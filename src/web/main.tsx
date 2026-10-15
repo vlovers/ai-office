@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode } from '../shared/types.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
+import { sceneStatus, workstationTask } from './scene-state.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -35,6 +36,21 @@ function App() {
       /* Storage is optional. */
     }
   }, [crt]);
+  const [motion, setMotion] = useState(() => {
+    try {
+      return localStorage.getItem('ai-office-motion') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('ai-office-motion', motion ? 'on' : 'off');
+    } catch {
+      /* Optional preference. */
+    }
+  }, [motion]);
+  const [view, setView] = useState<'mission' | 'focus'>('mission');
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [selected, setSelected] = useState<string>();
   const [events, setEvents] = useState<AgentEvent[]>([]);
@@ -95,13 +111,48 @@ function App() {
   const session = dashboard?.sessions.find((item) => item.id === task?.sessionId);
   const agentBusy = !dashboard || dashboard.agent.state !== 'idle';
   const selectedRepository = dashboard?.repositories.find((item) => item.id === repositoryId);
+  const scene = sceneStatus(dashboard, task, events, connection.includes('disconnected'));
+  const stationTask = workstationTask(dashboard, selected);
+  const showSection = (id: string) => {
+    requestAnimationFrame(() => {
+      const section = document.getElementById(id);
+      section?.focus();
+      section?.scrollIntoView({ block: 'start' });
+    });
+  };
+  const selectStation = () => {
+    if (stationTask) {
+      setSelected(stationTask.id);
+      setResumeSessionId('');
+      setView('focus');
+      showSection('task-workspace');
+    } else {
+      setView('mission');
+      showSection('agent');
+    }
+  };
+  const stopControl = agentBusy && dashboard?.agent.taskId && (
+    <button
+      className="stop-button"
+      disabled={busy || dashboard.agent.state === 'stopping' || !dashboard.agent.canStop}
+      onClick={() =>
+        void act(async () => {
+          await api(`/tasks/${dashboard.agent.taskId}/stop`, {});
+        })
+      }
+    >
+      ■ Stop agent
+    </button>
+  );
   return (
-    <div className={`shell ${crt ? 'crt-enabled' : ''}`}>
+    <div
+      className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
+    >
       <a className="skip-link" href="#overview">
         Skip to mission control
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
-        <a className="brand" href="#overview">
+        <a className="brand" href="#overview" onClick={() => setView('mission')}>
           <PixelBot />
           <span>
             AI OFFICE<small>PHOSPHOR OS / PHASE 1.3</small>
@@ -109,20 +160,24 @@ function App() {
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
         <nav aria-label="Dashboard sections">
-          <a className="nav-item active" href="#overview">
+          <a
+            className={`nav-item ${view === 'mission' ? 'active' : ''}`}
+            href="#overview"
+            onClick={() => setView('mission')}
+          >
             <span aria-hidden="true">⌂</span>Dashboard<span className="nav-count">01</span>
           </a>
-          <a className="nav-item" href="#agent">
+          <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
             <span aria-hidden="true">♙</span>Agent<span className="nav-count">01</span>
           </a>
-          <a className="nav-item" href="#task-history">
+          <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
             <span aria-hidden="true">▤</span>Task history
             <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
           </a>
           <a className="nav-item" href="#task-workspace">
             <span aria-hidden="true">▣</span>Session terminal
           </a>
-          <a className="nav-item" href="#compose">
+          <a className="nav-item" href="#compose" onClick={() => setView('mission')}>
             <span aria-hidden="true">＋</span>New task
           </a>
         </nav>
@@ -186,6 +241,14 @@ function App() {
             {connection}
           </span>
           <button
+            className="motion-toggle secondary"
+            aria-pressed={motion}
+            onClick={() => setMotion(!motion)}
+            title="Animate the office. Reduced motion overrides this preference; CRT glow is controlled separately."
+          >
+            Scene motion: {motion ? 'on' : 'off'}
+          </button>
+          <button
             className="crt-toggle secondary"
             aria-pressed={crt}
             onClick={() => setCrt(!crt)}
@@ -199,14 +262,80 @@ function App() {
             <div>
               <div className="eyebrow">AI OFFICE / PHOSPHOR OS</div>
               <h1>
-                Mission control<span>_</span>
+                {view === 'focus' ? 'Focus mode' : 'Mission control'}
+                <span>_</span>
               </h1>
               <p>One Codex agent. Read-only review. You have the controls.</p>
             </div>
-            <a className="button-link" href="#compose">
+            <a
+              className="button-link"
+              href="#compose"
+              onClick={() => {
+                setView('mission');
+                showSection('compose');
+              }}
+            >
               ＋ New task
             </a>
           </div>
+          <div className="view-switch" role="group" aria-label="Workspace view">
+            <button
+              className="secondary"
+              aria-pressed={view === 'mission'}
+              onClick={() => setView('mission')}
+            >
+              Mission Control
+            </button>
+            <button
+              className="secondary"
+              aria-pressed={view === 'focus'}
+              disabled={!stationTask}
+              onClick={() => {
+                if (stationTask) {
+                  setSelected(stationTask.id);
+                  setResumeSessionId('');
+                  setView('focus');
+                  showSection('task-workspace');
+                }
+              }}
+            >
+              Focus Mode
+            </button>
+            <span>
+              {view === 'focus'
+                ? 'Session output first. Stop and results stay within reach.'
+                : 'Overview / one real Codex workstation'}
+            </span>
+          </div>
+          {dashboard && !dashboard.repositories.length && (
+            <section className="onboarding" aria-label="Get started">
+              <span className="setup-index" aria-hidden="true">
+                01 →
+              </span>
+              <div>
+                <h2>Connect your first worktree</h2>
+                <p>
+                  Register a local Git repository, create a review task, then start a read-only
+                  Codex session. Your files stay unchanged.
+                </p>
+                <ol>
+                  <li>Register a repository</li>
+                  <li>Describe a task</li>
+                  <li>Start the review</li>
+                </ol>
+              </div>
+              <a
+                className="button-link"
+                href="#repositories"
+                onClick={() => {
+                  setView('mission');
+                  requestAnimationFrame(() => document.getElementById('path')?.focus());
+                }}
+              >
+                Register local worktree
+              </a>
+            </section>
+          )}
           {error && (
             <div role="alert" className="error-banner">
               {error}
@@ -217,18 +346,29 @@ function App() {
           )}
           <div className="mission-grid">
             <div className="mission-board">
-              <section className="office-scene" aria-label="Pixel office illustration">
+              <section
+                className={`office-scene state-${scene.state}`}
+                aria-label="Codex pixel workstation"
+                data-state={scene.state}
+              >
                 <div className="scene-label">
                   <span>WORKSPACE / 01</span>
                   <span>READ-ONLY STATION</span>
                 </div>
-                <PixelOffice />
+                <button
+                  className="workstation-button"
+                  onClick={selectStation}
+                  aria-label="Select Codex workstation"
+                  aria-describedby="workstation-hint"
+                >
+                  <PixelOffice state={scene.state} />
+                </button>
                 <div className="scene-caption">
                   <span>
                     <span className="status-dot" />
-                    CODEX / {dashboard?.agent.state ?? 'connecting'}
+                    CODEX / {scene.label}
                   </span>
-                  <span>One workstation. Room to think.</span>
+                  <span id="workstation-hint">Select workstation to inspect →</span>
                 </div>
               </section>
               <div className="stats" aria-label="Workspace statistics">
@@ -268,12 +408,17 @@ function App() {
                 {!dashboard?.tasks.length ? (
                   <div className="empty-state">
                     <div>☷</div>
-                    <h3>A clean slate.</h3>
+                    <h3>No reviews yet.</h3>
                     <p>
                       Your tasks and their results will appear here.
                       <br />
-                      Create your first task to get started.
+                      Choose a repository and describe your first read-only review.
                     </p>
+                    <a href={dashboard?.repositories.length ? '#compose' : '#repositories'}>
+                      {dashboard?.repositories.length
+                        ? 'Create your first task →'
+                        : 'Register a worktree →'}
+                    </a>
                   </div>
                 ) : (
                   <div className="task-list">
@@ -301,7 +446,7 @@ function App() {
                   </div>
                 )}
               </section>
-              <section className="panel output" id="task-workspace">
+              <section className="panel output" id="task-workspace" tabIndex={-1}>
                 <div className="panel-heading">
                   <h2>
                     Task workspace {task && <span className="output-title">/ {task.title}</span>}
@@ -319,6 +464,7 @@ function App() {
                         <span className={`badge ${task.state}`}>{task.state}</span>{' '}
                         {repository?.name}
                       </span>
+                      {view === 'focus' && task.id === dashboard?.agent.taskId && stopControl}
                       {task.state === 'queued' && (
                         <div className="start-controls">
                           <select
@@ -431,7 +577,7 @@ function App() {
                   </>
                 )}
               </section>
-              <section className="panel compose" id="compose">
+              <section className="panel compose" id="compose" tabIndex={-1}>
                 <div className="panel-heading">
                   <h2>Create a task</h2>
                   <span className="step">02</span>
@@ -505,13 +651,13 @@ function App() {
               </section>
             </div>
             <aside className="inspector" aria-label="Agent and connection inspector">
-              <section className="panel agent-panel" id="agent">
+              <section className="panel agent-panel" id="agent" tabIndex={-1}>
                 <div className="panel-heading">
                   <h2>Your agent</h2>
                   <span className="subtle">01 / 01</span>
                 </div>
                 <div className="agent-info">
-                  <div className="agent-avatar">
+                  <div className={`agent-avatar state-${scene.state}`}>
                     <PixelBot />
                   </div>
                   <div>
@@ -548,21 +694,7 @@ function App() {
                   <span>↳</span>
                   <p>{dashboard?.readinessMessage ?? 'Connecting to the local backend…'}</p>
                 </div>
-                {agentBusy && dashboard?.agent.taskId && (
-                  <button
-                    className="stop-button"
-                    disabled={
-                      busy || dashboard.agent.state === 'stopping' || !dashboard.agent.canStop
-                    }
-                    onClick={() =>
-                      void act(async () => {
-                        await api(`/tasks/${dashboard.agent.taskId}/stop`, {});
-                      })
-                    }
-                  >
-                    ■ Stop agent
-                  </button>
-                )}
+                {(view === 'mission' || task?.id !== dashboard?.agent.taskId) && stopControl}
               </section>
               <section className="panel connection-panel" aria-label="Codex connection">
                 <div className="panel-heading">

@@ -1042,3 +1042,318 @@ footer {
     display: none;
   }
 }
+
+/* Living workstation: decorative motion never substitutes for task telemetry. */
+.motion-toggle {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.motion-toggle[aria-pressed='true'] {
+  color: var(--phosphor);
+  border-color: #4e9061;
+}
+.workstation-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.workstation-button:hover:not(:disabled) {
+  background: #0b2117;
+}
+.workstation-button:focus-visible {
+  outline-offset: -4px;
+}
+.office-scene.state-error {
+  border-color: #9f6954;
+}
+.office-scene.state-error .status-dot {
+  background: var(--red);
+}
+.office-scene.state-offline .status-dot {
+  background: var(--muted);
+}
+.office-scene.state-thinking .status-dot,
+.office-scene.state-stopping .status-dot {
+  background: var(--amber);
+}
+.state-offline .pixel-office {
+  opacity: 0.65;
+}
+.state-error .agent-avatar,
+.agent-avatar.state-error {
+  border-color: var(--red);
+  color: var(--red);
+}
+.scene-motion .state-idle .character-body {
+  animation: idle-breathe 5s steps(2, end) infinite;
+}
+.scene-motion .state-idle .character-eyes {
+  animation: eye-blink 8s steps(1, end) infinite;
+}
+.scene-motion .state-thinking .character-body {
+  animation: think-pose 3s steps(2, end) infinite;
+}
+.scene-motion .state-thinking .state-bubble {
+  animation: think-pose 3s steps(2, end) infinite;
+}
+.scene-motion .state-working .typing-hands {
+  animation: type-hands 0.8s steps(2, end) infinite;
+}
+.scene-motion .state-working .screen-activity {
+  animation: screen-lines 3s steps(3, end) infinite;
+}
+.scene-motion .state-error .character-body {
+  animation: error-notice 0.5s steps(2, end) 1;
+}
+.scene-motion .office-scene:not(.state-offline):not(.state-error) .screen-cursor {
+  animation: cursor-blink 1.8s steps(1, end) infinite;
+}
+.crt-enabled.scene-motion .office-scene:not(.state-offline) .screen-glow {
+  animation: ambient-light 6s ease-in-out infinite alternate;
+}
+@keyframes idle-breathe {
+  50% {
+    transform: translateY(-1px);
+  }
+}
+@keyframes eye-blink {
+  47%,
+  49% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes think-pose {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes type-hands {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes screen-lines {
+  50% {
+    transform: translateY(3px);
+    opacity: 0.65;
+  }
+}
+@keyframes error-notice {
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
+}
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes ambient-light {
+  to {
+    opacity: 0.5;
+  }
+}
+.view-switch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 14px;
+}
+.view-switch button {
+  font-size: 11px;
+  padding: 7px 12px;
+}
+.view-switch button[aria-pressed='true'] {
+  border-color: var(--phosphor);
+  background: #163d26;
+  color: var(--phosphor);
+}
+.view-switch > span {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+.onboarding {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border: 1px solid #4d9966;
+  background: #102b1b;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.onboarding p {
+  color: var(--text);
+  font-size: 11px;
+  max-width: 650px;
+  margin-top: 6px;
+}
+.setup-index {
+  color: var(--phosphor);
+  font-size: 22px;
+  font-weight: 700;
+}
+.onboarding ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 26px;
+  color: var(--muted);
+  padding-left: 16px;
+  margin: 10px 0 0;
+  font-size: 10px;
+}
+.onboarding .button-link {
+  font-size: 11px;
+}
+.empty-state {
+  min-height: 100px;
+  padding: 8px;
+}
+.empty-state > div {
+  display: none;
+}
+.empty-state a {
+  font-size: 11px;
+  margin-top: 10px;
+}
+.output-empty {
+  min-height: 70px;
+}
+.stats > div {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.scene-caption {
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+.focus-mode .mission-board > :not(.output),
+.focus-mode .inspector > :not(.agent-panel) {
+  display: none;
+}
+.focus-mode .mission-grid {
+  grid-template-columns: minmax(0, 1fr) 285px;
+}
+.focus-mode .event-console {
+  min-height: 220px;
+  max-height: 55vh;
+}
+.focus-mode .agent-note {
+  display: none;
+}
+.focus-mode .output {
+  border-color: #4b8c61;
+}
+.focus-mode .page-heading {
+  margin-bottom: 16px;
+}
+.focus-mode .task-toolbar {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  padding: 10px 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--line-dim);
+}
+@media (max-width: 1180px) {
+  .onboarding {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .onboarding .button-link {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .view-switch > span {
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 960px) {
+  .focus-mode .inspector {
+    display: block;
+  }
+  .focus-mode .agent-info {
+    margin-bottom: 0;
+  }
+  .focus-mode .agent-detail {
+    display: none;
+  }
+  .focus-mode .agent-panel .panel-heading {
+    margin-bottom: 10px;
+  }
+  .focus-mode .agent-panel {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .focus-mode .agent-panel .panel-heading {
+    width: 100%;
+  }
+  .focus-mode .stop-button {
+    width: auto;
+    margin-top: 0;
+    margin-left: auto;
+  }
+}
+@media (max-width: 680px) {
+  .onboarding {
+    padding: 14px;
+    gap: 10px;
+  }
+  .setup-index {
+    font-size: 17px;
+  }
+  .onboarding .button-link {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .motion-toggle {
+    font-size: 9px;
+  }
+  .scene-caption {
+    font-size: 9px;
+  }
+  .office-scene .pixel-office {
+    min-height: 120px;
+    object-fit: cover;
+  }
+  .focus-mode .event-console {
+    min-height: 200px;
+    max-height: 50vh;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .screen-glow {
+    display: none;
+  }
+}
+
+.focus-mode .task-toolbar .stop-button {
+  margin: 0 0 0 auto;
+  width: auto;
+}
+@media (max-width: 960px) {
+  .focus-mode .inspector:not(:has(.stop-button)) {
+    display: none;
+  }
+}

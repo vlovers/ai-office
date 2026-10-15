@@ -1,4 +1,6 @@
-/** Original code-drawn decoration. These sprites never represent extra live agents. */
+import type { SceneState } from './scene-state.js';
+
+/** Original local SVG sprites; one workstation, tied to actual task state. */
 export function PixelBot() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" shapeRendering="crispEdges" aria-hidden="true">
@@ -9,7 +11,7 @@ export function PixelBot() {
   );
 }
 
-export function PixelOffice() {
+export function PixelOffice({ state }: { state: SceneState }) {
   return (
     <svg
       className="pixel-office"
@@ -71,7 +73,12 @@ export function PixelOffice() {
       <path fill="#6c5136" d="M111 131h351v8H111z" />
       <path fill="#3d3627" d="M117 139h7v34h-7zm331 0h7v34h-7z" />
       <path fill="#112f23" stroke="#43805d" strokeWidth="2" d="M251 83h83v47h-83z" />
+      <path className="screen-glow" fill="#164b2a" opacity=".22" d="M241 73h103v66H241z" />
       <path fill="#081b15" d="M257 89h71v34h-71z" />
+      <g className="screen-activity" stroke="#41895d" strokeWidth="2">
+        <path d="M300 96h19m-17 5h14m-16 5h21" />
+      </g>
+      <path className="screen-cursor" fill="#a4ffc1" d="M305 113h6v3h-6z" />
       <path stroke="#72db8e" strokeWidth="2" d="m265 100 5 4-5 4m13 0h12m-25 7h38" />
       <path fill="#3c6550" d="M286 130h12v5h-12zm-32 8h73v4h-73z" />
       <path fill="#142c24" stroke="#336749" strokeWidth="2" d="M149 101h57v31h-57z" />
@@ -80,11 +87,56 @@ export function PixelOffice() {
       <path stroke="#d0b46a" strokeWidth="2" d="M362 119h5v7h-5" />
       <path fill="#344e39" d="M399 114h12v17h-12z" />
       <path fill="#6bb071" d="M401 114v-13h4v-8h4v15h5v5h-9v1z" />
-      <path fill="#163c2a" stroke="#4c8060" strokeWidth="2" d="M220 136h37v30h-37z" />
-      <path fill="#294b34" d="M223 129h31v8h-31zm11 37h7v11h-7z" />
-      <path fill="#4e8d63" d="M224 131v-13h5v-9h20v9h5v13z" />
-      <path fill="#a3c091" d="M231 112h15v10h-15z" />
-      <path fill="#273e2c" d="M231 109h15v6h-15z" />
+      <g className="codex-character">
+        <path fill="#10221d" stroke="#4a745b" strokeWidth="2" d="M210 135h31v31h-31z" />
+        <path fill="#294b34" d="M213 166h7v10h-7zm11-6h24v5h-24zm12 5h7v11h-7z" />
+        <g className="character-body">
+          <path fill="#263e4a" d="M213 126h25v27h-25z" />
+          <path fill="#4d8e75" d="M215 126h8v26h-8zm14 0h7v26h-7z" />
+          <path fill="#87c697" d="M222 129h7v12h-7z" />
+          <path fill="#61df92" d="M225 143h4v5h-4z" />
+          <path fill="#171f22" d="M210 93h7v-6h21v5h7v28h-8v6h-20v-7h-7z" />
+          <path fill="#47392c" d="M213 94h6v-4h16v4h6v10h-28z" />
+          <path fill="#d6a77c" d="M218 101h20v5h5v8h-5v8h-17v-6h-6v-10h3z" />
+          <path fill="#efc49a" d="M224 103h14v12h-14z" />
+          <path fill="#282b2d" d="M218 100h6v5h-6z" />
+          <path className="character-eyes" fill="#183029" d="M225 107h3v4h-3zm10 0h3v4h-3z" />
+          <path fill="#9b6552" d="M230 117h6v2h-6z" />
+          <path fill="#608f7b" d="M212 105h4v13h-4zm25-5h8v3h-8zm6 3h4v13h-4z" />
+          <path fill="#8ae7ab" d="M243 116h5v2h-5zm-5 2h7v2h-7z" />
+        </g>
+        <g className="typing-hands">
+          <path fill="#d6a77c" d="M236 129h14v4h-14zm-15 5h26v4h-26z" />
+          <path fill="#4c9277" d="M233 126h6v7h-6zm-15 3h6v8h-6z" />
+        </g>
+      </g>
+      <g className="state-bubble">
+        <path
+          fill="#07170f"
+          stroke={state === 'error' ? '#ffa99b' : '#6fc68e'}
+          d="M196 64h57v17h-24v5h-5v-5h-28z"
+        />
+        <text
+          x="224"
+          y="76"
+          textAnchor="middle"
+          fill={state === 'error' ? '#ffa99b' : '#a9edbf'}
+          fontFamily="monospace"
+          fontSize="8"
+        >
+          {state === 'thinking'
+            ? '…'
+            : state === 'working'
+              ? '>_ R/O'
+              : state === 'error'
+                ? '! ERROR'
+                : state === 'stopping'
+                  ? 'STOP…'
+                  : state === 'offline'
+                    ? 'OFFLINE'
+                    : 'CODEX'}
+        </text>
+      </g>
       <path fill="#2b4a35" d="M537 148h46v8h-46zm5-7h35v7h-35z" />
       <path fill="#b58c57" d="M547 137h22v10h-22zm0-7h6v10h-6zm16 0h6v10h-6zm6 14h13v4h-13z" />
       <path fill="#162a20" d="M552 139h2v2h-2zm10 0h2v2h-2z" />
