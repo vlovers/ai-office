@@ -36,7 +36,7 @@ npm run format:check
 npm run test:browser
 ```
 
-The browser check requires Playwright Chromium. If using a separate browser cache, set `PLAYWRIGHT_BROWSERS_PATH` to its location. Set `AI_OFFICE_SCREENSHOT_DIR` to an existing writable directory to choose the screenshot destination (otherwise the OS temporary directory is used). Screenshots include `ai-office-phosphor-desktop.png`, `ai-office-phosphor-mobile.png`, `ai-office-phosphor-onboarding.png`, and `ai-office-phosphor-focus-desktop.png` / `ai-office-phosphor-focus-mobile.png`. They contain disposable fixture data and should remain outside Git.
+The browser check requires Playwright Chromium. If using a separate browser cache, set `PLAYWRIGHT_BROWSERS_PATH` to its location. Set `AI_OFFICE_SCREENSHOT_DIR` to an existing writable directory to choose the screenshot destination (otherwise the OS temporary directory is used). Screenshots include `ai-office-phosphor-desktop.png`, `ai-office-phosphor-mobile.png`, `ai-office-phosphor-onboarding.png`, and `ai-office-phosphor-focus-desktop.png` / `ai-office-phosphor-focus-mobile.png`. Raw captures contain disposable fixture data and remain outside Git. The two deliberately selected, visually reviewed [PR screenshots](screenshots/README.md) are documentation assets; they use a disposable `/private/tmp` worktree and the synthetic fixture thread ID, with no personal paths or real sessions.
 
 The Phase 1.3 verification run passed TypeScript, 26 unit/integration tests across six files, the one HTTP/SSE smoke test, production build, Prettier and the expanded browser check. No lint script is configured.
 
