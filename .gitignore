@@ -1,0 +1,10 @@
+node_modules/
+.idea/
+dist/
+.ai-office/
+coverage/
+playwright-report/
+test-results/
+.env*
+!.env.example
+*.log
