@@ -127,3 +127,7 @@ The earlier standalone SDK-only probe is available as `npm run test:real`; it do
 See [Phase 1.2 verification and limitations](docs/PHASE_1_2_DASHBOARD.md), [architecture](docs/ARCHITECTURE.md), [security/recovery](docs/SECURITY.md), and the historical [Phase 1.1 SDK report](docs/PHASE_1_1_CODEX_INTEGRATION.md).
 
 No autonomous planning, multiple parallel agents, editing, automatic commits, pushes or merges are implemented.
+
+## PHOSPHOR OS interface
+
+Phase 1.3 adds a responsive phosphor terminal dashboard with a single pixel workstation, keyboard navigation and optional CRT effects (off by default). The existing read-only Codex workflow is preserved. See the [design and verification notes](docs/design/PHOSPHOR_OS.md) for layout, accessibility, screenshot commands and limitations.
