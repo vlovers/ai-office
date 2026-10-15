@@ -17,7 +17,14 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
+  const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
   await page.getByRole('heading', { name: 'Mission control_' }).waitFor();
+  await expect(page.getByRole('region', { name: 'Get started' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toBeDisabled();
+  await page.screenshot({
+    path: join(screenshotDir, 'ai-office-phosphor-onboarding.png'),
+    fullPage: true,
+  });
   await page.getByTestId('codex-connection-status').filter({ hasText: 'Available' }).waitFor();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to mission control' })).toBeFocused();
@@ -35,6 +42,32 @@ try {
     await page.locator('.shell').evaluate((el) => getComputedStyle(el, '::after').display),
     'none',
   );
+  assert.equal(
+    await page.locator('.character-body').evaluate((el) => getComputedStyle(el).animationName),
+    'none',
+  );
+  const motion = page.getByRole('button', { name: /Scene motion:/ });
+  await motion.click();
+  await page.reload();
+  await expect(motion).toHaveAttribute('aria-pressed', 'false');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  assert.equal(
+    await page.locator('.character-body').evaluate((el) => getComputedStyle(el).animationName),
+    'none',
+  );
+  await motion.click();
+  await expect(motion).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.office-scene')).toHaveAttribute('data-state', 'idle');
+  await expect
+    .poll(() =>
+      page.locator('.character-body').evaluate((el) => getComputedStyle(el).animationName),
+    )
+    .toBe('idle-breathe');
+  await page.getByRole('button', { name: 'Select Codex workstation' }).click();
+  await expect(page.locator('#agent')).toBeFocused();
+  assert.equal(env.store.tasks().length, 0, 'Workstation invented a task');
+  await page.getByRole('link', { name: 'Register local worktree' }).click();
+  await expect(page.getByLabel('Absolute repository path')).toBeFocused();
   await crt.click();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.getByLabel('Authentication mode').selectOption('api-key');
@@ -46,6 +79,7 @@ try {
   await page.getByTestId('codex-connection-status').filter({ hasText: 'Available' }).waitFor();
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await expect(page.getByRole('region', { name: 'Get started' })).toHaveCount(0);
   await page.getByLabel('Task title').fill('Review the example project');
   await page.getByLabel('What should the agent work on?').fill('Review the README.');
   await page.getByRole('button', { name: 'Create task' }).click();
@@ -54,11 +88,13 @@ try {
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
   assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
   await page.evaluate(() => window.scrollTo(0, 0));
-  const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
   await page.screenshot({
     path: join(screenshotDir, 'ai-office-phosphor-desktop.png'),
     fullPage: true,
   });
+  await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
+  await expect(page.locator('.result')).toContainText('Reviewed the disposable repository');
+  await page.getByRole('button', { name: 'Mission Control', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: /Review the example project/ }).click();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
@@ -96,16 +132,50 @@ try {
   await createTask('Stop review', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
+  await expect(page.locator('.office-scene')).toHaveAttribute('data-state', 'thinking');
+  await page.getByRole('button', { name: 'Select Codex workstation' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('#task-workspace')).toBeFocused();
+  await expect(page.locator('.office-scene')).toBeHidden();
+  await expect(page.locator('#compose')).toBeHidden();
+  await expect(page.getByRole('button', { name: /Stop agent/ })).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.screenshot({
+    path: join(screenshotDir, 'ai-office-phosphor-focus-desktop.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole('complementary', { name: 'Agent and connection inspector' }),
+  ).toBeHidden();
+  await page.screenshot({
+    path: join(screenshotDir, 'ai-office-phosphor-focus-mobile.png'),
+    fullPage: true,
+  });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+
   await page.getByRole('button', { name: /Stop agent/ }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
+  await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.locator('nav a[href="#agent"]').click();
+  await expect(page.locator('#agent')).toBeVisible();
+  await expect(page.locator('.office-scene')).toHaveAttribute('data-state', 'idle');
   await createTask('Failed review', 'FAIL_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('failed');
   await expect(page.locator('.task-error')).toContainText('Provider diagnostics were withheld');
   await expect(page.locator('.task-error')).not.toContainText('Simulated provider failure');
+  await expect(page.locator('.office-scene')).toHaveAttribute('data-state', 'error');
   assert.deepEqual(errors, []);
   console.log(
-    'Browser smoke passed: keyboard navigation; CRT preference/reduced motion; auth modes; register → start → SSE result → persisted resume → stop → failure; responsive 320–1440px; no page errors.',
+    'Browser smoke passed: onboarding; real workstation selection; focus/overview; thinking/error states; motion preference; keyboard navigation; CRT preference/reduced motion; auth modes; register → start → SSE result → persisted resume → stop → failure; responsive 320–1440px; no page errors.',
   );
 } finally {
   // Close the HTTP server while the browser still has keep-alive/SSE connections.
