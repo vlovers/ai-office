@@ -10,7 +10,7 @@ updates:
         dependency-type: development
         update-types: [minor, patch]
     ignore:
-      - dependency-name: "@openai/codex-sdk"
+      - dependency-name: '@openai/codex-sdk'
   - package-ecosystem: github-actions
     directory: /
     schedule:
