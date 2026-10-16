@@ -73,7 +73,7 @@ export class CodexProvider implements AgentProvider {
   async executeTask(session: ProviderSession, prompt: string) {
     if (this.runs.size) throw new Error('Codex already has an active task.');
     if (process.platform === 'win32')
-      throw new Error('Phase 1 requires macOS or Linux process groups. Windows is unsupported.');
+      throw new Error('AI Office requires macOS or Linux process groups. Windows is unsupported.');
     await mkdir(this.options.home, { recursive: true, mode: 0o700 });
     const execution = this.prepared.get(session.id);
     if (!execution) throw new Error('Session has no prepared connection.');

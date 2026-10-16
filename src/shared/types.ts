@@ -1,3 +1,5 @@
+export const AGENT_IDS = ['codex-1', 'codex-2'] as const;
+export type AgentId = (typeof AGENT_IDS)[number];
 export type TaskState =
   'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'interrupted';
 export interface Repository {
@@ -13,6 +15,7 @@ export interface Session {
   provider: string;
   threadId: string | null;
   createdAt: string;
+  agentId?: AgentId;
   authMode?: AuthMode;
   model?: string | null;
 }
@@ -33,7 +36,7 @@ export interface Task {
   id: string;
   repositoryId: string;
   sessionId: string | null;
-  agentId: string;
+  agentId: AgentId;
   title: string;
   prompt: string;
   state: TaskState;
@@ -58,15 +61,30 @@ export interface Dashboard {
   repositories: Repository[];
   tasks: Task[];
   sessions: Session[];
-  agent: {
-    id: string;
-    name: string;
-    provider: string;
-    state: string;
-    taskId: string | null;
-    canStop: boolean;
-    mode: string;
-  };
+  agents: AgentView[];
+  /** Compatibility view of Codex 01. New clients use agents. */
+  agent: AgentView;
+  queue: QueueEntry[];
+  concurrency: number;
   ready: boolean;
   readinessMessage: string;
+}
+
+export interface AgentView {
+  id: AgentId;
+  name: string;
+  provider: string;
+  state: string;
+  taskId: string | null;
+  canStop: boolean;
+  mode: string;
+}
+export interface QueueEntry {
+  taskId: string;
+  agentId: AgentId;
+  order: number;
+  enqueuedAt: string;
+  mode: AuthMode;
+  resumeSessionId: string | null;
+  waitingReason?: string;
 }
