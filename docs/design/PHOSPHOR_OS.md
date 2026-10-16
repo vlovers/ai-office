@@ -1,5 +1,7 @@
 # PHOSPHOR OS — Phase 1.3
 
+This is the historical single-agent design report. The current two-workstation runtime and UI are documented in [v0.3 Milestone A](../V0_3_MILESTONE_A.md).
+
 The primary visual reference is [phosphor-reference.png](phosphor-reference.png). This iteration adapts its dark phosphor palette, narrow navigation rail, square bordered panels, pixel office, central terminal and right-side inspector to the actual Phase 1.2 capabilities.
 
 ## Interface
