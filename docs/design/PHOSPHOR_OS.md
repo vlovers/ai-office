@@ -45,3 +45,32 @@ The Phase 1.3 verification run passed TypeScript, 26 unit/integration tests acro
 The expanded browser fixture exercises empty-state registration guidance, real workstation selection without task fabrication, focus/overview switching, thinking/error state visualization, motion persistence/disable, keyboard skip/navigation, CRT toggle via keyboard and persistence, reduced-motion suppression, both auth-mode states, repository registration, task launch, real HTTP/SSE delivery of fixture events, history reload, persisted-session resume, cancellation and sanitized failure display. Unit/integration and HTTP/SSE tests also retain restart/recovery coverage. These checks make **no model calls**, access no authentication store and consume no Codex allowance. Historical real model verification remains documented in the Phase 1.2 report; it was not rerun for the visual redesign.
 
 Limitations: one read-only Codex agent; no editing or parallel agents; no interactive SDK approvals; item-level events rather than token deltas or percentage progress. This is an initial visual iteration, not a pixel-for-pixel reproduction of the multi-agent reference. Automated layout and keyboard checks plus screenshot review are not a complete assistive-technology audit. Display preferences are per browser, and existing backend cancellation limitations still apply.
+
+## Shared office
+
+Mission Control renders one SVG room with two independently selectable desks. The wall,
+windows, floor, plants and office cat belong to the room; only workstation artwork and real
+agent state are repeated. Character jacket/hair palettes distinguish Codex 01 and Codex 02.
+The room comes first on narrow Mission Control screens and uses a portrait arrangement to
+keep characters and state labels legible.
+
+`src/web/office-layout.ts` holds agent IDs, visual identities and landscape/portrait coordinates.
+Adding a future supported agent requires an explicit placement and room geometry review;
+the scene never creates an agent missing from the runtime dashboard. This change adds no
+runtime slots or backend capabilities.
+
+Each desk is a keyboard-accessible SVG button with its real agent ID, an accessible state
+description and a pressed selection indicator. Tab reaches either desk; arrow keys, Home and
+End move focus; Enter or Space selects. Selection updates the existing task workspace and
+inspector without leaving Mission Control. Focus Mode stays explicit and retains its compact
+agent switcher. The redundant switcher is hidden in Mission Control.
+
+Active tasks take precedence over saved outcomes. SDK reasoning items alone enable the
+thinking state; other active work is labeled working. Completed, failed, stopped, preparing,
+queued and disconnected states use actual dashboard/task data. A completed desk describes
+a saved result, not an actively running agent. No progress or activity is synthesized.
+
+Scene motion and CRT preferences remain independent. Reduced motion disables all animation;
+status text, selection corners and keyboard focus remain visible without animation or color.
+Browser smoke uses fixture-backed agents and disposable worktrees; it does not consume
+Codex allowance. Screenshot artifacts are local verification outputs, not tracked assets.

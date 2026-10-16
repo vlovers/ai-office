@@ -165,15 +165,10 @@ function App() {
   const selectStation = (agentId: AgentId) => {
     setSelectedAgent(agentId);
     const stationTask = workstationTask(dashboard, selected, agentId);
-    if (stationTask) {
-      setSelected(stationTask.id);
-      setResumeSessionId('');
-      setView('focus');
-      showSection('task-workspace');
-    } else {
-      setView('mission');
-      showSection('agent');
-    }
+    setSelected(stationTask?.id);
+    setResumeSessionId('');
+    // Inspect in place; Focus Mode remains an explicit choice.
+    if (!stationTask) showSection('agent');
   };
   const stopControl = selectedBusy && agent?.taskId && (
     <button
@@ -344,7 +339,7 @@ function App() {
             <span>
               {view === 'focus'
                 ? 'Session output first. Stop and results stay within reach.'
-                : 'Overview / two independent Codex workstations'}
+                : 'Overview / one office · two independent agents'}
             </span>
           </div>
           {dashboard && !dashboard.repositories.length && (
@@ -386,44 +381,30 @@ function App() {
           )}
           <div className="mission-grid">
             <div className="mission-board">
-              <div className="workstation-grid" aria-label="Codex workstations">
-                {dashboard?.agents.map((slot) => {
-                  const status = sceneStatus(
-                    dashboard,
-                    dashboard.tasks.find((task) => task.id === selected),
-                    Object.values(eventHistory).flat(),
-                    connection.includes('disconnected'),
-                    slot.id,
-                  );
-                  return (
-                    <section
-                      key={slot.id}
-                      className={`office-scene state-${status.state} ${slot.id === selectedAgent ? 'station-selected' : ''}`}
-                      aria-label={`${slot.name} pixel workstation`}
-                      data-state={status.state}
-                    >
-                      <div className="scene-label">
-                        <span>{slot.name.toUpperCase()}</span>
-                        <span>READ ONLY</span>
-                      </div>
-                      <button
-                        className="workstation-button"
-                        onClick={() => selectStation(slot.id)}
-                        aria-label={`Select ${slot.name} workstation`}
-                        aria-pressed={slot.id === selectedAgent}
-                      >
-                        <PixelOffice state={status.state} agentName={slot.name} compact />
-                      </button>
-                      <div className="scene-caption">
-                        <span>
-                          <span className="status-dot" />
-                          {status.label}
-                        </span>
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
+              <section className="office-scene" aria-label="Shared Codex office">
+                <div className="scene-label">
+                  <span>AI OFFICE / SHARED WORKSPACE</span>
+                  <span>READ ONLY</span>
+                </div>
+                <PixelOffice
+                  agents={(dashboard?.agents ?? []).map((slot) => ({
+                    id: slot.id,
+                    name: slot.name,
+                    status: sceneStatus(
+                      dashboard,
+                      workstationTask(dashboard, selected, slot.id),
+                      Object.values(eventHistory).flat(),
+                      connection.includes('disconnected'),
+                      slot.id,
+                    ),
+                  }))}
+                  selectedAgent={selectedAgent}
+                  onSelect={selectStation}
+                />
+                <div className="scene-caption">
+                  Select a desk to inspect its agent · Tab / arrows to navigate
+                </div>
+              </section>
               <div className="stats" aria-label="Workspace statistics">
                 <div>
                   <span>CODEX AGENTS</span>
@@ -766,7 +747,12 @@ function App() {
                   <h2>Agents / {agent?.name ?? 'Codex'}</h2>
                   <span className="subtle">{dashboard?.concurrency ?? 2} slots</span>
                 </div>
-                <div className="agent-switcher" role="group" aria-label="Select agent">
+                <div
+                  className="agent-switcher"
+                  role="group"
+                  aria-label="Select agent"
+                  hidden={view !== 'focus'}
+                >
                   {dashboard?.agents.map((slot) => (
                     <button
                       key={slot.id}

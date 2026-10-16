@@ -1,6 +1,7 @@
 import type { AgentEvent, Dashboard, Task, AgentId } from '../shared/types.js';
 
-export type SceneState = 'offline' | 'idle' | 'thinking' | 'working' | 'stopping' | 'error';
+export type SceneState =
+  'offline' | 'idle' | 'thinking' | 'working' | 'stopping' | 'completed' | 'error';
 export interface SceneStatus {
   state: SceneState;
   label: string;
@@ -18,6 +19,8 @@ export function sceneStatus(
   if (!dashboard) return { state: 'offline', label: 'Connecting' };
   const agent = dashboard.agents.find((item) => item.id === agentId);
   const active = dashboard.tasks.find((task) => task.id === agent?.taskId);
+  if (!agent) return { state: 'offline', label: 'Agent unavailable' };
+  if (agent.state === 'offline') return { state: 'offline', label: 'Agent offline' };
   if (agent?.state === 'preparing') return { state: 'idle', label: 'Preparing read-only session' };
   if (active?.state === 'stopping') return { state: 'stopping', label: 'Stopping' };
   if (active?.state === 'running') {
@@ -48,7 +51,15 @@ export function sceneStatus(
   if (dashboard.connection.status === 'authentication-required')
     return { state: 'offline', label: 'Authentication required' };
   if (agent?.state === 'waiting') return { state: 'idle', label: 'Waiting · submitted queue' };
-  return { state: 'idle', label: 'Idle · awaiting a task' };
+  if (selected?.agentId === agentId && selected.state === 'completed')
+    return { state: 'completed', label: 'Completed · saved result' };
+  return {
+    state: 'idle',
+    label:
+      selected?.agentId === agentId && selected.state === 'stopped'
+        ? 'Idle · task stopped'
+        : 'Idle · awaiting a task',
+  };
 }
 
 export function workstationTask(

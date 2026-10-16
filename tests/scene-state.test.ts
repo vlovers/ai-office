@@ -89,7 +89,7 @@ it('does not retain reasoning animation after a task ends or stops', () => {
   const saved = task('a', 'completed');
   expect(
     sceneStatus(dashboard([saved]), saved, [event('a', 'item.updated', 'reasoning')]).state,
-  ).toBe('idle');
+  ).toBe('completed');
   const stopping = task('a', 'stopping');
   expect(
     sceneStatus(dashboard([stopping], 'a'), stopping, [event('a', 'item.updated', 'reasoning')])
@@ -117,4 +117,29 @@ it('workstation selects only an actual active, selected, or saved task', () => {
   expect(workstationTask(dashboard([a, b], 'b'), 'a')?.id).toBe('b');
   expect(workstationTask(dashboard([a, b]), 'b')?.id).toBe('b');
   expect(workstationTask(dashboard([a, b]), undefined)?.id).toBe('a');
+});
+
+it('keeps saved outcomes and live reasoning scoped to their owning workstation', () => {
+  const first = task('saved', 'completed');
+  const second = { ...task('active', 'running'), agentId: 'codex-2' as const };
+  const data = dashboard([second, first]);
+  data.agents.push({
+    ...data.agents[0]!,
+    id: 'codex-2',
+    name: 'Codex 02',
+    taskId: second.id,
+    state: 'running',
+  });
+  expect(
+    sceneStatus(data, first, [event(second.id, 'item.started', 'reasoning')], false, 'codex-1')
+      .state,
+  ).toBe('completed');
+  expect(
+    sceneStatus(data, first, [event(second.id, 'item.started', 'reasoning')], false, 'codex-2')
+      .state,
+  ).toBe('thinking');
+  expect(sceneStatus(data, first, [], true, 'codex-1').state).toBe('offline');
+  expect(sceneStatus(data, first, [], true, 'codex-2').state).toBe('offline');
+  data.agents = [];
+  expect(sceneStatus(data, first, [], false, 'codex-1').state).toBe('offline');
 });

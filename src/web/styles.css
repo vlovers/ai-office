@@ -1052,37 +1052,6 @@ footer {
   color: var(--phosphor);
   border-color: #4e9061;
 }
-.workstation-button {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
-}
-.workstation-button:hover:not(:disabled) {
-  background: #0b2117;
-}
-.workstation-button:focus-visible {
-  outline-offset: -4px;
-}
-.office-scene.state-error {
-  border-color: #9f6954;
-}
-.office-scene.state-error .status-dot {
-  background: var(--red);
-}
-.office-scene.state-offline .status-dot {
-  background: var(--muted);
-}
-.office-scene.state-thinking .status-dot,
-.office-scene.state-stopping .status-dot {
-  background: var(--amber);
-}
-.state-offline .pixel-office {
-  opacity: 0.65;
-}
 .state-error .agent-avatar,
 .agent-avatar.state-error {
   border-color: var(--red);
@@ -1109,10 +1078,10 @@ footer {
 .scene-motion .state-error .character-body {
   animation: error-notice 0.5s steps(2, end) 1;
 }
-.scene-motion .office-scene:not(.state-offline):not(.state-error) .screen-cursor {
+.scene-motion .office-workstation:not(.state-offline):not(.state-error) .screen-cursor {
   animation: cursor-blink 1.8s steps(1, end) infinite;
 }
-.crt-enabled.scene-motion .office-scene:not(.state-offline) .screen-glow {
+.crt-enabled.scene-motion .office-workstation:not(.state-offline) .screen-glow {
   animation: ambient-light 6s ease-in-out infinite alternate;
 }
 @keyframes idle-breathe {
@@ -1358,14 +1327,6 @@ footer {
   }
 }
 
-.workstation-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.station-selected {
-  border-color: var(--phosphor);
-}
 .agent-switcher {
   display: flex;
   gap: 8px;
@@ -1407,8 +1368,92 @@ footer {
   width: 100%;
   font-size: 11px;
 }
-@media (max-width: 680px) {
-  .workstation-grid {
-    grid-template-columns: 1fr;
+
+/* One room, independently selectable stations. No nested room/card surfaces. */
+.shared-office {
+  min-width: 0;
+}
+.shared-office .pixel-office {
+  display: block;
+}
+.office-workstation {
+  cursor: pointer;
+  outline: none;
+  --station-ink: #b5d7c2;
+}
+.office-workstation.identity-sage {
+  --jacket: #8b9d83;
+  --hair: #717166;
+}
+.office-workstation.state-thinking,
+.office-workstation.state-stopping {
+  --station-ink: var(--amber);
+}
+.office-workstation.state-error {
+  --station-ink: var(--red);
+}
+.office-workstation.state-offline {
+  --station-ink: #a3b0a8;
+}
+.office-workstation.state-completed {
+  --station-ink: var(--phosphor);
+}
+.station-name,
+.station-status {
+  fill: var(--station-ink);
+}
+.station-selection {
+  stroke: #41684f;
+  stroke-width: 2;
+}
+.office-workstation[aria-pressed='true'] .station-selection {
+  stroke: var(--phosphor);
+}
+.office-workstation:hover .station-hit-area {
+  fill: #71e897;
+  fill-opacity: 0.035;
+}
+.office-workstation:focus-visible .station-hit-area {
+  stroke: var(--phosphor);
+  stroke-width: 3;
+  stroke-dasharray: 5 3;
+}
+.office-workstation.state-offline .codex-character,
+.office-workstation.state-offline .screen-activity {
+  opacity: 0.5;
+}
+.office-workstation.state-offline .screen-glow,
+.office-workstation.state-offline .screen-cursor {
+  display: none;
+}
+.agent-switcher[hidden] {
+  display: none;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@media (forced-colors: active) {
+  .station-name,
+  .station-status {
+    fill: CanvasText;
+  }
+  .station-selection,
+  .office-workstation:focus-visible .station-hit-area {
+    stroke: Highlight;
+  }
+}
+
+/* Keep the shared room first on narrow Mission Control screens. */
+@media (max-width: 960px) {
+  .shell:not(.focus-mode) .inspector {
+    order: 0;
   }
 }

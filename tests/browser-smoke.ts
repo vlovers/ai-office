@@ -64,7 +64,7 @@ try {
   );
   await motion.click();
   await expect(motion).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.office-scene').first()).toHaveAttribute('data-state', 'idle');
+  await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await expect
     .poll(() =>
       page
@@ -73,6 +73,20 @@ try {
         .evaluate((el) => getComputedStyle(el).animationName),
     )
     .toBe('idle-breathe');
+  await expect(page.locator('.office-scene')).toHaveCount(1);
+  await expect(page.locator('svg.pixel-office')).toHaveCount(1);
+  await expect(page.locator('.office-workstation')).toHaveCount(2);
+  const firstDesk = page.getByRole('button', { name: 'Select Codex 01 workstation' });
+  const secondDesk = page.getByRole('button', { name: 'Select Codex 02 workstation' });
+  await firstDesk.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(secondDesk).toBeFocused();
+  await page.keyboard.press(' ');
+  await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#agent')).toContainText('Codex 02');
+  await firstDesk.focus();
+  await page.keyboard.press('Home');
+  await expect(firstDesk).toBeFocused();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
   await expect(page.locator('#agent')).toBeFocused();
   assert.equal(env.store.tasks().length, 0, 'Workstation invented a task');
@@ -96,6 +110,10 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
+  await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
+    'data-state',
+    'completed',
+  );
   assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
@@ -142,9 +160,18 @@ try {
   await createTask('Stop review', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
-  await expect(page.locator('.office-scene').first()).toHaveAttribute('data-state', 'thinking');
+  await expect(page.locator('.office-workstation').first()).toHaveAttribute(
+    'data-state',
+    'thinking',
+  );
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).focus();
   await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Mission Control', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('#task-workspace')).toContainText('Stop review');
+  await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -176,13 +203,13 @@ try {
   );
   await page.locator('nav a[href="#agent"]').click();
   await expect(page.locator('#agent')).toBeVisible();
-  await expect(page.locator('.office-scene').first()).toHaveAttribute('data-state', 'idle');
+  await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await createTask('Failed review', 'FAIL_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('failed');
   await expect(page.locator('.task-error')).toContainText('Provider diagnostics were withheld');
   await expect(page.locator('.task-error')).not.toContainText('Simulated provider failure');
-  await expect(page.locator('.office-scene').first()).toHaveAttribute('data-state', 'error');
+  await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'error');
   // Launch both real agent slots against two disposable worktrees through the UI.
   await page.getByLabel('Assign to agent').selectOption('codex-1');
   await createTask('Agent A concurrent', 'WAIT_FIXTURE');
@@ -196,8 +223,28 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
-  await expect(page.locator('.office-scene').nth(0)).toHaveAttribute('data-state', 'thinking');
-  await expect(page.locator('.office-scene').nth(1)).toHaveAttribute('data-state', 'thinking');
+  await expect(page.locator('.office-workstation').nth(0)).toHaveAttribute(
+    'data-state',
+    'thinking',
+  );
+  await expect(page.locator('.office-workstation').nth(1)).toHaveAttribute(
+    'data-state',
+    'thinking',
+  );
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: join(screenshotDir, 'ai-office-shared-desktop.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.shared-office')).toHaveAttribute('data-layout', 'portrait');
+  await page.screenshot({
+    path: join(screenshotDir, 'ai-office-shared-mobile.png'),
+    fullPage: true,
+  });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+
   assert.equal(env.store.task(taskA.id)?.state, 'running');
   assert.equal(env.store.task(taskB.id)?.state, 'running');
   // A queued task is visible/cancellable without interrupting B's active task.
