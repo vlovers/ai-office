@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AgentEvent, Dashboard, Task, AuthMode } from '../shared/types.js';
+import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
 import './styles.css';
@@ -53,9 +53,11 @@ function App() {
   const [view, setView] = useState<'mission' | 'focus'>('mission');
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [selected, setSelected] = useState<string>();
-  const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [eventHistory, setEventHistory] = useState<Record<string, AgentEvent[]>>({});
+  const [selectedAgent, setSelectedAgent] = useState<AgentId>('codex-1');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pendingStops, setPendingStops] = useState<string[]>([]);
   const [connection, setConnection] = useState('Connecting');
   const [repositoryId, setRepositoryId] = useState('');
   const [resumeSessionId, setResumeSessionId] = useState('');
@@ -79,21 +81,40 @@ function App() {
   useEffect(() => {
     if (!repositoryId && dashboard?.repositories[0]) setRepositoryId(dashboard.repositories[0].id);
   }, [dashboard, repositoryId]);
+  const streamIds = [
+    ...new Set(
+      [selected, ...(dashboard?.agents.map((agent) => agent.taskId) ?? [])].filter(
+        (id): id is string => Boolean(id),
+      ),
+    ),
+  ]
+    .sort()
+    .join(',');
   useEffect(() => {
-    setEvents([]);
-    if (!selected) return;
-    const stream = new EventSource(`/api/tasks/${selected}/stream`);
-    stream.onopen = () => setConnection('Live events connected');
-    stream.onerror = () => setConnection('Reconnecting to live events…');
-    stream.onmessage = (message) => {
-      const event = JSON.parse(message.data) as AgentEvent;
-      setEvents((previous) =>
-        previous.some((item) => item.id === event.id) ? previous : [...previous, event].slice(-500),
-      );
-      if (event.kind === 'state') void refresh().catch(() => {});
-    };
-    return () => stream.close();
-  }, [selected]);
+    const ids = streamIds ? streamIds.split(',') : [];
+    setEventHistory((previous) => Object.fromEntries(ids.map((id) => [id, previous[id] ?? []])));
+    const streams = ids.map((id) => {
+      const stream = new EventSource(`/api/tasks/${id}/stream`);
+      stream.onopen = () => setConnection('Live events connected');
+      stream.onerror = () => setConnection('Reconnecting to live events…');
+      stream.onmessage = (message) => {
+        const event = JSON.parse(message.data) as AgentEvent;
+        setEventHistory((previous) => {
+          const events = previous[id] ?? [];
+          return {
+            ...previous,
+            [id]: events.some((item) => item.id === event.id)
+              ? events
+              : [...events, event].slice(-500),
+          };
+        });
+        if (event.kind === 'state') void refresh().catch(() => {});
+      };
+      return stream;
+    });
+    return () => streams.forEach((stream) => stream.close());
+  }, [streamIds]);
+  const events = selected ? (eventHistory[selected] ?? []) : [];
   const act = async (operation: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -106,13 +127,34 @@ function App() {
       setBusy(false);
     }
   };
+  const stopTask = async (taskId: string) => {
+    setPendingStops((previous) => [...previous, taskId]);
+    setError('');
+    try {
+      await api(`/tasks/${taskId}/stop`, {});
+      await refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingStops((previous) => previous.filter((id) => id !== taskId));
+    }
+  };
   const task = dashboard?.tasks.find((item) => item.id === selected);
   const repository = dashboard?.repositories.find((item) => item.id === task?.repositoryId);
   const session = dashboard?.sessions.find((item) => item.id === task?.sessionId);
-  const agentBusy = !dashboard || dashboard.agent.state !== 'idle';
+  const agent = dashboard?.agents.find((item) => item.id === selectedAgent);
+  const agentBusy = !dashboard || dashboard.agents.some((item) => item.taskId !== null);
+  const selectedBusy = Boolean(agent?.taskId);
+  const queued = dashboard?.queue.find((entry) => entry.taskId === selected);
   const selectedRepository = dashboard?.repositories.find((item) => item.id === repositoryId);
-  const scene = sceneStatus(dashboard, task, events, connection.includes('disconnected'));
-  const stationTask = workstationTask(dashboard, selected);
+  const scene = sceneStatus(
+    dashboard,
+    task,
+    Object.values(eventHistory).flat(),
+    connection.includes('disconnected'),
+    selectedAgent,
+  );
+  const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
     requestAnimationFrame(() => {
       const section = document.getElementById(id);
@@ -120,7 +162,9 @@ function App() {
       section?.scrollIntoView({ block: 'start' });
     });
   };
-  const selectStation = () => {
+  const selectStation = (agentId: AgentId) => {
+    setSelectedAgent(agentId);
+    const stationTask = workstationTask(dashboard, selected, agentId);
     if (stationTask) {
       setSelected(stationTask.id);
       setResumeSessionId('');
@@ -131,15 +175,11 @@ function App() {
       showSection('agent');
     }
   };
-  const stopControl = agentBusy && dashboard?.agent.taskId && (
+  const stopControl = selectedBusy && agent?.taskId && (
     <button
       className="stop-button"
-      disabled={busy || dashboard.agent.state === 'stopping' || !dashboard.agent.canStop}
-      onClick={() =>
-        void act(async () => {
-          await api(`/tasks/${dashboard.agent.taskId}/stop`, {});
-        })
-      }
+      disabled={pendingStops.includes(agent.taskId) || agent.state === 'stopping' || !agent.canStop}
+      onClick={() => void stopTask(agent.taskId!)}
     >
       ■ Stop agent
     </button>
@@ -155,7 +195,7 @@ function App() {
         <a className="brand" href="#overview" onClick={() => setView('mission')}>
           <PixelBot />
           <span>
-            AI OFFICE<small>PHOSPHOR OS / PHASE 1.3</small>
+            AI OFFICE<small>PHOSPHOR OS / v0.3</small>
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
@@ -168,7 +208,7 @@ function App() {
             <span aria-hidden="true">⌂</span>Dashboard<span className="nav-count">01</span>
           </a>
           <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
-            <span aria-hidden="true">♙</span>Agent<span className="nav-count">01</span>
+            <span aria-hidden="true">♙</span>Agents<span className="nav-count">02</span>
           </a>
           <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
             <span aria-hidden="true">▤</span>Task history
@@ -265,7 +305,7 @@ function App() {
                 {view === 'focus' ? 'Focus mode' : 'Mission control'}
                 <span>_</span>
               </h1>
-              <p>One Codex agent. Read-only review. You have the controls.</p>
+              <p>Two Codex agents. Read-only worktrees. You have the controls.</p>
             </div>
             <a
               className="button-link"
@@ -304,7 +344,7 @@ function App() {
             <span>
               {view === 'focus'
                 ? 'Session output first. Stop and results stay within reach.'
-                : 'Overview / one real Codex workstation'}
+                : 'Overview / two independent Codex workstations'}
             </span>
           </div>
           {dashboard && !dashboard.repositories.length && (
@@ -346,37 +386,50 @@ function App() {
           )}
           <div className="mission-grid">
             <div className="mission-board">
-              <section
-                className={`office-scene state-${scene.state}`}
-                aria-label="Codex pixel workstation"
-                data-state={scene.state}
-              >
-                <div className="scene-label">
-                  <span>WORKSPACE / 01</span>
-                  <span>READ-ONLY STATION</span>
-                </div>
-                <button
-                  className="workstation-button"
-                  onClick={selectStation}
-                  aria-label="Select Codex workstation"
-                  aria-describedby="workstation-hint"
-                >
-                  <PixelOffice state={scene.state} />
-                </button>
-                <div className="scene-caption">
-                  <span>
-                    <span className="status-dot" />
-                    CODEX / {scene.label}
-                  </span>
-                  <span id="workstation-hint">Select workstation to inspect →</span>
-                </div>
-              </section>
+              <div className="workstation-grid" aria-label="Codex workstations">
+                {dashboard?.agents.map((slot) => {
+                  const status = sceneStatus(
+                    dashboard,
+                    dashboard.tasks.find((task) => task.id === selected),
+                    Object.values(eventHistory).flat(),
+                    connection.includes('disconnected'),
+                    slot.id,
+                  );
+                  return (
+                    <section
+                      key={slot.id}
+                      className={`office-scene state-${status.state} ${slot.id === selectedAgent ? 'station-selected' : ''}`}
+                      aria-label={`${slot.name} pixel workstation`}
+                      data-state={status.state}
+                    >
+                      <div className="scene-label">
+                        <span>{slot.name.toUpperCase()}</span>
+                        <span>READ ONLY</span>
+                      </div>
+                      <button
+                        className="workstation-button"
+                        onClick={() => selectStation(slot.id)}
+                        aria-label={`Select ${slot.name} workstation`}
+                        aria-pressed={slot.id === selectedAgent}
+                      >
+                        <PixelOffice state={status.state} agentName={slot.name} compact />
+                      </button>
+                      <div className="scene-caption">
+                        <span>
+                          <span className="status-dot" />
+                          {status.label}
+                        </span>
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
               <div className="stats" aria-label="Workspace statistics">
                 <div>
-                  <span>AGENT SLOTS</span>
+                  <span>CODEX AGENTS</span>
                   <strong>
-                    {dashboard ? '01' : '—'}
-                    <small>Codex only</small>
+                    {dashboard?.agents.length ?? '—'}
+                    <small>independent slots</small>
                   </strong>
                 </div>
                 <div>
@@ -400,6 +453,32 @@ function App() {
                   </strong>
                 </div>
               </div>
+              {!!dashboard?.queue.length && (
+                <section className="panel queue-panel" aria-label="Submitted queue">
+                  <div className="panel-heading">
+                    <h2>Submitted queue</h2>
+                    <span>{dashboard.queue.length} / 100</span>
+                  </div>
+                  <ol>
+                    {dashboard.queue.map((entry) => (
+                      <li key={entry.taskId}>
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            setSelected(entry.taskId);
+                            setSelectedAgent(entry.agentId);
+                            setResumeSessionId('');
+                          }}
+                        >
+                          {dashboard.tasks.find((task) => task.id === entry.taskId)?.title} ·{' '}
+                          {entry.agentId}
+                          <small> / {entry.waitingReason}</small>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
@@ -428,6 +507,7 @@ function App() {
                         aria-pressed={selected === item.id}
                         className={`task-row ${selected === item.id ? 'selected' : ''}`}
                         onClick={() => {
+                          setSelectedAgent(item.agentId);
                           setSelected(item.id);
                           setResumeSessionId('');
                         }}
@@ -436,6 +516,7 @@ function App() {
                         <span>
                           <strong>{item.title}</strong>
                           <small>
+                            {item.agentId} ·{' '}
                             {dashboard.repositories.find((r) => r.id === item.repositoryId)?.name} ·{' '}
                             {new Date(item.createdAt).toLocaleString()}
                           </small>
@@ -464,8 +545,8 @@ function App() {
                         <span className={`badge ${task.state}`}>{task.state}</span>{' '}
                         {repository?.name}
                       </span>
-                      {view === 'focus' && task.id === dashboard?.agent.taskId && stopControl}
-                      {task.state === 'queued' && (
+                      {view === 'focus' && task.id === agent?.taskId && stopControl}
+                      {task.state === 'queued' && !queued && (
                         <div className="start-controls">
                           <select
                             aria-label="Session"
@@ -476,6 +557,7 @@ function App() {
                             {dashboard?.sessions
                               .filter(
                                 (s) =>
+                                  s.agentId === task.agentId &&
                                   s.repositoryId === task.repositoryId &&
                                   s.threadId &&
                                   s.authMode === dashboard.connection.mode,
@@ -487,7 +569,7 @@ function App() {
                               ))}
                           </select>
                           <button
-                            disabled={busy || agentBusy || !dashboard?.ready}
+                            disabled={busy || !dashboard?.ready}
                             onClick={() =>
                               void act(async () => {
                                 await api(
@@ -502,6 +584,18 @@ function App() {
                         </div>
                       )}
                     </div>
+                    {queued && (
+                      <div className="queue-notice" role="status">
+                        Submitted / {queued.agentId} / queue #{queued.order}. {queued.waitingReason}
+                        <button
+                          className="secondary"
+                          disabled={pendingStops.includes(task.id)}
+                          onClick={() => void stopTask(task.id)}
+                        >
+                          Cancel queued task
+                        </button>
+                      </div>
+                    )}
                     <p className="task-prompt">{task.prompt}</p>
                     {session?.threadId && (
                       <p className="thread-id">
@@ -590,7 +684,7 @@ function App() {
                     void act(async () => {
                       const created = await api<Task>('/tasks', {
                         repositoryId,
-                        agentId: 'codex-1',
+                        agentId: selectedAgent,
                         title: data.get('title'),
                         prompt: data.get('prompt'),
                       });
@@ -599,6 +693,21 @@ function App() {
                     });
                   }}
                 >
+                  <label htmlFor="assigned-agent">Assign to agent</label>
+                  <select
+                    id="assigned-agent"
+                    value={selectedAgent}
+                    onChange={(event) => {
+                      setSelectedAgent(event.target.value as AgentId);
+                      setResumeSessionId('');
+                    }}
+                  >
+                    {dashboard?.agents.map((slot) => (
+                      <option key={slot.id} value={slot.id}>
+                        {slot.name} · {slot.state}
+                      </option>
+                    ))}
+                  </select>
                   <label htmlFor="repository">Repository</label>
                   <select
                     id="repository"
@@ -637,7 +746,7 @@ function App() {
                   />
                   <div className="compose-footer">
                     <span>
-                      <span className="tiny-avatar">⌘</span> Assigned to Codex 01
+                      <span className="tiny-avatar">⌘</span> Assigned to {agent?.name ?? 'Codex 01'}
                     </span>
                     <button disabled={busy || !repositoryId}>
                       Create task <span>→</span>
@@ -645,16 +754,34 @@ function App() {
                   </div>
                 </form>
                 <p className="read-only-note">
-                  Read-only review. Changes are proposed for manual review. Approval-required
-                  actions are blocked.
+                  Start submits to the assigned FIFO queue and may execute immediately. Read-only
+                  review. Changes are proposed for manual review. Approval-required actions are
+                  blocked.
                 </p>
               </section>
             </div>
             <aside className="inspector" aria-label="Agent and connection inspector">
               <section className="panel agent-panel" id="agent" tabIndex={-1}>
                 <div className="panel-heading">
-                  <h2>Your agent</h2>
-                  <span className="subtle">01 / 01</span>
+                  <h2>Agents / {agent?.name ?? 'Codex'}</h2>
+                  <span className="subtle">{dashboard?.concurrency ?? 2} slots</span>
+                </div>
+                <div className="agent-switcher" role="group" aria-label="Select agent">
+                  {dashboard?.agents.map((slot) => (
+                    <button
+                      key={slot.id}
+                      className="secondary"
+                      aria-pressed={selectedAgent === slot.id}
+                      onClick={() => {
+                        setSelectedAgent(slot.id);
+                        setSelected(workstationTask(dashboard, selected, slot.id)?.id);
+                        setResumeSessionId('');
+                      }}
+                    >
+                      {slot.name}
+                      <small>{slot.state}</small>
+                    </button>
+                  ))}
                 </div>
                 <div className="agent-info">
                   <div className={`agent-avatar state-${scene.state}`}>
@@ -662,9 +789,9 @@ function App() {
                   </div>
                   <div>
                     <h3>
-                      Codex 01{' '}
-                      <span className={`badge ${dashboard?.agent.state ?? ''}`}>
-                        {dashboard ? dashboard.agent.state : 'connecting'}
+                      {agent?.name}{' '}
+                      <span className={`badge ${agent?.state ?? ''}`}>
+                        {agent?.state ?? 'connecting'}
                       </span>
                     </h3>
                     <p>
@@ -681,20 +808,22 @@ function App() {
                   <strong>
                     {dashboard?.repositories.find(
                       (r) =>
-                        r.id ===
-                        dashboard.tasks.find((t) => t.id === dashboard.agent.taskId)?.repositoryId,
+                        r.id === dashboard.tasks.find((t) => t.id === agent?.taskId)?.repositoryId,
                     )?.name ?? 'Awaiting a task'}
                   </strong>
                 </div>
                 <div className="agent-detail">
                   <span>Saved sessions</span>
-                  <strong>{dashboard?.sessions.length ?? 0}</strong>
+                  <strong>
+                    {dashboard?.sessions.filter((session) => session.agentId === selectedAgent)
+                      .length ?? 0}
+                  </strong>
                 </div>
                 <div className="agent-note">
                   <span>↳</span>
                   <p>{dashboard?.readinessMessage ?? 'Connecting to the local backend…'}</p>
                 </div>
-                {(view === 'mission' || task?.id !== dashboard?.agent.taskId) && stopControl}
+                {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
               <section className="panel connection-panel" aria-label="Codex connection">
                 <div className="panel-heading">
@@ -798,9 +927,9 @@ function App() {
           </div>
           <footer>
             <span>
-              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI
+              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / v0.3
             </span>
-            <span>LOCAL FIRST · ONE AGENT AT A TIME</span>
+            <span>LOCAL FIRST · TWO AGENTS · READ ONLY</span>
           </footer>
         </div>
       </main>

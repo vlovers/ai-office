@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { SceneState } from './scene-state.js';
 
 /** Original local SVG sprites; one workstation, tied to actual task state. */
@@ -11,34 +12,43 @@ export function PixelBot() {
   );
 }
 
-export function PixelOffice({ state }: { state: SceneState }) {
+export function PixelOffice({
+  state,
+  agentName = 'Codex',
+  compact = false,
+}: {
+  state: SceneState;
+  agentName?: string;
+  compact?: boolean;
+}) {
+  const prefix = useId();
   return (
     <svg
       className="pixel-office"
-      viewBox="0 0 720 184"
+      viewBox={compact ? '125 48 260 136' : '0 0 720 184'}
       fill="none"
       shapeRendering="crispEdges"
       aria-hidden="true"
     >
       <defs>
-        <pattern id="wall" width="40" height="18" patternUnits="userSpaceOnUse">
+        <pattern id={`${prefix}-wall`} width="40" height="18" patternUnits="userSpaceOnUse">
           <path d="M0 0h40v18H0z" fill="#0c211c" />
           <path d="M0 17h40M39 0v17M19 0v8" stroke="#17352b" />
         </pattern>
-        <pattern id="floor" width="48" height="16" patternUnits="userSpaceOnUse">
+        <pattern id={`${prefix}-floor`} width="48" height="16" patternUnits="userSpaceOnUse">
           <path d="M0 0h48v16H0z" fill="#0a1918" />
           <path d="M0 15h48M47 0v15" stroke="#17332b" />
         </pattern>
-        <pattern id="stars" width="51" height="35" patternUnits="userSpaceOnUse">
+        <pattern id={`${prefix}-stars`} width="51" height="35" patternUnits="userSpaceOnUse">
           <path d="M6 8h2v2H6zm28 17h2v2h-2z" fill="#5b9d84" />
         </pattern>
       </defs>
-      <path fill="url(#wall)" d="M0 0h720v151H0z" />
-      <path fill="url(#floor)" d="M0 151h720v33H0z" />
+      <path fill={`url(#${prefix}-wall)`} d="M0 0h720v151H0z" />
+      <path fill={`url(#${prefix}-floor)`} d="M0 151h720v33H0z" />
       {[40, 215, 500].map((x) => (
         <g key={x}>
           <path fill="#041211" stroke="#315747" strokeWidth="4" d={`M${x} 12h145v113H${x}z`} />
-          <path fill="url(#stars)" d={`M${x + 4} 16h137v105H${x + 4}z`} />
+          <path fill={`url(#${prefix}-stars)`} d={`M${x + 4} 16h137v105H${x + 4}z`} />
           <path
             fill="#1c3430"
             d={`M${x + 8} 86h22V60h18v20h17V47h21v37h15V67h20v21h18v33H${x + 8}z`}
@@ -134,7 +144,7 @@ export function PixelOffice({ state }: { state: SceneState }) {
                   ? 'STOP…'
                   : state === 'offline'
                     ? 'OFFLINE'
-                    : 'CODEX'}
+                    : agentName.toUpperCase()}
         </text>
       </g>
       <path fill="#2b4a35" d="M537 148h46v8h-46zm5-7h35v7h-35z" />
