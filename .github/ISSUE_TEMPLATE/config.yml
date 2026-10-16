@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security reports
+    url: https://github.com/vlovers/ai-office/security/advisories
+    about: Check private reporting availability; do not post vulnerabilities publicly.
