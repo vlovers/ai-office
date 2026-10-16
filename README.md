@@ -1,5 +1,27 @@
 # AI Office
 
+**Local-first, read-only workspace for two Codex agents.** Run independently assigned repository reviews, watch live results in a shared pixel-art PHOSPHOR office, cancel queued/running work, and explicitly resume saved sessions after restart.
+
+![CI](https://github.com/vlovers/ai-office/actions/workflows/validation.yml/badge.svg) · [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+
+> **v0.3.0 · macOS verified · Node.js 24.x** — Single-user local tool. No write mode, autonomous Git actions, or background deployments. The dashboard is not a security boundary against untrusted local users.
+
+## Quick start
+
+```sh
+npm ci
+npm run build
+npm start
+```
+
+Open **http://127.0.0.1:4310**. Sign in with your existing Codex CLI via `codex login` if needed; the app prefers local ChatGPT login without API-key fallback. Register a trusted Git worktree, create a review task, assign Codex 01 or 02, then explicitly click Start. A task consumes provider allowance only when submitted for execution.
+
+**Why use it?** Two real independent agents, persistent FIFO queue, read-only repository-scoped sandbox, explicit stop/resume, task-specific SSE, and an accessible pixel-art office. See [architecture](docs/ARCHITECTURE.md), [permission model](docs/SECURITY.md) and [v0.3 milestone](docs/V0_3_MILESTONE_A.md).
+
+**Demo media:** Screenshot/GIF not included yet; add a sanitized image captured from the current production UI before publishing a demo. Never commit private runtime captures or session data.
+
+---
+
 AI Office v0.3 Milestone A is a local-first dashboard for two independently controlled Codex agents. Register a local Git worktree, create a read-only review task, watch live progress, stop it, and resume the saved thread after restarting the backend.
 
 **AI Office prefers your existing ChatGPT Codex CLI login. No `CODEX_API_KEY` is needed for local-login tasks.** API-key mode remains an explicit, separately billed option. Local authentication never falls back to API billing.
