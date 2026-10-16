@@ -39,3 +39,7 @@ jobs:
         run: npm run build
       - name: Formatting
         run: npm run format:check
+      - name: Install Chromium and browser dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke (deterministic fixtures)
+        run: npm run test:browser
