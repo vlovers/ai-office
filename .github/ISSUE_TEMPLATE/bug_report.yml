@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible AI Office defect (not a security vulnerability)
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "For potential vulnerabilities, use the private reporting guidance in SECURITY.md. Never include secrets, native thread IDs, tokens or private repository files."
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Use a disposable repo and sanitized data
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: ["macOS", "Linux", "Windows (unsupported)", "Other"]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Remove credentials, local paths, prompts with private content and session identifiers
