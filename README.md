@@ -1,8 +1,8 @@
 # AI Office
 
-A local-first dashboard for one human-directed Codex agent. Register a local Git worktree, create a read-only review task, watch live progress, stop it, and resume the saved thread after restarting the backend.
+AI Office v0.3 Milestone A is a local-first dashboard for two independently controlled Codex agents. Register a local Git worktree, create a read-only review task, watch live progress, stop it, and resume the saved thread after restarting the backend.
 
-**Phase 1.2 prefers your existing ChatGPT Codex CLI login. No `CODEX_API_KEY` is needed for local-login tasks.** API-key mode remains an explicit, separately billed option. Local authentication never falls back to API billing.
+**AI Office prefers your existing ChatGPT Codex CLI login. No `CODEX_API_KEY` is needed for local-login tasks.** API-key mode remains an explicit, separately billed option. Local authentication never falls back to API billing.
 
 Agent execution stays **read-only**. The SDK has no interactive approval callback, so edits, destructive operations, pushes, merges, and database operations remain blocked. Results can propose changes for manual review.
 
@@ -55,8 +55,8 @@ Do not select a user home, an existing Codex home, or a production database dire
 ## Using the dashboard
 
 1. Register an absolute **Git worktree root** you own and trust. Paths are canonicalized and validated. Estima and Pixel Office are excluded. No agent can select an unregistered path through HTTP.
-2. Create a focused task, such as “Read README.md and explain the project.” It is assigned to Codex 01 in `queued` state.
-3. Select the task and click **Start task**. Local login consumes your ChatGPT Codex allowance/credits according to your account settings. Only one agent/task runs at a time.
+2. Create a focused task, such as “Read README.md and explain the project.” Choose Codex 01 or Codex 02 explicitly. Creation saves an unsubmitted task in `queued` state.
+3. Select the task and click **Start task**. Local login consumes your ChatGPT Codex allowance/credits according to your account settings. Start submits to the chosen agent’s persistent FIFO queue and may execute immediately. At most two tasks run, on different registered Git worktrees. A busy worktree waits for its lease.
 4. Watch the event log. Interim assistant commentary is progress; **Final result appears only after `turn.completed`**. Thread IDs, task states, results, errors and events persist in local SQLite.
 5. To continue after a backend restart, create a new task in the same repository, select the saved session in the Session menu, and Start. Its connection mode/model/context must match. The original native CLI transcript must still exist.
 6. Use **Stop agent** to request SDK cancellation. The supervisor waits for process-group cleanup before releasing the worktree lock. During preflight, Stop can wait for the bounded metadata check. Cancellation cannot undo a completed provider request or guarantee zero additional allowance use.
@@ -126,8 +126,18 @@ The earlier standalone SDK-only probe is available as `npm run test:real`; it do
 
 See [Phase 1.2 verification and limitations](docs/PHASE_1_2_DASHBOARD.md), [architecture](docs/ARCHITECTURE.md), [security/recovery](docs/SECURITY.md), and the historical [Phase 1.1 SDK report](docs/PHASE_1_1_CODEX_INTEGRATION.md).
 
-No autonomous planning, multiple parallel agents, editing, automatic commits, pushes or merges are implemented.
+Two manually assigned Codex agents are supported. Autonomous planning, editing, automatic commits, pushes and merges are not implemented.
 
 ## PHOSPHOR OS interface
 
-Phase 1.3 adds a responsive phosphor terminal dashboard with a single pixel workstation, keyboard navigation and optional CRT effects (off by default). The existing read-only Codex workflow is preserved. See the [design and verification notes](docs/design/PHOSPHOR_OS.md) for layout, accessibility, screenshot commands and limitations.
+The PHOSPHOR OS dashboard now has two real pixel workstations, independent event feeds, an explicit agent selector, a submitted queue and Focus Mode, keyboard navigation and optional CRT effects (off by default). The existing read-only Codex workflow is preserved. See the [v0.3 runtime and verification notes](docs/V0_3_MILESTONE_A.md) and [design and verification notes](docs/design/PHOSPHOR_OS.md) for layout, accessibility, screenshot commands and limitations.
+
+## Queue, restart and allowance
+
+Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.
+
+Submitted work survives normal shutdown and resumes dispatch after the backend successfully listens. Running tasks are stopped on normal shutdown and recovered as interrupted after an unclean restart; they are never automatically retried. Create a new task assigned to the same agent and choose its compatible saved session to resume. Existing pre-v0.3 unsubmitted tasks remain unsubmitted. Schema 3 migration is transactional; older application versions refuse it.
+
+Both agents use the selected backend authentication mode. A queued task retains its submitted mode and waits if it differs after restart; there is no paid fallback. Changing/refreshing the mode is blocked while either agent owns a run. Stale worktree/server leases require manual inspection and cleanup as described in [security and recovery](docs/SECURITY.md).
+
+Two simultaneous turns consume overlapping ChatGPT allowance or explicitly selected API usage, plus two worker/CLI process groups and additional memory/CPU. The app does not predict dollars, remaining allowance or enforce an account-wide spend limit. Shared provider rate limits can affect both agents. Use one agent or cancel queued work to reduce concurrent usage; different AI Office data directories have separate concurrency budgets, while sharing worktree leases.

@@ -1,6 +1,6 @@
 # Trust boundaries and recovery
 
-The [Phase 1.2 dashboard](PHASE_1_2_DASHBOARD.md) prefers the existing CLI-owned ChatGPT login without copying or opening credential files in application code. Local mode excludes API-key variables and never selects API billing on failure. Task tools remain repository-scoped and read-only; API mode requires an explicit UI selection and backend-only key configuration.
+The dashboard (authentication was verified in [Phase 1.2](PHASE_1_2_DASHBOARD.md)) prefers the existing CLI-owned ChatGPT login without copying or opening credential files in application code. Local mode excludes API-key variables and never selects API billing on failure. Task tools remain repository-scoped and read-only; API mode requires an explicit UI selection and backend-only key configuration.
 
 ## Enforced boundaries
 
@@ -11,7 +11,7 @@ The [Phase 1.2 dashboard](PHASE_1_2_DASHBOARD.md) prefers the existing CLI-owned
 - The worker gets an application-owned private HOME/CODEX_HOME and no inherited credentials. Its SDK subprocess receives only the selected CLI environment through private IPC: local mode gets existing auth-home paths and a minimal PATH, with no key/access-token/cloud/database/proxy variables; explicit API mode gets an isolated home and its configured API key. The CLI owns its login and normal refresh. Shell commands inside Codex inherit no CLI environment and receive a minimal PATH. No credential file is opened/copied by application code; none is exported through an HTTP endpoint.
 - Execution ignores inherited user configuration/rules and pins user review routing. Connection status is cached for polling and checked again before a task; actual expired-login failures become Authentication required. Raw CLI stderr/provider authentication diagnostics are withheld. Private session bindings are not browser-visible and cannot silently switch authentication modes on resume.
 - Automatic `AGENTS.md` context discovery is disabled with `project_doc_max_bytes=0` so parent-directory instructions are not imported into task context.
-- One active agent and cross-instance worktree leases prevent shared execution. No write provider is enabled. External editors and unrelated coding tools do not participate in these leases.
+- Two independent agent slots are bounded to one run each. Cross-instance worktree leases prevent shared worktree execution, even for read-only turns. FIFO submissions are pinned to an agent, repository and authentication mode; sessions also retain agent ownership. No write provider is enabled. External editors and unrelated coding tools do not participate in these leases.
 - Runtime directories use private permissions and are excluded from Git. The application API key is redacted from persisted output and obvious `sk-…` values are scrubbed. Errors and HTTP logs do not dump the server environment. Raw task prompts are intentionally persisted; never paste secrets into them.
 - The only backend Git calls are fixed read-only identity/status operations with bounded execution. The service opens only its own SQLite file; it has no production database connection code. Model-generated commands are isolated from user database credentials, networking, and filesystem writes.
 
@@ -29,20 +29,20 @@ SSE output is rendered as text, not HTML. Metadata and session transcripts are p
 
 ## Stop and shutdown
 
-Stop requests `AbortController.abort()` through the SDK. The supervising worker aborts on server disconnect or termination. The backend kills remaining process-group members after a grace period and holds the repository lease through cleanup. State is `stopping` until that finishes. Authentication preflight can delay Stop until its bounded metadata RPC completes. Ctrl-C/SIGTERM ends SSE responses, stops the active agent, and closes remaining HTTP connections before closing SQLite and releasing the server lease.
+Stop requests `AbortController.abort()` through the SDK. The supervising worker aborts on server disconnect or termination. The backend kills remaining process-group members after a grace period and holds the repository lease through cleanup. State is `stopping` until that finishes. Authentication preflight can delay Stop until its bounded metadata RPC completes. Ctrl-C/SIGTERM ends SSE responses, stops both active agents concurrently, retaining unclaimed queue submissions, and closes remaining HTTP connections before closing SQLite and releasing the server lease.
 
-Cancellation cannot roll back already completed actions, undo sent provider requests, or guarantee zero additional provider charges. POSIX process groups are not a container; deliberately detached external processes are not covered by group supervision. Phase 1's read-only/network-denied task sandbox and fail-closed leases limit the consequences. A host crash or power loss cannot emit a final event.
+Cancellation cannot roll back already completed actions, undo sent provider requests, or guarantee zero additional provider charges. POSIX process groups are not a container; deliberately detached external processes are not covered by group supervision. The read-only/network-denied task sandbox and fail-closed leases limit the consequences. A host crash or power loss cannot emit a final event.
 
 ## Unclean termination recovery
 
-The server uses `<data-directory>/server.lock`; worktree leases live under the OS temp directory as `ai-office-worktrees-<uid>/<sha256-of-canonical-git-directory>`. Owner files record the server PID, resource, and timestamp. An existing lease fails closed even if its recorded PID appears dead, to avoid PID reuse and orphaned-child races.
+The server uses `<data-directory>/server.lock`; worktree leases live under the fixed OS-local root `/tmp/ai-office-worktrees-<uid>/<sha256-of-canonical-git-directory>` regardless of `TMPDIR`. Private owner files record the server PID, resource, and timestamp. HTTP errors and queue messages never include that owner record or lease path. An existing lease fails closed even if its recorded PID appears dead, to avoid PID reuse and orphaned-child races.
 
 After an abnormal termination:
 
 1. Stop remaining AI Office, worker, and Codex processes associated with that instance. Inspect processes and the lease's `owner.json`; do not rely solely on PID liveness.
 2. Inspect the repository and preserve anything you need. Do not launch a second write agent into that worktree.
 3. Only after confirming cleanup, manually remove the corresponding stale lock directory. The application never automatically steals or clears unknown leases.
-4. Restart the backend. SQLite marks previously `running`/`stopping` tasks `interrupted` and retains their event history/thread IDs.
-5. Create a new task in that repository and choose the saved session's connection mode. If the native transcript in its original CLI home is gone, resume fails visibly; SQLite's ID alone cannot reconstruct the transcript. Pre-1.2 sessions without a verified binding remain history and require a new session.
+4. Restart the backend. SQLite marks previously `running`/`stopping` tasks `interrupted` and retains their event history/thread IDs. Unclaimed submitted tasks remain in the persistent queue; legacy unsubmitted tasks do not start.
+5. Create a new task in that repository and assign the same agent and choose the saved session's connection mode. If the native transcript in its original CLI home is gone, resume fails visibly; SQLite's ID alone cannot reconstruct the transcript. Pre-1.2 sessions without a verified binding remain history and require a new session.
 
 Normal shutdown releases its locks. Do not delete SQLite/session data to clear a lock. No startup, test, or application action automatically commits, pushes, or merges.

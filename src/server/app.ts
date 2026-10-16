@@ -54,6 +54,9 @@ export async function createApp(manager: TaskManager) {
       "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
   });
+  app.addHook('onListen', async () => {
+    manager.startQueue();
+  });
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/dashboard', async () => manager.dashboard());
   app.post('/api/connection', async (request) => {
@@ -79,7 +82,7 @@ export async function createApp(manager: TaskManager) {
     const input = z
       .object({
         repositoryId: id,
-        agentId: z.literal('codex-1'),
+        agentId: z.enum(['codex-1', 'codex-2']),
         title: z.string().trim().min(1).max(160),
         prompt: z.string().trim().min(1).max(16000),
       })

@@ -1,6 +1,15 @@
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AppError } from './errors.js';
+
+export class ResourceLockedError extends AppError {
+  constructor() {
+    super(
+      409,
+      'Resource is locked. Verify the previous AI Office/Codex processes and local lease before retrying.',
+    );
+  }
+}
 
 // OS-local lease shared by all AI Office instances. Unknown/stale leases fail closed.
 // We do not steal leases after a crash: the user must verify old processes have exited.
@@ -9,16 +18,7 @@ export async function acquireLock(directory: string, detail: string) {
     await mkdir(directory, { mode: 0o700 });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    let owner = 'unknown owner';
-    try {
-      owner = await readFile(join(directory, 'owner.json'), 'utf8');
-    } catch {
-      /* fail closed */
-    }
-    throw new AppError(
-      409,
-      `Resource is locked: ${detail}. Verify no previous AI Office/Codex processes remain before removing ${directory}. Owner: ${owner}`,
-    );
+    throw new ResourceLockedError();
   }
   try {
     await writeFile(

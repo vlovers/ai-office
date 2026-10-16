@@ -5,6 +5,7 @@ import { TaskManager } from './manager.js';
 import { CodexProvider } from './providers/codex.js';
 import { createApp } from './app.js';
 import { acquireLock } from './lock.js';
+import { AGENT_IDS } from '../shared/types.js';
 import { CodexAuth } from './providers/codex-auth.js';
 
 process.umask(0o077);
@@ -17,11 +18,10 @@ try {
   store = new Store(join(data, 'office.sqlite'));
   const auth = new CodexAuth({ dataDir: data, apiKey: process.env.CODEX_API_KEY });
   await auth.refresh();
-  const provider = new CodexProvider({
-    home: join(data, 'codex-home'),
-    auth,
-  });
-  const manager = new TaskManager(store, provider, auth, process.env.CODEX_API_KEY);
+  const providers = AGENT_IDS.map(
+    (id) => new CodexProvider({ home: join(data, 'workers', id), auth }),
+  );
+  const manager = new TaskManager(store, providers, auth, process.env.CODEX_API_KEY);
   const app = await createApp(manager);
   let stopping = false;
   const shutdown = async (exitCode = 0) => {

@@ -1,6 +1,7 @@
 // Test double for the CLI transport, consumed through the REAL installed Codex SDK.
 // Never invokes a model, accesses auth, or executes model-generated commands.
 import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 const args = process.argv.slice(2);
 const config = args.filter((_, index) => args[index - 1] === '--config');
 const filesystem = config.find((arg) => arg.startsWith('permissions.ai-office-review.filesystem='));
@@ -33,7 +34,10 @@ if (
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
 const send = (event) => process.stdout.write(JSON.stringify(event) + '\n');
-const threadId = '00000000-0000-4000-8000-000000000001';
+const savedThread = args.find((arg) => /^00000000-0000-4000-8000-[a-f0-9]{12}$/.test(arg));
+const threadId =
+  savedThread ??
+  `00000000-0000-4000-8000-${createHash('sha256').update(repo).digest('hex').slice(0, 12)}`;
 send({ type: 'thread.started', thread_id: threadId });
 send({ type: 'turn.started' });
 if (input.includes('AUTH_FIXTURE')) {

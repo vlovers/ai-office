@@ -1,6 +1,7 @@
-import type { AgentEvent, Dashboard, Task } from '../shared/types.js';
+import type { AgentEvent, Dashboard, Task, AgentId } from '../shared/types.js';
 
-export type SceneState = 'offline' | 'idle' | 'thinking' | 'working' | 'stopping' | 'error';
+export type SceneState =
+  'offline' | 'idle' | 'thinking' | 'working' | 'stopping' | 'completed' | 'error';
 export interface SceneStatus {
   state: SceneState;
   label: string;
@@ -12,10 +13,15 @@ export function sceneStatus(
   selected: Task | undefined,
   events: AgentEvent[],
   disconnected = false,
+  agentId: AgentId = 'codex-1',
 ): SceneStatus {
   if (disconnected) return { state: 'offline', label: 'Server disconnected' };
   if (!dashboard) return { state: 'offline', label: 'Connecting' };
-  const active = dashboard.tasks.find((task) => task.id === dashboard.agent.taskId);
+  const agent = dashboard.agents.find((item) => item.id === agentId);
+  const active = dashboard.tasks.find((task) => task.id === agent?.taskId);
+  if (!agent) return { state: 'offline', label: 'Agent unavailable' };
+  if (agent.state === 'offline') return { state: 'offline', label: 'Agent offline' };
+  if (agent?.state === 'preparing') return { state: 'idle', label: 'Preparing read-only session' };
   if (active?.state === 'stopping') return { state: 'stopping', label: 'Stopping' };
   if (active?.state === 'running') {
     const latest = events.findLast(
@@ -35,19 +41,37 @@ export function sceneStatus(
       return { state: 'thinking', label: 'Thinking · SDK reasoning item' };
     return { state: 'working', label: 'Working · read-only turn' };
   }
-  if (selected?.state === 'failed' || selected?.state === 'interrupted')
+  if (
+    selected?.agentId === agentId &&
+    (selected?.state === 'failed' || selected?.state === 'interrupted')
+  )
     return { state: 'error', label: `Selected task ${selected.state}` };
   if (dashboard.connection.status === 'connection-error')
     return { state: 'error', label: 'Connection error' };
   if (dashboard.connection.status === 'authentication-required')
     return { state: 'offline', label: 'Authentication required' };
-  return { state: 'idle', label: 'Idle · awaiting a task' };
+  if (agent?.state === 'waiting') return { state: 'idle', label: 'Waiting · submitted queue' };
+  if (selected?.agentId === agentId && selected.state === 'completed')
+    return { state: 'completed', label: 'Completed · saved result' };
+  return {
+    state: 'idle',
+    label:
+      selected?.agentId === agentId && selected.state === 'stopped'
+        ? 'Idle · task stopped'
+        : 'Idle · awaiting a task',
+  };
 }
 
-export function workstationTask(dashboard: Dashboard | undefined, selectedId: string | undefined) {
+export function workstationTask(
+  dashboard: Dashboard | undefined,
+  selectedId: string | undefined,
+  agentId: AgentId = 'codex-1',
+) {
   return (
-    dashboard?.tasks.find((task) => task.id === dashboard.agent.taskId) ??
-    dashboard?.tasks.find((task) => task.id === selectedId) ??
-    dashboard?.tasks[0]
+    dashboard?.tasks.find(
+      (task) => task.id === dashboard.agents.find((agent) => agent.id === agentId)?.taskId,
+    ) ??
+    dashboard?.tasks.find((task) => task.id === selectedId && task.agentId === agentId) ??
+    dashboard?.tasks.find((task) => task.agentId === agentId)
   );
 }

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, writeFile, realpath } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { mkdir, writeFile, realpath, rename } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -182,11 +182,13 @@ export class CodexAuth {
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const launcher = join(directory, `${contextId}.sh`);
     const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+    const temporary = `${launcher}.${randomUUID()}.tmp`;
     await writeFile(
-      launcher,
+      temporary,
       `#!/bin/sh\n[ "$1" = exec ] || exit 64\nshift\nexec ${quote(canonicalExecutable)} exec --ignore-user-config --ignore-rules "$@"\n`,
       { mode: 0o700 },
     );
+    await rename(temporary, launcher); // atomic replacement: concurrent preflights never truncate an executable
     return {
       executable: launcher,
       env,

@@ -43,7 +43,7 @@ it('records provider failure and releases the agent for a subsequent task', asyn
     ),
   ).toBe(true);
 });
-it('rejects concurrent starts and stops a process that ignores SIGTERM', async () => {
+it('queues an assigned agent’s next task and stops a process that ignores SIGTERM', async () => {
   const env = await setup('WAIT_FIXTURE');
   env.manager.start(env.task.id);
   const another = env.store.createTask({
@@ -51,15 +51,15 @@ it('rejects concurrent starts and stops a process that ignores SIGTERM', async (
     title: 'Other',
     prompt: 'review',
   });
-  expect(() => env.manager.start(another.id)).toThrow('already has a task');
+  env.manager.start(another.id);
+  expect(env.store.queue().some((entry) => entry.taskId === another.id)).toBe(true);
   await until(
     () => env.store.events(env.task.id),
     (events) => events.some((event) => event.kind === 'thread'),
   );
   await env.manager.stop(env.task.id);
   expect(env.store.task(env.task.id)?.state).toBe('stopped');
-  expect(env.manager.dashboard().agent.state).toBe('idle');
-  env.manager.start(another.id);
+  expect(env.manager.dashboard().agent.taskId).not.toBe(env.task.id);
   await until(
     () => env.store.task(another.id)!,
     (task) => task.state === 'completed',
@@ -79,6 +79,10 @@ it('treats unexpected CLI termination as failure, and validates session ownershi
 it('stops safely if shutdown arrives while a task is preparing', async () => {
   const env = await setup('WAIT_FIXTURE');
   env.manager.start(env.task.id);
+  await until(
+    () => env.store.task(env.task.id)!.state,
+    (state) => state === 'running',
+  );
   await env.manager.shutdown();
   expect(env.store.task(env.task.id)?.state).toBe('stopped');
   const next = env.store.createTask({ repositoryId: env.repo.id, title: 'Late', prompt: 'review' });

@@ -45,7 +45,7 @@ it('smoke: HTTP → SQLite → official SDK/CLI fixture → SSE → result → p
     expect(finished.changedFiles).toEqual(finished.baselineFiles);
     expect(finished.changedFiles).toEqual([{ path: 'README.md', status: '??' }]);
     const thread = env.store.session(finished.sessionId!)!;
-    expect(thread.threadId).toBe('00000000-0000-4000-8000-000000000001');
+    expect(thread.threadId).toMatch(/^00000000-0000-4000-8000-[a-f0-9]{12}$/);
     expect(thread.authMode).toBe('local-cli-chatgpt');
     expect(thread.model).toBe('fixture-model');
     let streamed = '';
@@ -101,5 +101,77 @@ it('smoke: HTTP → SQLite → official SDK/CLI fixture → SSE → result → p
     await app.close();
     currentStore.close();
     await env.cleanup();
+  }
+});
+
+it('smoke: two assigned agents stream independently and Stop A leaves B running', async () => {
+  const env = await sandbox();
+  const other = await sandbox();
+  const app = await createApp(env.manager);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
+  try {
+    const base = (await app.listen({ host: '127.0.0.1', port: 0 })) + '/api';
+    const post = async <T>(path: string, body: unknown): Promise<T> => {
+      const response = await fetch(base + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      expect(response.ok, await response.clone().text()).toBe(true);
+      return response.json() as Promise<T>;
+    };
+    const repoA = await post<Repository>('/repositories', { path: env.repository });
+    const repoB = await post<Repository>('/repositories', { path: other.repository });
+    const a = await post<Task>('/tasks', {
+      repositoryId: repoA.id,
+      agentId: 'codex-1',
+      title: 'Agent A',
+      prompt: 'WAIT_FIXTURE',
+    });
+    const b = await post<Task>('/tasks', {
+      repositoryId: repoB.id,
+      agentId: 'codex-2',
+      title: 'Agent B',
+      prompt: 'WAIT_FIXTURE',
+    });
+    for (const task of [a, b]) {
+      const stream = await fetch(`${base}/tasks/${task.id}/stream`, { signal: controller.signal });
+      expect(stream.headers.get('content-type')).toBe('text/event-stream');
+      readers.push(stream.body!.getReader());
+    }
+    await Promise.all([post(`/tasks/${a.id}/start`, {}), post(`/tasks/${b.id}/start`, {})]);
+    const readProgress = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+      let text = '';
+      while (!text.includes('Waiting for Stop')) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        text += new TextDecoder().decode(chunk.value);
+      }
+      return text;
+    };
+    const [eventsA, eventsB] = await Promise.all(readers.map(readProgress));
+    expect(eventsA).toContain(a.id);
+    expect(eventsA).not.toContain(b.id);
+    expect(eventsB).toContain(b.id);
+    expect(eventsB).not.toContain(a.id);
+    await post(`/tasks/${a.id}/stop`, {});
+    expect(env.store.task(a.id)?.state).toBe('stopped');
+    expect(env.store.task(b.id)?.state).toBe('running');
+    await post(`/tasks/${b.id}/stop`, {});
+    const dashboard = await (await fetch(`${base}/dashboard`)).json();
+    expect(dashboard.agents).toHaveLength(2);
+    expect(dashboard.concurrency).toBe(2);
+    expect(JSON.stringify(dashboard)).not.toContain('contextId');
+    expect(JSON.stringify(dashboard)).not.toContain('owner.json');
+  } finally {
+    clearTimeout(timeout);
+    for (const reader of readers) await reader.cancel().catch(() => {});
+    controller.abort();
+    await app.close();
+    await env.cleanup();
+    await other.cleanup();
   }
 });
