@@ -7,21 +7,24 @@ import { CodexProvider } from '../src/server/providers/codex.js';
 import { Store } from '../src/server/store.js';
 import { TaskManager } from '../src/server/manager.js';
 import { CodexAuth, type LocalInspection } from '../src/server/providers/codex-auth.js';
+import { AGENT_IDS } from '../src/shared/types.js';
 import { dirname } from 'node:path';
 
-export async function sandbox() {
+export async function sandbox(existingRepository?: string) {
   const root = await mkdtemp(join(tmpdir(), 'ai-office-test-'));
-  const repository = join(root, 'example');
-  execFileSync('/bin/mkdir', [repository]);
-  execFileSync('/usr/bin/git', ['init', '--quiet', repository], {
-    env: {
-      PATH: '/usr/bin:/bin',
-      HOME: root,
-      GIT_CONFIG_NOSYSTEM: '1',
-      GIT_CONFIG_GLOBAL: '/dev/null',
-    },
-  });
-  await writeFile(join(repository, 'README.md'), '# Disposable example\n');
+  const repository = existingRepository ?? join(root, 'example');
+  if (!existingRepository) {
+    execFileSync('/bin/mkdir', [repository]);
+    execFileSync('/usr/bin/git', ['init', '--quiet', repository], {
+      env: {
+        PATH: '/usr/bin:/bin',
+        HOME: root,
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+      },
+    });
+    await writeFile(join(repository, 'README.md'), '# Disposable example\n');
+  }
   const executable = join(root, 'fixture.mjs');
   await writeFile(
     executable,
@@ -42,13 +45,17 @@ export async function sandbox() {
   };
   const auth = new CodexAuth({ dataDir: root, inspectLocal: async () => inspection });
   await auth.refresh();
-  const provider = new CodexProvider({ home: join(root, 'worker-home'), auth });
-  const manager = new TaskManager(store, provider, auth);
+  const providers = AGENT_IDS.map(
+    (id) => new CodexProvider({ home: join(root, 'workers', id), auth }),
+  );
+  const provider = providers[0]!;
+  const manager = new TaskManager(store, providers, auth);
   return {
     root,
     repository,
     store,
     provider,
+    providers,
     manager,
     auth,
     inspection,

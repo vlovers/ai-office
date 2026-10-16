@@ -20,6 +20,19 @@ const task = (id: string, state: Task['state'] = 'queued'): Task => ({
 });
 const dashboard = (tasks: Task[] = [], activeId: string | null = null): Dashboard => ({
   tasks,
+  concurrency: 2,
+  queue: [],
+  agents: [
+    {
+      id: 'codex-1',
+      name: 'Codex 01',
+      provider: 'codex',
+      state: activeId ? 'running' : 'idle',
+      taskId: activeId,
+      canStop: true,
+      mode: 'read-only',
+    },
+  ],
   repositories: [],
   sessions: [],
   ready: true,
