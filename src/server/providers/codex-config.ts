@@ -4,6 +4,7 @@ export function codexOptions(
   repositoryPath: string,
   env: Record<string, string>,
   executable?: string,
+  write = false,
 ): CodexOptions {
   const filesystem = {
     ':root': 'deny',
@@ -11,11 +12,19 @@ export function codexOptions(
     ':tmpdir': 'deny',
     ':slash_tmp': 'deny',
     [repositoryPath]: {
-      '.': 'read',
+      '.': write ? 'write' : 'read',
       '.git': 'deny',
       '.codex': 'deny',
       '.agents': 'deny',
       '.aws': 'deny',
+      '**/.git': 'deny',
+      '**/.git/**': 'deny',
+      '**/.codex': 'deny',
+      '**/.codex/**': 'deny',
+      '**/.agents': 'deny',
+      '**/.agents/**': 'deny',
+      '**/.aws': 'deny',
+      '**/.aws/**': 'deny',
       '.env': 'deny',
       '**/.env*': 'deny',
       '**/*.pem': 'deny',

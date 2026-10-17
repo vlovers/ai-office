@@ -21,7 +21,14 @@ export function sceneStatus(
   const active = dashboard.tasks.find((task) => task.id === agent?.taskId);
   if (!agent) return { state: 'offline', label: 'Agent unavailable' };
   if (agent.state === 'offline') return { state: 'offline', label: 'Agent offline' };
-  if (agent?.state === 'preparing') return { state: 'idle', label: 'Preparing read-only session' };
+  if (agent?.state === 'preparing')
+    return {
+      state: 'idle',
+      label:
+        active?.executionMode === 'write'
+          ? 'Preparing isolated coding session'
+          : 'Preparing read-only session',
+    };
   if (active?.state === 'stopping') return { state: 'stopping', label: 'Stopping' };
   if (active?.state === 'running') {
     const latest = events.findLast(
@@ -39,7 +46,13 @@ export function sceneStatus(
       ['item.started', 'item.updated'].includes(sdk.type ?? '')
     )
       return { state: 'thinking', label: 'Thinking · SDK reasoning item' };
-    return { state: 'working', label: 'Working · read-only turn' };
+    return {
+      state: 'working',
+      label:
+        active.executionMode === 'write'
+          ? 'Working · isolated write turn'
+          : 'Working · read-only turn',
+    };
   }
   if (
     selected?.agentId === agentId &&

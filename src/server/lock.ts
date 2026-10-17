@@ -32,3 +32,18 @@ export async function acquireLock(directory: string, detail: string) {
   }
   return () => rm(directory, { recursive: true, force: true });
 }
+
+// Acquire in deterministic order; a partial acquisition is released, never stolen.
+export async function acquireLocks(directories: string[], detail: string) {
+  const releases: (() => Promise<void>)[] = [];
+  try {
+    for (const directory of [...new Set(directories)].sort())
+      releases.push(await acquireLock(directory, detail));
+  } catch (error) {
+    for (const release of releases.reverse()) await release();
+    throw error;
+  }
+  return async () => {
+    for (const release of releases.reverse()) await release();
+  };
+}

@@ -1,10 +1,10 @@
 # AI Office
 
-**Local-first, read-only workspace for two Codex agents.** Run independently assigned repository reviews, watch live results in a shared pixel-art PHOSPHOR office, cancel queued/running work, and explicitly resume saved sessions after restart.
+**Local-first coding workspace for two Codex agents.** Delegate isolated coding tasks or read-only reviews, follow live progress, inspect Git diffs, run configured verification, and explicitly keep or reject changes.
 
 ![CI](https://github.com/vlovers/ai-office/actions/workflows/validation.yml/badge.svg) · [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-> **v0.3.0 · macOS verified · Node.js 24.x** — Single-user local tool. No write mode, autonomous Git actions, or background deployments. The dashboard is not a security boundary against untrusted local users.
+> **v0.4 development · macOS verified · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
 
 ## Quick start
 
@@ -16,17 +16,17 @@ npm start
 
 Open **http://127.0.0.1:4310**. Sign in with your existing Codex CLI via `codex login` if needed; the app prefers local ChatGPT login without API-key fallback. Register a trusted Git worktree, create a review task, assign Codex 01 or 02, then explicitly click Start. A task consumes provider allowance only when submitted for execution.
 
-**Why use it?** Two real independent agents, persistent FIFO queue, read-only repository-scoped sandbox, explicit stop/resume, task-specific SSE, and an accessible pixel-art office. See [architecture](docs/ARCHITECTURE.md), [permission model](docs/SECURITY.md) and [v0.3 milestone](docs/V0_3_MILESTONE_A.md).
+**Why use it?** Persistent FIFO queues, isolated coding worktrees, Git diff review, explicit keep/reject, stop/resume, task-specific SSE, and an accessible pixel-art office. Start with [write-session setup and demo](docs/V0_4_DEMO.md) and [session lifecycle](docs/SESSION_LIFECYCLE.md). See [architecture](docs/ARCHITECTURE.md), [permission model](docs/SECURITY.md) and [v0.3 milestone](docs/V0_3_MILESTONE_A.md).
 
 **Demo media:** Screenshot/GIF not included yet; add a sanitized image captured from the current production UI before publishing a demo. Never commit private runtime captures or session data.
 
 ---
 
-AI Office v0.3 Milestone A is a local-first dashboard for two independently controlled Codex agents. Register a local Git worktree, create a read-only review task, watch live progress, stop it, and resume the saved thread after restarting the backend.
+AI Office supports read-only reviews and write-enabled tasks in dedicated Git worktrees/branches. Review persists independently of the agent session. Keep preserves isolated changes; revision-confirmed rejection discards uncommitted task files while retaining the branch. Ignored files, nested repositories, advanced HEAD or ambiguous ownership require manual preservation and cleanup. Integrate kept changes manually.
 
 **AI Office prefers your existing ChatGPT Codex CLI login. No `CODEX_API_KEY` is needed for local-login tasks.** API-key mode remains an explicit, separately billed option. Local authentication never falls back to API billing.
 
-Agent execution stays **read-only**. The SDK has no interactive approval callback, so edits, destructive operations, pushes, merges, and database operations remain blocked. Results can propose changes for manual review.
+Read-only execution retains its original restrictive profile. Isolated coding grants writes only inside its dedicated worktree; primary checkout and Git metadata remain denied. The SDK has no interactive approval callback: actions requiring escalation stay blocked. Host verification is disabled by default. Enabling it requires AI_OFFICE_ALLOW_HOST_VERIFICATION=1 and separate confirmation of full host permissions; inspect AI-edited scripts before running them. See the [security model](docs/SECURITY.md), [security audit](docs/V0_4_SECURITY_AUDIT.md), and [workspace recovery](docs/WORKSPACE_RECOVERY.md).
 
 ## Requirements
 
@@ -85,7 +85,7 @@ Do not select a user home, an existing Codex home, or a production database dire
 
 The connection selection returns to local login on restart. Saved API sessions require explicitly choosing API-key mode again. Pre-1.2 sessions without a verified execution binding remain readable history but require a new session; no authentication context is guessed or migrated silently.
 
-The changed-file summary is the worktree status at finish, including changes already present before the task. It is not an attribution claim. Read-only Codex tasks should not change files.
+For read-only tasks, the changed-file summary is the worktree status at finish, including changes already present before the task. Write tasks provide a separate live Git review against their saved base commit. It is not an attribution claim. Read-only Codex tasks should not change files.
 
 ## Optional API-key mode
 
@@ -158,7 +158,7 @@ The PHOSPHOR OS dashboard now has two real pixel workstations, independent event
 
 Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.
 
-Submitted work survives normal shutdown and resumes dispatch after the backend successfully listens. Running tasks are stopped on normal shutdown and recovered as interrupted after an unclean restart; they are never automatically retried. Create a new task assigned to the same agent and choose its compatible saved session to resume. Existing pre-v0.3 unsubmitted tasks remain unsubmitted. Schema 3 migration is transactional; older application versions refuse it.
+Submitted work survives normal shutdown and resumes dispatch after the backend successfully listens. Running tasks are stopped on normal shutdown and recovered as interrupted after an unclean restart; they are never automatically retried. Create a new task assigned to the same agent and choose its compatible saved session to resume. Existing pre-v0.3 unsubmitted tasks remain unsubmitted. Schema 5 migration is transactional; older application versions refuse it.
 
 Both agents use the selected backend authentication mode. A queued task retains its submitted mode and waits if it differs after restart; there is no paid fallback. Changing/refreshing the mode is blocked while either agent owns a run. Stale worktree/server leases require manual inspection and cleanup as described in [security and recovery](docs/SECURITY.md).
 

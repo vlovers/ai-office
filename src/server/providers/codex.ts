@@ -1,3 +1,4 @@
+import { reapProcessGroup, UncertainCleanupError } from '../process-group.js';
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
@@ -43,8 +44,9 @@ export interface CodexProviderOptions {
 
 export class CodexProvider implements AgentProvider {
   readonly id = 'codex';
-  readonly capabilities = { cancellation: true, interactiveApprovals: false, writes: false };
+  readonly capabilities = { cancellation: true, interactiveApprovals: false, writes: true };
   private runs = new Map<string, Run>();
+  private cleanupFailures = new Map<string, Error>();
   private prepared = new Map<string, CodexExecution>();
   constructor(private options: CodexProviderOptions) {}
   async startSession(repositoryPath: string): Promise<ProviderSession> {
@@ -154,13 +156,15 @@ export class CodexProvider implements AgentProvider {
       failed = true;
       queue.push({ kind: 'failure', message: 'Could not start Codex worker.' });
     });
-    child.on('close', (code, signal) => {
+    child.on('close', async (code, signal) => {
       // SDK hides its CLI PID. Reap all group members, including descendants, before unlocking.
       if (child.pid) {
         try {
-          process.kill(-child.pid, 'SIGKILL');
+          await reapProcessGroup(child.pid);
         } catch {
-          /* group has exited */
+          this.cleanupFailures.set(session.id, new UncertainCleanupError());
+          failed = true;
+          queue.push({ kind: 'failure', message: new UncertainCleanupError().message });
         }
       }
       if (!failed && !run.stopping && (!completed || code !== 0 || signal))
@@ -178,6 +182,7 @@ export class CodexProvider implements AgentProvider {
       {
         type: 'run',
         repositoryPath: session.repositoryPath,
+        executionMode: session.executionMode,
         threadId: session.threadId,
         prompt,
         executable: execution.executable,
@@ -201,7 +206,10 @@ export class CodexProvider implements AgentProvider {
   async stopSession(session: ProviderSession) {
     this.prepared.delete(session.id);
     const run = this.runs.get(session.id);
-    if (!run) return;
+    if (!run) {
+      if (this.cleanupFailures.has(session.id)) throw this.cleanupFailures.get(session.id)!;
+      return;
+    }
     run.stopping = true;
     if (run.child.connected) run.child.send({ type: 'stop' }, () => {});
     const timer = setTimeout(() => {
@@ -215,5 +223,6 @@ export class CodexProvider implements AgentProvider {
     }, 3000);
     await run.closed;
     clearTimeout(timer);
+    if (this.cleanupFailures.has(session.id)) throw this.cleanupFailures.get(session.id)!;
   }
 }

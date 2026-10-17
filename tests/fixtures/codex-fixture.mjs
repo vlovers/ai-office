@@ -1,6 +1,6 @@
 // Test double for the CLI transport, consumed through the REAL installed Codex SDK.
 // Never invokes a model, accesses auth, or executes model-generated commands.
-import { existsSync } from 'node:fs';
+import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const args = process.argv.slice(2);
 const config = args.filter((_, index) => args[index - 1] === '--config');
@@ -18,7 +18,7 @@ if (!args.includes('--ignore-user-config') || !args.includes('--ignore-rules'))
   throw new Error('Uncontrolled CLI configuration');
 if (
   !filesystem?.includes('":root"="deny"') ||
-  !filesystem.includes('"."="read"') ||
+  !/"\."="(read|write)"/.test(filesystem) ||
   !config.includes('permissions.ai-office-review.network.enabled=false') ||
   !config.includes('approval_policy="on-request"')
 )
@@ -33,6 +33,12 @@ if (
   throw new Error('Host environment leaked');
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
+if (input.includes('WRITE_FIXTURE')) {
+  if (!filesystem.includes('"."="write"')) throw new Error('Write profile missing');
+  writeFileSync(repo + '/README.md', 'Modified by fixture\n');
+  writeFileSync(repo + '/added.txt', 'Created by fixture\n');
+  unlinkSync(repo + '/deleted.txt');
+}
 const send = (event) => process.stdout.write(JSON.stringify(event) + '\n');
 const savedThread = args.find((arg) => /^00000000-0000-4000-8000-[a-f0-9]{12}$/.test(arg));
 const threadId =

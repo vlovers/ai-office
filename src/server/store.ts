@@ -2,6 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import type {
   Repository,
+  Workspace,
+  ExecutionMode,
   Task,
   Session,
   AgentEvent,
@@ -16,13 +18,14 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
-    if (version > 3) {
+    if (version > 5) {
       this.db.close();
       throw new Error('Metadata schema is newer than this AI Office version.');
     }
     try {
       this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       BEGIN IMMEDIATE;
+      CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS repositories (id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, repository_id TEXT NOT NULL REFERENCES repositories(id), json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, repository_id TEXT NOT NULL REFERENCES repositories(id), state TEXT NOT NULL, json TEXT NOT NULL);
@@ -57,7 +60,20 @@ export class Store {
           this.addEvent(task.id, 'interrupted', 'Recovered unfinished task after server restart.');
         }
       }
-      this.db.exec('PRAGMA user_version=3; COMMIT;');
+      for (const workspace of this.workspaces()) {
+        if (workspace.operation)
+          this.saveWorkspace({
+            ...workspace,
+            recoveryError: `Interrupted workspace ${workspace.operation}. Preserve files and branches; inspect processes, Git worktree list and the lease before manual recovery.`,
+          });
+        else if (!workspace.identity && workspace.decision !== 'rejected')
+          this.saveWorkspace({
+            ...workspace,
+            recoveryError:
+              'Legacy workspace has no ownership fingerprint. Preserve its files; manual inspection and integration are required.',
+          });
+      }
+      this.db.exec('PRAGMA user_version=5; COMMIT;');
     } catch (error) {
       try {
         this.db.exec('ROLLBACK');
@@ -77,7 +93,7 @@ export class Store {
   sessions(): Session[] {
     return this.rows('sessions');
   }
-  private rows<T>(table: 'repositories' | 'tasks' | 'sessions'): T[] {
+  private rows<T>(table: 'repositories' | 'tasks' | 'sessions' | 'workspaces'): T[] {
     return this.db
       .prepare(`SELECT json FROM ${table}`)
       .all()
@@ -105,6 +121,7 @@ export class Store {
     repositoryId: string;
     title: string;
     prompt: string;
+    executionMode?: ExecutionMode;
     agentId?: AgentId;
   }): Task {
     const now = new Date().toISOString();
@@ -132,6 +149,8 @@ export class Store {
     patch: Partial<
       Pick<
         Task,
+        | 'workspaceId'
+        | 'executionMode'
         | 'agentId'
         | 'state'
         | 'sessionId'
@@ -156,24 +175,61 @@ export class Store {
     binding?: SessionBinding,
     provider = 'codex',
     agentId: AgentId = 'codex-1',
+    executionMode: ExecutionMode = 'read-only',
+    workspaceId?: string,
   ) {
     const session: Session = {
       id: randomUUID(),
       repositoryId,
+      executionMode,
+      workspaceId,
       provider,
       agentId,
       threadId: null,
       createdAt: new Date().toISOString(),
       ...(binding ? { authMode: binding.mode, model: binding.model } : {}),
     };
-    this.db
-      .prepare('INSERT INTO sessions VALUES (?,?,?)')
-      .run(session.id, repositoryId, JSON.stringify(session));
-    if (binding)
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
       this.db
-        .prepare('INSERT INTO session_bindings VALUES (?,?)')
-        .run(session.id, JSON.stringify(binding));
+        .prepare('INSERT INTO sessions VALUES (?,?,?)')
+        .run(session.id, repositoryId, JSON.stringify(session));
+      if (binding)
+        this.db
+          .prepare('INSERT INTO session_bindings VALUES (?,?)')
+          .run(session.id, JSON.stringify(binding));
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
     return session;
+  }
+  workspaces(): Workspace[] {
+    return this.rows('workspaces');
+  }
+  attachWorkspace(taskId: string, workspace: Workspace) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.saveWorkspace(workspace);
+      this.updateTask(taskId, { workspaceId: workspace.id });
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  workspace(id: string): Workspace | undefined {
+    const row = this.db.prepare('SELECT json FROM workspaces WHERE id=?').get(id);
+    return row ? (JSON.parse(String(row.json)) as Workspace) : undefined;
+  }
+  saveWorkspace(workspace: Workspace) {
+    this.db
+      .prepare(
+        'INSERT INTO workspaces VALUES (?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json',
+      )
+      .run(workspace.id, JSON.stringify(workspace));
+    return workspace;
   }
   sessionBinding(id: string): SessionBinding | undefined {
     const row = this.db.prepare('SELECT json FROM session_bindings WHERE session_id=?').get(id);

@@ -83,6 +83,7 @@ export async function createApp(manager: TaskManager) {
       .object({
         repositoryId: id,
         agentId: z.enum(['codex-1', 'codex-2']),
+        executionMode: z.enum(['read-only', 'write']).default('read-only'),
         title: z.string().trim().min(1).max(160),
         prompt: z.string().trim().min(1).max(16000),
       })
@@ -94,8 +95,34 @@ export async function createApp(manager: TaskManager) {
   });
   app.post('/api/tasks/:id/start', async (request, reply) => {
     const taskId = id.parse((request.params as { id: string }).id);
-    const input = z.object({ resumeSessionId: id.optional() }).strict().parse(request.body);
-    return reply.code(202).send(manager.start(taskId, input.resumeSessionId));
+    const input = z
+      .object({ resumeSessionId: id.optional(), confirmedWrite: z.boolean().optional() })
+      .strict()
+      .parse(request.body);
+    return reply.code(202).send(manager.start(taskId, input.resumeSessionId, input.confirmedWrite));
+  });
+  app.get('/api/tasks/:id/review', async (request) =>
+    manager.reviewOperation(id.parse((request.params as { id: string }).id), 'review'),
+  );
+  app.post('/api/tasks/:id/review', async (request) => {
+    const input = z
+      .object({
+        action: z.enum(['keep', 'reject', 'verify']),
+        confirmed: z.literal(true),
+        command: z.string().max(160).optional(),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        confirmedHostExecution: z.boolean().optional(),
+      })
+      .strict()
+      .parse(request.body);
+    if (input.action === 'verify' && input.confirmedHostExecution !== true)
+      throw new AppError(409, 'Explicit host execution confirmation is required.');
+    return manager.reviewOperation(
+      id.parse((request.params as { id: string }).id),
+      input.action,
+      input.command,
+      input.revision,
+    );
   });
   app.post('/api/tasks/:id/stop', async (request, reply) => {
     const taskId = id.parse((request.params as { id: string }).id);

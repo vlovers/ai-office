@@ -1,90 +1,55 @@
-# v0.3 Milestone A architecture
+# AI Office v0.4 architecture
 
-The runtime supports two human-directed read-only Codex agents. It builds on the merged PHOSPHOR OS UI and unchanged official SDK 0.162.1 transport. [Milestone A verification and limits](V0_3_MILESTONE_A.md) distinguish deterministic fixture coverage from historical real model checks.
-
-## Runtime and rationale
-
-Fastify remains appropriate for the small loopback API, lifecycle hooks and persistent task-scoped SSE. React/Vite renders two actual workstations. Node 24 SQLite provides transactional schema migration, queue ordering and history; one backend owns each dedicated data directory through its server lease.
-
-TaskManager owns a map of fixed `codex-1`/`codex-2` slots. Each slot has a distinct provider instance, worker home, active task/session and cleanup promise. Provider instances retain their one-run guard. The scheduler never invents tasks, plans autonomously or enables writing.
+Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders the existing two-agent PHOSPHOR interface. Each fixed agent slot has an independent Codex provider, private worker home and at most one active task; no orchestration/team framework is introduced.
 
 ```mermaid
 flowchart LR
-  UI[PHOSPHOR OS] --> API[Fastify loopback API]
-  API --> Queue[(SQLite submitted FIFO queue)]
-  Queue --> Manager[TaskManager / maximum two slots]
-  Manager --> A[Codex 01 / own worker group]
-  Manager --> B[Codex 02 / own worker group]
-  A --> Lease[Exclusive canonical worktree lease]
-  B --> Lease
-  A --> SDK[Official SDK / read-only CLI]
-  B --> SDK
-  API -->|task-specific SSE| UI
+  UI[PHOSPHOR interface] --> API[Loopback API / strict JSON]
+  API --> Store[(SQLite v5 / tasks, sessions, queue, workspaces, events)]
+  Store --> Manager[TaskManager / two fixed slots]
+  Manager --> Leases[Common Git directory + worktree leases]
+  Manager --> RO[Read-only registered checkout]
+  Manager --> WT[Isolated branch and worktree]
+  RO --> Codex[Supervised worker / pinned Codex SDK]
+  WT --> Codex
+  API --> Review[Git review + revision-bound decisions]
+  Review --> Leases
+  Review --> Verify[Opt-in host verification supervisor]
+  API -->|persisted SSE replay| UI
 ```
 
-## Queue and ownership
+## Queue and execution
 
-Creating a task records its explicit agent assignment, but does not submit it. Start validates ownership/readiness/resume, persists an ordered entry with authentication mode and optional resume session, then pumps the queue. Submission is bounded to 100 waiting entries; each configured agent can reserve only its oldest entry. A blocked head waits, rather than letting later work for that agent overtake it. Other agents may proceed.
+Creation records a task; Start is a separate authorization/submission action. FIFO entries retain authentication mode, assigned agent and optional saved session; at most 100 submissions wait. Dispatch begins only after successful HTTP listen. Slot reservation precedes asynchronous preflight. Common-Git-directory and legacy per-worktree leases serialize aliases across instances; isolated execution also holds the task's actual Git-directory lease. Busy tasks remain queued before claim. Unknown/stale leases fail closed rather than using PID-based stealing.
 
-Slot and canonical Git-directory reservations are synchronous before filesystem awaits. Dispatch revalidates the repository, acquires the OS-local worktree lease, revalidates the saved session, then atomically removes the queue entry and marks the task running. Another process's lease leaves the task queued and retries at roughly 500 ms, with no SDK execution. This per-application concurrency limit is two; it is not a fleet-wide rate or cost quota.
+Read-only is the legacy/default mode. Write tasks require explicit confirmation and operator-configured absolute roots covering both source checkout and Git/common metadata. Workspaces reserves a generated UUID directory and dedicated branch, based on HEAD rather than dirty primary-checkout files. Creation intent and task association are persisted before Git creation. Successful ownership includes canonical paths and device/inode/birth-time fingerprints for the worktree, pointer, Git directory, source root and common metadata.
 
-The lock root is fixed `/tmp/ai-office-worktrees-<uid>` so different `TMPDIR` settings cannot bypass exclusion. Keys hash canonical worktree Git directories: symlink aliases contend; distinct linked worktrees have distinct identities. Private owner records never enter HTTP responses. Stale leases are not stolen based on a PID check.
+Authentication preparation can take time, so ownership is checked again immediately before execution. Write resume requires the original execution/authentication modes, repository, agent/provider, native transcript, pending workspace and unchanged HEAD. No reset or implicit privilege upgrade occurs.
 
-Workers are separate detached POSIX process groups. Stop addresses one slot, waits through preflight/abort/process reaping and only then releases its lease. Shutdown closes SSE, concurrently stops claimed work, preserves unclaimed queue entries, then closes SQLite/server lease. Workers abort on parent disconnect; after a hard crash, stale leases require manual inspection. Queue dispatch begins only after a successful HTTP listen, so a port conflict cannot start recovered tasks.
+## Codex transport and sandbox
 
-## Provider contract
+The installed/pinned SDK remains `@openai/codex-sdk` 0.162.1. Verified APIs are `startThread`, `resumeThread`, `runStreamed` and AbortSignal. The SDK starts threads lazily and emits `thread.started`; the ID is persisted immediately. Completed agent messages can be interim commentary: only the latest response after `turn.completed` is a final result.
 
-`src/server/providers/types.ts` defines:
+The worker is a detached POSIX process group supervised by the backend. Stop first aborts the SDK, then escalates if needed; backend disconnect also triggers worker termination. The adapter observes worker closure and cleans the group before releasing leases. EPERM is not termination evidence: transient failures get a bounded retry and persistent uncertainty retains leases/reports interruption. Deliberately detached programs remain outside group supervision.
 
-- `startSession(repositoryPath)` preflights the selected connection and creates a local handle; the SDK starts the actual thread lazily on execution.
-- `resumeSession(repositoryPath, threadId, binding)` verifies the saved execution binding and recreates a handle using an application-owned saved thread.
-- `executeTask(session, prompt)` starts one run.
-- `streamEvents(session)` yields normalized thread, progress, result, and failure events until the worker exits.
-- `stopSession(session)` waits for cancellation and process cleanup.
+CodexAuth maintains private execution bindings separate from public connection status. Local mode uses existing CLI authentication and excludes key variables; explicit API mode uses a separate isolated home. A fixed launcher ignores inherited user configuration/rules. Agent commands receive a minimal environment. There is no interactive SDK approval channel or automatic approval bypass.
 
-`ClaudeCodeProvider` is a future implementation, not a placeholder that pretends to work. Its session/thread representation, approval capabilities, and cancellation behavior can differ without changing the dashboard's task model. Milestone A configures two independent CodexProvider instances; no other provider is implemented.
+Named filesystem permissions grant either read-only checkout access or writes only in the task directory; Git metadata and known sensitive paths are denied. Raw `configOverrides` preserve quoted filesystem keys rather than the SDK flattener's dotted keys. Legacy sandboxMode/networkAccessEnabled flags are omitted because they override named profiles. Runtime controls, glob timing limits and machine trust assumptions are documented in [security](SECURITY.md), with links to official documentation.
 
-## SDK inspection
+## Review, verification and decisions
 
-Inspected the installed SDK **0.162.1** before writing the adapter: its `dist/index.d.ts`, `dist/index.js`, and README. The package is pinned exactly and locked with npm.
+Workspaces reads Git diffs independently of thread lifetime, against the saved base commit. Backend Git treats paths literally and suppresses hooks, fsmonitor, filters, external diff/textconv and submodule inspection. Filter-dependent data such as LFS pointer hydration is left to trusted manual handling. Known sensitive paths are withheld and untracked file reads are bounded/no-follow.
 
-Verified APIs: `new Codex(options)`, `startThread(options)`, `resumeThread(id, options)`, and `thread.runStreamed(prompt, { signal })`. The thread ID is initially null and becomes available in `thread.started`; the manager persists it immediately. Completed agent messages may be interim commentary: these stream as progress, and the latest message becomes a final result only after `turn.completed`. Failures are normalized before persistence/browser delivery; a specific authentication/connection category takes precedence over a subsequent generic CLI exit error.
+The review revision includes ownership/decision, HEAD, index, status, bounded filesystem metadata and command configuration. Keep/Reject/Verify need a fresh revision and state is reloaded under the lease. This detects observed edits; it is not an atomic filesystem snapshot or a lock against external editors.
 
-`CodexAuth` separates public connection status from server-only execution configuration. It uses metadata-only `account/read`/`model/list` on the existing CLI, then passes an allowlisted CLI environment through the supervised worker over private IPC. The worker retains its own private home. A fixed local launcher disables inherited user execution configuration/rules; the tested profile and user review routing stay explicit. Local mode excludes keys; explicit API mode uses a separate isolated home. Connection changes cannot race a task start.
+Keep retains the isolated branch/files and ends continuation. Reject refuses advanced HEAD, ignored files, nested bare/non-bare repositories and ambiguous/large ownership scans. After final validation it records intent and asks Git to remove only the registered worktree; branches remain. No commit, push, reset, merge or automatic integration occurs.
 
-The SDK spawns `codex exec` and reads JSONL. It accepts `TurnOptions.signal` and passes it to Node's child spawn. Its cleanup sends a termination signal, but it exposes neither the CLI PID nor a hard-kill API. Our adapter supervises an isolated worker/process group, requests SDK abort first, then kills the remaining group if necessary. The repository lease is held until cleanup finishes. Parent disconnect also aborts the worker; stale leases remain after unclean crashes.
+Host verification is disabled unless the operator explicitly enables it and the UI/API separately confirms host execution. It can execute AI-edited project scripts with full OS permissions; it is not protected by the Codex sandbox. A separate minimal-environment worker owns timeout/output bounds and disconnect cleanup. Its result is accepted only after worker/group cleanup. Shutdown aborts verification and stops agents in parallel before closing persistence.
 
-There is **no interactive approval callback** in this SDK surface. Consequently this runtime remains read-only and provides proposals instead of applying changes. Approval-required operations are denied by the noninteractive runtime rather than approved in the UI. Full write workflows need a reviewed approval-capable transport (such as a future app-server integration) or a separate explicit proposal/apply design.
+## Persistence and recovery
 
-The restrictive filesystem profile uses raw `configOverrides` for quoted filesystem keys. The SDK's structured config flattener joins object keys with dots, which cannot safely represent arbitrary filesystem paths. Legacy `sandboxMode` and `networkAccessEnabled` are deliberately omitted because legacy sandbox settings override named permission profiles. Newer documentation retires explicit `untrusted` approval policy despite that literal still appearing in SDK types; this app uses `on-request` and an untrusted project configuration instead.
+SQLite v5 uses WAL, foreign keys, bounded events and transactional schema migration. It stores repositories, task/session JSON, private session bindings, submitted FIFO entries, events and workspace ownership/review/operation JSON. Workspace/task attachment is transactional. Legacy tasks/sessions remain read-only; older application readers refuse schema v5.
 
-Official references: [Codex SDK](https://learn.chatgpt.com/docs/codex-sdk), [permission profiles](https://learn.chatgpt.com/docs/permissions), and [approvals/security](https://learn.chatgpt.com/docs/agent-approvals-security). The installed package is the authority for the API actually used here.
+Filesystem and SQLite changes cannot be committed together. Creation/rejection/verification intents therefore precede external operations. Restart retains unfinished intent as a blocked recovery diagnostic; it never guesses that files are safe to delete or that a command stopped. Workspaces without ownership fingerprints require manual inspection rather than automatic adoption. Review output redaction never rewrites persisted filesystem identity.
 
-## State and persistence
-
-SQLite schema **3** adds `task_queue` (monotonic sequence, task, optional saved session, submitted mode and timestamp), and session agent ownership. DDL, JSON ownership backfill, unfinished-task recovery and `user_version` update share an immediate transaction. Version 1/2 records and bindings survive; missing legacy ownership becomes Codex 01. Newer unknown schemas are rejected. Schema downgrade is not implemented.
-
-`queued` without a queue entry means unsubmitted. `queued` with an entry means authorized pending work. Lease acquisition precedes the atomic queued → running claim. Running/stopping tasks become completed/failed/stopped, or interrupted on unclean restart. Interrupted turns are never automatically retried; a new task can explicitly resume the same agent/repository/provider and compatible model/auth context. Submitted queued work survives restart, but only dispatches with its saved mode; API sessions never silently become local-login sessions or vice versa.
-
-`/dashboard.agents` contains authoritative real slots; `.queue` reports pending entries and safe wait reasons; `.concurrency` reports the bound. `.agent` remains a compatibility view of Codex 01 for older local clients. New UI clients use the agents array. Agent phases reflect preparation, actual SDK events, stopping, or queued waiting; the scene never invents percentages.
-
-The browser opens independent task-specific EventSources for both active tasks plus the selected history task, deduplicates each stream and retains 500 events per visible task. The backend subscribes before replay, supports Last-Event-ID and bounds slow-client buffers/events/results as before. Results and changed-file summaries remain persisted and read-only; pre-existing worktree changes are labeled, not attributed to an agent.
-
-## HTTP API
-
-All mutations require `application/json`, accept strict schemas, and reject extra fields.
-
-| Method | Path                            | Body / behavior                                                      |
-| ------ | ------------------------------- | -------------------------------------------------------------------- |
-| GET    | `/api/health`                   | Liveness                                                             |
-| GET    | `/api/dashboard`                | Agents, queue, concurrency, repositories, sessions, tasks, readiness |
-| POST   | `/api/connection`               | `{ mode: "local-cli-chatgpt" \| "api-key" }`, explicit selection     |
-| POST   | `/api/connection/refresh`       | `{}`, metadata refresh without inference                             |
-| POST   | `/api/repositories`             | `{ path }`, canonical root registration                              |
-| POST   | `/api/tasks`                    | `{ repositoryId, agentId: "codex-1" \| "codex-2", title, prompt }`   |
-| POST   | `/api/tasks/:id/start`          | `{}` or `{ resumeSessionId }`; enqueue assigned task                 |
-| POST   | `/api/tasks/:id/stop`           | `{}`, cancel submitted work or wait for own worker cleanup           |
-| GET    | `/api/tasks/:id/events?after=0` | Up to 500 persisted events                                           |
-| GET    | `/api/tasks/:id/stream?after=0` | SSE with reconnect replay                                            |
-
-There are no shell, Git mutation, custom executable, arbitrary SDK options, sandbox override, merge, push, or database-operation HTTP endpoints.
+Missing/replaced resources, stale leases, native transcript loss and interrupted mutations are described in [workspace recovery](WORKSPACE_RECOVERY.md). Read [the security audit](V0_4_SECURITY_AUDIT.md) and [verification evidence](VERIFICATION.md) for actual findings, tests and remaining limits.

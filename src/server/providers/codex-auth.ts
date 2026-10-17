@@ -65,7 +65,7 @@ export class CodexAuth {
     const message =
       status === 'available'
         ? this.mode === 'local-cli-chatgpt'
-          ? 'Available. Uses your local ChatGPT Codex allowance/credits. Files remain read only.'
+          ? 'Available. Uses your local ChatGPT Codex allowance/credits. Access follows the confirmed task mode.'
           : 'Available. API-key mode uses separate OpenAI API billing; the key is checked when the task starts.'
         : status === 'authentication-required'
           ? this.mode === 'local-cli-chatgpt'

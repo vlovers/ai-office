@@ -19,6 +19,7 @@ export interface OfficeAgent {
   id: AgentId;
   name: string;
   status: SceneStatus;
+  access?: string;
 }
 
 function WorkstationArt({ state }: { state: SceneState }) {
@@ -81,7 +82,7 @@ function WorkstationArt({ state }: { state: SceneState }) {
           {state === 'thinking'
             ? '…'
             : state === 'working'
-              ? '>_ R/O'
+              ? '>_ RUN'
               : state === 'error'
                 ? '! ERROR'
                 : state === 'stopping'
@@ -290,7 +291,7 @@ export function PixelOffice({
       </svg>
       {agents.map((agent) => (
         <span key={agent.id} id={`${prefix}-${agent.id}-status`} className="sr-only">
-          {agent.status.label}. Read only.
+          {agent.status.label}. {agent.access ?? 'Read only'}.
         </span>
       ))}
     </div>

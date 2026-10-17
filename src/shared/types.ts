@@ -10,6 +10,8 @@ export interface Repository {
   createdAt: string;
 }
 export interface Session {
+  executionMode?: ExecutionMode;
+  workspaceId?: string;
   id: string;
   repositoryId: string;
   provider: string;
@@ -33,6 +35,8 @@ export interface ChangedFile {
   status: string;
 }
 export interface Task {
+  executionMode?: ExecutionMode;
+  workspaceId?: string;
   id: string;
   repositoryId: string;
   sessionId: string | null;
@@ -87,4 +91,33 @@ export interface QueueEntry {
   mode: AuthMode;
   resumeSessionId: string | null;
   waitingReason?: string;
+}
+
+export type ExecutionMode = 'read-only' | 'write';
+export interface Workspace {
+  id: string;
+  repositoryId: string;
+  path: string;
+  gitDir: string;
+  branch: string;
+  base: string;
+  decision: 'pending' | 'kept' | 'rejected';
+  identity?: {
+    root: string;
+    gitDir: string;
+    gitFile: string;
+    sourceRoot: string;
+    commonDir: string;
+  };
+  operation?: 'creating' | 'rejecting' | 'verifying';
+  recoveryError?: string;
+  verification?: { command: string; output: string; passed: boolean; at: string };
+}
+export interface WorkspaceReview {
+  revision?: string;
+  commandDetails?: Record<string, string[]>;
+  workspace: Workspace;
+  files: ChangedFile[];
+  diff: string;
+  commands: string[];
 }

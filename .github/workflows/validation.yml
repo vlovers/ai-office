@@ -43,3 +43,23 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
         run: npm run test:browser
+
+      - name: Isolated write browser smoke (no model calls)
+        run: npm run test:browser:write
+
+  native-sandbox:
+    name: Native Codex filesystem policy (no inference)
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Native read-only and isolated-write policy
+        run: npm run test:sandbox

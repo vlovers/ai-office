@@ -8,6 +8,7 @@ export interface SessionBinding {
   runtimeVersion: string;
 }
 export interface ProviderSession {
+  executionMode?: import('../../shared/types.js').ExecutionMode;
   id: string;
   repositoryPath: string;
   threadId: string | null;

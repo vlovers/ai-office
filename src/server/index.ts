@@ -1,5 +1,7 @@
 import { mkdir, chmod } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { Workspaces } from './workspaces.js';
+import { z } from 'zod';
 import { Store } from './store.js';
 import { TaskManager } from './manager.js';
 import { CodexProvider } from './providers/codex.js';
@@ -21,7 +23,26 @@ try {
   const providers = AGENT_IDS.map(
     (id) => new CodexProvider({ home: join(data, 'workers', id), auth }),
   );
-  const manager = new TaskManager(store, providers, auth, process.env.CODEX_API_KEY);
+  const commands = z
+    .record(z.string(), z.array(z.string().min(1)).min(1))
+    .parse(JSON.parse(process.env.AI_OFFICE_VERIFICATION_COMMANDS ?? '{}'));
+  const workspaces =
+    process.env.AI_OFFICE_AUTHORIZED_ROOT && process.env.AI_OFFICE_WORKSPACE_ROOT
+      ? new Workspaces({
+          authorizedRoot: process.env.AI_OFFICE_AUTHORIZED_ROOT,
+          workspaceRoot: process.env.AI_OFFICE_WORKSPACE_ROOT,
+          commands,
+          allowHostVerification: process.env.AI_OFFICE_ALLOW_HOST_VERIFICATION === '1',
+        })
+      : undefined;
+  const manager = new TaskManager(
+    store,
+    providers,
+    auth,
+    process.env.CODEX_API_KEY,
+    undefined,
+    workspaces,
+  );
   const app = await createApp(manager);
   let stopping = false;
   const shutdown = async (exitCode = 0) => {
