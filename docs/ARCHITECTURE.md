@@ -1,3 +1,11 @@
+# v0.4 isolated execution
+
+The existing queue and supervised provider architecture now supports two execution modes. Read-only stays the default. Write tasks use server-authorized Git worktrees with dedicated branches and a restrictive named Codex filesystem profile granting writes only to that worktree. Git metadata remains denied. Schema v4 adds workspace records and optional execution mode/workspace references on tasks and sessions; legacy JSON remains read-only.
+
+`Workspaces` owns root validation, fixed-argv Git worktree operations, live Git diffs and bounded operator-configured verification. `TaskManager` reuses the original repository lease for execution and review mutations, persists workspace/session identity, and refuses continuation after a decision. This deliberately serializes tasks within one registered repository, even with isolated directories. There is no orchestration expansion or automatic integration.
+
+See [audit and decisions](V0_4_AUDIT.md), [lifecycle](SESSION_LIFECYCLE.md), [setup/demo](V0_4_DEMO.md), and [security](SECURITY.md). The baseline architecture below remains applicable except for its read-only-only statements.
+
 # v0.3 Milestone A architecture
 
 The runtime supports two human-directed read-only Codex agents. It builds on the merged PHOSPHOR OS UI and unchanged official SDK 0.162.1 transport. [Milestone A verification and limits](V0_3_MILESTONE_A.md) distinguish deterministic fixture coverage from historical real model checks.

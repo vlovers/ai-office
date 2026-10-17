@@ -42,6 +42,8 @@
     "format:check": "prettier --check .",
     "codex:inspect": "node --import tsx scripts/codex-inspect.ts",
     "test:real": "node --import tsx scripts/real-codex-smoke.ts --run",
-    "test:dashboard:real": "node --import tsx tests/dashboard-real.ts --run"
+    "test:dashboard:real": "node --import tsx tests/dashboard-real.ts --run",
+    "test:real:write": "node --import tsx scripts/real-write-smoke.ts",
+    "test:browser:write": "node --import tsx tests/browser-write-smoke.ts"
   }
 }

@@ -1,3 +1,15 @@
+# v0.4 write-session security additions
+
+Read-only remains the default. Write execution requires both operator-configured absolute roots and an explicit start confirmation. Repository realpaths must be inside the authorized root. Worktree roots must be canonical without symlink components and separate from the primary checkout. Generated UUID paths and dedicated branches never overwrite existing directories or refs. Creation uses HEAD only; local primary-checkout edits are not copied.
+
+Only the isolated directory receives write permission in the existing Codex named filesystem profile. The primary checkout, Git metadata, sibling worktrees, known secret paths and command network access remain denied. The installed runtime probe checks both profiles without authentication or model calls. Git worktrees share metadata and are not containers. Roots and file identities are revalidated before execution, resume, review and cleanup. Trusted local Git configuration remains an assumption.
+
+Review uses bounded, fixed-argv Git commands with hooks, external diff and textconv disabled. Known sensitive paths are withheld from diffs; configured keys and obvious API-key tokens are redacted using existing protections. These are not comprehensive secret scanning: never store secrets in task files or verification output. Verification runs only operator-configured argv, with no HTTP shell/executable/environment inputs and no inherited server credentials. It executes trusted code with host OS permissions, not inside the Codex sandbox, and needs separate confirmation. Do not run untrusted project scripts. Verification is bounded by time/output and its process group is reaped; shutdown waits for pending operations.
+
+Cleanup never calls recursive filesystem deletion or deletes branches. Explicit confirmed rejection invokes Git worktree remove only after validating saved ownership, canonical worktree identity, common Git directory, expected branch and unchanged HEAD. Kept changes or added commits require manual cleanup. Git's lock protection is respected. Nested repositories and worktrees exceeding the bounded ownership scan require manual cleanup. Concurrent agent/review operations share the repository lease. Human editors and malicious same-user processes are outside this lease boundary; do not edit a worktree during rejection. An unknown creation orphan is preserved for manual recovery.
+
+The baseline policy below describes the read-only mode. Its statements that no write provider or backend Git mutation exists are superseded only by the constrained workflow above.
+
 # Trust boundaries and recovery
 
 The dashboard (authentication was verified in [Phase 1.2](PHASE_1_2_DASHBOARD.md)) prefers the existing CLI-owned ChatGPT login without copying or opening credential files in application code. Local mode excludes API-key variables and never selects API billing on failure. Task tools remain repository-scoped and read-only; API mode requires an explicit UI selection and backend-only key configuration.

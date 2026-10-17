@@ -21,3 +21,5 @@ Please report vulnerabilities privately according to [SECURITY.md](SECURITY.md),
 TypeScript, React, Fastify and SQLite; tests use Vitest and Playwright. Keep task/agent state backed by actual runtime events, never invented progress. UI must remain keyboard-accessible and respect reduced motion. Document new environment variables, migrations and unsupported platforms.
 
 This project welcomes bug fixes, reproducible tests, accessibility work and documentation improvements. Maintainers review contributions when available; no response time is guaranteed.
+
+Isolated coding setup, disposable-worktree validation and the optional real write smoke test are documented in [the v0.4 demo](docs/V0_4_DEMO.md).

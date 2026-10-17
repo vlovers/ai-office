@@ -1,3 +1,29 @@
+# v0.4 verification
+
+Local verification: macOS arm64, Node 24.21.0, installed SDK/CLI 0.162.1, 2026-10-18 (Europe/Kyiv). No model calls or credential reads were used for v0.4 validation.
+
+| Check                                       | Result                                                                                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run typecheck`                         | Passed                                                                                                                                                                   |
+| `npm test`                                  | 50/50 tests passed in 9 files; 43.56 s                                                                                                                                   |
+| Final targeted workspace safety rerun       | 9/9 passed in 10.71 s                                                                                                                                                    |
+| `npm run test:smoke`                        | 2/2 HTTP/SSE tests passed in 6.91 s                                                                                                                                      |
+| `npm run build`                             | Passed, TypeScript server + Vite production frontend                                                                                                                     |
+| `npm run format:check`                      | Passed; this repository uses Prettier as its style gate and has no separate lint command                                                                                 |
+| `git diff --check`                          | Passed                                                                                                                                                                   |
+| `npm run test:sandbox`                      | Installed runtime allowed isolated writes; denied primary/sibling, known secret and Git metadata writes; read-only profile still denied writes                           |
+| `npm run test:browser`                      | Passed existing Chromium regression, keyboard/reduced-motion, 320–1440px, no page errors                                                                                 |
+| `npm run test:browser:write`                | Passed confirmation dismissal, isolated changes, live Git diff, verification persistence, keyboard diff focus, responsive widths, confirmed rejection, primary unchanged |
+| Optional `npm run test:real:write -- --run` | Added, intentionally not executed; consumes existing CLI-authenticated usage, never normal CI                                                                            |
+
+Browser commands used `PLAYWRIGHT_BROWSERS_PATH=/private/tmp/ai-office-playwright`. The default cache had no Chromium. The outer execution sandbox blocked native macOS sandbox application/process-group probes; those checks passed when rerun outside that outer boundary. Initial browser-write selector expected an exact Register label despite its arrow suffix; corrected the test selector and reran successfully. Assertions were retained.
+
+The workspace fixtures cover clean and dirty-primary isolation, existing branches/paths, authorization/traversal/symlink checks, nested repository protection, added/modified/deleted/committed diffs, sensitive paths, failed cleanup, committed and kept cleanup refusals, uncommitted rejection, bounded failing verification, saved review identity, stop/failure and restart/resume. Git is the source of truth; the fake CLI drives the installed SDK transport without inference.
+
+Known limits: trusted single-user host; verification is trusted code with OS permissions; worktrees share Git metadata; external editors do not honor leases; stale locks and creation orphans require manual inspection. No Linux execution was performed locally; deterministic Linux checks are configured in CI. Windows remains unsupported. Native transcripts are required for resume. Large/sensitive/binary diffs and committed/nested/large-tree cleanup may require local review.
+
+The historical v1.2 evidence below describes the baseline, not a new real-model v0.4 test.
+
 # Verification record
 
 Current phase: **1.2**. Environment: macOS arm64, Node 24.21.0, official Codex SDK/existing CLI **0.162.1**. Local verification date: **2026-10-16** (live-run timestamp is UTC on 2026-10-15).

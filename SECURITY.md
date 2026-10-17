@@ -13,3 +13,5 @@ Include a concise reproduction, affected version/commit, expected versus actual 
 Security fixes target the latest `main` branch. Older commits and unreleased experimental branches are not supported. The current threat model and recovery limitations are documented in [docs/SECURITY.md](docs/SECURITY.md).
 
 This policy is not a security guarantee. Filesystem sandboxing is not a VM boundary; do not register repositories containing credentials, and never give an agent access to production secrets.
+
+For opt-in isolated write sessions and trusted local verification boundaries, see [the v0.4 security model](docs/SECURITY.md).

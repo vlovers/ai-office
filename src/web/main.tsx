@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
+import type {
+  AgentEvent,
+  Dashboard,
+  Task,
+  AuthMode,
+  AgentId,
+  WorkspaceReview,
+} from '../shared/types.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
 import './styles.css';
@@ -21,6 +28,118 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   return data as T;
 }
 const activeStates = ['running', 'stopping'];
+function Review({ task }: { task: Task }) {
+  const [review, setReview] = useState<WorkspaceReview>();
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function load(action?: 'keep' | 'reject' | 'verify', command?: string) {
+    if (
+      action &&
+      !window.confirm(
+        action === 'reject'
+          ? 'Permanently discard ALL uncommitted and untracked files in this task worktree? The branch is preserved. This cannot be undone.'
+          : action === 'keep'
+            ? 'Keep these changes in the isolated worktree and branch? Integration remains manual.'
+            : 'Run this configured command locally in the task worktree? Verification executes trusted project code with your OS permissions.',
+      )
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      if (action) await api(`/tasks/${task.id}/review`, { action, command, confirmed: true });
+      setReview(await api<WorkspaceReview>(`/tasks/${task.id}/review`));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="file-summary" aria-label="Isolated changes review">
+      <h3>Review isolated changes</h3>
+      <button className="secondary" disabled={busy} onClick={() => void load()}>
+        Refresh Git review
+      </button>
+      {error && <p role="alert">{error}</p>}
+      {review && (
+        <>
+          <p>
+            Decision: <strong>{review.workspace.decision}</strong>
+          </p>
+          <p>
+            Branch <code>{review.workspace.branch}</code>
+            <br />
+            Worktree <code>{review.workspace.path}</code>
+            <br />
+            Base <code>{review.workspace.base}</code>
+          </p>
+          {review.workspace.decision !== 'rejected' && (
+            <>
+              <p>
+                {review.files.length} changed files compared with the saved base commit. Includes
+                staged, unstaged and untracked files.
+              </p>
+              <ul>
+                {review.files.map((file) => (
+                  <li key={file.path}>
+                    <code>{file.status}</code> {file.path}
+                  </li>
+                ))}
+              </ul>
+              <pre className="review-diff" tabIndex={0} aria-label="Git diff">
+                {review.diff || 'No changes.'}
+              </pre>
+              <p>
+                Inspect this worktree locally, commit the files you choose, then integrate the
+                branch from your destination checkout using your normal Git workflow. AI Office
+                never merges automatically.
+              </p>
+              {review.commands.map((command) => (
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  key={command}
+                  onClick={() => void load('verify', command)}
+                >
+                  Verify: {command}
+                </button>
+              ))}
+              {!review.commands.length && (
+                <p>
+                  No verification commands configured. Set AI_OFFICE_VERIFICATION_COMMANDS on the
+                  server.
+                </p>
+              )}
+              {review.workspace.verification && (
+                <div role="status">
+                  <p>
+                    {review.workspace.verification.command}:{' '}
+                    {review.workspace.verification.passed ? 'Passed' : 'Failed'} ·{' '}
+                    {review.workspace.verification.at}
+                  </p>
+                  <pre className="review-diff" tabIndex={0}>
+                    {review.workspace.verification.output}
+                  </pre>
+                </div>
+              )}
+              {review.workspace.decision === 'pending' && (
+                <div className="start-controls">
+                  <button disabled={busy} onClick={() => void load('keep')}>
+                    Keep isolated changes
+                  </button>
+                  <button className="secondary" disabled={busy} onClick={() => void load('reject')}>
+                    Reject and clean up…
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
 function App() {
   const [crt, setCrt] = useState(() => {
     try {
@@ -190,7 +309,7 @@ function App() {
         <a className="brand" href="#overview" onClick={() => setView('mission')}>
           <PixelBot />
           <span>
-            AI OFFICE<small>PHOSPHOR OS / v0.3</small>
+            AI OFFICE<small>PHOSPHOR OS / v0.4 dev</small>
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
@@ -256,7 +375,7 @@ function App() {
         </div>
         <div className="sidebar-bottom">
           <span className="status-dot" />
-          Local-only server<small>127.0.0.1 / READ ONLY</small>
+          Local-only server<small>127.0.0.1 / LOCAL</small>
         </div>
       </aside>
       <main id="overview" tabIndex={-1}>
@@ -300,7 +419,7 @@ function App() {
                 {view === 'focus' ? 'Focus mode' : 'Mission control'}
                 <span>_</span>
               </h1>
-              <p>Two Codex agents. Read-only worktrees. You have the controls.</p>
+              <p>Two Codex agents. Isolated coding and repository review. You have the controls.</p>
             </div>
             <a
               className="button-link"
@@ -384,12 +503,13 @@ function App() {
               <section className="office-scene" aria-label="Shared Codex office">
                 <div className="scene-label">
                   <span>AI OFFICE / SHARED WORKSPACE</span>
-                  <span>READ ONLY</span>
+                  <span>TASK-SCOPED ACCESS</span>
                 </div>
                 <PixelOffice
                   agents={(dashboard?.agents ?? []).map((slot) => ({
                     id: slot.id,
                     name: slot.name,
+                    access: slot.mode,
                     status: sceneStatus(
                       dashboard,
                       workstationTask(dashboard, selected, slot.id),
@@ -430,7 +550,7 @@ function App() {
                 <div>
                   <span>ACCESS</span>
                   <strong className="environment">
-                    R/O<small>Repository scoped</small>
+                    SCOPED<small>Isolated writes / read-only</small>
                   </strong>
                 </div>
               </div>
@@ -524,7 +644,8 @@ function App() {
                     <div className="task-toolbar">
                       <span>
                         <span className={`badge ${task.state}`}>{task.state}</span>{' '}
-                        {repository?.name}
+                        {repository?.name} ·{' '}
+                        {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
                       </span>
                       {view === 'focus' && task.id === agent?.taskId && stopControl}
                       {task.state === 'queued' && !queued && (
@@ -541,7 +662,9 @@ function App() {
                                   s.agentId === task.agentId &&
                                   s.repositoryId === task.repositoryId &&
                                   s.threadId &&
-                                  s.authMode === dashboard.connection.mode,
+                                  s.authMode === dashboard.connection.mode &&
+                                  (s.executionMode ?? 'read-only') ===
+                                    (task.executionMode ?? 'read-only'),
                               )
                               .map((s) => (
                                 <option key={s.id} value={s.id}>
@@ -553,10 +676,17 @@ function App() {
                             disabled={busy || !dashboard?.ready}
                             onClick={() =>
                               void act(async () => {
-                                await api(
-                                  `/tasks/${task.id}/start`,
-                                  resumeSessionId ? { resumeSessionId } : {},
-                                );
+                                if (
+                                  task.executionMode === 'write' &&
+                                  !window.confirm(
+                                    'Start a write-enabled Codex session in an isolated Git worktree? The agent can edit that worktree. Review and integration are manual.',
+                                  )
+                                )
+                                  return;
+                                await api(`/tasks/${task.id}/start`, {
+                                  ...(resumeSessionId ? { resumeSessionId } : {}),
+                                  confirmedWrite: task.executionMode === 'write',
+                                });
                               })
                             }
                           >
@@ -622,33 +752,38 @@ function App() {
                         <pre>{task.result}</pre>
                       </div>
                     )}
-                    {!['queued', 'running', 'stopping'].includes(task.state) && (
-                      <div className="file-summary">
-                        <h3>
-                          Changed-file summary <span>{task.changedFiles.length}</span>
-                        </h3>
-                        <p>
-                          Git worktree status at finish, including pre-existing changes. The agent
-                          has read-only access.
-                        </p>
-                        {task.summaryError ? (
-                          <p role="alert">Summary unavailable: {task.summaryError}</p>
-                        ) : task.changedFiles.length ? (
-                          <ul>
-                            {task.changedFiles.map((file) => (
-                              <li key={file.path}>
-                                <code>{file.status}</code> {file.path}
-                                {task.baselineFiles.some((before) => before.path === file.path) && (
-                                  <small> · present before task</small>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No changed files in the worktree.</p>
-                        )}
-                      </div>
-                    )}
+                    {task.workspaceId &&
+                      !['queued', 'running', 'stopping'].includes(task.state) && (
+                        <Review key={task.id} task={task} />
+                      )}
+                    {task.executionMode !== 'write' &&
+                      !['queued', 'running', 'stopping'].includes(task.state) && (
+                        <div className="file-summary">
+                          <h3>
+                            Changed-file summary <span>{task.changedFiles.length}</span>
+                          </h3>
+                          <p>
+                            Git worktree status at finish, including pre-existing changes. The agent
+                            has read-only access.
+                          </p>
+                          {task.summaryError ? (
+                            <p role="alert">Summary unavailable: {task.summaryError}</p>
+                          ) : task.changedFiles.length ? (
+                            <ul>
+                              {task.changedFiles.map((file) => (
+                                <li key={file.path}>
+                                  <code>{file.status}</code> {file.path}
+                                  {task.baselineFiles.some(
+                                    (before) => before.path === file.path,
+                                  ) && <small> · present before task</small>}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>No changed files in the worktree.</p>
+                          )}
+                        </div>
+                      )}
                   </>
                 )}
               </section>
@@ -668,6 +803,7 @@ function App() {
                         agentId: selectedAgent,
                         title: data.get('title'),
                         prompt: data.get('prompt'),
+                        executionMode: data.get('executionMode'),
                       });
                       setSelected(created.id);
                       form.reset();
@@ -708,6 +844,11 @@ function App() {
                       </option>
                     ))}
                   </select>
+                  <label htmlFor="executionMode">Execution mode</label>
+                  <select id="executionMode" name="executionMode" defaultValue="read-only">
+                    <option value="read-only">Read-only review</option>
+                    <option value="write">Isolated coding · write enabled</option>
+                  </select>
                   <label htmlFor="title">Task title</label>
                   <input
                     id="title"
@@ -735,9 +876,9 @@ function App() {
                   </div>
                 </form>
                 <p className="read-only-note">
-                  Start submits to the assigned FIFO queue and may execute immediately. Read-only
-                  review. Changes are proposed for manual review. Approval-required actions are
-                  blocked.
+                  Start submits to the assigned FIFO queue and may execute immediately. Isolated
+                  coding requires confirmation and server-configured roots. Review changes before
+                  keeping or rejecting; integration is manual.
                 </p>
               </section>
             </div>
@@ -913,9 +1054,9 @@ function App() {
           </div>
           <footer>
             <span>
-              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / v0.3
+              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / v0.4 dev
             </span>
-            <span>LOCAL FIRST · TWO AGENTS · READ ONLY</span>
+            <span>LOCAL FIRST · HUMAN REVIEW · ISOLATED CODING</span>
           </footer>
         </div>
       </main>

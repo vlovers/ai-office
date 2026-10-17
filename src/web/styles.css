@@ -1457,3 +1457,13 @@ footer {
     order: 0;
   }
 }
+
+.review-diff {
+  max-height: 32rem;
+  overflow: auto;
+  white-space: pre;
+  font-size: 0.8rem;
+}
+.file-summary code {
+  overflow-wrap: anywhere;
+}
