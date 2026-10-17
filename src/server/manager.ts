@@ -1,3 +1,5 @@
+import { diffLines } from '../shared/diff.js';
+import type { ReviewComment, ReviewRecord } from '../shared/types.js';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
@@ -20,6 +22,11 @@ import {
 import type { AuthMode } from '../shared/types.js';
 import type { CodexAuth } from './providers/codex-auth.js';
 
+export interface FeedbackInput {
+  revision: string;
+  version: number;
+  comments: ReviewComment[];
+}
 interface Active {
   taskId: string;
   agentId: AgentId;
@@ -325,6 +332,28 @@ export class TaskManager {
           repository,
           this.store.workspace(currentTask.workspaceId)!,
         );
+      if (currentTask.reviewRequest) {
+        const request = currentTask.reviewRequest;
+        const currentSession = this.validateResume(currentTask, request.sessionId);
+        if (
+          currentSession?.threadId !== request.threadId ||
+          currentSession.workspaceId !== currentTask.workspaceId ||
+          JSON.stringify(this.store.sessionBinding(request.sessionId)) !==
+            JSON.stringify(active.session.binding) ||
+          previous?.id !== request.sessionId ||
+          previous?.threadId !== request.threadId ||
+          active.session.threadId !== request.threadId
+        )
+          throw new AppError(
+            409,
+            'Review continuation session identity changed. No replacement thread was started.',
+          );
+        await this.workspaces!.assertRevision(
+          repository,
+          this.store.workspace(currentTask.workspaceId!)!,
+          request.revision,
+        );
+      }
       active.session.executionMode = currentTask.executionMode ?? 'read-only';
       await provider.executeTask(active.session, this.store.task(active.taskId)!.prompt);
       if (active.stopRequested) void provider.stopSession(active.session);
@@ -339,7 +368,14 @@ export class TaskManager {
           void this.stop(active.taskId);
           continue;
         }
-        if (event.kind === 'thread') this.store.setThread(saved.id, event.threadId);
+        if (event.kind === 'thread') {
+          if (previous?.threadId && event.threadId !== previous.threadId)
+            throw new AppError(
+              409,
+              'Codex returned a different thread during resume. Stopped; inspect the native session before continuing.',
+            );
+          this.store.setThread(saved.id, event.threadId);
+        }
         if (event.kind === 'result') {
           result = this.clean(event.text).slice(-256_000);
           this.store.updateTask(active.taskId, { result });
@@ -401,6 +437,10 @@ export class TaskManager {
               : 'Worktree summary unavailable. Private runtime diagnostics were withheld.',
         });
       }
+      if (!requeue && !active.preserveQueue && this.store.task(active.taskId)?.workspaceId) {
+        const workspace = this.store.workspace(this.store.task(active.taskId)!.workspaceId!);
+        if (workspace) this.store.saveWorkspace({ ...workspace, reviewEpoch: active.taskId });
+      }
       try {
         if (cleanupConfirmed) {
           await workspaceRelease?.();
@@ -422,23 +462,79 @@ export class TaskManager {
       this.wake();
     }
   }
+  reviewHistory(taskId: string, before?: number) {
+    const task = this.store.task(taskId);
+    if (!task?.workspaceId) throw new AppError(404, 'Workspace not found.');
+    return this.clean(
+      this.store.reviewRecords(task.workspaceId, before).map((record) => {
+        const next = record.continuationTaskId
+          ? this.store.task(record.continuationTaskId)
+          : undefined;
+        return {
+          ...record,
+          continuation: next
+            ? { id: next.id, state: next.state, error: next.error, sessionId: next.sessionId }
+            : undefined,
+        };
+      }),
+    );
+  }
+  private saveFeedback(taskId: string, input: FeedbackInput) {
+    const task = this.store.task(taskId)!;
+    const record = this.store.reviewRecord(task.workspaceId!, input.revision);
+    if (!record) throw new AppError(404, 'Review revision not found. Refresh Git review.');
+    if (record.submittedAt)
+      throw new AppError(409, 'Submitted feedback is immutable. Review the next revision.');
+    if (record.version !== input.version)
+      throw new AppError(409, 'Feedback changed. Reload review history before editing.');
+    const ids = new Set<string>();
+    const now = new Date().toISOString();
+    const comments = input.comments.map((comment) => {
+      if (ids.has(comment.id)) throw new AppError(400, 'Duplicate comment identifier.');
+      ids.add(comment.id);
+      const file = record.files.find((file) => file.path === comment.path);
+      if (comment.path && !file) throw new AppError(400, 'Comment file is not in this revision.');
+      if (
+        comment.anchor &&
+        (!file?.patch ||
+          !diffLines(file.patch).some(
+            (line) => line[comment.anchor!.side] === comment.anchor!.line,
+          ))
+      )
+        throw new AppError(400, 'Line anchor is not in this revision.');
+      const previous = record.comments.find((item) => item.id === comment.id);
+      return {
+        ...comment,
+        createdAt: previous?.createdAt ?? now,
+        updatedAt:
+          previous &&
+          JSON.stringify({ ...previous, updatedAt: '' }) ===
+            JSON.stringify({ ...comment, createdAt: previous.createdAt, updatedAt: '' })
+            ? previous.updatedAt
+            : now,
+      };
+    });
+    return this.store.saveComments(record, this.clean(comments));
+  }
   reviewOperation(
     taskId: string,
-    action: 'review' | 'keep' | 'reject' | 'verify',
+    action: 'review' | 'keep' | 'reject' | 'verify' | 'feedback' | 'request-changes',
     command?: string,
     revision?: string,
+    feedback?: FeedbackInput,
   ) {
     if (this.closing) throw new AppError(503, 'Server is shutting down.');
-    const operation = this.performReview(taskId, action, command, revision);
+    const operation = this.performReview(taskId, action, command, revision, feedback);
     this.reviews.add(operation);
     void operation.finally(() => this.reviews.delete(operation)).catch(() => {});
     return operation;
   }
   private async performReview(
     taskId: string,
-    action: 'review' | 'keep' | 'reject' | 'verify',
+    action: 'review' | 'keep' | 'reject' | 'verify' | 'feedback' | 'request-changes',
     command?: string,
     revision?: string,
+    feedback?: FeedbackInput,
   ) {
     const task = this.store.task(taskId);
     let workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
@@ -446,6 +542,10 @@ export class TaskManager {
     if (!task || !workspace || !repository || !this.workspaces)
       throw new AppError(404, 'Isolated workspace not found.');
     const workspaceId = workspace.id;
+    if (action === 'request-changes') {
+      const submitted = this.store.reviewRecord(workspaceId, revision ?? '');
+      if (submitted?.continuationTaskId) return this.clean(submitted);
+    }
     if (
       [...this.active.values()].some((run) => run.gitDir === repository.gitDir) ||
       this.store.queue().some((entry) => {
@@ -497,9 +597,103 @@ export class TaskManager {
       // A prior operation may have completed between snapshot and lease acquisition.
       workspace = this.store.workspace(workspace.id)!;
       await this.workspaces.validate(repository, workspace);
-      if (action === 'review')
-        return this.clean(await this.workspaces.review(repository, workspace));
+      if (action === 'review') {
+        const review = await this.workspaces.review(repository, workspace);
+        return this.clean({
+          ...review,
+          record: this.store.captureReview(task, this.clean(review)),
+        });
+      }
+      if (action === 'feedback') {
+        if (!feedback || workspace.decision !== 'pending')
+          throw new AppError(409, 'Only pending reviews accept draft feedback.');
+        return this.clean(this.saveFeedback(taskId, feedback));
+      }
       await this.workspaces.assertRevision(repository, workspace, revision);
+      if (action === 'request-changes') {
+        if (workspace.decision !== 'pending')
+          throw new AppError(409, 'Only pending workspaces can continue.');
+        const record = this.store.reviewRecord(workspace.id, revision!);
+        if (!record?.comments.length) throw new AppError(409, 'Save actionable feedback first.');
+        if (feedback?.version !== record.version)
+          throw new AppError(409, 'Feedback changed. Reload and confirm again.');
+        if (!record.sessionId || !record.threadId)
+          throw new AppError(
+            409,
+            'This review has no resumable session. Inspect the saved task and native CLI transcript.',
+          );
+        const latest = this.store
+          .tasks()
+          .filter((item) => item.workspaceId === workspace!.id)
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+        if (latest?.sessionId !== record.sessionId)
+          throw new AppError(409, 'Session changed. Refresh the latest task review.');
+        const session = this.store.session(record.sessionId);
+        if (session?.threadId !== record.threadId || session.workspaceId !== workspace.id)
+          throw new AppError(409, 'Saved session identity changed. Manual recovery is required.');
+        this.validateResume(task, session.id);
+        if (!this.dashboard().ready || this.connectionBusy || this.store.queue().length >= 100)
+          throw new AppError(409, 'Connection or queue unavailable. Refresh connection and retry.');
+        await this.workspaces.validateExecution(repository, workspace);
+        const prompt =
+          'Apply the following developer review feedback in the current authorized worktree. References belong ONLY to the specified revision; never reinterpret outdated line anchors. Do not commit, push, merge or escalate permissions.\n' +
+          JSON.stringify({
+            revision: record.revision,
+            workspace: workspace.path,
+            branch: workspace.branch,
+            feedback: record.comments,
+            outdatedAnchorWarning:
+              'All earlier-revision line anchors are outdated; inspect current code before applying feedback.',
+          });
+        if (
+          this.store
+            .queue()
+            .some(
+              (entry) =>
+                this.store.task(entry.taskId)?.workspaceId === workspace!.id ||
+                (entry.resumeSessionId &&
+                  this.store.session(entry.resumeSessionId)?.workspaceId === workspace!.id),
+            )
+        )
+          throw new AppError(
+            409,
+            'Another continuation was submitted. Cancel it before requesting changes.',
+          );
+        this.store.db.exec('BEGIN IMMEDIATE');
+        let submitted: ReviewRecord;
+        try {
+          const next = this.store.createTask({
+            repositoryId: task.repositoryId,
+            agentId: task.agentId,
+            executionMode: 'write',
+            title: `Review corrections · ${task.title}`.slice(0, 160),
+            prompt,
+            reviewRequest: {
+              revision: record.revision,
+              sessionId: session.id,
+              threadId: record.threadId,
+            },
+          });
+          this.store.updateTask(next.id, { workspaceId: workspace.id });
+          this.store.enqueue(next.id, this.auth.view().mode, session.id);
+          submitted = this.store.saveReviewRecord({
+            ...record,
+            submittedAt: new Date().toISOString(),
+            continuationTaskId: next.id,
+          });
+          this.store.db.exec('COMMIT');
+        } catch (error) {
+          this.store.db.exec('ROLLBACK');
+          throw error;
+        }
+        this.emit(
+          taskId,
+          'review',
+          'Changes requested; continuation submitted to the existing queue.',
+        );
+        this.wake();
+        return this.clean(submitted);
+      }
       const recordIntent = () =>
         this.store.saveWorkspace({
           ...workspace!,
@@ -522,9 +716,21 @@ export class TaskManager {
         ...updated,
         operation: undefined,
         verification: updated.verification
-          ? { ...updated.verification, output: this.clean(updated.verification.output) }
+          ? {
+              ...updated.verification,
+              revision: action === 'verify' ? revision : workspace.verification?.revision,
+              output: this.clean(updated.verification.output),
+            }
           : undefined,
       });
+      if (action === 'verify') {
+        const record = this.store.reviewRecord(workspace.id, revision!);
+        if (record)
+          this.store.saveReviewRecord({
+            ...record,
+            verification: this.store.workspace(workspace.id)?.verification,
+          });
+      }
       this.emit(
         taskId,
         'review',

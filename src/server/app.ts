@@ -104,6 +104,70 @@ export async function createApp(manager: TaskManager) {
   app.get('/api/tasks/:id/review', async (request) =>
     manager.reviewOperation(id.parse((request.params as { id: string }).id), 'review'),
   );
+  app.get('/api/tasks/:id/review/history', async (request) => {
+    const query = z
+      .object({
+        before: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+      })
+      .strict()
+      .parse(request.query);
+    return manager.reviewHistory(id.parse((request.params as { id: string }).id), query.before);
+  });
+  app.post('/api/tasks/:id/review/feedback', async (request) => {
+    const input = z
+      .object({
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        version: z.number().int().min(0),
+        comments: z
+          .array(
+            z
+              .object({
+                id,
+                body: z.string().trim().min(1).max(4000),
+                path: z.string().min(1).max(4096).optional(),
+                anchor: z
+                  .object({
+                    side: z.enum(['old', 'new']),
+                    line: z.number().int().positive().max(10000000),
+                  })
+                  .strict()
+                  .optional(),
+                createdAt: z.string().max(40),
+                updatedAt: z.string().max(40),
+              })
+              .strict(),
+          )
+          .max(50),
+      })
+      .strict()
+      .parse(request.body);
+    if (JSON.stringify(input).length > 20000)
+      throw new AppError(413, 'Feedback exceeds 20,000 characters.');
+    return manager.reviewOperation(
+      id.parse((request.params as { id: string }).id),
+      'feedback',
+      undefined,
+      input.revision,
+      input,
+    );
+  });
+  app.post('/api/tasks/:id/review/request-changes', async (request) => {
+    const input = z
+      .object({
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        version: z.number().int().min(0),
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    return manager.reviewOperation(
+      id.parse((request.params as { id: string }).id),
+      'request-changes',
+      undefined,
+      input.revision,
+      { ...input, comments: [] },
+    );
+  });
   app.post('/api/tasks/:id/review', async (request) => {
     const input = z
       .object({

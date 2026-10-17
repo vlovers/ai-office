@@ -1,6 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import type {
+  ReviewRecord,
+  ReviewComment,
+  WorkspaceReview,
   Repository,
   Workspace,
   ExecutionMode,
@@ -18,7 +21,7 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
-    if (version > 5) {
+    if (version > 6) {
       this.db.close();
       throw new Error('Metadata schema is newer than this AI Office version.');
     }
@@ -58,6 +61,8 @@ export class Store {
               'Server terminated before the task finished. Inspect the repository before resuming.',
           });
           this.addEvent(task.id, 'interrupted', 'Recovered unfinished task after server restart.');
+          const workspace = task.workspaceId ? this.workspace(task.workspaceId) : undefined;
+          if (workspace) this.saveWorkspace({ ...workspace, reviewEpoch: task.id });
         }
       }
       for (const workspace of this.workspaces()) {
@@ -73,7 +78,14 @@ export class Store {
               'Legacy workspace has no ownership fingerprint. Preserve its files; manual inspection and integration are required.',
           });
       }
-      this.db.exec('PRAGMA user_version=5; COMMIT;');
+      this.db.exec(`CREATE TABLE IF NOT EXISTS review_records (
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        revision TEXT NOT NULL,
+        number INTEGER NOT NULL,
+        json TEXT NOT NULL,
+        PRIMARY KEY(workspace_id, revision),
+        UNIQUE(workspace_id, number)
+      ); PRAGMA user_version=6; COMMIT;`);
     } catch (error) {
       try {
         this.db.exec('ROLLBACK');
@@ -119,6 +131,7 @@ export class Store {
   }
   createTask(input: {
     repositoryId: string;
+    reviewRequest?: Task['reviewRequest'];
     title: string;
     prompt: string;
     executionMode?: ExecutionMode;
@@ -300,6 +313,51 @@ export class Store {
       this.db.exec('ROLLBACK');
       throw error;
     }
+  }
+  reviewRecords(workspaceId: string, before = Number.MAX_SAFE_INTEGER): ReviewRecord[] {
+    return this.db
+      .prepare(
+        'SELECT json FROM review_records WHERE workspace_id=? AND number<? ORDER BY number DESC LIMIT 20',
+      )
+      .all(workspaceId, before)
+      .map((row) => JSON.parse(String(row.json)) as ReviewRecord);
+  }
+  reviewRecord(workspaceId: string, revision: string) {
+    const row = this.db
+      .prepare('SELECT json FROM review_records WHERE workspace_id=? AND revision=?')
+      .get(workspaceId, revision);
+    return row ? (JSON.parse(String(row.json)) as ReviewRecord) : undefined;
+  }
+  captureReview(task: Task, review: WorkspaceReview) {
+    const existing = this.reviewRecord(review.workspace.id, review.revision!);
+    if (existing) return existing;
+    const session = task.sessionId ? this.session(task.sessionId) : undefined;
+    const record: ReviewRecord = {
+      workspaceId: review.workspace.id,
+      taskId: task.id,
+      revision: review.revision!,
+      number: (this.reviewRecords(review.workspace.id)[0]?.number ?? 0) + 1,
+      createdAt: new Date().toISOString(),
+      files: review.files,
+      comments: [],
+      version: 0,
+      sessionId: session?.id ?? null,
+      threadId: session?.threadId ?? null,
+      verification: review.workspace.verification,
+    };
+    this.db
+      .prepare('INSERT INTO review_records VALUES (?,?,?,?)')
+      .run(record.workspaceId, record.revision, record.number, JSON.stringify(record));
+    return record;
+  }
+  saveReviewRecord(record: ReviewRecord) {
+    this.db
+      .prepare('UPDATE review_records SET json=? WHERE workspace_id=? AND revision=?')
+      .run(JSON.stringify(record), record.workspaceId, record.revision);
+    return record;
+  }
+  saveComments(record: ReviewRecord, comments: ReviewComment[]) {
+    return this.saveReviewRecord({ ...record, comments, version: record.version + 1 });
   }
   close() {
     if (this.db.isOpen) this.db.close();

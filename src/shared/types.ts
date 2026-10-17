@@ -35,6 +35,7 @@ export interface ChangedFile {
   status: string;
 }
 export interface Task {
+  reviewRequest?: { revision: string; sessionId: string; threadId: string };
   executionMode?: ExecutionMode;
   workspaceId?: string;
   id: string;
@@ -95,6 +96,7 @@ export interface QueueEntry {
 
 export type ExecutionMode = 'read-only' | 'write';
 export interface Workspace {
+  reviewEpoch?: string;
   id: string;
   repositoryId: string;
   path: string;
@@ -111,13 +113,53 @@ export interface Workspace {
   };
   operation?: 'creating' | 'rejecting' | 'verifying';
   recoveryError?: string;
-  verification?: { command: string; output: string; passed: boolean; at: string };
+  verification?: {
+    command: string;
+    output: string;
+    passed: boolean;
+    at: string;
+    revision?: string;
+  };
 }
 export interface WorkspaceReview {
   revision?: string;
   commandDetails?: Record<string, string[]>;
   workspace: Workspace;
-  files: ChangedFile[];
+  files: ReviewFile[];
+  record?: ReviewRecord;
   diff: string;
   commands: string[];
+}
+
+export interface ReviewFile extends ChangedFile {
+  patch?: string;
+  availability?: 'text' | 'binary' | 'withheld' | 'oversized' | 'unavailable';
+  additions?: number;
+  deletions?: number;
+}
+export interface ReviewComment {
+  id: string;
+  body: string;
+  path?: string;
+  anchor?: { side: 'old' | 'new'; line: number };
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ReviewRecord {
+  workspaceId: string;
+  taskId: string;
+  revision: string;
+  number: number;
+  createdAt: string;
+  files: ReviewFile[];
+  comments: ReviewComment[];
+  version: number;
+  submittedAt?: string;
+  continuationTaskId?: string;
+  sessionId: string | null;
+  threadId: string | null;
+  verification?: Workspace['verification'];
+}
+export interface ReviewHistoryEntry extends ReviewRecord {
+  continuation?: Pick<Task, 'id' | 'state' | 'error' | 'sessionId'>;
 }

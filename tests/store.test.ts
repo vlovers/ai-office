@@ -56,7 +56,7 @@ it('upgrades version-1 metadata without guessing authentication for legacy sessi
     expect(store.session(session.id)?.threadId).toBe('legacy-thread');
     expect(store.session(session.id)?.authMode).toBeUndefined();
     expect(store.sessionBinding(session.id)).toBeUndefined();
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(5);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(6);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
@@ -100,7 +100,7 @@ it('transactionally migrates v2 tasks and sessions without auto-submitting legac
     store.db.exec('DROP TABLE task_queue; PRAGMA user_version=2;');
     store.close();
     store = new Store(path);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(5);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(6);
     expect(store.session(session.id)?.agentId).toBe('codex-1');
     expect(store.session(session.id)?.threadId).toBe('synthetic-v2-thread');
     expect(store.sessionBinding(session.id)).toEqual(binding);
@@ -174,6 +174,56 @@ it('does not leave a resumable session without its binding when persistence fail
       }),
     ).toThrow('synthetic binding failure');
     expect(store.sessions()).toEqual([]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('migrates an actual schema-5 database without changing tasks and preserves schema-6 records on restart', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-v5-'));
+  const path = join(directory, 'metadata.sqlite');
+  let store = new Store(path);
+  try {
+    const repo = store.register({
+      path: '/disposable/v5',
+      gitDir: '/disposable/v5/.git',
+      name: 'v5',
+    });
+    const task = store.createTask({ repositoryId: repo.id, title: 'Preserve', prompt: 'Preserve' });
+    const workspace = {
+      id: 'fixture-workspace',
+      repositoryId: repo.id,
+      path: '/disposable/worktree',
+      gitDir: '/disposable/git',
+      branch: 'fixture',
+      base: 'fixture',
+      decision: 'rejected' as const,
+    };
+    store.attachWorkspace(task.id, workspace);
+    const original = store.task(task.id);
+    store.db.exec('DROP TABLE review_records; PRAGMA user_version=5;');
+    store.close();
+    store = new Store(path);
+    expect(store.task(task.id)).toEqual(original);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(6);
+    expect(store.queue()).toEqual([]);
+    const record = store.captureReview(store.task(task.id)!, {
+      workspace,
+      revision: 'a'.repeat(64),
+      files: [],
+      diff: '',
+      commands: [],
+    });
+    store.saveComments(record, [
+      { id: 'comment', body: 'Preserve rejected history', createdAt: 'now', updatedAt: 'now' },
+    ]);
+    store.close();
+    store = new Store(path);
+    expect(store.reviewRecords(workspace.id)[0]?.comments[0]?.body).toBe(
+      'Preserve rejected history',
+    );
+    expect(store.workspace(workspace.id)?.decision).toBe('rejected');
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
