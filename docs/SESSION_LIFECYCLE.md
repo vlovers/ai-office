@@ -15,3 +15,17 @@ Keep leaves files and the branch for manual integration. Reject records removal 
 Host verification needs operator opt-in and a separate warning/acknowledgement. It records verification intent and uses an independent bounded supervisor. Normal shutdown aborts it and stops agents concurrently, waiting for cleanup before persistence closes. An abrupt backend death disconnects the supervisor, which also owns its own timeout. Interrupted operations remain visible across restart; deliberately detached descendants remain a documented limit.
 
 See [workspace recovery](WORKSPACE_RECOVERY.md), [security model](SECURITY.md) and [setup/manual integration](V0_4_DEMO.md). Do not remove stale leases until processes and files have been inspected. A saved thread ID cannot reconstruct a missing native CLI transcript.
+
+## Review corrections (v0.5)
+
+A saved draft does not authorize execution. Request Changes opens an exact-target/feedback
+confirmation; explicit confirmation creates a new task in the existing queue, using the
+original write session/workspace/agent. Submitted feedback and queue insertion commit
+together. Same-revision retries return the original task. Stale confirmation, changed
+ownership/HEAD/session or incompatible authentication fail closed. There is no replacement
+thread fallback. After async auth, the ordinary worker validates the pinned revision and
+session again before execution. Stop/cancel and confirmed-queue restart behavior are the
+existing lifecycle. Each terminal write iteration advances the review generation; recovery
+of an unfinished write does so too. Older comments keep their original revision, and line
+anchors are outdated for any other revision. History is preserved after Keep/Reject.
+See [the full review workflow](V0_5_REVIEW_CENTER.md).

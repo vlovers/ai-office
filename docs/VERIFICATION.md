@@ -81,3 +81,7 @@ Actual live evidence: `.ai-office/verification/dashboard-real-1792100825565/repo
 The historical [Phase 1.1 SDK-only probe](PHASE_1_1_CODEX_INTEGRATION.md) passed in 17.659 s and remains separate evidence. Fixture tests are not counted as real model runs. No editing/interactive approval behavior is claimed.
 
 No Estima or Pixel Office repository was read or modified. No production databases, automatic commits, pushes, or merges were involved.
+
+## v0.5 Code Review Center
+
+See [v0.5 validation evidence](V0_5_VALIDATION.md) for exact results, fixture browser reproduction, native sandbox boundaries and the reviewed [Code Review Center screenshot](design/screenshots/v05-feedback.png). No paid model call is part of deterministic validation.

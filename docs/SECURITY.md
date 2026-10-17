@@ -42,6 +42,8 @@ Cleanup accepts only a delivered SIGKILL or confirmed group absence. Transient E
 
 ## Storage and retained limitations
 
-Metadata/runtime directories are private and excluded from Git. SQLite uses WAL/foreign keys/transactions; schema v5 refuses older application readers and retains unfinished operation diagnostics. There are no quotas, general backup/retention/encryption facilities or account-wide spend limits. Host crashes cannot emit final events. Never clear a lock by deleting the database. No recovery path automatically deletes unknown/user-modified resources.
+Metadata/runtime directories are private and excluded from Git. SQLite uses WAL/foreign keys/transactions; schema v6 refuses older application readers and retains unfinished operation diagnostics. There are no quotas, general backup/retention/encryption facilities or account-wide spend limits. Host crashes cannot emit final events. Never clear a lock by deleting the database. No recovery path automatically deletes unknown/user-modified resources.
 
 The full evidence-based findings and remaining boundaries are in [the v0.4 security audit](V0_4_SECURITY_AUDIT.md). Report vulnerabilities privately as described in the repository's [security policy](../SECURITY.md).
+
+Review feedback, immutable submitted iterations, resume validation and new abuse cases are documented in the [v0.5 threat model](V0_5_SECURITY.md). All v0.4 filesystem, Git, process cleanup and host-verification boundaries still apply.

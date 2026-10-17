@@ -1,11 +1,11 @@
-# AI Office v0.4 architecture
+# AI Office v0.5 architecture
 
 Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders the existing two-agent PHOSPHOR interface. Each fixed agent slot has an independent Codex provider, private worker home and at most one active task; no orchestration/team framework is introduced.
 
 ```mermaid
 flowchart LR
   UI[PHOSPHOR interface] --> API[Loopback API / strict JSON]
-  API --> Store[(SQLite v5 / tasks, sessions, queue, workspaces, events)]
+  API --> Store[(SQLite v6 / tasks, sessions, queue, workspaces, events)]
   Store --> Manager[TaskManager / two fixed slots]
   Manager --> Leases[Common Git directory + worktree leases]
   Manager --> RO[Read-only registered checkout]
@@ -48,8 +48,31 @@ Host verification is disabled unless the operator explicitly enables it and the 
 
 ## Persistence and recovery
 
-SQLite v5 uses WAL, foreign keys, bounded events and transactional schema migration. It stores repositories, task/session JSON, private session bindings, submitted FIFO entries, events and workspace ownership/review/operation JSON. Workspace/task attachment is transactional. Legacy tasks/sessions remain read-only; older application readers refuse schema v5.
+SQLite v6 uses WAL, foreign keys, bounded events and transactional schema migration. It stores repositories, task/session JSON, private session bindings, submitted FIFO entries, events and workspace ownership/review/operation JSON. Workspace/task attachment is transactional. Legacy tasks/sessions remain read-only; older application readers refuse schema v6.
 
 Filesystem and SQLite changes cannot be committed together. Creation/rejection/verification intents therefore precede external operations. Restart retains unfinished intent as a blocked recovery diagnostic; it never guesses that files are safe to delete or that a command stopped. Workspaces without ownership fingerprints require manual inspection rather than automatic adoption. Review output redaction never rewrites persisted filesystem identity.
 
 Missing/replaced resources, stale leases, native transcript loss and interrupted mutations are described in [workspace recovery](WORKSPACE_RECOVERY.md). Read [the security audit](V0_4_SECURITY_AUDIT.md) and [verification evidence](VERIFICATION.md) for actual findings, tests and remaining limits.
+
+## Revision-bound feedback loop
+
+The Code Review Center extends Workspaces Git review with bounded per-file patches,
+availability states and parsed unified line numbers. Store schema 6 adds review_records
+(workspace/revision primary key, workspace-local sequence, typed JSON). Patches and
+submitted comments stay immutable; draft edits increment a conflict-detection version.
+History reads use 20-record pages and never read older file data from the live worktree.
+
+Request Changes runs under the existing review leases. It validates pending ownership,
+fresh revision, saved session/thread and connection context, then atomically records
+submitted feedback and creates a correction task in the existing FIFO. Internal task
+metadata pins the authorized revision/session/thread. The ordinary worker path rechecks
+revision and session after authentication and before executing SDK resumeThread. It never
+silently starts a replacement thread. Duplicate workspace/revision requests return the
+original correction task. No new agent service or queue is introduced.
+
+Every finished write turn and restart-recovered interrupted write advances a workspace
+review generation, allowing a new iteration even when its patch is unchanged. History
+joins the correction task's persisted status/error; verification records carry their input
+revision. Keep/Reject still operate on the current Git state, with the v0.4 preservation
+rules. Review records remain after removal. See [workflow/migration](V0_5_REVIEW_CENTER.md)
+and [new threat model](V0_5_SECURITY.md).
