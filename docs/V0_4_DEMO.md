@@ -27,7 +27,7 @@ A dirty primary checkout stays dirty and unchanged. Isolated work starts from HE
 
 Backend Git filters are disabled to prevent attributes from launching host-side code. LFS pointer hydration and other filter materialization require separate trusted manual handling. Pre-hardening workspaces without ownership fingerprints require manual inspection.
 
-Validation: `npm run check`, `npm run format:check`, `npm run test:sandbox`, `npm run test:browser`, and `npm run test:browser:write`. `npm run test:real:write -- --run` is an optional paid-usage smoke test using existing CLI authentication only; never part of CI.
+Validation: `npm run check`, `npm run format:check`, `npm run test:sandbox`, `npm run test:browser`, and `npm run test:browser:write`. The optional real-model workflow uses existing CLI authentication only and never runs in CI. Run `npm run test:real:write -- --prepare` first (no inference), review the printed disposable path, then explicitly approve `npm run test:real:write -- --run --root <printed-path> --model <approved-default-model>`. It consumes two model turns, performs a fixed host file-content check, and verifies Keep/Reject across process restarts. It refuses repeated runs and preserves evidence, the database, branches and the kept worktree. See [release verification](V0_4_RELEASE_VERIFICATION.md).
 
 Example manual integration after **Keep**, with paths and commit IDs chosen by you:
 

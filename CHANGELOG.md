@@ -4,9 +4,25 @@ This project follows semantic versioning for release labels. Until a stable 1.0 
 
 ## [Unreleased]
 
-### Documentation
+## [0.4.0] - Release candidate (unreleased)
 
-- Prepare open-source contribution, security and maintenance guidance.
+### Added
+
+- Explicitly confirmed write-enabled Codex tasks in isolated Git worktrees and dedicated branches.
+- Persistent Git diff review, bounded opt-in host verification, Keep and confirmed Reject.
+- Workspace ownership fingerprints, repository leases and conservative restart recovery.
+- Native filesystem policy and deterministic browser/safety tests; opt-in two-turn real Codex E2E with preserved evidence.
+
+### Security
+
+- Fail-closed canonical path, worktree identity and HEAD checks; confirmed review revisions.
+- Restricted Git helpers, sensitive-path diff filtering, and branch-preserving cleanup.
+- Host verification disabled by default; explicit permission required for unsandboxed commands.
+
+### Limitations
+
+- Experimental single-user local application, macOS-verified. Linux native sandbox and real-model write E2E require separate release evidence.
+- No automatic integration, branch deletion or recovery of ambiguous resources. See [release notes](docs/releases/v0.4.0.md).
 
 ## [0.3.0] - 2026-10-16
 
