@@ -1,3 +1,5 @@
+Current release preparation and the real-model approval gate are tracked in [v0.4.0 release verification](V0_4_RELEASE_VERIFICATION.md). The records below retain their original audit scope.
+
 # v0.4 security-audit verification — 2026-10-18
 
 Environment: macOS arm64, Node 24.21.0, installed Codex SDK/CLI 0.162.1. Baseline PR head was `6353783`; hardening implementation is commit `67d29be`. No inference calls were used. All Git/database/process fixtures were disposable; synthetic canaries stood in for secrets.

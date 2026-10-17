@@ -4,7 +4,9 @@
 
 ![CI](https://github.com/vlovers/ai-office/actions/workflows/validation.yml/badge.svg) · [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-> **v0.4 development · macOS verified · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
+> **v0.4.0 release candidate · macOS verified · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
+
+The v0.4.0 candidate passed macOS real Codex write validation and automated checks; no GitHub release or package has been published. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
 
 ## Quick start
 
