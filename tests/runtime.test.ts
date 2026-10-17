@@ -208,6 +208,9 @@ it('reaps its orphan worker group after abrupt backend death and keeps the workt
         return true;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+        // macOS can temporarily deny the probe while an orphan group is being reaped.
+        // EPERM is not evidence of termination: keep waiting for a confirmed ESRCH.
+        if ((error as NodeJS.ErrnoException).code === 'EPERM') return true;
         throw error;
       }
     },
