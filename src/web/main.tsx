@@ -157,7 +157,10 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
+    const origin = document.activeElement;
     requestAnimationFrame(() => {
+      // A later keyboard/pointer action takes precedence over this deferred navigation.
+      if (document.activeElement !== origin) return;
       const section = document.getElementById(id);
       section?.focus();
       section?.scrollIntoView({ block: 'start' });

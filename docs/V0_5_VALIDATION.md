@@ -65,6 +65,11 @@ visually inspected [feedback screenshot](design/screenshots/v05-feedback.png) sh
 real production component with synthetic fixture feedback/thread identity and no personal
 repository paths or credentials. It is a bounded patch review, not real-model evidence.
 
+The first GitHub run exposed a workstation-navigation race: a deferred inspector focus
+could steal focus after the user had moved to another desk. Deferred navigation now
+checks that focus is still at its original control before moving it. The keyboard assertion
+was retained; no test was skipped or relaxed.
+
 GitHub Actions runs the same deterministic tests/build/browser checks on Ubuntu and the
 native probe on macOS. The PR's checks and final delivery report identify its exact run and
 commit; local results above do not substitute for CI. Real-model testing was not requested

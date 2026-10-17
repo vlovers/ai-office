@@ -87,6 +87,17 @@ try {
   await firstDesk.focus();
   await page.keyboard.press('Home');
   await expect(firstDesk).toBeFocused();
+  // Force activation and subsequent focus movement within one frame: deferred navigation
+  // must not override a newer keyboard action, even on a slower CI renderer.
+  await page.evaluate(async () => {
+    const first = document.querySelector<SVGGElement>('[data-agent-id="codex-1"]')!;
+    const second = document.querySelector<SVGGElement>('[data-agent-id="codex-2"]')!;
+    second.focus();
+    second.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    first.focus();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+  await expect(firstDesk).toBeFocused();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
   await expect(page.locator('#agent')).toBeFocused();
   assert.equal(env.store.tasks().length, 0, 'Workstation invented a task');
