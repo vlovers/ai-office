@@ -56,7 +56,7 @@ it('upgrades version-1 metadata without guessing authentication for legacy sessi
     expect(store.session(session.id)?.threadId).toBe('legacy-thread');
     expect(store.session(session.id)?.authMode).toBeUndefined();
     expect(store.sessionBinding(session.id)).toBeUndefined();
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(3);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(4);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
@@ -100,7 +100,7 @@ it('transactionally migrates v2 tasks and sessions without auto-submitting legac
     store.db.exec('DROP TABLE task_queue; PRAGMA user_version=2;');
     store.close();
     store = new Store(path);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(3);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(4);
     expect(store.session(session.id)?.agentId).toBe('codex-1');
     expect(store.session(session.id)?.threadId).toBe('synthetic-v2-thread');
     expect(store.sessionBinding(session.id)).toEqual(binding);

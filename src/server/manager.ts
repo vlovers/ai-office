@@ -2,6 +2,8 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { Workspaces } from './workspaces.js';
+import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
 import { AppError } from './errors.js';
 import { acquireLock, ResourceLockedError } from './lock.js';
@@ -34,6 +36,7 @@ export class TaskManager {
   private waiting = new Map<string, string>();
   private providers: Map<AgentId, AgentProvider>;
   private closing = false;
+  private reviews = new Set<Promise<unknown>>();
   private connectionBusy = false;
   constructor(
     readonly store: Store,
@@ -41,6 +44,7 @@ export class TaskManager {
     private auth: CodexAuth,
     private secret?: string,
     private timeoutMs = 15 * 60_000,
+    readonly workspaces?: Workspaces,
   ) {
     const list = Array.isArray(providers) ? providers : [providers as AgentProvider];
     if (list.length < 1 || list.length > 2 || new Set(list).size !== list.length)
@@ -69,7 +73,10 @@ export class TaskManager {
             : 'idle',
         taskId: task?.id ?? null,
         canStop: provider.capabilities.cancellation,
-        mode: 'Repository review · read only',
+        mode:
+          task?.executionMode === 'write'
+            ? 'Isolated coding · write enabled'
+            : 'Repository review · read only',
       };
     });
     return {
@@ -151,7 +158,7 @@ export class TaskManager {
     );
     this.events.emit('event', event);
   }
-  start(taskId: string, resumeSessionId?: string) {
+  start(taskId: string, resumeSessionId?: string, confirmedWrite = false) {
     if (this.closing) throw new AppError(503, 'Server is shutting down.');
     if (this.connectionBusy) throw new AppError(409, 'Wait for the connection check to finish.');
     if (!this.dashboard().ready) throw new AppError(503, this.dashboard().readinessMessage);
@@ -159,8 +166,15 @@ export class TaskManager {
     if (!task) throw new AppError(404, 'Task not found.');
     if (task.state !== 'queued')
       throw new AppError(409, 'Create a new task to retry or continue a previous session.');
+    if (task.executionMode === 'write' && (!confirmedWrite || !this.workspaces))
+      throw new AppError(
+        409,
+        'Confirm isolated writes and configure AI_OFFICE_AUTHORIZED_ROOT and AI_OFFICE_WORKSPACE_ROOT first.',
+      );
     const provider = this.providers.get(task.agentId);
     if (!provider) throw new AppError(400, 'Unknown assigned agent.');
+    if (task.executionMode === 'write' && !provider.capabilities.writes)
+      throw new AppError(409, 'Provider does not support isolated writes.');
     if (this.store.queue().some((entry) => entry.taskId === task.id))
       throw new AppError(409, 'Task is already submitted to the queue.');
     if (this.store.queue().length >= 100)
@@ -195,6 +209,15 @@ export class TaskManager {
         409,
         'Choose the saved session’s connection mode. Legacy sessions without a verified connection context require a new session.',
       );
+    if (previous && (previous.executionMode ?? 'read-only') !== (task.executionMode ?? 'read-only'))
+      throw new AppError(409, 'Resume requires the same execution mode.');
+    if (previous?.executionMode === 'write' && !previous.workspaceId)
+      throw new AppError(
+        409,
+        'Saved write session has no workspace identity. Start a new session.',
+      );
+    if (previous?.workspaceId && this.store.workspace(previous.workspaceId)?.decision !== 'pending')
+      throw new AppError(409, 'Only pending workspaces can be resumed.');
     return previous;
   }
   private async run(
@@ -209,6 +232,7 @@ export class TaskManager {
     let eventCount = 0;
     let state: TaskState = 'failed';
     let requeue = false;
+    let workingPath = repository.path;
     const provider = this.providers.get(active.agentId)!;
     try {
       await revalidateRepository(repository);
@@ -228,8 +252,27 @@ export class TaskManager {
       this.validateResume(this.store.task(active.taskId)!, entry.resumeSessionId ?? undefined);
       this.store.claimQueued(active.taskId);
       this.waiting.delete(active.taskId);
-      this.emit(active.taskId, 'state', 'Starting repository review.');
-      const baselineFiles = await changedFiles(repository.path);
+      const task = this.store.task(active.taskId)!;
+      if (task.executionMode === 'write') {
+        if (!this.workspaces) throw new AppError(409, 'Isolated writes are not configured.');
+        const previousSession = entry.resumeSessionId
+          ? this.store.session(entry.resumeSessionId)
+          : undefined;
+        const workspaceId = previousSession?.workspaceId ?? task.workspaceId;
+        const workspace = workspaceId ? this.store.workspace(workspaceId) : undefined;
+        if (workspaceId && !workspace)
+          throw new AppError(409, 'Saved workspace metadata is missing.');
+        const isolated = workspace ?? (await this.workspaces.create(repository, randomUUID()));
+        if (isolated.decision !== 'pending')
+          throw new AppError(409, 'Workspace is no longer pending review.');
+        await this.workspaces.validate(repository, isolated);
+        this.store.saveWorkspace(isolated);
+        this.store.updateTask(active.taskId, { workspaceId: isolated.id });
+        workingPath = isolated.path;
+        this.emit(active.taskId, 'workspace', `Isolated branch ${isolated.branch} ready.`);
+      }
+      this.emit(active.taskId, 'state', 'Starting agent session.');
+      const baselineFiles = await changedFiles(workingPath);
       this.store.updateTask(active.taskId, { baselineFiles });
       if (active.stopRequested) {
         state = 'stopped';
@@ -240,11 +283,11 @@ export class TaskManager {
         : undefined;
       active.session = previous?.threadId
         ? await provider.resumeSession(
-            repository.path,
+            workingPath,
             previous.threadId,
             this.store.sessionBinding(previous.id),
           )
-        : await provider.startSession(repository.path);
+        : await provider.startSession(workingPath);
       const saved =
         previous ??
         this.store.createSession(
@@ -252,12 +295,15 @@ export class TaskManager {
           active.session.binding,
           provider.id,
           active.agentId,
+          this.store.task(active.taskId)!.executionMode,
+          this.store.task(active.taskId)!.workspaceId,
         );
       this.store.updateTask(active.taskId, { sessionId: saved.id });
       if (active.stopRequested) {
         state = 'stopped';
         return;
       }
+      active.session.executionMode = this.store.task(active.taskId)!.executionMode ?? 'read-only';
       await provider.executeTask(active.session, this.store.task(active.taskId)!.prompt);
       if (active.stopRequested) void provider.stopSession(active.session);
       timer = setTimeout(() => {
@@ -310,7 +356,7 @@ export class TaskManager {
       try {
         if (release) {
           await revalidateRepository(repository);
-          const files = await changedFiles(repository.path);
+          const files = await changedFiles(workingPath);
           this.store.updateTask(active.taskId, { changedFiles: files });
         }
       } catch (error) {
@@ -339,6 +385,73 @@ export class TaskManager {
       this.wake();
     }
   }
+  reviewOperation(
+    taskId: string,
+    action: 'review' | 'keep' | 'reject' | 'verify',
+    command?: string,
+  ) {
+    if (this.closing) throw new AppError(503, 'Server is shutting down.');
+    const operation = this.performReview(taskId, action, command);
+    this.reviews.add(operation);
+    void operation.finally(() => this.reviews.delete(operation)).catch(() => {});
+    return operation;
+  }
+  private async performReview(
+    taskId: string,
+    action: 'review' | 'keep' | 'reject' | 'verify',
+    command?: string,
+  ) {
+    const task = this.store.task(taskId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    const repository = task && this.store.repository(task.repositoryId);
+    if (!task || !workspace || !repository || !this.workspaces)
+      throw new AppError(404, 'Isolated workspace not found.');
+    if (
+      [...this.active.values()].some((run) => run.gitDir === repository.gitDir) ||
+      this.store.queue().some((entry) => {
+        const queued = this.store.task(entry.taskId);
+        return (
+          queued?.workspaceId === workspace.id ||
+          (entry.resumeSessionId &&
+            this.store.session(entry.resumeSessionId)?.workspaceId === workspace.id)
+        );
+      })
+    )
+      throw new AppError(409, 'Stop or cancel sessions using this workspace before review.');
+    if (workspace.decision === 'rejected') {
+      if (action === 'review') return { workspace, files: [], diff: '', commands: [] };
+      throw new AppError(409, 'Workspace already rejected.');
+    }
+    const locks = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(locks, { recursive: true, mode: 0o700 });
+    const hash = createHash('sha256').update(repository.gitDir).digest('hex');
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLock(join(locks, hash), repository.path);
+    } catch {
+      throw new AppError(409, 'Repository is busy or has an unresolved lease.');
+    }
+    try {
+      await this.workspaces.validate(repository, workspace);
+      if (action === 'review')
+        return this.clean(await this.workspaces.review(repository, workspace));
+      const updated =
+        action === 'reject'
+          ? await this.workspaces.reject(repository, workspace)
+          : action === 'verify'
+            ? await this.workspaces.verify(repository, workspace, command ?? '')
+            : { ...workspace, decision: 'kept' as const };
+      this.store.saveWorkspace(this.clean(updated));
+      this.emit(
+        taskId,
+        'review',
+        action === 'verify' ? 'Verification finished.' : `Changes ${updated.decision}.`,
+      );
+      return this.clean(updated);
+    } finally {
+      await release();
+    }
+  }
   async stop(taskId: string) {
     const active = [...this.active.values()].find((run) => run.taskId === taskId);
     if (!active) {
@@ -365,6 +478,7 @@ export class TaskManager {
   }
   async shutdown() {
     this.closing = true;
+    await Promise.allSettled([...this.reviews]);
     clearTimeout(this.timer);
     this.timer = undefined;
     await Promise.all(

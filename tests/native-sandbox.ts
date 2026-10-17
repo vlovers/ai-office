@@ -21,7 +21,7 @@ try {
   await writeFile(join(repository, '.env'), 'FAKE_SECRET_MUST_NOT_BE_READ');
   await writeFile(join(root, 'outside.txt'), 'UNREGISTERED_MUST_NOT_BE_READ');
   const env = { PATH: '/usr/bin:/bin', HOME: home, CODEX_HOME: home };
-  const options = codexOptions(repository, env);
+  let options = codexOptions(repository, env);
   const overrides: string[] = [];
   function flatten(value: unknown, prefix: string) {
     if (value && typeof value === 'object' && !Array.isArray(value))
@@ -60,8 +60,26 @@ try {
   const write = command('/usr/bin/touch', [join(repository, 'must-not-exist')]);
   assert.notEqual(write.status, 0, 'Read-only repository unexpectedly writable');
   await assert.rejects(readFile(join(repository, 'must-not-exist')));
+  options = codexOptions(repository, env, undefined, true);
+  overrides.length = 0;
+  flatten(options.config, '');
+  overrides.push(...options.configOverrides!);
+  const isolatedWrite = command('/usr/bin/touch', [join(repository, 'allowed-write')]);
+  assert.equal(isolatedWrite.status, 0, `Isolated write failed: ${isolatedWrite.stderr}`);
+  await readFile(join(repository, 'allowed-write'));
+  for (const file of [
+    join(otherRepository, 'forbidden-write'),
+    join(repository, '.env'),
+    join(root, 'outside.txt'),
+  ]) {
+    const denied = command('/usr/bin/touch', [file]);
+    assert.notEqual(denied.status, 0, `Out-of-bound write allowed: ${file}`);
+  }
+  await mkdir(join(repository, '.git'));
+  const metadataWrite = command('/usr/bin/touch', [join(repository, '.git', 'config')]);
+  assert.notEqual(metadataWrite.status, 0, 'Git metadata write unexpectedly allowed');
   console.log(
-    'Native sandbox passed: repository read allowed; outside/secret/other-worktree reads and repository writes denied. No credentials or model calls used.',
+    'Native sandbox passed: repository read allowed; outside/secret/other-worktree reads and repository writes denied; write profile permits worktree writes and denies sibling/secret/Git metadata writes. No credentials or model calls used.',
   );
 } finally {
   await rm(root, { recursive: true, force: true });

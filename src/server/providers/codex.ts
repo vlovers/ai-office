@@ -43,7 +43,7 @@ export interface CodexProviderOptions {
 
 export class CodexProvider implements AgentProvider {
   readonly id = 'codex';
-  readonly capabilities = { cancellation: true, interactiveApprovals: false, writes: false };
+  readonly capabilities = { cancellation: true, interactiveApprovals: false, writes: true };
   private runs = new Map<string, Run>();
   private prepared = new Map<string, CodexExecution>();
   constructor(private options: CodexProviderOptions) {}
@@ -178,6 +178,7 @@ export class CodexProvider implements AgentProvider {
       {
         type: 'run',
         repositoryPath: session.repositoryPath,
+        executionMode: session.executionMode,
         threadId: session.threadId,
         prompt,
         executable: execution.executable,

@@ -7,7 +7,7 @@ import type { ChangedFile } from '../shared/types.js';
 
 const execute = promisify(execFile);
 // Fixed argument vectors only. No HTTP-provided executable, flags, shell, or environment.
-async function git(path: string, args: string[]) {
+export async function git(path: string, args: string[]) {
   const { stdout } = await execute(
     '/usr/bin/git',
     [
