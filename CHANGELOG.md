@@ -21,7 +21,7 @@ This project follows semantic versioning for release labels. Until a stable 1.0 
 
 ### Limitations
 
-- Experimental single-user local application, macOS-verified. Linux native sandbox and real-model write E2E require separate release evidence.
+- Experimental single-user local application, macOS-verified. Linux native sandbox remains unverified; the approved two-turn real Codex write E2E passed on macOS.
 - No automatic integration, branch deletion or recovery of ambiguous resources. See [release notes](docs/releases/v0.4.0.md).
 
 ## [0.3.0] - 2026-10-16
