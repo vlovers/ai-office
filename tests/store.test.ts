@@ -56,7 +56,7 @@ it('upgrades version-1 metadata without guessing authentication for legacy sessi
     expect(store.session(session.id)?.threadId).toBe('legacy-thread');
     expect(store.session(session.id)?.authMode).toBeUndefined();
     expect(store.sessionBinding(session.id)).toBeUndefined();
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(4);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(5);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
@@ -100,7 +100,7 @@ it('transactionally migrates v2 tasks and sessions without auto-submitting legac
     store.db.exec('DROP TABLE task_queue; PRAGMA user_version=2;');
     store.close();
     store = new Store(path);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(4);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(5);
     expect(store.session(session.id)?.agentId).toBe('codex-1');
     expect(store.session(session.id)?.threadId).toBe('synthetic-v2-thread');
     expect(store.sessionBinding(session.id)).toEqual(binding);
@@ -147,6 +147,33 @@ it('rolls back schema and ownership changes if migration encounters malformed le
     } finally {
       inspection.close();
     }
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('does not leave a resumable session without its binding when persistence fails', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-binding-'));
+  const store = new Store(join(directory, 'metadata.sqlite'));
+  try {
+    const repository = store.register({
+      path: '/disposable/atomic-binding',
+      gitDir: '/disposable/atomic-binding/.git',
+      name: 'fixture',
+    });
+    store.db.exec(
+      `CREATE TRIGGER fail_binding BEFORE INSERT ON session_bindings BEGIN SELECT RAISE(ABORT,'synthetic binding failure'); END`,
+    );
+    expect(() =>
+      store.createSession(repository.id, {
+        mode: 'local-cli-chatgpt',
+        contextId: 'synthetic',
+        model: 'fixture',
+        runtimeVersion: '0.162.1',
+      }),
+    ).toThrow('synthetic binding failure');
+    expect(store.sessions()).toEqual([]);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });

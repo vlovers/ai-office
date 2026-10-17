@@ -18,7 +18,7 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
-    if (version > 4) {
+    if (version > 5) {
       this.db.close();
       throw new Error('Metadata schema is newer than this AI Office version.');
     }
@@ -60,7 +60,20 @@ export class Store {
           this.addEvent(task.id, 'interrupted', 'Recovered unfinished task after server restart.');
         }
       }
-      this.db.exec('PRAGMA user_version=4; COMMIT;');
+      for (const workspace of this.workspaces()) {
+        if (workspace.operation)
+          this.saveWorkspace({
+            ...workspace,
+            recoveryError: `Interrupted workspace ${workspace.operation}. Preserve files and branches; inspect processes, Git worktree list and the lease before manual recovery.`,
+          });
+        else if (!workspace.identity && workspace.decision !== 'rejected')
+          this.saveWorkspace({
+            ...workspace,
+            recoveryError:
+              'Legacy workspace has no ownership fingerprint. Preserve its files; manual inspection and integration are required.',
+          });
+      }
+      this.db.exec('PRAGMA user_version=5; COMMIT;');
     } catch (error) {
       try {
         this.db.exec('ROLLBACK');
@@ -80,7 +93,7 @@ export class Store {
   sessions(): Session[] {
     return this.rows('sessions');
   }
-  private rows<T>(table: 'repositories' | 'tasks' | 'sessions'): T[] {
+  private rows<T>(table: 'repositories' | 'tasks' | 'sessions' | 'workspaces'): T[] {
     return this.db
       .prepare(`SELECT json FROM ${table}`)
       .all()
@@ -176,14 +189,35 @@ export class Store {
       createdAt: new Date().toISOString(),
       ...(binding ? { authMode: binding.mode, model: binding.model } : {}),
     };
-    this.db
-      .prepare('INSERT INTO sessions VALUES (?,?,?)')
-      .run(session.id, repositoryId, JSON.stringify(session));
-    if (binding)
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
       this.db
-        .prepare('INSERT INTO session_bindings VALUES (?,?)')
-        .run(session.id, JSON.stringify(binding));
+        .prepare('INSERT INTO sessions VALUES (?,?,?)')
+        .run(session.id, repositoryId, JSON.stringify(session));
+      if (binding)
+        this.db
+          .prepare('INSERT INTO session_bindings VALUES (?,?)')
+          .run(session.id, JSON.stringify(binding));
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
     return session;
+  }
+  workspaces(): Workspace[] {
+    return this.rows('workspaces');
+  }
+  attachWorkspace(taskId: string, workspace: Workspace) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.saveWorkspace(workspace);
+      this.updateTask(taskId, { workspaceId: workspace.id });
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
   workspace(id: string): Workspace | undefined {
     const row = this.db.prepare('SELECT json FROM workspaces WHERE id=?').get(id);

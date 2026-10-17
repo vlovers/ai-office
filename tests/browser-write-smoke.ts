@@ -36,6 +36,7 @@ const manager = new TaskManager(
     authorizedRoot: root,
     workspaceRoot: join(root, 'worktrees'),
     commands: { fixture: ['/bin/echo', 'verification passed'] },
+    allowHostVerification: true,
   }),
 );
 const app = await createApp(manager);

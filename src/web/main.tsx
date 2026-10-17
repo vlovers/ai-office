@@ -40,14 +40,21 @@ function Review({ task }: { task: Task }) {
           ? 'Permanently discard ALL uncommitted and untracked files in this task worktree? The branch is preserved. This cannot be undone.'
           : action === 'keep'
             ? 'Keep these changes in the isolated worktree and branch? Integration remains manual.'
-            : 'Run this configured command locally in the task worktree? Verification executes trusted project code with your OS permissions.',
+            : `Run on host: ${JSON.stringify(review?.commandDetails?.[command ?? ''])}\n\nThis executes project code, including AI edits, with your full OS permissions and network access. It can read credentials or modify other checkouts. Inspect the scripts first. Continue?`,
       )
     )
       return;
     setBusy(true);
     setError('');
     try {
-      if (action) await api(`/tasks/${task.id}/review`, { action, command, confirmed: true });
+      if (action)
+        await api(`/tasks/${task.id}/review`, {
+          action,
+          command,
+          confirmed: true,
+          revision: review?.revision,
+          confirmedHostExecution: action === 'verify',
+        });
       setReview(await api<WorkspaceReview>(`/tasks/${task.id}/review`));
     } catch (e) {
       setError((e as Error).message);
@@ -74,7 +81,8 @@ function Review({ task }: { task: Task }) {
             <br />
             Base <code>{review.workspace.base}</code>
           </p>
-          {review.workspace.decision !== 'rejected' && (
+          {review.workspace.recoveryError && <p role="alert">{review.workspace.recoveryError}</p>}
+          {review.workspace.decision !== 'rejected' && !review.workspace.recoveryError && (
             <>
               <p>
                 {review.files.length} changed files compared with the saved base commit. Includes
@@ -107,8 +115,8 @@ function Review({ task }: { task: Task }) {
               ))}
               {!review.commands.length && (
                 <p>
-                  No verification commands configured. Set AI_OFFICE_VERIFICATION_COMMANDS on the
-                  server.
+                  Host verification is disabled or no commands are configured. Inspect project
+                  scripts before enabling AI_OFFICE_ALLOW_HOST_VERIFICATION=1 on the server.
                 </p>
               )}
               {review.workspace.verification && (

@@ -35,13 +35,6 @@ execFileSync('/usr/bin/git', [
 ]);
 const store = new Store(join(root, 'metadata.sqlite'));
 const auth = new CodexAuth({ dataDir: root });
-await auth.refresh();
-assert.equal(auth.view().mode, 'local-cli-chatgpt');
-assert.equal(
-  auth.view().status,
-  'available',
-  'Existing CLI authentication required; no API fallback.',
-);
 const provider = new CodexProvider({ home: join(root, 'worker'), auth });
 const manager = new TaskManager(
   store,
@@ -51,7 +44,16 @@ const manager = new TaskManager(
   120_000,
   new Workspaces({ authorizedRoot: root, workspaceRoot: join(root, 'worktrees') }),
 );
+let success = false;
 try {
+  await auth.refresh();
+  assert.equal(auth.view().mode, 'local-cli-chatgpt');
+  assert.equal(
+    auth.view().status,
+    'available',
+    'Existing CLI authentication required; no API fallback.',
+  );
+
   const repo = store.register(await validateRepository(repository));
   const task = store.createTask({
     repositoryId: repo.id,
@@ -72,12 +74,14 @@ try {
   assert.equal(await readFile(join(review.workspace.path, 'hello.txt'), 'utf8'), 'hello\n');
   await assert.rejects(readFile(join(repository, 'hello.txt')));
   assert.equal(await readFile(join(repository, 'README.md'), 'utf8'), 'Disposable fixture\n');
-  await manager.reviewOperation(task.id, 'reject');
+  await manager.reviewOperation(task.id, 'reject', undefined, review.revision);
+  success = true;
   console.log(
     'Real CLI-authenticated write smoke passed: isolated file, Git review, rejection, primary checkout unchanged.',
   );
 } finally {
   await manager.shutdown();
   store.close();
-  await rm(root, { recursive: true, force: true });
+  if (success) await rm(root, { recursive: true, force: true });
+  else console.error(`Smoke evidence preserved for inspection: ${root}`);
 }

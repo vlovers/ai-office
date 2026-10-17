@@ -102,9 +102,20 @@ export interface Workspace {
   branch: string;
   base: string;
   decision: 'pending' | 'kept' | 'rejected';
+  identity?: {
+    root: string;
+    gitDir: string;
+    gitFile: string;
+    sourceRoot: string;
+    commonDir: string;
+  };
+  operation?: 'creating' | 'rejecting' | 'verifying';
+  recoveryError?: string;
   verification?: { command: string; output: string; passed: boolean; at: string };
 }
 export interface WorkspaceReview {
+  revision?: string;
+  commandDetails?: Record<string, string[]>;
   workspace: Workspace;
   files: ChangedFile[];
   diff: string;

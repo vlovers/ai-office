@@ -6,32 +6,72 @@ import { AppError } from './errors.js';
 import type { ChangedFile } from '../shared/types.js';
 
 const execute = promisify(execFile);
-// Fixed argument vectors only. No HTTP-provided executable, flags, shell, or environment.
+// No HTTP-provided executable, flags, shell or environment. Attributes are agent-controlled:
+// even a legitimate repository filter can execute project scripts on the unsandboxed host.
 export async function git(path: string, args: string[]) {
-  const { stdout } = await execute(
-    '/usr/bin/git',
-    [
-      '--no-optional-locks',
-      '-c',
-      'core.fsmonitor=false',
-      '-c',
-      'core.hooksPath=/dev/null',
-      '-C',
-      path,
-      ...args,
-    ],
-    {
-      timeout: 5000,
-      maxBuffer: 2 * 1024 * 1024,
-      env: {
-        PATH: '/usr/bin:/bin',
-        HOME: '/var/empty',
-        GIT_CONFIG_NOSYSTEM: '1',
-        GIT_CONFIG_GLOBAL: '/dev/null',
-        GIT_TERMINAL_PROMPT: '0',
-      },
+  const fixed = [
+    '--no-optional-locks',
+    '--literal-pathspecs',
+    '-c',
+    'core.fsmonitor=false',
+    '-c',
+    'core.hooksPath=/dev/null',
+    '-c',
+    'diff.ignoreSubmodules=all',
+    '-C',
+    path,
+  ];
+  const options = {
+    timeout: 5000,
+    maxBuffer: 2 * 1024 * 1024,
+    env: {
+      PATH: '/usr/bin:/bin',
+      HOME: '/var/empty',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_TERMINAL_PROMPT: '0',
     },
+  };
+  let names = '';
+  try {
+    names = (
+      await execute(
+        '/usr/bin/git',
+        [
+          ...fixed,
+          'config',
+          '--includes',
+          '--name-only',
+          '--get-regexp',
+          '^filter\\..*\\.(clean|smudge|process|required)$',
+        ],
+        { ...options, maxBuffer: 64_000 },
+      )
+    ).stdout;
+  } catch (error) {
+    if ((error as { code?: number }).code !== 1) throw error;
+  }
+  const prefixes = [
+    ...new Set(
+      names
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((name) => name.replace(/\.(clean|smudge|process|required)$/, '')),
+    ),
+  ];
+  if (prefixes.length > 128)
+    throw new AppError(
+      409,
+      'Too many Git filters to disable safely. Inspect repository configuration manually.',
+    );
+  const disabled = prefixes.flatMap((prefix) =>
+    ['clean', 'smudge', 'process', 'required'].flatMap((key) => [
+      '-c',
+      `${prefix}.${key}=${key === 'required' ? 'false' : ''}`,
+    ]),
   );
+  const { stdout } = await execute('/usr/bin/git', [...fixed, ...disabled, ...args], options);
   return stdout;
 }
 export function assertSafePath(path: string) {
@@ -98,4 +138,20 @@ export async function changedFiles(path: string): Promise<ChangedFile[]> {
     if (status.includes('R') || status.includes('C')) index++;
   }
   return result;
+}
+
+// Shared Git refs/metadata and registered aliases must use the same cross-instance lease.
+export async function repositoryLeaseDirectories(
+  repository: { path: string; gitDir: string },
+  workspaceGitDir?: string,
+) {
+  const common = await realpath(
+    (
+      await git(repository.path, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
+    ).trim(),
+  );
+  assertSafePath(common);
+  return [
+    ...new Set([common, repository.gitDir, ...(workspaceGitDir ? [workspaceGitDir] : [])]),
+  ].sort();
 }

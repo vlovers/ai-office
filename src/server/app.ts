@@ -110,13 +110,18 @@ export async function createApp(manager: TaskManager) {
         action: z.enum(['keep', 'reject', 'verify']),
         confirmed: z.literal(true),
         command: z.string().max(160).optional(),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        confirmedHostExecution: z.boolean().optional(),
       })
       .strict()
       .parse(request.body);
+    if (input.action === 'verify' && input.confirmedHostExecution !== true)
+      throw new AppError(409, 'Explicit host execution confirmation is required.');
     return manager.reviewOperation(
       id.parse((request.params as { id: string }).id),
       input.action,
       input.command,
+      input.revision,
     );
   });
   app.post('/api/tasks/:id/stop', async (request, reply) => {

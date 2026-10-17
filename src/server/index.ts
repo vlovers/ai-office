@@ -32,6 +32,7 @@ try {
           authorizedRoot: process.env.AI_OFFICE_AUTHORIZED_ROOT,
           workspaceRoot: process.env.AI_OFFICE_WORKSPACE_ROOT,
           commands,
+          allowHostVerification: process.env.AI_OFFICE_ALLOW_HOST_VERIFICATION === '1',
         })
       : undefined;
   const manager = new TaskManager(

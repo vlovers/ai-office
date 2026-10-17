@@ -1,8 +1,8 @@
 // Credential-free safety probe of the INSTALLED Codex runtime, with no model call.
-import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { codexOptions } from '../src/server/providers/codex-config.js';
 
@@ -20,6 +20,17 @@ try {
   await writeFile(join(repository, 'README.md'), 'registered repository');
   await writeFile(join(repository, '.env'), 'FAKE_SECRET_MUST_NOT_BE_READ');
   await writeFile(join(root, 'outside.txt'), 'UNREGISTERED_MUST_NOT_BE_READ');
+  await mkdir(join(repository, 'nested'));
+  await mkdir(join(repository, 'nested', '.git'));
+  await mkdir(join(repository, 'nested', '.aws'));
+  await writeFile(join(repository, 'nested', '.git', 'config'), 'NESTED_METADATA_MUST_NOT_BE_READ');
+  await writeFile(
+    join(repository, 'nested', '.aws', 'credentials'),
+    'NESTED_SECRET_MUST_NOT_BE_READ',
+  );
+  await symlink(join(root, 'outside.txt'), join(repository, 'outside-link'));
+
+  let sandboxPath = repository;
   const env = { PATH: '/usr/bin:/bin', HOME: home, CODEX_HOME: home };
   let options = codexOptions(repository, env);
   const overrides: string[] = [];
@@ -42,7 +53,7 @@ try {
         executable,
         ...args,
       ],
-      { env, cwd: repository, encoding: 'utf8', timeout: 10000 },
+      { env, cwd: sandboxPath, encoding: 'utf8', timeout: 10000 },
     );
   }
   const allowed = command('/bin/cat', [join(repository, 'README.md')]);
@@ -52,9 +63,12 @@ try {
     join(root, 'outside.txt'),
     join(repository, '.env'),
     join(otherRepository, 'README.md'),
+    join(repository, 'outside-link'),
+    join(repository, 'nested', '.git', 'config'),
+    join(repository, 'nested', '.aws', 'credentials'),
   ]) {
     const denied = command('/bin/cat', [file]);
-    assert.notEqual(denied.status, 0, 'Out-of-bound read unexpectedly allowed');
+    assert.notEqual(denied.status, 0, `Out-of-bound read unexpectedly allowed: ${file}`);
     assert.doesNotMatch(denied.stdout, /MUST_NOT_BE_READ/);
   }
   const write = command('/usr/bin/touch', [join(repository, 'must-not-exist')]);
@@ -71,15 +85,65 @@ try {
     join(otherRepository, 'forbidden-write'),
     join(repository, '.env'),
     join(root, 'outside.txt'),
+    join(repository, 'outside-link'),
+    join(repository, 'nested', '.git', 'config'),
   ]) {
     const denied = command('/usr/bin/touch', [file]);
     assert.notEqual(denied.status, 0, `Out-of-bound write allowed: ${file}`);
   }
+  const nestedCreate = command('/bin/mkdir', [join(repository, 'nested', '.codex')]);
+  assert.notEqual(nestedCreate.status, 0, 'Future nested metadata directory unexpectedly writable');
   await mkdir(join(repository, '.git'));
   const metadataWrite = command('/usr/bin/touch', [join(repository, '.git', 'config')]);
   assert.notEqual(metadataWrite.status, 0, 'Git metadata write unexpectedly allowed');
+  // A real linked worktree uses a Git pointer file, not a .git directory.
+  const primary = join(root, 'primary');
+  const linked = join(root, 'linked-worktree');
+  const gitEnv = { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
+  execFileSync('/usr/bin/git', ['init', '-q', primary], { env: gitEnv });
+  await writeFile(join(primary, 'README.md'), 'primary unchanged\n');
+  execFileSync('/usr/bin/git', ['-C', primary, 'add', '.'], { env: gitEnv });
+  execFileSync(
+    '/usr/bin/git',
+    [
+      '-C',
+      primary,
+      '-c',
+      'core.hooksPath=/dev/null',
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-qm',
+      'Fixture',
+    ],
+    { env: gitEnv },
+  );
+  execFileSync('/usr/bin/git', ['-C', primary, 'worktree', 'add', '-qb', 'isolated', linked], {
+    env: gitEnv,
+  });
+  options = codexOptions(linked, env, undefined, true);
+  overrides.length = 0;
+  flatten(options.config, '');
+  overrides.push(...options.configOverrides!);
+  sandboxPath = linked;
+  assert.equal(command('/usr/bin/touch', [join(linked, 'allowed-code-file')]).status, 0);
+  for (const [executable, args] of [
+    ['/bin/rm', [join(linked, '.git')]],
+    ['/bin/mv', [join(linked, '.git'), join(linked, 'moved-git')]],
+    ['/usr/bin/touch', [join(primary, 'must-not-write')]],
+    ['/bin/cat', [join(primary, '.git', 'config')]],
+  ] as [string, string[]][])
+    assert.notEqual(
+      command(executable, args).status,
+      0,
+      'Actual Git metadata or primary checkout unexpectedly accessible',
+    );
+  assert.match(await readFile(join(linked, '.git'), 'utf8'), /^gitdir: /);
+  assert.equal(await readFile(join(primary, 'README.md'), 'utf8'), 'primary unchanged\n');
   console.log(
-    'Native sandbox passed: repository read allowed; outside/secret/other-worktree reads and repository writes denied; write profile permits worktree writes and denies sibling/secret/Git metadata writes. No credentials or model calls used.',
+    'Native sandbox passed: repository read allowed; outside/secret/other-worktree reads and repository writes denied; write profile permits worktree writes and denies sibling/secret/nested metadata and symlink escapes; actual linked-worktree Git pointer deletion/rename and primary checkout access denied. No credentials or model calls used.',
   );
 } finally {
   await rm(root, { recursive: true, force: true });
