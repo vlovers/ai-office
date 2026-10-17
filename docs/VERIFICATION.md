@@ -1,4 +1,33 @@
-# v0.4 verification
+# v0.4 security-audit verification — 2026-10-18
+
+Environment: macOS arm64, Node 24.21.0, installed Codex SDK/CLI 0.162.1. Baseline PR head was `6353783`; hardening implementation is commit `67d29be`. No inference calls were used. All Git/database/process fixtures were disposable; synthetic canaries stood in for secrets.
+
+| Gate                            | Actual result                                                                                                                                                                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check`                 | Passed: TypeScript, complete unit/integration suite, HTTP/SSE smoke and production build                                                                                                             |
+| `npm test`                      | **73/73 passed**, 10 files, **101.66 seconds**                                                                                                                                                       |
+| `npm run test:smoke`            | **2/2 passed**, **6.82 seconds**                                                                                                                                                                     |
+| TypeScript and production build | Passed; server TypeScript plus Vite frontend                                                                                                                                                         |
+| `npm run format:check`          | Passed; repository has no separate lint script                                                                                                                                                       |
+| `git diff --check`              | Passed                                                                                                                                                                                               |
+| `npm run test:sandbox`          | Passed credential-free installed runtime probe: both profiles, outside/sensitive/nested paths, symlink escapes, actual linked-worktree Git-pointer removal/rename denied, primary checkout preserved |
+| Existing browser workflow       | Passed read-only/session/SSE/queue/stop/resume, keyboard/reduced motion, 320–1440px, no page errors                                                                                                  |
+| Write browser workflow          | Passed dismissed write/reject confirmations, real Git diff, revision-bearing decisions, opt-in host verification/result persistence, keyboard focus, responsive widths and primary preservation      |
+| Optional real Codex write smoke | Inspected, not executed without explicit usage approval. Failed-run fixtures are retained for inspection. No paid model usage is required in CI.                                                     |
+
+GitHub's original PR run [39070478525](https://github.com/vlovers/ai-office/actions/runs/39070478525) was green before this audit. Current hardening-head Linux checks and the added credential-free macOS native sandbox job are linked from [PR #7 checks](https://github.com/vlovers/ai-office/pull/7/checks); their final results are recorded in the PR review summary. This document does not count a queued CI job as a pass. Linux native sandbox behavior is not attested by the macOS job.
+
+Reproductions before fixes: wildcard-pathspec secret-filter bypass, host clean-filter execution, ignored/bare-repository data deletion, same-path worktree replacement, and Git metadata outside the authorized root all failed their new negative assertions. After hardening those assertions pass. Fault-injection tests cover creation intent, transactional rollback, rejection followed by a failed SQLite update, interrupted verification/removal and restart. Concurrent write/alias tests, advanced HEAD, post-auth identity/HEAD changes, mode compatibility and uncertain-cleanup lease retention are covered.
+
+Process tests prove independent timeout/disconnect handling after an abrupt fixture backend death, bounded descendant-held output, shutdown abort, no inherited synthetic host secret, and conservative EPERM handling. The initial strict cleanup attempt exposed a transient macOS EPERM; bounded retry still requires delivered SIGKILL or confirmed absence. Persistent denied cleanup remains a failure with a retained lease. Assertions were not weakened to treat EPERM as termination.
+
+The expanded native probe initially exposed that a directory-only nested deny glob did not cover a descendant file; explicit descendant globs fixed it. It then passed, including a real linked worktree and Git pointer. The outer execution sandbox cannot apply macOS sandbox-exec policies or always inspect orphan groups, so native/process tests ran outside that outer boundary. Browser checks use `PLAYWRIGHT_BROWSERS_PATH=/private/tmp/ai-office-playwright` and disposable loopback ports.
+
+Remaining boundaries: metadata revisions are not atomic snapshots against outside editors; deny globs have platform/depth/timing limits; host verification grants OS/network permissions only after operator opt-in and separate confirmation; process groups do not contain deliberately detached programs; stale locks and ambiguous ownership require manual recovery. See [the audit](V0_4_SECURITY_AUDIT.md), [security model](SECURITY.md), and [workspace recovery](WORKSPACE_RECOVERY.md). No real-model write execution is claimed by deterministic transport tests.
+
+The records below are historical and are not the security-audit test totals.
+
+# Earlier v0.4 implementation validation (before security audit)
 
 Local verification: macOS arm64, Node 24.21.0, installed SDK/CLI 0.162.1, 2026-10-18 (Europe/Kyiv). No model calls or credential reads were used for v0.4 validation.
 
@@ -26,7 +55,7 @@ The historical v1.2 evidence below describes the baseline, not a new real-model 
 
 # Verification record
 
-Current phase: **1.2**. Environment: macOS arm64, Node 24.21.0, official Codex SDK/existing CLI **0.162.1**. Local verification date: **2026-10-16** (live-run timestamp is UTC on 2026-10-15).
+Historical phase: **1.2**. Environment: macOS arm64, Node 24.21.0, official Codex SDK/existing CLI **0.162.1**. Local verification date: **2026-10-16** (live-run timestamp is UTC on 2026-10-15).
 
 | Check                         | Actual result                                                                                                                                                                                                       |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -15,3 +15,5 @@ Security fixes target the latest `main` branch. Older commits and unreleased exp
 This policy is not a security guarantee. Filesystem sandboxing is not a VM boundary; do not register repositories containing credentials, and never give an agent access to production secrets.
 
 For opt-in isolated write sessions and trusted local verification boundaries, see [the v0.4 security model](docs/SECURITY.md).
+
+The [v0.4 audit](docs/V0_4_SECURITY_AUDIT.md) records reproduced issues and fixes. [Workspace recovery](docs/WORKSPACE_RECOVERY.md) explains fail-closed handling of interrupted operations and ownership uncertainty. Host verification is disabled by default and requires an explicit operator opt-in; enabling it grants project scripts full host permissions.
