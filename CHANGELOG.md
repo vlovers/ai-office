@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0] — Release candidate (unreleased)
+
+- Agent Studio supports persistent, user-managed Codex profiles with create, edit, duplicate, archive, restore and accessible dashboard controls.
+- Transactional SQLite migrations (schemas 7/8), legacy profile/queue migration and restart checks preserve existing v0.5 review workflows.
+- Immutable submission/session configuration pins instructions, model and policy decisions; resumes preserve the original native Codex session and configuration.
+- Bounded fair scheduling with conservative capacity quarantine on uncertain worker cleanup.
+- Security hardening validates untrusted profile inputs, rejects known/configured secrets and unsafe overrides, and keeps filesystem policy/server authorization boundaries unchanged.
+- PRs #13–#19 merged into main. Final integration CI: https://github.com/vlovers/ai-office/actions/runs/39116645458 (success).
+- See [v0.6 validation](docs/V0_6_VALIDATION.md), [Agent Studio guide](docs/V0_6_AGENT_STUDIO.md) and [release checklist](docs/releases/v0.6.0.md).
+
+**Limits:** no v0.6 real inference or provider API availability validation; API model ID required explicitly; profiles stored as plaintext; native Codex transcripts remain required; Linux isolation remains unverified. Single-user local tool, not a secret vault.
+
 ## [0.5.0] — Released 2026-10-18
 
 - Code Review Center with directory-grouped file navigation, bounded unified diff lines and accessible feedback controls.

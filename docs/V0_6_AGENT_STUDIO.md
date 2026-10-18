@@ -1,4 +1,4 @@
-# Agent Studio — v0.6 implementation, unreleased
+# Agent Studio — v0.6 release candidate (not tagged)
 
 Agent Studio extends the existing dashboard, queue, Codex worker and Code Review Center.
 It supports Codex SDK/CLI **0.162.1**. It does not introduce an agent team service.
