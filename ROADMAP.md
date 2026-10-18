@@ -8,7 +8,7 @@
 - **v0.4.0:** Explicitly approved isolated write worktrees, Git diff review, Keep/Reject, conservative cleanup.
 - **v0.5.0:** Code Review Center, revision-bound feedback, Request Changes against the original Codex session, retained review history and safety audit. [Release](https://github.com/vlovers/ai-office/releases/tag/v0.5.0).
 
-## v0.6.0 — Agent Studio (implemented in unmerged PR stack)
+## v0.6.0 — Agent Studio (merged into main; release candidate, not tagged)
 
 **Goal:** Replace the hard-coded “Codex 01 / Codex 02” identity model with user-managed, persistently configured agent profiles while retaining the existing security and task lifecycle guarantees. v0.6 targets **Codex SDK only**. Provider adapters are a future extension, not a reason to claim unsupported functionality now.
 
