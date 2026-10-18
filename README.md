@@ -8,6 +8,8 @@
 
 The v0.5.0 Code Review Center has passed the [PR validation](docs/V0_5_VALIDATION.md) and [focused security audit](docs/V0_5_SECURITY_AUDIT.md). It is awaiting a GitHub Release; CI and local-fixture validation do not establish arbitrary host/runtime safety. The v0.4.0 baseline passed macOS real Codex write validation and automated checks. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
 
+**Next milestone:** [v0.6 Agent Studio roadmap](ROADMAP.md) · [Codex implementation prompt](docs/V0_6_AGENT_STUDIO_PROMPT.md). The two current Codex slots will become user-managed profiles; this is planned, not shipped.
+
 ## Quick start
 
 ```sh
