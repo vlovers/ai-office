@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.6.0] — Release candidate (unreleased)
+## [0.6.0] — Released 2026-10-18
 
 - Agent Studio supports persistent, user-managed Codex profiles with create, edit, duplicate, archive, restore and accessible dashboard controls.
 - Transactional SQLite migrations (schemas 7/8), legacy profile/queue migration and restart checks preserve existing v0.5 review workflows.
@@ -25,7 +25,7 @@
 
 This project follows semantic versioning for release labels. Until a stable 1.0 release, APIs and storage formats may change.
 
-## [Unreleased] — v0.6 Agent Studio implementation
+## [Historical development notes] — v0.6 Agent Studio implementation
 
 - Persisted editable/duplicate/archive/restore Codex profiles with stable IDs and append-only revisions.
 - Transactional schema 7/8 migration retaining v0.5 ownership, queues, sessions, workspaces and review history.
@@ -33,7 +33,7 @@ This project follows semantic versioning for release labels. Until a stable 1.0 
 - Dynamic profile assignment and fair FIFO scheduling within the two-worker bound; cleanup uncertainty retains capacity.
 - Accessible PHOSPHOR Studio, pinned/current version details, responsive dialogs and deterministic browser/restart coverage.
 - Explicit model IDs required for API-key execution when a default cannot be resolved; unknown legacy API models fail closed.
-- [Workflow/migration](docs/V0_6_AGENT_STUDIO.md), [validation/audit](docs/V0_6_VALIDATION.md), and synthetic visual evidence. No release or real inference performed.
+- [Workflow/migration](docs/V0_6_AGENT_STUDIO.md), [validation/audit](docs/V0_6_VALIDATION.md), and synthetic visual evidence. No real inference performed as part of this development-stage evidence; v0.6.0 was subsequently released.
 
 ## [0.4.0] - Released
 
