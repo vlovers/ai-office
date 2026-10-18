@@ -1,4 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
+import { AppError } from './errors.js';
+import type { AgentSettings } from './agents.js';
+import type { AgentProfile } from '../shared/types.js';
 import { randomUUID } from 'node:crypto';
 import type {
   ReviewRecord,
@@ -21,7 +24,7 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
-    if (version > 6) {
+    if (version > 7) {
       this.db.close();
       throw new Error('Metadata schema is newer than this AI Office version.');
     }
@@ -85,7 +88,39 @@ export class Store {
         json TEXT NOT NULL,
         PRIMARY KEY(workspace_id, revision),
         UNIQUE(workspace_id, number)
-      ); PRAGMA user_version=6; COMMIT;`);
+      );`);
+      this.db.exec(`CREATE TABLE IF NOT EXISTS agent_profiles (
+        id TEXT PRIMARY KEY, position INTEGER UNIQUE NOT NULL, json TEXT NOT NULL
+      ); CREATE TABLE IF NOT EXISTS agent_versions (
+        agent_id TEXT NOT NULL REFERENCES agent_profiles(id), revision INTEGER NOT NULL,
+        json TEXT NOT NULL, PRIMARY KEY(agent_id, revision)
+      );`);
+      if (version < 7) {
+        for (const owner of [...this.tasks(), ...this.sessions()])
+          if (!['codex-1', 'codex-2'].includes(owner.agentId ?? ''))
+            throw new Error(
+              'Unknown legacy agent owner. Preserve metadata and inspect before upgrading.',
+            );
+        for (const [index, id] of ['codex-1', 'codex-2'].entries()) {
+          if (!this.agent(id))
+            this.insertAgent({
+              id,
+              provider: 'codex',
+              name: `Codex ${index ? '02' : '01'}`,
+              role: 'Coding assistant',
+              description: '',
+              instructions: '',
+              model: null,
+              maximumMode: 'read-only',
+              revision: 1,
+              archived: false,
+              order: index + 1,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+        }
+      }
+      this.db.exec(`PRAGMA user_version=7; COMMIT;`);
     } catch (error) {
       try {
         this.db.exec('ROLLBACK');
@@ -95,6 +130,90 @@ export class Store {
       this.db.close();
       throw error;
     }
+  }
+  agents(): AgentProfile[] {
+    return this.db
+      .prepare('SELECT json FROM agent_profiles ORDER BY position')
+      .all()
+      .map((row) => JSON.parse(String(row.json)) as AgentProfile);
+  }
+  agent(id: string): AgentProfile | undefined {
+    const row = this.db.prepare('SELECT json FROM agent_profiles WHERE id=?').get(id);
+    return row ? (JSON.parse(String(row.json)) as AgentProfile) : undefined;
+  }
+  agentVersion(id: string, revision: number): AgentProfile | undefined {
+    const row = this.db
+      .prepare('SELECT json FROM agent_versions WHERE agent_id=? AND revision=?')
+      .get(id, revision);
+    return row ? (JSON.parse(String(row.json)) as AgentProfile) : undefined;
+  }
+  private insertAgent(profile: AgentProfile) {
+    this.db
+      .prepare('INSERT INTO agent_profiles VALUES (?,?,?)')
+      .run(profile.id, profile.order, JSON.stringify(profile));
+    this.db
+      .prepare('INSERT INTO agent_versions VALUES (?,?,?)')
+      .run(profile.id, profile.revision, JSON.stringify(profile));
+    return profile;
+  }
+  createAgent(settings: AgentSettings): AgentProfile {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const now = new Date().toISOString();
+      const order = Number(
+        this.db.prepare('SELECT coalesce(max(position),0)+1 AS next FROM agent_profiles').get()!
+          .next,
+      );
+      const profile = this.insertAgent({
+        ...settings,
+        id: randomUUID(),
+        provider: 'codex',
+        revision: 1,
+        archived: false,
+        order,
+        createdAt: now,
+        updatedAt: now,
+      });
+      this.db.exec('COMMIT');
+      return profile;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  editAgent(
+    id: string,
+    revision: number,
+    patch: AgentSettings | { archived: boolean },
+  ): AgentProfile {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const previous = this.requireAgent(id, revision);
+      const profile = {
+        ...previous,
+        ...patch,
+        revision: previous.revision + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      this.db
+        .prepare('UPDATE agent_profiles SET json=? WHERE id=?')
+        .run(JSON.stringify(profile), id);
+      this.db
+        .prepare('INSERT INTO agent_versions VALUES (?,?,?)')
+        .run(id, profile.revision, JSON.stringify(profile));
+      this.db.exec('COMMIT');
+      return profile;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  requireAgent(id: string, revision?: number): AgentProfile {
+    const profile = this.agent(id);
+    if (!profile) throw new AppError(404, 'Agent profile not found.');
+    if (revision !== undefined && revision !== profile.revision)
+      throw new AppError(409, 'Agent profile changed. Reload before saving.');
+    return profile;
   }
   repositories(): Repository[] {
     return this.rows('repositories');

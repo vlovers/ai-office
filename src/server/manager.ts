@@ -1,3 +1,4 @@
+import { validateAgentSettings } from './agents.js';
 import { diffLines } from '../shared/diff.js';
 import type { ReviewComment, ReviewRecord } from '../shared/types.js';
 import { EventEmitter } from 'node:events';
@@ -59,6 +60,9 @@ export class TaskManager {
     if (list.length < 1 || list.length > 2 || new Set(list).size !== list.length)
       throw new Error('Provide one or two independent agent providers.');
     this.providers = new Map(list.map((provider, index) => [AGENT_IDS[index]!, provider]));
+  }
+  agentSettings(input: unknown) {
+    return validateAgentSettings(input, this.secret);
   }
   startQueue() {
     this.wake(0);
