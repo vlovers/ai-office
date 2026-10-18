@@ -326,6 +326,16 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
           ))}
         </select>
       </label>
+      {record?.configuration && (
+        <p className="review-config">
+          Revision configuration: {record.configuration.name} ·{' '}
+          {record.configuration.source === 'legacy'
+            ? 'legacy v0.5'
+            : `v${record.configuration.profileRevision}`}{' '}
+          · {record.configuration.executionMode} ·{' '}
+          {record.configuration.model ?? 'model not recorded'}
+        </p>
+      )}
       <div className="review-diff-controls">
         <button
           className="secondary"
@@ -789,6 +799,16 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
           <br />
           Revision: {record?.number} ({record?.revision})
         </p>
+        {task.configuration && (
+          <p>
+            Pinned agent: {task.configuration.name} ·{' '}
+            {task.configuration.source === 'legacy'
+              ? 'legacy v0.5'
+              : `v${task.configuration.profileRevision}`}{' '}
+            · {task.configuration.model ?? 'saved default model'}. Current profile edits do not
+            apply.
+          </p>
+        )}
         <h4>Exact feedback</h4>
         <pre className="review-diff" tabIndex={0}>
           {JSON.stringify(record?.comments, null, 2)}

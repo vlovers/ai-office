@@ -1,12 +1,12 @@
-# AI Office v0.5 architecture
+# AI Office architecture — v0.6 implementation (unreleased)
 
-Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders the existing two-agent PHOSPHOR interface. Each fixed agent slot has an independent Codex provider, private worker home and at most one active task; no orchestration/team framework is introduced.
+Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders Agent Studio and the PHOSPHOR interface. Stable persisted profiles receive independent lazy Codex providers/private worker homes. At most two turns prepare/run globally, with one per profile; no orchestration/team framework is introduced.
 
 ```mermaid
 flowchart LR
   UI[PHOSPHOR interface] --> API[Loopback API / strict JSON]
-  API --> Store[(SQLite v6 / tasks, sessions, queue, workspaces, events)]
-  Store --> Manager[TaskManager / two fixed slots]
+  API --> Store[(SQLite v8 / profiles, config pins, tasks, review, queue)]
+  Store --> Manager[TaskManager / bounded dynamic profiles]
   Manager --> Leases[Common Git directory + worktree leases]
   Manager --> RO[Read-only registered checkout]
   Manager --> WT[Isolated branch and worktree]
@@ -48,7 +48,7 @@ Host verification is disabled unless the operator explicitly enables it and the 
 
 ## Persistence and recovery
 
-SQLite v6 uses WAL, foreign keys, bounded events and transactional schema migration. It stores repositories, task/session JSON, private session bindings, submitted FIFO entries, events and workspace ownership/review/operation JSON. Workspace/task attachment is transactional. Legacy tasks/sessions remain read-only; older application readers refuse schema v6.
+SQLite v8 uses WAL, foreign keys, bounded events and transactional schema migration. It stores repositories, task/session JSON, private session bindings, submitted FIFO entries, events and workspace ownership/review/operation JSON. Workspace/task attachment is transactional. Pre-write legacy tasks/sessions remain read-only; v0.5 writes retain explicit legacy pins. Older readers refuse schema 8.
 
 Filesystem and SQLite changes cannot be committed together. Creation/rejection/verification intents therefore precede external operations. Restart retains unfinished intent as a blocked recovery diagnostic; it never guesses that files are safe to delete or that a command stopped. Workspaces without ownership fingerprints require manual inspection rather than automatic adoption. Review output redaction never rewrites persisted filesystem identity.
 
@@ -76,3 +76,27 @@ joins the correction task's persisted status/error; verification records carry t
 revision. Keep/Reject still operate on the current Git state, with the v0.4 preservation
 rules. Review records remain after removal. See [workflow/migration](V0_5_REVIEW_CENTER.md)
 and [new threat model](V0_5_SECURITY.md).
+
+## Agent Studio registry and immutable configuration
+
+Schema 7 adds deterministic `agent_profiles` and append-only `(agent_id, revision)`
+`agent_versions`. Legacy IDs stay unchanged; new profiles use UUIDs, never names as keys.
+Schema 8 adds `task_configurations` (immutable submission plus once-set execution JSON) and
+`session_configurations`. Enqueue/pin and session/private-binding/config creation are
+transactional. Startup migrates queued/session authority from saved legacy metadata without
+inventing auth or profile guidance; unknown owners fail the upgrade transaction.
+
+Profiles constrain mode but cannot grant server/worktree/host authority. Guidance is task
+text, never raw SDK options. Optional local model selection is catalog-validated and resolved
+before execution. API mode requires an explicit model because metadata cannot resolve an
+unspecified default. Session resume/corrections reuse original config and binding, or fail.
+Review records capture their config; legacy history joins its explicitly migrated session pin.
+
+Production capacity stays two (the internal constructor accepts one/two for fixtures),
+independent of saved profile count. The scheduler scans oldest eligible profile heads and
+reserves before async work. Confirmed queues survive archival/restart; new assignment is
+blocked for archived profiles. Cleanup uncertainty retains leases **and** the occupied
+reservation, blocking reuse until manual inspection. SSE stays keyed to task ID.
+
+[Workflow/API and migration limits](V0_6_AGENT_STUDIO.md) and [audit evidence](V0_6_VALIDATION.md)
+describe supported behavior. Existing v0.5 review, Git and decision invariants remain in use.

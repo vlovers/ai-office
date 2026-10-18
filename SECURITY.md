@@ -19,3 +19,5 @@ For opt-in isolated write sessions and trusted local verification boundaries, se
 The [v0.4 audit](docs/V0_4_SECURITY_AUDIT.md) records reproduced issues and fixes. [Workspace recovery](docs/WORKSPACE_RECOVERY.md) explains fail-closed handling of interrupted operations and ownership uncertainty. Host verification is disabled by default and requires an explicit operator opt-in; enabling it grants project scripts full host permissions.
 
 The Code Review Center adds revision-bound, explicitly confirmed continuation of existing write sessions. See the [v0.5 threat model](docs/V0_5_SECURITY.md) and [workflow limitations](docs/V0_5_REVIEW_CENTER.md). No automatic replacement thread or verification authorization is provided.
+
+Unreleased Agent Studio threat model, migration and fixture evidence: [v0.6 audit](docs/V0_6_VALIDATION.md). Profile instructions never authorize execution privileges.

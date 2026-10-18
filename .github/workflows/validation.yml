@@ -47,6 +47,9 @@ jobs:
       - name: Isolated write browser smoke (no model calls)
         run: npm run test:browser:write
 
+      - name: Agent Studio browser and restart smoke (no model calls)
+        run: npm run test:browser:studio
+
   native-sandbox:
     name: Native Codex filesystem policy (no inference)
     runs-on: macos-latest

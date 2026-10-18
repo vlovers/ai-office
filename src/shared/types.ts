@@ -93,6 +93,7 @@ export interface AgentEvent {
   data?: unknown;
 }
 export interface Dashboard {
+  profiles?: AgentProfile[];
   connection: ConnectionView;
   repositories: Repository[];
   tasks: Task[];
@@ -177,6 +178,7 @@ export interface ReviewComment {
   updatedAt: string;
 }
 export interface ReviewRecord {
+  configuration?: ExecutionConfiguration;
   workspaceId: string;
   taskId: string;
   revision: string;

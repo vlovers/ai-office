@@ -18,3 +18,8 @@ repository paths or credentials. Reproduce with `npm run build` then
 `npm run test:browser:write`; set `AI_OFFICE_SCREENSHOT_DIR` to an existing writable directory.
 The test also captures responsive and final-iteration views for local inspection. These are
 intentional documentation images; raw runtime databases remain Git-ignored.
+
+Agent Studio synthetic production evidence: `v06-agent-studio-desktop.png` and
+`v06-agent-studio-mobile.png`. Reproduce with `npm run build` and
+`AI_OFFICE_SCREENSHOT_DIR=/private/tmp npm run test:browser:studio`. The fixture uses
+synthetic profiles, a disposable repository/database and no model calls/authentication data.

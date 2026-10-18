@@ -151,3 +151,29 @@ capacity synchronously before asynchronous validation. An active profile, incomp
 connection mode or busy repository head cannot bypass that profile's FIFO, while unrelated
 eligible heads can proceed. Archived profiles still execute already-confirmed pinned queues.
 Task creation accepts registered active opaque IDs; SSE remains task-scoped and persisted.
+
+## Studio milestone and visual evidence
+
+The Studio provides filtered profile cards, create/edit dialogs, duplicate, archive/restore,
+revision/capability details and direct task assignment. Native modal behavior plus explicit
+Tab wrap, initial focus, Escape and opener focus restoration are covered in Chromium. No
+HTML rendering is used. Two desks display active/selected profiles; all profiles remain
+available in Studio and the task selector. Historical task/session pins and current profile
+revisions are shown separately, including continuation confirmation.
+
+Reproduce synthetic screenshots with `npm run build` then `npm run test:browser:studio`;
+set `AI_OFFICE_SCREENSHOT_DIR` to choose the output directory. Checked-in desktop/mobile
+images in `docs/design/screenshots/v06-agent-studio-*.png` contain only disposable fixture
+profiles. No real model calls or authentication data were used. The production-browser
+scenario also closes the server/Store, opens a new database connection and checks profiles,
+original session identity and pinned configuration after restart.
+
+## Final audit clarifications
+
+API metadata cannot resolve an unspecified provider default, so API-key execution now
+requires an explicit model ID. Legacy API queues/sessions lacking one fail closed before
+execution instead of pretending to pin an unknown model. This is a deliberate recovery
+limit; their metadata/history/worktrees remain preserved. Local login still resolves its
+metadata default without any new key requirement. Cleanup uncertainty retains capacity as
+well as leases. Final workflow, migration and security evidence are consolidated in
+[V0_6_AGENT_STUDIO.md](V0_6_AGENT_STUDIO.md) and [V0_6_VALIDATION.md](V0_6_VALIDATION.md).

@@ -29,3 +29,22 @@ existing lifecycle. Each terminal write iteration advances the review generation
 of an unfinished write does so too. Older comments keep their original revision, and line
 anchors are outdated for any other revision. History is preserved after Keep/Reject.
 See [the full review workflow](V0_5_REVIEW_CENTER.md).
+
+## Agent profiles and pinned execution (unreleased v0.6)
+
+Start captures the active profile's exact revision/guidance/model/cap before enqueue. A write
+also requires the profile's write preference; it never replaces server roots or confirmation.
+Prepared auth resolves the local default and binds the effective config to the saved session
+before execution. API-key execution requires an explicit model ID. Unknown API defaults
+cannot safely resume and fail with an actionable error; no replacement thread is started.
+
+Edits affect new independent submissions only. Resume and confirmed review corrections reuse
+the original effective snapshot, including archived-profile corrections. Archive blocks new
+assignment/ordinary submission but does not cancel already-confirmed queues. Profiles and
+revision history are retained. Default legacy profiles prefer read-only for new work; v0.5
+confirmed writes receive explicit legacy pins and keep their original mode.
+
+Global preparing/running capacity remains two, with FIFO and serialization per profile.
+Unconfirmed worker cleanup retains its reservation and leases and blocks stop/shutdown as
+uncertain; inspect processes manually before restarting. Read the [Studio migration and
+recovery workflow](V0_6_AGENT_STUDIO.md) before upgrading a persisted installation.

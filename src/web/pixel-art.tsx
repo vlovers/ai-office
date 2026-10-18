@@ -20,6 +20,7 @@ export interface OfficeAgent {
   name: string;
   status: SceneStatus;
   access?: string;
+  active?: boolean;
 }
 
 function WorkstationArt({ state }: { state: SceneState }) {
@@ -206,8 +207,21 @@ export function PixelOffice({
             d={`M${geometry.width / 2 - 8} ${geometry.height - 31}h2v2h-2zm10 0h2v2h-2z`}
           />
         </g>
-        {OFFICE_LAYOUT.map((placement) => {
-          const agent = agents.find((agent) => agent.id === placement.agentId);
+        {OFFICE_LAYOUT.map((placement, index) => {
+          const busy = agents.filter(
+            (agent) =>
+              agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
+          );
+          const visible = new Set(
+            [
+              ...new Set([
+                ...busy.map((agent) => agent.id),
+                ...agents.filter((agent) => agent.id === selectedAgent).map((agent) => agent.id),
+                ...agents.map((agent) => agent.id),
+              ]),
+            ].slice(0, 2),
+          );
+          const agent = agents.filter((agent) => visible.has(agent.id))[index];
           if (!agent) return null;
           const point = narrow ? placement.portrait : placement.landscape;
           const selected = selectedAgent === agent.id;
@@ -271,7 +285,10 @@ export function PixelOffice({
                   fontSize="11"
                   fontWeight="bold"
                 >
-                  {agent.name.toUpperCase()}
+                  {(agent.name.length > 28
+                    ? `${agent.name.slice(0, 27)}…`
+                    : agent.name
+                  ).toUpperCase()}
                 </text>
                 <WorkstationArt state={agent.status.state} />
                 <text

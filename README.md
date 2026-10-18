@@ -1,14 +1,14 @@
 # AI Office
 
-**Local-first coding workspace for two Codex agents.** Delegate isolated coding tasks or read-only reviews, follow live progress, inspect Git diffs, run configured verification, and explicitly keep or reject changes.
+**Local-first coding workspace with reusable Codex agent profiles and two workers.** Delegate isolated coding tasks or read-only reviews, follow live progress, inspect Git diffs, run configured verification, and explicitly keep or reject changes.
 
 ![CI](https://github.com/vlovers/ai-office/actions/workflows/validation.yml/badge.svg) · [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-> **v0.5.0 release candidate · Code Review Center · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
+> **v0.5.0 released baseline · Code Review Center · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
 
-The v0.5.0 Code Review Center has passed the [PR validation](docs/V0_5_VALIDATION.md) and [focused security audit](docs/V0_5_SECURITY_AUDIT.md). It is awaiting a GitHub Release; CI and local-fixture validation do not establish arbitrary host/runtime safety. The v0.4.0 baseline passed macOS real Codex write validation and automated checks. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
+The v0.5.0 Code Review Center has passed the [PR validation](docs/V0_5_VALIDATION.md) and [focused security audit](docs/V0_5_SECURITY_AUDIT.md). It was [released as v0.5.0](https://github.com/vlovers/ai-office/releases/tag/v0.5.0); CI and local-fixture validation do not establish arbitrary host/runtime safety. The v0.4.0 baseline passed macOS real Codex write validation and automated checks. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
 
-**Next milestone:** [v0.6 Agent Studio roadmap](ROADMAP.md) · [Codex implementation prompt](docs/V0_6_AGENT_STUDIO_PROMPT.md). The two current Codex slots will become user-managed profiles; this is planned, not shipped.
+**Unreleased v0.6 implementation:** [Agent Studio workflow and migration](docs/V0_6_AGENT_STUDIO.md) · [audit/validation and PR stack](docs/V0_6_VALIDATION.md) · [roadmap](ROADMAP.md). Create/edit/duplicate/archive persisted profiles; submitted tasks and corrections keep their original configuration. Saved profiles share two workers. This branch has not been released.
 
 ## Quick start
 
@@ -18,7 +18,7 @@ npm run build
 npm start
 ```
 
-Open **http://127.0.0.1:4310**. Sign in with your existing Codex CLI via `codex login` if needed; the app prefers local ChatGPT login without API-key fallback. Register a trusted Git worktree, create a review task, assign Codex 01 or 02, then explicitly click Start. A task consumes provider allowance only when submitted for execution.
+Open **http://127.0.0.1:4310**. Sign in with your existing Codex CLI via `codex login` if needed; the app prefers local ChatGPT login without API-key fallback. Register a trusted Git worktree, create a review task, assign an active agent profile, then explicitly click Start. Use Agent Studio to create or edit profiles. A task consumes provider allowance only when submitted for execution. New profiles prefer read-only; writes additionally require opting into the profile preference. Local model defaults are resolved from CLI metadata; explicit API-key execution requires a model ID.
 
 **Code Review Center:** Navigate directory-grouped changed files, read bounded unified diffs, save general/file/line feedback, explicitly confirm Request Changes against the original Codex session, inspect preserved iterations, then Keep or Reject. See the [complete workflow and migration notes](docs/V0_5_REVIEW_CENTER.md), [threat model](docs/V0_5_SECURITY.md) and [validation evidence](docs/V0_5_VALIDATION.md). No automatic commits, integration or replacement threads.
 

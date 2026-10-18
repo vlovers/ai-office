@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
+import { AgentStudio } from './agent-studio.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
@@ -62,6 +63,7 @@ function App() {
   const [connection, setConnection] = useState('Connecting');
   const [repositoryId, setRepositoryId] = useState('');
   const [resumeSessionId, setResumeSessionId] = useState('');
+  const [executionMode, setExecutionMode] = useState('read-only');
   const refresh = async () => {
     try {
       const data = await api<Dashboard>('/dashboard');
@@ -143,7 +145,17 @@ function App() {
   const task = dashboard?.tasks.find((item) => item.id === selected);
   const repository = dashboard?.repositories.find((item) => item.id === task?.repositoryId);
   const session = dashboard?.sessions.find((item) => item.id === task?.sessionId);
+  const taskConfiguration = task?.configuration ?? session?.configuration;
   const agent = dashboard?.agents.find((item) => item.id === selectedAgent);
+  const selectedProfile = dashboard?.profiles?.find((profile) => profile.id === selectedAgent);
+  const assignable =
+    dashboard?.agents.filter(
+      (slot) => !dashboard.profiles?.find((profile) => profile.id === slot.id)?.archived,
+    ) ?? [];
+  const canAssign = assignable.some((slot) => slot.id === selectedAgent);
+  useEffect(() => {
+    if (selectedProfile?.maximumMode !== 'write') setExecutionMode('read-only');
+  }, [selectedProfile?.id, selectedProfile?.maximumMode]);
   const agentBusy = !dashboard || dashboard.agents.some((item) => item.taskId !== null);
   const selectedBusy = Boolean(agent?.taskId);
   const queued = dashboard?.queue.find((entry) => entry.taskId === selected);
@@ -194,7 +206,7 @@ function App() {
         <a className="brand" href="#overview" onClick={() => setView('mission')}>
           <PixelBot />
           <span>
-            AI OFFICE<small>PHOSPHOR OS / v0.4 dev</small>
+            AI OFFICE<small>PHOSPHOR OS / Agent Studio</small>
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
@@ -207,7 +219,11 @@ function App() {
             <span aria-hidden="true">⌂</span>Dashboard<span className="nav-count">01</span>
           </a>
           <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
-            <span aria-hidden="true">♙</span>Agents<span className="nav-count">02</span>
+            <span aria-hidden="true">♙</span>Agents
+            <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
+          </a>
+          <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
+            Agent Studio
           </a>
           <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
             <span aria-hidden="true">▤</span>Task history
@@ -304,7 +320,7 @@ function App() {
                 {view === 'focus' ? 'Focus mode' : 'Mission control'}
                 <span>_</span>
               </h1>
-              <p>Two Codex agents. Isolated coding and repository review. You have the controls.</p>
+              <p>Your agent profiles. Two workers. Isolated coding and repository review.</p>
             </div>
             <a
               className="button-link"
@@ -343,7 +359,7 @@ function App() {
             <span>
               {view === 'focus'
                 ? 'Session output first. Stop and results stay within reach.'
-                : 'Overview / one office · two independent agents'}
+                : 'Overview / saved profiles · two worker capacity'}
             </span>
           </div>
           {dashboard && !dashboard.repositories.length && (
@@ -391,23 +407,31 @@ function App() {
                   <span>TASK-SCOPED ACCESS</span>
                 </div>
                 <PixelOffice
-                  agents={(dashboard?.agents ?? []).map((slot) => ({
-                    id: slot.id,
-                    name: slot.name,
-                    access: slot.mode,
-                    status: sceneStatus(
-                      dashboard,
-                      workstationTask(dashboard, selected, slot.id),
-                      Object.values(eventHistory).flat(),
-                      connection.includes('disconnected'),
-                      slot.id,
-                    ),
-                  }))}
+                  agents={(dashboard?.agents ?? [])
+                    .filter(
+                      (slot) =>
+                        !dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived ||
+                        slot.taskId,
+                    )
+                    .map((slot) => ({
+                      id: slot.id,
+                      name: slot.name,
+                      access: slot.mode,
+                      active: Boolean(slot.taskId),
+                      status: sceneStatus(
+                        dashboard,
+                        workstationTask(dashboard, selected, slot.id),
+                        Object.values(eventHistory).flat(),
+                        connection.includes('disconnected'),
+                        slot.id,
+                      ),
+                    }))}
                   selectedAgent={selectedAgent}
                   onSelect={selectStation}
                 />
                 <div className="scene-caption">
-                  Select a desk to inspect its agent · Tab / arrows to navigate
+                  Two worker desks · select other profiles in Agent Studio · Tab / arrows to
+                  navigate
                 </div>
               </section>
               <div className="stats" aria-label="Workspace statistics">
@@ -415,7 +439,7 @@ function App() {
                   <span>CODEX AGENTS</span>
                   <strong>
                     {dashboard?.agents.length ?? '—'}
-                    <small>independent slots</small>
+                    <small>saved profiles</small>
                   </strong>
                 </div>
                 <div>
@@ -464,6 +488,18 @@ function App() {
                     ))}
                   </ol>
                 </section>
+              )}
+              {dashboard && (
+                <AgentStudio
+                  profiles={dashboard.profiles ?? []}
+                  api={api}
+                  refresh={refresh}
+                  select={(id) => {
+                    setSelectedAgent(id);
+                    setResumeSessionId('');
+                    showSection('compose');
+                  }}
+                />
               )}
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
@@ -563,10 +599,19 @@ function App() {
                               )
                               .map((s) => (
                                 <option key={s.id} value={s.id}>
-                                  Resume {s.threadId?.slice(0, 12)}…
+                                  Resume {s.threadId?.slice(0, 12)}… · pinned{' '}
+                                  {s.configuration?.source === 'legacy'
+                                    ? 'legacy'
+                                    : `v${s.configuration?.profileRevision ?? '?'}`}
                                 </option>
                               ))}
                           </select>
+                          {resumeSessionId && (
+                            <small>
+                              Resumes the original pinned configuration; current profile edits do
+                              not apply.
+                            </small>
+                          )}
                           <button
                             disabled={busy || !dashboard?.ready}
                             onClick={() =>
@@ -601,6 +646,33 @@ function App() {
                           Cancel queued task
                         </button>
                       </div>
+                    )}
+                    {taskConfiguration && (
+                      <details className="configuration-record">
+                        <summary>
+                          Pinned configuration · {taskConfiguration.name} ·{' '}
+                          {taskConfiguration.source === 'legacy'
+                            ? 'legacy v0.5'
+                            : `v${taskConfiguration.profileRevision}`}
+                        </summary>
+                        <p>
+                          Current profile v
+                          {dashboard?.profiles?.find((profile) => profile.id === task.agentId)
+                            ?.revision ?? 'unavailable'}
+                          . This task retains its submitted configuration.
+                        </p>
+                        <p>
+                          {taskConfiguration.executionMode} ·{' '}
+                          {taskConfiguration.model ??
+                            'Connection default (resolved before execution)'}{' '}
+                          · {taskConfiguration.policy}
+                        </p>
+                        <pre>
+                          {taskConfiguration.role}
+                          {'\n'}
+                          {taskConfiguration.instructions}
+                        </pre>
+                      </details>
                     )}
                     <p className="task-prompt">{task.prompt}</p>
                     {session?.threadId && (
@@ -649,7 +721,11 @@ function App() {
                     )}
                     {task.workspaceId &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
-                        <ReviewCenter key={task.id} task={task} api={api} />
+                        <ReviewCenter
+                          key={task.id}
+                          task={{ ...task, configuration: taskConfiguration }}
+                          api={api}
+                        />
                       )}
                     {task.executionMode !== 'write' &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
@@ -702,6 +778,7 @@ function App() {
                       });
                       setSelected(created.id);
                       form.reset();
+                      setExecutionMode('read-only');
                     });
                   }}
                 >
@@ -714,9 +791,14 @@ function App() {
                       setResumeSessionId('');
                     }}
                   >
-                    {dashboard?.agents.map((slot) => (
+                    {!canAssign && (
+                      <option value={selectedAgent} disabled>
+                        Select an active profile
+                      </option>
+                    )}
+                    {assignable.map((slot) => (
                       <option key={slot.id} value={slot.id}>
-                        {slot.name} · {slot.state}
+                        {slot.name} · {slot.id.slice(0, 8)} · {slot.state}
                       </option>
                     ))}
                   </select>
@@ -740,9 +822,16 @@ function App() {
                     ))}
                   </select>
                   <label htmlFor="executionMode">Execution mode</label>
-                  <select id="executionMode" name="executionMode" defaultValue="read-only">
+                  <select
+                    id="executionMode"
+                    name="executionMode"
+                    value={executionMode}
+                    onChange={(event) => setExecutionMode(event.target.value)}
+                  >
                     <option value="read-only">Read-only review</option>
-                    <option value="write">Isolated coding · write enabled</option>
+                    <option value="write" disabled={selectedProfile?.maximumMode !== 'write'}>
+                      Isolated coding · write enabled
+                    </option>
                   </select>
                   <label htmlFor="title">Task title</label>
                   <input
@@ -763,9 +852,10 @@ function App() {
                   />
                   <div className="compose-footer">
                     <span>
-                      <span className="tiny-avatar">⌘</span> Assigned to {agent?.name ?? 'Codex 01'}
+                      <span className="tiny-avatar">⌘</span> Assigned to{' '}
+                      {agent?.name ?? 'Select a profile'}
                     </span>
-                    <button disabled={busy || !repositoryId}>
+                    <button disabled={busy || !repositoryId || !canAssign}>
                       Create task <span>→</span>
                     </button>
                   </div>
@@ -823,7 +913,11 @@ function App() {
                 </div>
                 <div className="agent-detail">
                   <span>Access mode</span>
-                  <strong>Read only</strong>
+                  <strong>
+                    {selectedProfile?.maximumMode === 'write'
+                      ? 'Isolated writes with confirmation'
+                      : 'Read-only preference'}
+                  </strong>
                 </div>
                 <div className="agent-detail">
                   <span>Workspace</span>
@@ -949,7 +1043,7 @@ function App() {
           </div>
           <footer>
             <span>
-              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / v0.4 dev
+              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / AGENT STUDIO · UNRELEASED
             </span>
             <span>LOCAL FIRST · HUMAN REVIEW · ISOLATED CODING</span>
           </footer>
