@@ -117,6 +117,7 @@ export class TaskManager {
         };
       });
     return {
+      profiles: this.store.agents(),
       connection: this.auth.view(),
       repositories: this.store.repositories(),
       tasks: this.store

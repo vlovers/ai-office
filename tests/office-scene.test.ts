@@ -47,3 +47,24 @@ it('places each identity independently in wide and portrait layouts', () => {
   expect(OFFICE_LAYOUT[0]!.portrait.y).not.toBe(OFFICE_LAYOUT[1]!.portrait.y);
   expect(OFFICE_LAYOUT[0]!.identity).not.toBe(OFFICE_LAYOUT[1]!.identity);
 });
+
+it('uses two desks for active and selected dynamic profiles without inventing IDs or HTML', () => {
+  const dynamic: OfficeAgent[] = [
+    { id: 'profile-a', name: '<script>unsafe</script>', status: { state: 'idle', label: 'Idle' } },
+    { id: 'profile-b', name: 'Second', status: { state: 'idle', label: 'Idle' }, active: true },
+    { id: 'profile-c', name: 'Third', status: { state: 'idle', label: 'Idle' } },
+  ];
+  const markup = renderToStaticMarkup(
+    createElement(PixelOffice, { agents: dynamic, selectedAgent: 'profile-c', onSelect: () => {} }),
+  );
+  expect(markup.match(/role="button"/g)).toHaveLength(2);
+  expect(markup).toContain('data-agent-id="profile-b"');
+  expect(markup).toContain('data-agent-id="profile-c"');
+  expect(markup).not.toContain('data-agent-id="profile-a"');
+  const selectedActive = renderToStaticMarkup(
+    createElement(PixelOffice, { agents: dynamic, selectedAgent: 'profile-b', onSelect: () => {} }),
+  );
+  expect(selectedActive.match(/role="button"/g)).toHaveLength(2);
+  expect(selectedActive).toContain('&lt;script&gt;');
+  expect(selectedActive).not.toContain('<script>');
+});

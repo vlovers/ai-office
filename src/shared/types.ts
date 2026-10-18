@@ -93,6 +93,7 @@ export interface AgentEvent {
   data?: unknown;
 }
 export interface Dashboard {
+  profiles?: AgentProfile[];
   connection: ConnectionView;
   repositories: Repository[];
   tasks: Task[];
