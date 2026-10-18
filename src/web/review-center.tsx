@@ -326,6 +326,16 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
           ))}
         </select>
       </label>
+      {record?.configuration && (
+        <p className="review-config">
+          Revision configuration: {record.configuration.name} ·{' '}
+          {record.configuration.source === 'legacy'
+            ? 'legacy v0.5'
+            : `v${record.configuration.profileRevision}`}{' '}
+          · {record.configuration.executionMode} ·{' '}
+          {record.configuration.model ?? 'unspecified legacy model'}
+        </p>
+      )}
       <div className="review-diff-controls">
         <button
           className="secondary"

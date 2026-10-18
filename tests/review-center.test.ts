@@ -153,6 +153,9 @@ it('resumes exactly one existing SDK thread, generates a new revision, preserves
   expect(updated.record?.comments).toEqual([]);
   const history = env.manager.reviewHistory(next.id);
   expect(history[1]?.comments[0]?.body).toContain('CORRECT_FIXTURE');
+  expect(
+    history.every((item) => JSON.stringify(item.configuration) === JSON.stringify(pinned)),
+  ).toBe(true);
   expect(history[1]?.continuation?.state).toBe('completed');
   await expect(env.save([], 1)).rejects.toThrow('immutable');
   await env.manager.reviewOperation(next.id, 'reject', undefined, updated.revision);

@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] — release candidate (not yet tagged)
+## [0.5.0] — Released 2026-10-18
 
 - Code Review Center with directory-grouped file navigation, bounded unified diff lines and accessible feedback controls.
 - SQLite schema 6 preserves revision-bound comments, submitted feedback, iteration outcomes and attributed verification.
@@ -13,7 +13,15 @@
 
 This project follows semantic versioning for release labels. Until a stable 1.0 release, APIs and storage formats may change.
 
-## [Unreleased]
+## [Unreleased] — v0.6 Agent Studio implementation
+
+- Persisted editable/duplicate/archive/restore Codex profiles with stable IDs and append-only revisions.
+- Transactional schema 7/8 migration retaining v0.5 ownership, queues, sessions, workspaces and review history.
+- Immutable submission/effective/session configurations; corrections retain original guidance, model and authority.
+- Dynamic profile assignment and fair FIFO scheduling within the two-worker bound; cleanup uncertainty retains capacity.
+- Accessible PHOSPHOR Studio, pinned/current version details, responsive dialogs and deterministic browser/restart coverage.
+- Explicit model IDs required for API-key execution when a default cannot be resolved; unknown legacy API models fail closed.
+- [Workflow/migration](docs/V0_6_AGENT_STUDIO.md), [validation/audit](docs/V0_6_VALIDATION.md), and synthetic visual evidence. No release or real inference performed.
 
 ## [0.4.0] - Released
 

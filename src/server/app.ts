@@ -22,7 +22,7 @@ export async function createApp(manager: TaskManager) {
     if (error instanceof z.ZodError)
       return reply.code(400).send({
         error: 'Invalid request fields.',
-        details: error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+        details: error.issues.map((issue) => `${issue.path.join('.')}: ${issue.code}`),
       });
     const known = error instanceof AppError;
     const status = known

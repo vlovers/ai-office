@@ -51,6 +51,7 @@ it('validates, versions, duplicates and archives registry profiles without losin
     reopened.close();
     for (const bad of [
       { ...settings, id: '../../escape' },
+      { ...settings, 'sk-syntheticcredential123456': true },
       { ...settings, instructions: 'x'.repeat(12001) },
       { ...settings, name: '\u001bname' },
       { ...settings, model: '--config=unsafe' },
@@ -76,6 +77,30 @@ it('validates, versions, duplicates and archives registry profiles without losin
         })
       ).statusCode,
     ).toBe(403);
+  } finally {
+    await app.close();
+    await env.cleanup();
+  }
+});
+
+it('rejects the configured secret without persisting or reflecting it', async () => {
+  const env = await sandbox();
+  const { TaskManager } = await import('../src/server/manager.js');
+  const secret = 'synthetic-configured-credential';
+  const manager = new TaskManager(env.store, env.providers, env.auth, secret);
+  const app = await createApp(manager);
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agents',
+      headers: { host: '127.0.0.1:4310', 'content-type': 'application/json' },
+      payload: { name: 'Rejected', role: 'Review', instructions: `Do not retain ${secret}` },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.body).not.toContain(secret);
+    expect(JSON.stringify(env.store.agents())).not.toContain(secret);
+    expect(env.store.agents()).toHaveLength(2);
+    expect(env.store.tasks()).toEqual([]);
   } finally {
     await app.close();
     await env.cleanup();

@@ -1043,7 +1043,7 @@ function App() {
           </div>
           <footer>
             <span>
-              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / v0.4 dev
+              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / AGENT STUDIO · UNRELEASED
             </span>
             <span>LOCAL FIRST · HUMAN REVIEW · ISOLATED CODING</span>
           </footer>

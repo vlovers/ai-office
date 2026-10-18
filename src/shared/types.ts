@@ -178,6 +178,7 @@ export interface ReviewComment {
   updatedAt: string;
 }
 export interface ReviewRecord {
+  configuration?: ExecutionConfiguration;
   workspaceId: string;
   taskId: string;
   revision: string;

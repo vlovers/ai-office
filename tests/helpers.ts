@@ -34,7 +34,11 @@ export async function sandbox(existingRepository?: string) {
   const store = new Store(join(root, 'metadata.sqlite'));
   // Write scenarios explicitly opt fixture profiles into write preference; production defaults stay read-only.
   for (const profile of store.agents())
-    store.editAgent(profile.id, profile.revision, { ...profile, maximumMode: 'write' });
+    store.editAgent(profile.id, profile.revision, {
+      ...profile,
+      maximumMode: 'write',
+      model: 'fixture-model',
+    });
   const inspection: LocalInspection = {
     account: 'chatgpt',
     executable,
