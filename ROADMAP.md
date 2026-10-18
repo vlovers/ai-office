@@ -1,0 +1,65 @@
+# AI Office roadmap
+
+> Planning document, not a release promise. The source of truth for shipped functionality is tagged releases and their validation evidence. Security boundaries must never be inferred from a UI setting alone.
+
+## Shipped
+
+- **v0.3.0:** Two fixed Codex slots, persistent queues, read-only sessions, PHOSPHOR OS.
+- **v0.4.0:** Explicitly approved isolated write worktrees, Git diff review, Keep/Reject, conservative cleanup.
+- **v0.5.0:** Code Review Center, revision-bound feedback, Request Changes against the original Codex session, retained review history and safety audit. [Release](https://github.com/vlovers/ai-office/releases/tag/v0.5.0).
+
+## v0.6.0 — Agent Studio (next)
+
+**Goal:** Replace the hard-coded “Codex 01 / Codex 02” identity model with user-managed, persistently configured agent profiles while retaining the existing security and task lifecycle guarantees. v0.6 targets **Codex SDK only**. Provider adapters are a future extension, not a reason to claim unsupported functionality now.
+
+### P0 — foundation and safe migration
+
+- [ ] Audit the actual code paths, SQLite schema, queue, agent identity, leases, SSE, UI and session resume before proposing the migration.
+- [ ] Agent registry with stable IDs, display name, role, optional description, archived status, created/updated timestamps and deterministic ordering.
+- [ ] Upgrade existing installations without losing tasks, review threads, sessions, assigned owners, worktrees or pending work. Preserve the two existing agents as ordinary default profiles; migration must be idempotent and rollback-safe.
+- [ ] Separate **saved agent count** from **concurrent execution limit**. Initial concurrency must not exceed currently verified safe bounds; use a bounded configurable limit only after proving isolation and restart behavior.
+- [ ] Database and server-side validation for create/edit/archive/list and assignment; archive instead of deleting referenced agents.
+
+### P0 — configuration and safety
+
+- [ ] Role/instructions and configurable model **only where verified supported** by the pinned Codex SDK and installed CLI. Unsupported settings should be visibly unavailable, not silently ignored.
+- [ ] Versioned immutable _effective configuration snapshot_ per execution/review iteration, including provider capability and policy version; an edit must not mutate a running or resumable session unexpectedly.
+- [ ] Server-enforced authority caps: read-only by default, explicit isolated-write authorization, registered workspaces, sandbox boundaries, approved verification. Agent instructions are not security controls.
+- [ ] Enforce effective permissions as intersection of platform policy, workspace/user approval and agent configuration. Never allow UI/API requests to expand host privileges.
+- [ ] Redact secrets from API, logs, streams, exports and errors; avoid embedding credentials in agent configuration.
+
+### P1 — Agent Studio UI
+
+- [ ] Create/edit/archive/duplicate profiles and inspect their effective permissions and provider support.
+- [ ] Select a profile when creating/assigning a task, including worktree/review history; show the exact profile version bound to a session.
+- [ ] Preserve accessibility, responsive layouts, keyboard controls, reduced-motion preferences and the existing PHOSPHOR OS aesthetic.
+- [ ] Clear empty states, offline/connection errors, blocked permissions and upgrade migrations.
+
+### Delivery plan (separate reviewable PRs)
+
+1. Discovery/spec, compatibility matrix, threats and migration test fixtures.
+2. SQLite migration and typed Agent Registry API, preserving legacy identifiers.
+3. Snapshot semantics and server-side policy enforcement; resume/recovery tests.
+4. Task/queue/SSE/worktree binding and bounded scheduling.
+5. Agent Studio UI and migration/UX integration.
+6. Comprehensive security, browser, native sandbox and release-validation documentation.
+
+### v0.6 exit criteria
+
+- Existing v0.5 fixtures and persisted installations migrate with no lost task/review/session state; upgrade and restart tested.
+- Create, edit, archive and assign profiles persist; old sessions remain bound to original effective config.
+- No privilege escalation via prompt or config; no unapproved host execution; worktree ownership and correction-loop invariants remain intact.
+- Typecheck, unit/integration, HTTP/SSE, browser, native macOS sandbox and build/format CI pass. No claim of Linux sandbox compatibility without real evidence.
+- New functionality is opt-in or backward-compatible; README, architecture, security, changelog, migration notes and release evidence reflect real behavior.
+
+## v0.7.0 — workflow orchestration (proposal)
+
+User-approved agent handoffs such as Coder → Reviewer → QA, capability-aware routing, deterministic workflows with checkpoints and resumable approval gates. No autonomous merge/deploy by default.
+
+## v0.8.0 — delivery integration (proposal)
+
+Verification dashboard and explicitly authorized GitHub PR preparation/publishing, minimal GitHub permissions, revision-pinned checks, manual confirmation for push/PR actions.
+
+## Non-goals for v0.6
+
+Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
