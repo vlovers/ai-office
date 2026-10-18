@@ -1650,3 +1650,88 @@ button.line-anchor {
   border: 1px solid var(--line);
   color: var(--phosphor);
 }
+
+/* Agent Studio shares the mission panels; forms remain native and keyboard accessible. */
+.agent-studio > p,
+.agent-studio > .studio-tools,
+.agent-studio > [role] {
+  margin: 1rem 1.25rem;
+}
+.studio-tools,
+.profile-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.studio-tools label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.studio-tools input[type='search'] {
+  width: min(18rem, 100%);
+}
+.checkbox-label input {
+  width: auto;
+}
+.profile-list {
+  list-style: none;
+  padding: 0 1.25rem 1.25rem;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.profile-card {
+  border: 1px solid var(--line);
+  padding: 1rem;
+  min-width: 0;
+}
+.profile-card h3,
+.profile-card p {
+  margin: 0 0 0.65rem;
+  overflow-wrap: anywhere;
+}
+.agent-studio dialog {
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 1.5rem;
+  overflow: auto;
+}
+.agent-studio dialog::backdrop {
+  background: #000b;
+}
+.agent-studio dialog label {
+  display: block;
+  margin-top: 0.85rem;
+}
+.agent-studio dialog input,
+.agent-studio dialog textarea,
+.agent-studio dialog select {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+.agent-studio dialog p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.configuration-record {
+  margin: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+}
+.configuration-record pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .studio-tools {
+    align-items: stretch;
+  }
+  .studio-tools label {
+    flex-wrap: wrap;
+  }
+}

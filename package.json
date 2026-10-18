@@ -44,6 +44,7 @@
     "test:real": "node --import tsx scripts/real-codex-smoke.ts --run",
     "test:dashboard:real": "node --import tsx tests/dashboard-real.ts --run",
     "test:real:write": "node --import tsx scripts/real-write-smoke.ts",
-    "test:browser:write": "node --import tsx tests/browser-write-smoke.ts"
+    "test:browser:write": "node --import tsx tests/browser-write-smoke.ts",
+    "test:browser:studio": "node --import tsx tests/browser-studio-smoke.ts"
   }
 }
