@@ -72,3 +72,42 @@ it('rolls back recovery when legacy metadata is malformed', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('migrates the registry once and rolls back new tables for unknown legacy owners', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ai-office-v05-owner-'));
+  const path = join(root, 'fixture.sqlite');
+  const fixture = createV05Fixture(path);
+  const db = new DatabaseSync(path);
+  try {
+    db.prepare('UPDATE sessions SET json=? WHERE id=?').run(
+      JSON.stringify({ ...fixture.sessions[0], agentId: 'ambiguous-owner' }),
+      fixture.sessions[0]!.id,
+    );
+    expect(() => new Store(path)).toThrow('Unknown legacy agent owner');
+    expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(6);
+    expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE name='agent_profiles'").get(),
+    ).toBeUndefined();
+    expect(
+      JSON.parse(
+        String(db.prepare('SELECT json FROM tasks WHERE id=?').get(fixture.tasks[0]!.id)?.json),
+      ).state,
+    ).toBe('running');
+    db.prepare('UPDATE sessions SET json=? WHERE id=?').run(
+      JSON.stringify(fixture.sessions[0]),
+      fixture.sessions[0]!.id,
+    );
+    let store = new Store(path);
+    const profiles = store.agents();
+    expect(profiles.map((profile) => profile.id)).toEqual(['codex-1', 'codex-2']);
+    expect(profiles.every((profile) => profile.maximumMode === 'read-only')).toBe(true);
+    store.close();
+    store = new Store(path);
+    expect(store.agents()).toEqual(profiles);
+    expect(store.agentVersion('codex-1', 1)).toEqual(profiles[0]);
+    store.close();
+  } finally {
+    db.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -112,3 +112,12 @@ Each PR is tested and left unmerged. Dependent changes may be stacked against th
 feature branch so each diff stays reviewable; explicitly dispatch the existing CI workflow
 when its main-only pull_request filter would otherwise omit a stacked PR. No inference,
 merge, tag, release or package publication is authorized by this plan.
+
+## Registry milestone (schema 7)
+
+The first implementation adds the registry and strict CRUD/archive/restore/duplicate API.
+Profile revisions are append-only; stale writes return 409, and migration rejects unknown
+legacy owners transactionally. Both seeded profiles initially prefer read-only. This PR
+intentionally leaves task assignment/scheduling and SDK execution unchanged: profile settings
+become executable only after immutable snapshots and dynamic scheduling land. Existing v0.5
+write authorization is therefore preserved throughout the intermediate milestone.

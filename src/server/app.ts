@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { TaskManager } from './manager.js';
+import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
 import { validateRepository } from './repositories.js';
 import type { AgentEvent } from '../shared/types.js';
@@ -77,6 +78,51 @@ export async function createApp(manager: TaskManager) {
       .parse(request.body);
     const repo = await validateRepository(input.path);
     return reply.code(201).send(manager.store.register(repo));
+  });
+  app.get('/api/agents', async () => manager.store.agents());
+  app.get('/api/agents/:id', async (request) =>
+    manager.store.requireAgent(agentIdSchema.parse((request.params as { id: string }).id)),
+  );
+  app.post('/api/agents', async (request, reply) =>
+    reply.code(201).send(manager.store.createAgent(manager.agentSettings(request.body))),
+  );
+  app.post('/api/agents/:id', async (request) => {
+    const input = agentSettingsSchema
+      .extend({ revision: z.number().int().positive() })
+      .strict()
+      .parse(request.body);
+    const { revision, ...settings } = input;
+    return manager.store.editAgent(
+      agentIdSchema.parse((request.params as { id: string }).id),
+      revision,
+      manager.agentSettings(settings),
+    );
+  });
+  app.post('/api/agents/:id/archive', async (request) => {
+    const input = z
+      .object({ revision: z.number().int().positive(), archived: z.boolean() })
+      .strict()
+      .parse(request.body);
+    return manager.store.editAgent(
+      agentIdSchema.parse((request.params as { id: string }).id),
+      input.revision,
+      { archived: input.archived },
+    );
+  });
+  app.post('/api/agents/:id/duplicate', async (request, reply) => {
+    const input = z.object({ revision: z.number().int().positive() }).strict().parse(request.body);
+    const original = manager.store.requireAgent(
+      agentIdSchema.parse((request.params as { id: string }).id),
+      input.revision,
+    );
+    const { name, role, description, instructions, model, maximumMode } = original;
+    return reply
+      .code(201)
+      .send(
+        manager.store.createAgent(
+          manager.agentSettings({ name, role, description, instructions, model, maximumMode }),
+        ),
+      );
   });
   app.post('/api/tasks', async (request, reply) => {
     const input = z

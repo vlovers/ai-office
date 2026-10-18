@@ -1,5 +1,20 @@
 export const AGENT_IDS = ['codex-1', 'codex-2'] as const;
 export type AgentId = (typeof AGENT_IDS)[number];
+export interface AgentProfile {
+  id: string;
+  provider: 'codex';
+  name: string;
+  role: string;
+  description: string;
+  instructions: string;
+  model: string | null;
+  maximumMode: ExecutionMode;
+  revision: number;
+  archived: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
 export type TaskState =
   'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'interrupted';
 export interface Repository {
