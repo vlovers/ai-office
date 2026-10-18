@@ -42,6 +42,10 @@ try {
     process.env.CODEX_API_KEY,
     undefined,
     workspaces,
+    {
+      createProvider: (id) => new CodexProvider({ home: join(data, 'workers', id), auth }),
+      concurrency: 2,
+    },
   );
   const app = await createApp(manager);
   let stopping = false;
