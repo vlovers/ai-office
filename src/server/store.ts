@@ -331,7 +331,10 @@ export class Store {
   captureReview(task: Task, review: WorkspaceReview) {
     const existing = this.reviewRecord(review.workspace.id, review.revision!);
     if (existing) return existing;
-    const session = task.sessionId ? this.session(task.sessionId) : undefined;
+    // A canceled or preflight-failed correction has not attached an executed session yet.
+    // Retain only its explicitly pinned source session; never infer another workspace thread.
+    const sessionId = task.sessionId ?? task.reviewRequest?.sessionId;
+    const session = sessionId ? this.session(sessionId) : undefined;
     const record: ReviewRecord = {
       workspaceId: review.workspace.id,
       taskId: task.id,
@@ -342,7 +345,7 @@ export class Store {
       comments: [],
       version: 0,
       sessionId: session?.id ?? null,
-      threadId: session?.threadId ?? null,
+      threadId: task.reviewRequest?.threadId ?? session?.threadId ?? null,
       verification: review.workspace.verification,
     };
     this.db

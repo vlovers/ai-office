@@ -624,7 +624,7 @@ export class TaskManager {
           );
         const latest = this.store
           .tasks()
-          .filter((item) => item.workspaceId === workspace!.id)
+          .filter((item) => item.workspaceId === workspace!.id && item.sessionId)
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
         if (latest?.sessionId !== record.sessionId)
           throw new AppError(409, 'Session changed. Refresh the latest task review.');
@@ -756,9 +756,19 @@ export class TaskManager {
     if (!active) {
       if (!this.store.queue().some((entry) => entry.taskId === taskId))
         throw new AppError(409, 'This task is not active or submitted.');
-      this.store.removeQueued(taskId);
+      this.store.db.exec('BEGIN IMMEDIATE');
+      try {
+        const task = this.store.task(taskId)!;
+        this.store.removeQueued(taskId);
+        this.store.updateTask(taskId, { state: 'stopped' });
+        const workspace = task.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+        if (workspace) this.store.saveWorkspace({ ...workspace, reviewEpoch: taskId });
+        this.store.db.exec('COMMIT');
+      } catch (error) {
+        this.store.db.exec('ROLLBACK');
+        throw error;
+      }
       this.waiting.delete(taskId);
-      this.store.updateTask(taskId, { state: 'stopped' });
       this.emit(taskId, 'state', 'Task stopped before execution.');
       this.wake();
       return;

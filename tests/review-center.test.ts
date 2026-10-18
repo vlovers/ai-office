@@ -361,3 +361,44 @@ it('reloads saved session identity after asynchronous authentication and refuses
   expect(env.store.task(submitted.continuationTaskId!)?.error).toContain('identity changed');
   expect(env.store.sessions()).toHaveLength(1);
 });
+
+it('advances canceled queued feedback atomically and permits only a freshly confirmed retry', async () => {
+  const env = await fixture();
+  await env.save();
+  const canceled = await env.request();
+  env.store.db.exec(
+    "CREATE TRIGGER fail_cancel BEFORE UPDATE ON workspaces BEGIN SELECT RAISE(ABORT,'synthetic cancel failure'); END",
+  );
+  await expect(env.manager.stop(canceled.continuationTaskId!)).rejects.toThrow(
+    'synthetic cancel failure',
+  );
+  expect(env.store.task(canceled.continuationTaskId!)?.state).toBe('queued');
+  expect(env.store.queue().some((entry) => entry.taskId === canceled.continuationTaskId)).toBe(
+    true,
+  );
+  env.store.db.exec('DROP TRIGGER fail_cancel');
+  await env.manager.stop(canceled.continuationTaskId!);
+  expect(env.store.task(canceled.continuationTaskId!)?.state).toBe('stopped');
+  expect(env.store.task(canceled.continuationTaskId!)?.sessionId).toBeNull();
+  expect((await env.request()).continuationTaskId).toBe(canceled.continuationTaskId);
+  expect(env.store.queue()).toEqual([]);
+  const fresh = (await env.manager.reviewOperation(
+    canceled.continuationTaskId!,
+    'review',
+  )) as WorkspaceReview;
+  expect(fresh.revision).not.toBe(env.review.revision);
+  expect(fresh.record?.number).toBe(2);
+  expect(fresh.record?.sessionId).toBe(env.review.record?.sessionId);
+  expect(fresh.record?.threadId).toBe(env.review.record?.threadId);
+  await env.save(env.comments, 0, fresh.revision);
+  const retry = await env.request(1, fresh.revision);
+  expect(retry.continuationTaskId).not.toBe(canceled.continuationTaskId);
+  await until(
+    () => env.store.task(retry.continuationTaskId!),
+    (task) => task?.state === 'completed',
+  );
+  expect(env.store.sessions()).toHaveLength(1);
+  expect(await readFile(join(env.workspace.path, 'README.md'), 'utf8')).toBe(
+    'Corrected by fixture\n',
+  );
+});

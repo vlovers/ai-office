@@ -27,7 +27,9 @@ Read-only task summaries remain unchanged. No model call occurs when opening rev
    assigned agent's FIFO. It never creates a replacement agent or SDK thread.
 5. Follow continuation status, use **Stop continuation**, or select its task for the
    ordinary SSE event log. On completion/failure/stop the center refreshes Git review.
-   Each finished write turn advances the review generation, even if it made no changes.
+   Each finished write turn or canceled queued correction advances the review generation,
+   even if it made no changes. A canceled correction retains only its pinned original
+   session for a freshly confirmed retry.
    An interrupted run recovered after restart also advances its generation. Queued,
    explicitly confirmed submissions retain the existing restart authorization semantics.
 6. Inspect **Iteration outcomes and verification**, then choose a revision in **Review
