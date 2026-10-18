@@ -12,7 +12,6 @@
 
 **Limits:** no v0.6 real inference or provider API availability validation; API model ID required explicitly; profiles stored as plaintext; native Codex transcripts remain required; Linux isolation remains unverified. Single-user local tool, not a secret vault.
 
-
 ## [0.5.0] — Released 2026-10-18
 
 - Code Review Center with directory-grouped file navigation, bounded unified diff lines and accessible feedback controls.
