@@ -39,6 +39,7 @@ if (input.includes('WRITE_FIXTURE')) {
   writeFileSync(repo + '/added.txt', 'Created by fixture\n');
   unlinkSync(repo + '/deleted.txt');
 }
+if (input.includes('CORRECT_FIXTURE')) writeFileSync(repo + '/README.md', 'Corrected by fixture\n');
 const send = (event) => process.stdout.write(JSON.stringify(event) + '\n');
 const savedThread = args.find((arg) => /^00000000-0000-4000-8000-[a-f0-9]{12}$/.test(arg));
 const threadId =

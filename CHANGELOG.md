@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.0 (development)
+
+- Code Review Center with directory-grouped file navigation, bounded unified diff lines and accessible feedback controls.
+- SQLite schema 6 preserves revision-bound comments, submitted feedback, iteration outcomes and attributed verification.
+- Explicit Request Changes confirmation resumes the original Codex session through the existing queue, worker and leases; stale and duplicate submissions are controlled.
+- Historical patches survive restart and Keep/Reject; no filesystem snapshots or automatic integration.
+
 This project follows semantic versioning for release labels. Until a stable 1.0 release, APIs and storage formats may change.
 
 ## [Unreleased]

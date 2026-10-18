@@ -1467,3 +1467,186 @@ footer {
 .file-summary code {
   overflow-wrap: anywhere;
 }
+
+/* Code Review Center shares the PHOSPHOR surface and focus tokens. */
+.review-center {
+  min-width: 0;
+}
+.review-heading,
+.review-diff-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-heading h3 {
+  margin-top: 5px;
+}
+.review-meta {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.review-workspace {
+  display: grid;
+  grid-template-columns: minmax(170px, 240px) minmax(0, 1fr);
+  border: 1px solid var(--line);
+  margin: 16px 0;
+}
+.review-explorer {
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  min-width: 0;
+}
+.review-file-list {
+  max-height: 440px;
+  overflow: auto;
+}
+.review-file {
+  width: 100%;
+  text-align: left;
+  margin: 3px 0;
+  display: block;
+  overflow-wrap: anywhere;
+}
+.review-file span,
+.review-file small {
+  display: block;
+}
+.review-file small {
+  opacity: 0.8;
+  margin-top: 5px;
+}
+.review-file[aria-pressed='true'] {
+  border-color: var(--phosphor, #a6e5b1);
+  background: #19352b;
+}
+.review-patch {
+  min-width: 0;
+  padding: 12px;
+}
+.review-patch h4 {
+  overflow-wrap: anywhere;
+  margin-top: 0;
+}
+.diff-grid {
+  max-height: 560px;
+  overflow: auto;
+  margin: 12px 0;
+}
+.diff-grid table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+.diff-grid td,
+.diff-grid th {
+  padding: 1px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.diff-grid td:last-child {
+  white-space: pre;
+}
+.diff-grid th {
+  color: #b3bdb5;
+  background: #101b19;
+}
+.diff-add {
+  background: #183526;
+  color: #bce9c2;
+}
+.diff-delete {
+  background: #3c2328;
+  color: #f5bcc4;
+}
+.diff-hunk {
+  color: #a5dce9;
+  background: #162c34;
+}
+.diff-keyword {
+  color: #efcc85;
+}
+button.line-anchor {
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  min-width: 24px;
+  font: inherit;
+  text-decoration: underline;
+}
+.review-comments {
+  padding-left: 24px;
+}
+.review-comments li {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.comment-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review-center dialog {
+  background: #111d1a;
+  color: #e4ece5;
+  border: 1px solid #84b892;
+  max-width: 680px;
+  width: calc(100% - 32px);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.review-center dialog::backdrop {
+  background: #030b09cc;
+}
+.review-center select,
+.review-center input,
+.review-center textarea {
+  width: 100%;
+  min-width: 0;
+}
+.review-center label {
+  display: block;
+  margin: 12px 0;
+}
+.review-center textarea {
+  min-height: 110px;
+}
+@media (max-width: 1000px) {
+  .review-workspace {
+    grid-template-columns: 1fr;
+  }
+  .review-explorer {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .review-file-list {
+    max-height: 220px;
+  }
+}
+.diff-grid code {
+  color: inherit;
+  background: transparent;
+  padding: 0;
+}
+.file-summary.review-center p {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.file-summary.review-center small {
+  font-size: 11px;
+}
+.review-center h3 {
+  font-size: 18px;
+}
+.review-center h4 {
+  font-size: 14px;
+}
+.review-shortcut {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  color: var(--phosphor);
+}

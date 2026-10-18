@@ -4,9 +4,9 @@
 
 ![CI](https://github.com/vlovers/ai-office/actions/workflows/validation.yml/badge.svg) · [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-> **v0.4.0 release candidate · macOS verified · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
+> **v0.5 development · Code Review Center · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
 
-The v0.4.0 candidate passed macOS real Codex write validation and automated checks; no GitHub release or package has been published. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
+The v0.4.0 baseline passed macOS real Codex write validation and automated checks. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
 
 ## Quick start
 
@@ -18,9 +18,11 @@ npm start
 
 Open **http://127.0.0.1:4310**. Sign in with your existing Codex CLI via `codex login` if needed; the app prefers local ChatGPT login without API-key fallback. Register a trusted Git worktree, create a review task, assign Codex 01 or 02, then explicitly click Start. A task consumes provider allowance only when submitted for execution.
 
+**Code Review Center:** Navigate directory-grouped changed files, read bounded unified diffs, save general/file/line feedback, explicitly confirm Request Changes against the original Codex session, inspect preserved iterations, then Keep or Reject. See the [complete workflow and migration notes](docs/V0_5_REVIEW_CENTER.md), [threat model](docs/V0_5_SECURITY.md) and [validation evidence](docs/V0_5_VALIDATION.md). No automatic commits, integration or replacement threads.
+
 **Why use it?** Persistent FIFO queues, isolated coding worktrees, Git diff review, explicit keep/reject, stop/resume, task-specific SSE, and an accessible pixel-art office. Start with [write-session setup and demo](docs/V0_4_DEMO.md) and [session lifecycle](docs/SESSION_LIFECYCLE.md). See [architecture](docs/ARCHITECTURE.md), [permission model](docs/SECURITY.md) and [v0.3 milestone](docs/V0_3_MILESTONE_A.md).
 
-**Demo media:** Screenshot/GIF not included yet; add a sanitized image captured from the current production UI before publishing a demo. Never commit private runtime captures or session data.
+**Review UI:** [Production Code Review Center screenshot](docs/design/screenshots/v05-feedback.png), captured with synthetic SDK fixtures and a disposable repository. See [reproduction and validation](docs/V0_5_VALIDATION.md). Never commit private runtime captures or session data.
 
 ---
 
@@ -150,7 +152,7 @@ The earlier standalone SDK-only probe is available as `npm run test:real`; it do
 
 See [Phase 1.2 verification and limitations](docs/PHASE_1_2_DASHBOARD.md), [architecture](docs/ARCHITECTURE.md), [security/recovery](docs/SECURITY.md), and the historical [Phase 1.1 SDK report](docs/PHASE_1_1_CODEX_INTEGRATION.md).
 
-Two manually assigned Codex agents are supported. Autonomous planning, editing, automatic commits, pushes and merges are not implemented.
+Two manually assigned Codex agents are supported. Autonomous planning, automatic commits, pushes and merges are not implemented. Editing is restricted to explicitly authorized isolated-write tasks and review continuations.
 
 ## PHOSPHOR OS interface
 
@@ -160,7 +162,7 @@ The PHOSPHOR OS dashboard now has two real pixel workstations, independent event
 
 Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.
 
-Submitted work survives normal shutdown and resumes dispatch after the backend successfully listens. Running tasks are stopped on normal shutdown and recovered as interrupted after an unclean restart; they are never automatically retried. Create a new task assigned to the same agent and choose its compatible saved session to resume. Existing pre-v0.3 unsubmitted tasks remain unsubmitted. Schema 5 migration is transactional; older application versions refuse it.
+Submitted work survives normal shutdown and resumes dispatch after the backend successfully listens. Running tasks are stopped on normal shutdown and recovered as interrupted after an unclean restart; they are never automatically retried. Create a new task assigned to the same agent and choose its compatible saved session to resume. Existing pre-v0.3 unsubmitted tasks remain unsubmitted. Schema 6 migration is transactional; older application versions refuse it. Review artifacts and feedback are preserved across restart and Keep/Reject.
 
 Both agents use the selected backend authentication mode. A queued task retains its submitted mode and waits if it differs after restart; there is no paid fallback. Changing/refreshing the mode is blocked while either agent owns a run. Stale worktree/server leases require manual inspection and cleanup as described in [security and recovery](docs/SECURITY.md).
 

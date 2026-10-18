@@ -4,6 +4,8 @@ import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { runVerification } from './verification.js';
 import type { Repository, Workspace, WorkspaceReview } from '../shared/types.js';
+import { diffLines } from '../shared/diff.js';
+import type { ReviewFile } from '../shared/types.js';
 import { AppError } from './errors.js';
 import { changedFiles, git, revalidateRepository, validateRepository } from './repositories.js';
 
@@ -241,14 +243,19 @@ export class Workspaces {
     if (files.size > 500)
       throw new AppError(413, 'More than 500 changed files. Review this worktree manually.');
     let diff = '';
+    const detailed: ReviewFile[] = [];
     for (const file of files.values()) {
+      const start = diff.length;
+      const detail: ReviewFile = { ...file };
+      detailed.push(detail);
       if (secretPath(file.path)) {
+        detail.availability = 'withheld';
         diff += `\n${file.path}: sensitive path; inspect locally.\n`;
         continue;
       }
       if (diff.length > 512_000) {
-        diff += '\nDiff truncated; inspect remaining changes locally.\n';
-        break;
+        detail.availability = 'oversized';
+        continue;
       }
       diff += await git(workspace.path, [
         'diff',
@@ -258,7 +265,10 @@ export class Workspaces {
         workspace.base,
         '--',
         file.path,
-      ]).catch(() => `\n${file.path}: diff unavailable or exceeds limits; inspect locally.\n`);
+      ]).catch(() => {
+        detail.availability = 'unavailable';
+        return '';
+      });
       if (file.status === '??') {
         const path = resolve(workspace.path, file.path);
         if (!inside(workspace.path, path)) throw new AppError(403, 'Invalid changed-file path.');
@@ -280,23 +290,41 @@ export class Workspaces {
             const buffer = Buffer.alloc(256_001);
             const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
             const data = buffer.subarray(0, bytesRead);
-            diff +=
-              `\n--- /dev/null\n+++ b/${file.path}\n` +
-              (bytesRead > 256_000 || data.includes(0)
-                ? 'Binary or large file; inspect locally.\n'
-                : data
-                    .toString('utf8')
-                    .split('\n')
-                    .map((line) => `+${line}`)
-                    .join('\n'));
+            if (bytesRead > 256_000) detail.availability = 'oversized';
+            else if (data.includes(0)) detail.availability = 'binary';
+            else {
+              const text = data.toString('utf8');
+              const content = text.endsWith('\n')
+                ? text.slice(0, -1).split('\n')
+                : text
+                  ? text.split('\n')
+                  : [];
+              diff +=
+                `\n--- /dev/null\n+++ ${JSON.stringify('b/' + file.path)}\n@@ -0,0 +1,${content.length} @@\n` +
+                content.map((line) => `+${line}`).join('\n') +
+                (text.endsWith('\n') ? '\n' : '\n\\ No newline at end of file\n');
+            }
           } finally {
             await handle.close();
           }
-        } else diff += `\n${file.path}: large file, directory or symlink; inspect locally.\n`;
+        } else {
+          detail.availability = info.size > 256_000 ? 'oversized' : 'unavailable';
+          diff += `\n${file.path}: ${detail.availability}; inspect locally.\n`;
+        }
       }
-      if (diff.length > 512_000) {
-        diff = diff.slice(0, 512_000) + '\nDiff truncated; inspect remaining changes locally.\n';
-        break;
+      const patch = diff.slice(start);
+      detail.availability ??= /^Binary files .* differ$/m.test(patch)
+        ? 'binary'
+        : patch.length > 256_000 || diff.length > 512_000
+          ? 'oversized'
+          : 'text';
+      if (detail.availability === 'text') {
+        detail.patch = patch;
+        const lines = diffLines(patch);
+        detail.additions = lines.filter((line) => line.kind === 'add').length;
+        detail.deletions = lines.filter((line) => line.kind === 'delete').length;
+      } else {
+        diff = diff.slice(0, start) + `\n${file.path}: ${detail.availability}; inspect locally.\n`;
       }
     }
     await this.assertRevision(repository, workspace, revision);
@@ -304,7 +332,7 @@ export class Workspaces {
       workspace,
       revision,
       commandDetails: this.options.allowHostVerification ? (this.options.commands ?? {}) : {},
-      files: [...files.values()],
+      files: detailed,
       diff,
       commands: this.options.allowHostVerification ? Object.keys(this.options.commands ?? {}) : [],
     };
@@ -315,6 +343,7 @@ export class Workspaces {
     hash.update(
       JSON.stringify({
         id: workspace.id,
+        reviewEpoch: workspace.reviewEpoch,
         decision: workspace.decision,
         identity: workspace.identity,
         commands: this.options.commands,

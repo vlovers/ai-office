@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type {
-  AgentEvent,
-  Dashboard,
-  Task,
-  AuthMode,
-  AgentId,
-  WorkspaceReview,
-} from '../shared/types.js';
+import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
+import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
 import './styles.css';
@@ -28,126 +22,6 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   return data as T;
 }
 const activeStates = ['running', 'stopping'];
-function Review({ task }: { task: Task }) {
-  const [review, setReview] = useState<WorkspaceReview>();
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  async function load(action?: 'keep' | 'reject' | 'verify', command?: string) {
-    if (
-      action &&
-      !window.confirm(
-        action === 'reject'
-          ? 'Permanently discard ALL uncommitted and untracked files in this task worktree? The branch is preserved. This cannot be undone.'
-          : action === 'keep'
-            ? 'Keep these changes in the isolated worktree and branch? Integration remains manual.'
-            : `Run on host: ${JSON.stringify(review?.commandDetails?.[command ?? ''])}\n\nThis executes project code, including AI edits, with your full OS permissions and network access. It can read credentials or modify other checkouts. Inspect the scripts first. Continue?`,
-      )
-    )
-      return;
-    setBusy(true);
-    setError('');
-    try {
-      if (action)
-        await api(`/tasks/${task.id}/review`, {
-          action,
-          command,
-          confirmed: true,
-          revision: review?.revision,
-          confirmedHostExecution: action === 'verify',
-        });
-      setReview(await api<WorkspaceReview>(`/tasks/${task.id}/review`));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <section className="file-summary" aria-label="Isolated changes review">
-      <h3>Review isolated changes</h3>
-      <button className="secondary" disabled={busy} onClick={() => void load()}>
-        Refresh Git review
-      </button>
-      {error && <p role="alert">{error}</p>}
-      {review && (
-        <>
-          <p>
-            Decision: <strong>{review.workspace.decision}</strong>
-          </p>
-          <p>
-            Branch <code>{review.workspace.branch}</code>
-            <br />
-            Worktree <code>{review.workspace.path}</code>
-            <br />
-            Base <code>{review.workspace.base}</code>
-          </p>
-          {review.workspace.recoveryError && <p role="alert">{review.workspace.recoveryError}</p>}
-          {review.workspace.decision !== 'rejected' && !review.workspace.recoveryError && (
-            <>
-              <p>
-                {review.files.length} changed files compared with the saved base commit. Includes
-                staged, unstaged and untracked files.
-              </p>
-              <ul>
-                {review.files.map((file) => (
-                  <li key={file.path}>
-                    <code>{file.status}</code> {file.path}
-                  </li>
-                ))}
-              </ul>
-              <pre className="review-diff" tabIndex={0} aria-label="Git diff">
-                {review.diff || 'No changes.'}
-              </pre>
-              <p>
-                Inspect this worktree locally, commit the files you choose, then integrate the
-                branch from your destination checkout using your normal Git workflow. AI Office
-                never merges automatically.
-              </p>
-              {review.commands.map((command) => (
-                <button
-                  className="secondary"
-                  disabled={busy}
-                  key={command}
-                  onClick={() => void load('verify', command)}
-                >
-                  Verify: {command}
-                </button>
-              ))}
-              {!review.commands.length && (
-                <p>
-                  Host verification is disabled or no commands are configured. Inspect project
-                  scripts before enabling AI_OFFICE_ALLOW_HOST_VERIFICATION=1 on the server.
-                </p>
-              )}
-              {review.workspace.verification && (
-                <div role="status">
-                  <p>
-                    {review.workspace.verification.command}:{' '}
-                    {review.workspace.verification.passed ? 'Passed' : 'Failed'} ·{' '}
-                    {review.workspace.verification.at}
-                  </p>
-                  <pre className="review-diff" tabIndex={0}>
-                    {review.workspace.verification.output}
-                  </pre>
-                </div>
-              )}
-              {review.workspace.decision === 'pending' && (
-                <div className="start-controls">
-                  <button disabled={busy} onClick={() => void load('keep')}>
-                    Keep isolated changes
-                  </button>
-                  <button className="secondary" disabled={busy} onClick={() => void load('reject')}>
-                    Reject and clean up…
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
 function App() {
   const [crt, setCrt] = useState(() => {
     try {
@@ -283,7 +157,10 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
+    const origin = document.activeElement;
     requestAnimationFrame(() => {
+      // A later keyboard/pointer action takes precedence over this deferred navigation.
+      if (document.activeElement !== origin) return;
       const section = document.getElementById(id);
       section?.focus();
       section?.scrollIntoView({ block: 'start' });
@@ -656,6 +533,16 @@ function App() {
                         {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
                       </span>
                       {view === 'focus' && task.id === agent?.taskId && stopControl}
+                      {task.workspaceId &&
+                        !['queued', 'running', 'stopping'].includes(task.state) && (
+                          <a
+                            className="review-shortcut"
+                            href="#code-review-center"
+                            onClick={() => setView('focus')}
+                          >
+                            Code Review Center ↗
+                          </a>
+                        )}
                       {task.state === 'queued' && !queued && (
                         <div className="start-controls">
                           <select
@@ -762,7 +649,7 @@ function App() {
                     )}
                     {task.workspaceId &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
-                        <Review key={task.id} task={task} />
+                        <ReviewCenter key={task.id} task={task} api={api} />
                       )}
                     {task.executionMode !== 'write' &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
