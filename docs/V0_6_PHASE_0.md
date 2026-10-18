@@ -121,3 +121,21 @@ legacy owners transactionally. Both seeded profiles initially prefer read-only. 
 intentionally leaves task assignment/scheduling and SDK execution unchanged: profile settings
 become executable only after immutable snapshots and dynamic scheduling land. Existing v0.5
 write authorization is therefore preserved throughout the intermediate milestone.
+
+## Execution milestone (schema 8)
+
+`task_configurations` stores immutable submission JSON and a once-set effective execution
+JSON; `session_configurations` pins the exact effective config to its native session.
+Queue insertion and submission capture commit together. Session creation, private auth binding
+and config commit together. The task/session pin includes profile revision, bounded guidance,
+model, mode, maximumMode, policy and capability versions. Effective config becomes durable
+before `executeTask`; failed preparation may retain a submission without execution.
+
+Profile guidance is JSON-delimited task text, not a system instruction. Local models must
+exist in the inspected CLI catalog. API-mode model names are syntax-validated and provider
+availability is not claimed before execution. Default-model resolution is recorded from the
+prepared private binding. Resumption reuses both the original configuration and private
+binding, regardless of subsequent edits. It fails if either is missing/incompatible; a new
+ordinary task requires an active profile, while confirmed review corrections may reuse an
+archived profile's existing pin. Existing v0.5 queued work and saved sessions receive explicit
+legacy pins (revision 0, empty guidance); no authentication context is invented.

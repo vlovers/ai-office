@@ -1,3 +1,9 @@
+import {
+  legacyConfiguration,
+  profileConfiguration,
+  assertConfiguration,
+} from './execution-config.js';
+import type { ExecutionConfiguration } from '../shared/types.js';
 import { DatabaseSync } from 'node:sqlite';
 import { AppError } from './errors.js';
 import type { AgentSettings } from './agents.js';
@@ -24,7 +30,7 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
-    if (version > 7) {
+    if (version > 8) {
       this.db.close();
       throw new Error('Metadata schema is newer than this AI Office version.');
     }
@@ -120,7 +126,26 @@ export class Store {
             });
         }
       }
-      this.db.exec(`PRAGMA user_version=7; COMMIT;`);
+      this.db.exec(`CREATE TABLE IF NOT EXISTS task_configurations (
+        task_id TEXT PRIMARY KEY REFERENCES tasks(id), submission TEXT NOT NULL, execution TEXT
+      ); CREATE TABLE IF NOT EXISTS session_configurations (
+        session_id TEXT PRIMARY KEY REFERENCES sessions(id), json TEXT NOT NULL
+      );`);
+      if (version < 8) {
+        for (const session of this.sessions()) {
+          const config = legacyConfiguration(session);
+          config.model = this.sessionBinding(session.id)?.model ?? session.model ?? null;
+          this.saveSessionConfiguration(session.id, config);
+        }
+        for (const entry of this.queue()) {
+          const task = this.task(entry.taskId)!;
+          const config = entry.resumeSessionId
+            ? this.sessionConfiguration(entry.resumeSessionId)
+            : legacyConfiguration(task);
+          this.pinConfiguration(task, config);
+        }
+      }
+      this.db.exec(`PRAGMA user_version=8; COMMIT;`);
     } catch (error) {
       try {
         this.db.exec('ROLLBACK');
@@ -130,6 +155,45 @@ export class Store {
       this.db.close();
       throw error;
     }
+  }
+  taskConfiguration(id: string): ExecutionConfiguration | undefined {
+    const row = this.db
+      .prepare(
+        'SELECT coalesce(execution,submission) AS json FROM task_configurations WHERE task_id=?',
+      )
+      .get(id);
+    return row ? (JSON.parse(String(row.json)) as ExecutionConfiguration) : undefined;
+  }
+  sessionConfiguration(id: string): ExecutionConfiguration | undefined {
+    const row = this.db
+      .prepare('SELECT json FROM session_configurations WHERE session_id=?')
+      .get(id);
+    return row ? (JSON.parse(String(row.json)) as ExecutionConfiguration) : undefined;
+  }
+  saveSessionConfiguration(id: string, config: ExecutionConfiguration) {
+    this.db
+      .prepare('INSERT INTO session_configurations VALUES (?,?)')
+      .run(id, JSON.stringify(config));
+  }
+  pinConfiguration(task: Task, config?: ExecutionConfiguration) {
+    const selected = assertConfiguration(
+      config ?? profileConfiguration(this.requireAgent(task.agentId), task),
+      task,
+    );
+    this.db
+      .prepare('INSERT INTO task_configurations(task_id,submission) VALUES (?,?)')
+      .run(task.id, JSON.stringify(selected));
+    return selected;
+  }
+  effectiveConfiguration(taskId: string, config: ExecutionConfiguration) {
+    const row = this.db
+      .prepare('SELECT execution FROM task_configurations WHERE task_id=?')
+      .get(taskId);
+    if (!row || row.execution)
+      throw new AppError(409, 'Execution configuration is already pinned or missing.');
+    this.db
+      .prepare('UPDATE task_configurations SET execution=? WHERE task_id=?')
+      .run(JSON.stringify(config), taskId);
   }
   agents(): AgentProfile[] {
     return this.db
@@ -309,6 +373,7 @@ export class Store {
     agentId: AgentId = 'codex-1',
     executionMode: ExecutionMode = 'read-only',
     workspaceId?: string,
+    configuration?: ExecutionConfiguration,
   ) {
     const session: Session = {
       id: randomUUID(),
@@ -330,6 +395,7 @@ export class Store {
         this.db
           .prepare('INSERT INTO session_bindings VALUES (?,?)')
           .run(session.id, JSON.stringify(binding));
+      if (configuration) this.saveSessionConfiguration(session.id, configuration);
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -407,12 +473,25 @@ export class Store {
         resumeSessionId: row.resume_session_id as string | null,
       }));
   }
-  enqueue(taskId: string, mode: AuthMode, resumeSessionId?: string) {
-    this.db
-      .prepare(
-        'INSERT INTO task_queue(task_id,resume_session_id,mode,enqueued_at) VALUES (?,?,?,?)',
-      )
-      .run(taskId, resumeSessionId ?? null, mode, new Date().toISOString());
+  enqueue(taskId: string, mode: AuthMode, resumeSessionId?: string, transaction = true) {
+    if (transaction) this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const task = this.task(taskId);
+      if (!task) throw new AppError(404, 'Task not found.');
+      const config = resumeSessionId ? this.sessionConfiguration(resumeSessionId) : undefined;
+      if (resumeSessionId && !config)
+        throw new AppError(409, 'Saved session configuration is missing.');
+      this.pinConfiguration(task, config);
+      this.db
+        .prepare(
+          'INSERT INTO task_queue(task_id,resume_session_id,mode,enqueued_at) VALUES (?,?,?,?)',
+        )
+        .run(taskId, resumeSessionId ?? null, mode, new Date().toISOString());
+      if (transaction) this.db.exec('COMMIT');
+    } catch (error) {
+      if (transaction) this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
   removeQueued(taskId: string) {
     this.db.prepare('DELETE FROM task_queue WHERE task_id=?').run(taskId);
