@@ -481,7 +481,12 @@ export class Store {
       const config = resumeSessionId ? this.sessionConfiguration(resumeSessionId) : undefined;
       if (resumeSessionId && !config)
         throw new AppError(409, 'Saved session configuration is missing.');
-      this.pinConfiguration(task, config);
+      const pinned = this.pinConfiguration(task, config);
+      if (mode === 'api-key' && pinned.model === null)
+        throw new AppError(
+          409,
+          'API-key execution requires an explicit model ID in the agent profile. Saved sessions without a model cannot be safely resumed.',
+        );
       this.db
         .prepare(
           'INSERT INTO task_queue(task_id,resume_session_id,mode,enqueued_at) VALUES (?,?,?,?)',
@@ -545,6 +550,9 @@ export class Store {
       sessionId: session?.id ?? null,
       threadId: task.reviewRequest?.threadId ?? session?.threadId ?? null,
       verification: review.workspace.verification,
+      configuration:
+        this.taskConfiguration(task.id) ??
+        (sessionId ? this.sessionConfiguration(sessionId) : undefined),
     };
     this.db
       .prepare('INSERT INTO review_records VALUES (?,?,?,?)')

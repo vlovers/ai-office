@@ -274,9 +274,9 @@ export function AgentStudio({
               aria-describedby="studio-model-help"
             />
             <p id="studio-model-help">
-              Blank uses the connection default for new sessions. Local login validates against CLI
-              model metadata; API model availability is checked by the provider. No automatic
-              fallback.
+              Blank uses the local connection default for new sessions. API-key execution requires
+              an explicit model ID. Local login validates against CLI model metadata; API model
+              availability is checked by the provider. No automatic fallback.
             </p>
             <label htmlFor="studio-mode">Maximum access preference</label>
             <select

@@ -34,6 +34,7 @@ interface Active {
   agentId: AgentId;
   gitDir: string;
   preparing: boolean;
+  quarantined?: boolean;
   preserveQueue?: boolean;
   session?: ProviderSession;
   stopRequested: boolean;
@@ -109,7 +110,7 @@ export class TaskManager {
               ? 'waiting'
               : 'idle',
           taskId: task?.id ?? null,
-          canStop: provider?.capabilities.cancellation ?? true,
+          canStop: !active?.quarantined && (provider?.capabilities.cancellation ?? true),
           mode:
             task?.executionMode === 'write'
               ? 'Isolated coding · write enabled'
@@ -305,6 +306,15 @@ export class TaskManager {
         return;
       }
       this.validateResume(this.store.task(active.taskId)!, entry.resumeSessionId ?? undefined);
+      const queuedConfiguration = assertConfiguration(
+        this.store.taskConfiguration(active.taskId),
+        this.store.task(active.taskId)!,
+      );
+      if (entry.mode === 'api-key' && queuedConfiguration.model === null)
+        throw new AppError(
+          409,
+          'Saved API-key submission has no explicit model. Preserve its history and create a new task with a configured model; no replacement session was started.',
+        );
       this.store.claimQueued(active.taskId);
       this.waiting.delete(active.taskId);
       const task = this.store.task(active.taskId)!;
@@ -489,6 +499,7 @@ export class TaskManager {
           await provider.stopSession(active.session);
         } catch {
           cleanupConfirmed = false;
+          active.quarantined = true;
           state = 'interrupted';
           failure = new UncertainCleanupError().message;
         }
@@ -526,7 +537,7 @@ export class TaskManager {
         this.waiting.delete(active.taskId);
         this.store.updateTask(active.taskId, { state, result, error: failure });
       }
-      this.active.delete(active.agentId);
+      if (cleanupConfirmed) this.active.delete(active.agentId);
       if (!requeue && !active.preserveQueue)
         this.emit(active.taskId, 'state', failure ?? `Task ${state}.`);
       this.wake();
@@ -542,6 +553,9 @@ export class TaskManager {
           : undefined;
         return {
           ...record,
+          configuration:
+            record.configuration ??
+            (record.sessionId ? this.store.sessionConfiguration(record.sessionId) : undefined),
           continuation: next
             ? { id: next.id, state: next.state, error: next.error, sessionId: next.sessionId }
             : undefined,
@@ -843,6 +857,7 @@ export class TaskManager {
       this.wake();
       return;
     }
+    if (active.quarantined) throw new UncertainCleanupError();
     const provider = this.providers.get(active.agentId)!;
     if (!provider.capabilities.cancellation)
       throw new AppError(409, 'This provider does not support cancellation.');
@@ -862,6 +877,7 @@ export class TaskManager {
     this.timer = undefined;
     const stopAgents = Promise.all(
       [...this.active.values()].map(async (active) => {
+        if (active.quarantined) throw new UncertainCleanupError();
         if (this.store.task(active.taskId)?.state === 'queued') {
           active.preserveQueue = true;
           active.stopRequested = true;

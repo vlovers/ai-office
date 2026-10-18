@@ -740,7 +740,9 @@ it('keeps leases and reports interrupted rather than stopped when provider clean
     },
   };
   const manager = new TaskManager(env.store, provider, env.auth, undefined, undefined, service);
-  cleanup.push(() => manager.shutdown());
+  cleanup.push(async () => {
+    await expect(manager.shutdown()).rejects.toThrow('cleanup could not be confirmed');
+  });
   const repo = env.store.register(await validateRepository(env.repository));
   const task = env.store.createTask({
     repositoryId: repo.id,
@@ -754,6 +756,24 @@ it('keeps leases and reports interrupted rather than stopped when provider clean
     (state) => state === 'interrupted',
   );
   expect(env.store.task(task.id)?.error).toContain('lease retained');
+  expect(manager.dashboard().agents[0]?.taskId).toBe(task.id);
+  expect(manager.dashboard().agents[0]?.canStop).toBe(false);
+  await expect(manager.stop(task.id)).rejects.toThrow('cleanup could not be confirmed');
+  const unrelated = env.store.register({
+    path: '/disposable/unstarted',
+    gitDir: '/disposable/unstarted/.git',
+    name: 'Unrelated',
+  });
+  const next = env.store.createTask({
+    repositoryId: unrelated.id,
+    title: 'Must remain queued',
+    prompt: 'Inspect',
+  });
+  manager.start(next.id);
+  expect(env.store.task(next.id)?.state).toBe('queued');
+  expect(env.store.queue().some((entry) => entry.taskId === next.id)).toBe(true);
+  await manager.stop(next.id);
+
   const workspace = env.store.workspaces()[0]!;
   const directories = await repositoryLeaseDirectories(repo, workspace.gitDir);
   for (const directory of directories) {

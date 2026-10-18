@@ -111,3 +111,36 @@ it('migrates the registry once and rolls back new tables for unknown legacy owne
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('rolls back seeded profiles and session pins when a legacy queued resume has another owner', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ai-office-v05-late-rollback-'));
+  const path = join(root, 'fixture.sqlite');
+  const fixture = createV05Fixture(path);
+  const db = new DatabaseSync(path);
+  try {
+    db.prepare('UPDATE task_queue SET resume_session_id=?').run(fixture.sessions[0]!.id);
+    expect(() => new Store(path)).toThrow('Pinned execution configuration');
+    expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(6);
+    for (const name of [
+      'agent_profiles',
+      'agent_versions',
+      'task_configurations',
+      'session_configurations',
+    ])
+      expect(db.prepare('SELECT name FROM sqlite_master WHERE name=?').get(name)).toBeUndefined();
+    expect(
+      JSON.parse(
+        String(db.prepare('SELECT json FROM tasks WHERE id=?').get(fixture.tasks[0]!.id)?.json),
+      ),
+    ).toEqual(fixture.tasks[0]);
+    expect(db.prepare('SELECT count(*) AS count FROM events').get()?.count).toBe(1);
+    expect(db.prepare('SELECT sequence FROM task_queue').get()?.sequence).toBe(42);
+    expect(db.prepare('SELECT json FROM review_records').get()?.json).toBe(
+      JSON.stringify(fixture.review),
+    );
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  } finally {
+    db.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

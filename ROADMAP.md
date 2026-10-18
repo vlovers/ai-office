@@ -8,32 +8,32 @@
 - **v0.4.0:** Explicitly approved isolated write worktrees, Git diff review, Keep/Reject, conservative cleanup.
 - **v0.5.0:** Code Review Center, revision-bound feedback, Request Changes against the original Codex session, retained review history and safety audit. [Release](https://github.com/vlovers/ai-office/releases/tag/v0.5.0).
 
-## v0.6.0 — Agent Studio (next)
+## v0.6.0 — Agent Studio (implemented in unmerged PR stack)
 
 **Goal:** Replace the hard-coded “Codex 01 / Codex 02” identity model with user-managed, persistently configured agent profiles while retaining the existing security and task lifecycle guarantees. v0.6 targets **Codex SDK only**. Provider adapters are a future extension, not a reason to claim unsupported functionality now.
 
 ### P0 — foundation and safe migration
 
-- [ ] Audit the actual code paths, SQLite schema, queue, agent identity, leases, SSE, UI and session resume before proposing the migration.
-- [ ] Agent registry with stable IDs, display name, role, optional description, archived status, created/updated timestamps and deterministic ordering.
-- [ ] Upgrade existing installations without losing tasks, review threads, sessions, assigned owners, worktrees or pending work. Preserve the two existing agents as ordinary default profiles; migration must be idempotent and rollback-safe.
-- [ ] Separate **saved agent count** from **concurrent execution limit**. Initial concurrency must not exceed currently verified safe bounds; use a bounded configurable limit only after proving isolation and restart behavior.
-- [ ] Database and server-side validation for create/edit/archive/list and assignment; archive instead of deleting referenced agents.
+- [x] Audit the actual code paths, SQLite schema, queue, agent identity, leases, SSE, UI and session resume before proposing the migration.
+- [x] Agent registry with stable IDs, display name, role, optional description, archived status, created/updated timestamps and deterministic ordering.
+- [x] Upgrade existing installations without losing tasks, review threads, sessions, assigned owners, worktrees or pending work. Preserve the two existing agents as ordinary default profiles; migration must be idempotent and rollback-safe.
+- [x] Separate **saved agent count** from **concurrent execution limit**. Initial concurrency must not exceed currently verified safe bounds; use a bounded configurable limit only after proving isolation and restart behavior.
+- [x] Database and server-side validation for create/edit/archive/list and assignment; archive instead of deleting referenced agents.
 
 ### P0 — configuration and safety
 
-- [ ] Role/instructions and configurable model **only where verified supported** by the pinned Codex SDK and installed CLI. Unsupported settings should be visibly unavailable, not silently ignored.
-- [ ] Versioned immutable _effective configuration snapshot_ per execution/review iteration, including provider capability and policy version; an edit must not mutate a running or resumable session unexpectedly.
-- [ ] Server-enforced authority caps: read-only by default, explicit isolated-write authorization, registered workspaces, sandbox boundaries, approved verification. Agent instructions are not security controls.
-- [ ] Enforce effective permissions as intersection of platform policy, workspace/user approval and agent configuration. Never allow UI/API requests to expand host privileges.
-- [ ] Redact secrets from API, logs, streams, exports and errors; avoid embedding credentials in agent configuration.
+- [x] Role/instructions and configurable model **only where verified supported** by the pinned Codex SDK and installed CLI. Unsupported settings should be visibly unavailable, not silently ignored.
+- [x] Versioned immutable _effective configuration snapshot_ per execution/review iteration, including provider capability and policy version; an edit must not mutate a running or resumable session unexpectedly.
+- [x] Server-enforced authority caps: read-only by default, explicit isolated-write authorization, registered workspaces, sandbox boundaries, approved verification. Agent instructions are not security controls.
+- [x] Enforce effective permissions as intersection of platform policy, workspace/user approval and agent configuration. Never allow UI/API requests to expand host privileges.
+- [x] Reject known/configured credentials in profiles and redact configured/known tokens in transcripts/errors; do not offer configuration export or claim universal secret detection.
 
 ### P1 — Agent Studio UI
 
-- [ ] Create/edit/archive/duplicate profiles and inspect their effective permissions and provider support.
-- [ ] Select a profile when creating/assigning a task, including worktree/review history; show the exact profile version bound to a session.
-- [ ] Preserve accessibility, responsive layouts, keyboard controls, reduced-motion preferences and the existing PHOSPHOR OS aesthetic.
-- [ ] Clear empty states, offline/connection errors, blocked permissions and upgrade migrations.
+- [x] Create/edit/archive/duplicate profiles and inspect their effective permissions and provider support.
+- [x] Select a profile when creating/assigning a task, including worktree/review history; show the exact profile version bound to a session.
+- [x] Preserve accessibility, responsive layouts, keyboard controls, reduced-motion preferences and the existing PHOSPHOR OS aesthetic.
+- [x] Clear empty states, offline/connection errors, blocked permissions and upgrade migrations.
 
 ### Delivery plan (separate reviewable PRs)
 
@@ -43,6 +43,11 @@
 4. Task/queue/SSE/worktree binding and bounded scheduling.
 5. Agent Studio UI and migration/UX integration.
 6. Comprehensive security, browser, native sandbox and release-validation documentation.
+
+Implementation and exact validation: [workflow/migrations](docs/V0_6_AGENT_STUDIO.md),
+[PR stack/security report](docs/V0_6_VALIDATION.md). Checkmarks describe this unmerged
+implementation, not an approved release. Known-pattern secret handling and macOS fixture
+validation do not establish arbitrary-content secrecy or Linux runtime safety.
 
 ### v0.6 exit criteria
 

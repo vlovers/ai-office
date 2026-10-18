@@ -42,8 +42,31 @@ Cleanup accepts only a delivered SIGKILL or confirmed group absence. Transient E
 
 ## Storage and retained limitations
 
-Metadata/runtime directories are private and excluded from Git. SQLite uses WAL/foreign keys/transactions; schema v6 refuses older application readers and retains unfinished operation diagnostics. There are no quotas, general backup/retention/encryption facilities or account-wide spend limits. Host crashes cannot emit final events. Never clear a lock by deleting the database. No recovery path automatically deletes unknown/user-modified resources.
+Metadata/runtime directories are private and excluded from Git. SQLite uses WAL/foreign keys/transactions; schema v8 refuses older application readers and retains unfinished operation diagnostics. There are no quotas, general backup/retention/encryption facilities or account-wide spend limits. Host crashes cannot emit final events. Never clear a lock by deleting the database. No recovery path automatically deletes unknown/user-modified resources.
 
 The full evidence-based findings and remaining boundaries are in [the v0.4 security audit](V0_4_SECURITY_AUDIT.md). Report vulnerabilities privately as described in the repository's [security policy](../SECURITY.md).
 
 Review feedback, immutable submitted iterations, resume validation and new abuse cases are documented in the [v0.5 threat model](V0_5_SECURITY.md). All v0.4 filesystem, Git, process cleanup and host-verification boundaries still apply.
+
+## Agent Studio boundaries (unreleased v0.6)
+
+Names/role/instructions/model preferences are untrusted bounded data. Only server-generated
+UUIDs or retained legacy IDs identify providers/worker homes. Strict schemas reject raw
+filesystem/shell/tool/network/SDK configuration, unexpected keys, invalid model syntax and
+stale edits. Names/roles reject Unicode control/format characters; credential rejection and
+transcript redaction cover known/configured patterns, not arbitrary sensitive text. Error
+validation codes avoid reflecting unknown-key contents. Profiles/config pins are plaintext
+SQLite, not a credential store.
+
+Default profiles are read-only. Effective write authority requires the pinned profile cap,
+existing server/worktree authorization and explicit user confirmation. Guidance is delimited
+task text with no system privilege; it cannot change the fixed sandbox. Local model defaults
+resolve from trusted CLI metadata; API execution requires an explicit model ID. Native resume
+uses the original snapshot, binding and session, never current profile edits or a fallback.
+Archival does not alter confirmed work. Schema migration validates legacy ownership and
+commits all profile/config/recovery metadata together or rolls it back. Cleanup uncertainty
+keeps worker capacity occupied as well as retaining leases.
+
+The [v0.6 audit](V0_6_VALIDATION.md) records regression evidence and limitations. Existing v0.5
+stale revision, duplicate feedback, path/filter and historical data preservation controls
+remain unchanged. No real-model or Linux-native verification is implied by fixture tests.

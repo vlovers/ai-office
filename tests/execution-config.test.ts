@@ -95,3 +95,81 @@ it('enforces the profile cap and rolls submission/config back together on persis
     await env.cleanup();
   }
 });
+
+it('rejects unpinned API defaults atomically and keeps explicit model submissions durable', async () => {
+  const env = await sandbox();
+  try {
+    const repo = env.store.register(await validateRepository(env.repository));
+    const profile = env.store.requireAgent('codex-1');
+    env.store.editAgent(profile.id, profile.revision, { ...profile, model: null });
+    const missing = env.store.createTask({
+      repositoryId: repo.id,
+      title: 'Missing model',
+      prompt: 'review',
+    });
+    expect(() => env.store.enqueue(missing.id, 'api-key')).toThrow('explicit model');
+    expect(env.store.taskConfiguration(missing.id)).toBeUndefined();
+    expect(env.store.queue()).toEqual([]);
+    const current = env.store.requireAgent(profile.id);
+    env.store.editAgent(current.id, current.revision, { ...current, model: 'fixture-model' });
+    env.store.enqueue(missing.id, 'api-key');
+    expect(env.store.taskConfiguration(missing.id)?.model).toBe('fixture-model');
+    expect(env.store.queue()[0]?.mode).toBe('api-key');
+    await env.manager.stop(missing.id);
+  } finally {
+    await env.cleanup();
+  }
+});
+
+it('fails a migrated API queue with an unknown default before preparing any provider session', async () => {
+  const env = await sandbox();
+  const { CodexAuth } = await import('../src/server/providers/codex-auth.js');
+  const { TaskManager } = await import('../src/server/manager.js');
+  const auth = new CodexAuth({
+    dataDir: env.root,
+    apiKey: 'synthetic-api-key',
+    apiExecutable: env.executable,
+    inspectLocal: async () => env.inspection,
+  });
+  await auth.select('api-key');
+  const manager = new TaskManager(env.store, env.providers, auth);
+  let preparations = 0;
+  env.providers[0]!.startSession = async () => {
+    preparations++;
+    throw new Error('Must never prepare');
+  };
+  try {
+    const repo = env.store.register(await validateRepository(env.repository));
+    const task = env.store.createTask({
+      repositoryId: repo.id,
+      title: 'Legacy API default',
+      prompt: 'review',
+    });
+    env.store.enqueue(task.id, 'local-cli-chatgpt');
+    // Independent persisted shape of a migrated v0.5 queue: no recoverable model identity.
+    env.store.db.prepare('UPDATE task_configurations SET submission=? WHERE task_id=?').run(
+      JSON.stringify({
+        ...env.store.taskConfiguration(task.id),
+        source: 'legacy',
+        profileRevision: 0,
+        role: '',
+        instructions: '',
+        model: null,
+      }),
+      task.id,
+    );
+    env.store.db.prepare('UPDATE task_queue SET mode=? WHERE task_id=?').run('api-key', task.id);
+    manager.startQueue();
+    const failed = await until(
+      () => env.store.task(task.id)!,
+      (t) => t.state === 'failed',
+    );
+    expect(failed.error).toContain('no explicit model');
+    expect(preparations).toBe(0);
+    expect(env.store.sessions()).toEqual([]);
+    expect(env.store.taskConfiguration(task.id)?.source).toBe('legacy');
+  } finally {
+    await manager.shutdown();
+    await env.cleanup();
+  }
+});
