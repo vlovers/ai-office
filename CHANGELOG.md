@@ -1,17 +1,21 @@
 # Changelog
 
-## v0.5.0 (development)
+## [0.5.0] — release candidate (not yet tagged)
 
 - Code Review Center with directory-grouped file navigation, bounded unified diff lines and accessible feedback controls.
 - SQLite schema 6 preserves revision-bound comments, submitted feedback, iteration outcomes and attributed verification.
 - Explicit Request Changes confirmation resumes the original Codex session through the existing queue, worker and leases; stale and duplicate submissions are controlled.
 - Historical patches survive restart and Keep/Reject; no filesystem snapshots or automatic integration.
+- Audit fixes for queued correction cancellation, pinned-session recovery, and unsaved feedback protection after failed saves.
+- Verified 87 unit/integration tests, 2 HTTP/SSE tests and browser/native sandbox checks in disposable fixtures; see [validation](docs/V0_5_VALIDATION.md) and [audit](docs/V0_5_SECURITY_AUDIT.md).
+
+**Limits:** bounded historical patches, reliance on native Codex transcripts, and opt-in host verification. No autonomous merge/deployment or Linux native sandbox validation.
 
 This project follows semantic versioning for release labels. Until a stable 1.0 release, APIs and storage formats may change.
 
 ## [Unreleased]
 
-## [0.4.0] - Release candidate (unreleased)
+## [0.4.0] - Released
 
 ### Added
 
