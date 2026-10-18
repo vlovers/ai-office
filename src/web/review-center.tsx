@@ -333,7 +333,7 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
             ? 'legacy v0.5'
             : `v${record.configuration.profileRevision}`}{' '}
           · {record.configuration.executionMode} ·{' '}
-          {record.configuration.model ?? 'unspecified legacy model'}
+          {record.configuration.model ?? 'model not recorded'}
         </p>
       )}
       <div className="review-diff-controls">
