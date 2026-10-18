@@ -4,9 +4,9 @@
 
 ![CI](https://github.com/vlovers/ai-office/actions/workflows/validation.yml/badge.svg) · [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-> **v0.5 development · Code Review Center · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
+> **v0.5.0 release candidate · Code Review Center · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
 
-The v0.4.0 baseline passed macOS real Codex write validation and automated checks. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
+The v0.5.0 Code Review Center has passed the [PR validation](docs/V0_5_VALIDATION.md) and [focused security audit](docs/V0_5_SECURITY_AUDIT.md). It is awaiting a GitHub Release; CI and local-fixture validation do not establish arbitrary host/runtime safety. The v0.4.0 baseline passed macOS real Codex write validation and automated checks. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
 
 ## Quick start
 
