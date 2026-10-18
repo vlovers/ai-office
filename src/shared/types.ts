@@ -1,5 +1,5 @@
 export const AGENT_IDS = ['codex-1', 'codex-2'] as const;
-export type AgentId = (typeof AGENT_IDS)[number];
+export type AgentId = string;
 export interface ExecutionConfiguration {
   version: 1;
   source: 'legacy' | 'profile';

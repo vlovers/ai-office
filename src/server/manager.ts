@@ -1,5 +1,5 @@
 import { assertConfiguration, configuredPrompt } from './execution-config.js';
-import { validateAgentSettings } from './agents.js';
+import { agentIdSchema, validateAgentSettings } from './agents.js';
 import { diffLines } from '../shared/diff.js';
 import type { ReviewComment, ReviewRecord } from '../shared/types.js';
 import { EventEmitter } from 'node:events';
@@ -56,11 +56,29 @@ export class TaskManager {
     private secret?: string,
     private timeoutMs = 15 * 60_000,
     readonly workspaces?: Workspaces,
+    private runtime?: { createProvider: (id: AgentId) => AgentProvider; concurrency?: 1 | 2 },
   ) {
     const list = Array.isArray(providers) ? providers : [providers as AgentProvider];
     if (list.length < 1 || list.length > 2 || new Set(list).size !== list.length)
       throw new Error('Provide one or two independent agent providers.');
+    if (runtime?.concurrency !== undefined && ![1, 2].includes(runtime.concurrency))
+      throw new Error('Concurrency must be one or two.');
     this.providers = new Map(list.map((provider, index) => [AGENT_IDS[index]!, provider]));
+  }
+  private providerFor(id: AgentId) {
+    if (!agentIdSchema.safeParse(id).success || !this.store.agent(id))
+      throw new AppError(400, 'Unknown assigned agent.');
+    let provider = this.providers.get(id);
+    if (!provider && this.runtime) {
+      provider = this.runtime.createProvider(id);
+      if (provider.id !== 'codex' || [...this.providers.values()].includes(provider))
+        throw new Error('Agent profiles require independent Codex providers.');
+      this.providers.set(id, provider);
+    }
+    return provider;
+  }
+  private capacity() {
+    return this.runtime?.concurrency ?? (this.runtime ? 2 : this.providers.size);
   }
   agentSettings(input: unknown) {
     return validateAgentSettings(input, this.secret);
@@ -70,29 +88,34 @@ export class TaskManager {
   } // recover submitted work only after a successful listen
   dashboard(): Dashboard {
     const queue = this.store.queue();
-    const agents = [...this.providers].map(([id, provider]) => {
-      const active = this.active.get(id);
-      const task = active ? this.store.task(active.taskId) : undefined;
-      const queued = queue.find((entry) => entry.agentId === id);
-      return {
-        id,
-        name: `Codex ${id === 'codex-1' ? '01' : '02'}`,
-        provider: provider.id,
-        state: active
-          ? active.preparing && task?.state !== 'stopping'
-            ? 'preparing'
-            : (task?.state ?? 'idle')
-          : queued
-            ? 'waiting'
-            : 'idle',
-        taskId: task?.id ?? null,
-        canStop: provider.capabilities.cancellation,
-        mode:
-          task?.executionMode === 'write'
-            ? 'Isolated coding · write enabled'
-            : 'Repository review · read only',
-      };
-    });
+    const agents = this.store
+      .agents()
+      .filter((profile) => this.runtime || this.providers.has(profile.id))
+      .map((profile) => {
+        const id = profile.id;
+        const provider = this.providers.get(id);
+        const active = this.active.get(id);
+        const task = active ? this.store.task(active.taskId) : undefined;
+        const queued = queue.find((entry) => entry.agentId === id);
+        return {
+          id,
+          name: profile.name,
+          provider: profile.provider,
+          state: active
+            ? active.preparing && task?.state !== 'stopping'
+              ? 'preparing'
+              : (task?.state ?? 'idle')
+            : queued
+              ? 'waiting'
+              : 'idle',
+          taskId: task?.id ?? null,
+          canStop: provider?.capabilities.cancellation ?? true,
+          mode:
+            task?.executionMode === 'write'
+              ? 'Isolated coding · write enabled'
+              : 'Repository review · read only',
+        };
+      });
     return {
       connection: this.auth.view(),
       repositories: this.store.repositories(),
@@ -105,7 +128,7 @@ export class TaskManager {
       })),
       agents,
       agent: agents[0]!,
-      concurrency: this.providers.size,
+      concurrency: this.capacity(),
       queue: queue.map((entry) => ({
         ...entry,
         waitingReason:
@@ -133,10 +156,14 @@ export class TaskManager {
       return;
     }
     const queue = this.store.queue();
-    for (const [agentId] of this.providers) {
-      if (this.active.has(agentId)) continue;
-      const entry = queue.find((item) => item.agentId === agentId);
-      if (!entry || entry.mode !== this.auth.view().mode) continue;
+    const visited = new Set<AgentId>();
+    for (const entry of queue) {
+      if (this.active.size >= this.capacity()) break;
+      const agentId = entry.agentId;
+      if (visited.has(agentId)) continue;
+      visited.add(agentId); // preserve FIFO even if this profile's head is blocked
+      if (this.active.has(agentId) || entry.mode !== this.auth.view().mode) continue;
+      if (!this.providerFor(agentId)) continue;
       const task = this.store.task(entry.taskId);
       const repository = task && this.store.repository(task.repositoryId);
       if (!task || task.state !== 'queued' || !repository) {
@@ -190,7 +217,7 @@ export class TaskManager {
         409,
         'Confirm isolated writes and configure AI_OFFICE_AUTHORIZED_ROOT and AI_OFFICE_WORKSPACE_ROOT first.',
       );
-    const provider = this.providers.get(task.agentId);
+    const provider = this.providerFor(task.agentId);
     if (!provider) throw new AppError(400, 'Unknown assigned agent.');
     if (task.executionMode === 'write' && !provider.capabilities.writes)
       throw new AppError(409, 'Provider does not support isolated writes.');
@@ -209,7 +236,7 @@ export class TaskManager {
     return this.store.task(taskId)!;
   }
   private validateResume(task: NonNullable<ReturnType<Store['task']>>, resumeSessionId?: string) {
-    const provider = this.providers.get(task.agentId)!;
+    const provider = this.providerFor(task.agentId)!;
     const previous = resumeSessionId ? this.store.session(resumeSessionId) : undefined;
     if (
       resumeSessionId &&

@@ -139,3 +139,15 @@ binding, regardless of subsequent edits. It fails if either is missing/incompati
 ordinary task requires an active profile, while confirmed review corrections may reuse an
 archived profile's existing pin. Existing v0.5 queued work and saved sessions receive explicit
 legacy pins (revision 0, empty guidance); no authentication context is invented.
+
+## Dynamic runtime milestone
+
+The production manager allocates independent Codex providers lazily by validated registry ID;
+worker homes use legacy IDs or server-generated UUIDs, never editable names. One/two fixed
+providers remain supported for deterministic fixtures and compatibility. Global capacity is
+explicitly one or two, independently of saved profiles and allocated idle provider objects.
+The scheduler scans queue order, considers only each profile's oldest entry and reserves
+capacity synchronously before asynchronous validation. An active profile, incompatible
+connection mode or busy repository head cannot bypass that profile's FIFO, while unrelated
+eligible heads can proceed. Archived profiles still execute already-confirmed pinned queues.
+Task creation accepts registered active opaque IDs; SSE remains task-scoped and persisted.

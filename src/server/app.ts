@@ -128,7 +128,7 @@ export async function createApp(manager: TaskManager) {
     const input = z
       .object({
         repositoryId: id,
-        agentId: z.enum(['codex-1', 'codex-2']),
+        agentId: agentIdSchema,
         executionMode: z.enum(['read-only', 'write']).default('read-only'),
         title: z.string().trim().min(1).max(160),
         prompt: z.string().trim().min(1).max(16000),
@@ -137,6 +137,9 @@ export async function createApp(manager: TaskManager) {
       .parse(request.body);
     if (!manager.store.repository(input.repositoryId))
       throw new AppError(404, 'Repository not found.');
+    const profile = manager.store.requireAgent(input.agentId);
+    if (profile.archived)
+      throw new AppError(409, 'Restore the archived agent before assigning new work.');
     return reply.code(201).send(manager.store.createTask(input));
   });
   app.post('/api/tasks/:id/start', async (request, reply) => {
