@@ -39,6 +39,23 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
+  // Complete repository registration after the task form was edited: its draft mode must survive.
+  let releaseRegistration!: () => void;
+  const registration = new Promise<void>((resolve) => {
+    releaseRegistration = resolve;
+  });
+  await page.route('**/api/repositories', async (route) => {
+    const response = await route.fetch();
+    await registration;
+    await route.fulfill({ response });
+  });
+  await page.getByLabel('Absolute repository path').fill(env.repository);
+  await page.getByRole('button', { name: /^Register/ }).click();
+  await page.getByLabel('Execution mode').selectOption('write');
+  releaseRegistration();
+  await expect(page.getByRole('button', { name: /^Register/ })).toBeEnabled();
+  await expect(page.getByLabel('Execution mode')).toHaveValue('write');
+  await page.getByLabel('Execution mode').selectOption('read-only');
   const studio = page.getByRole('region', { name: 'Agent Studio', exact: true });
   await expect(studio).toBeVisible();
   const create = studio.getByRole('button', { name: 'Create agent' });

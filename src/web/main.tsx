@@ -1018,7 +1018,6 @@ function App() {
                       setRepositoryId(repo.id);
                       setResumeSessionId('');
                       form.reset();
-                      setExecutionMode('read-only');
                     });
                   }}
                 >
