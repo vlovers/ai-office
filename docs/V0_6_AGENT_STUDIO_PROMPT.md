@@ -16,7 +16,7 @@ Map existing identity assumptions (two slots), tables/foreign keys, task ownersh
 
 ## Target functionality
 
-**A. Agent Registry.** Users can create, edit, duplicate, archive and list any number of persisted agent *profiles*. Stable opaque IDs, name, role, optional description, instruction text, profile revision, lifecycle metadata, and validated optional supported model/provider settings. Archive cannot orphan historic tasks. Migrate the two existing built-in agents to editable profiles with their historical tasks, reviews and active/queued sessions intact. Idempotent transactional migration and recovery tests are mandatory.
+**A. Agent Registry.** Users can create, edit, duplicate, archive and list any number of persisted agent _profiles_. Stable opaque IDs, name, role, optional description, instruction text, profile revision, lifecycle metadata, and validated optional supported model/provider settings. Archive cannot orphan historic tasks. Migrate the two existing built-in agents to editable profiles with their historical tasks, reviews and active/queued sessions intact. Idempotent transactional migration and recovery tests are mandatory.
 
 **B. Execution snapshots.** New task executions capture an immutable versioned effective agent configuration/policy. Editing a profile must not change the rules of a running/resumable session. Define explicit semantics for corrections to an existing Codex thread: reuse the pinned session/config or reject incompatible profile edits; never silently swap SDK sessions or permissions. Keep reproducible records with safe redaction.
 

@@ -23,7 +23,7 @@
 ### P0 — configuration and safety
 
 - [ ] Role/instructions and configurable model **only where verified supported** by the pinned Codex SDK and installed CLI. Unsupported settings should be visibly unavailable, not silently ignored.
-- [ ] Versioned immutable *effective configuration snapshot* per execution/review iteration, including provider capability and policy version; an edit must not mutate a running or resumable session unexpectedly.
+- [ ] Versioned immutable _effective configuration snapshot_ per execution/review iteration, including provider capability and policy version; an edit must not mutate a running or resumable session unexpectedly.
 - [ ] Server-enforced authority caps: read-only by default, explicit isolated-write authorization, registered workspaces, sandbox boundaries, approved verification. Agent instructions are not security controls.
 - [ ] Enforce effective permissions as intersection of platform policy, workspace/user approval and agent configuration. Never allow UI/API requests to expand host privileges.
 - [ ] Redact secrets from API, logs, streams, exports and errors; avoid embedding credentials in agent configuration.
