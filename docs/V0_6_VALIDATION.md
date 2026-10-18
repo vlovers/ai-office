@@ -71,7 +71,10 @@ in-progress source/test run is counted as evidence.
 Final local results: **100/100 unit/integration tests in 16 files** (194.78 seconds),
 **2/2 HTTP/SSE smoke tests**, all three production browser workflows, native macOS sandbox
 probes, TypeScript, production build, formatting and Git whitespace checks pass. The final
-full run includes the legacy API-default and configured-secret regressions. No checks were
+full run includes the legacy API-default and configured-secret regressions. An additional
+late-migration rollback case then passed in the 4/4 migration suite, proving a cross-owner
+queued resume rolls back already-seeded profiles/session pins as well as recovery edits.
+Final CI runs all 101 unit/integration cases. No checks were
 disabled and no real inference was used. Browser workflows cover keyboard/accessibility,
 interleaved SSE, queue/cancel/stop, the v0.5 correction loop, failed resume, historical
 revisions, Keep/Reject, Studio CRUD/config pins and fresh-Store restart.
