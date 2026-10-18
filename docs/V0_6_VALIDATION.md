@@ -1,6 +1,6 @@
-# v0.6 validation and security audit (release candidate, not tagged)
+# v0.6 validation and security audit (historical pre-release evidence)
 
-This report originally covered the Agent Studio PR stack based on main `4589e30` before integration. PRs #13–#19 are now merged to main. No tag, release, paid inference, real login flow or authentication-store access was performed.
+This report originally covered the Agent Studio PR stack based on main `4589e30` before integration. PRs #13–#19 are now merged to main. At the time of this validation, no tag, release, paid inference, real login flow or authentication-store access was performed. The [v0.6.0 release](https://github.com/vlovers/ai-office/releases/tag/v0.6.0) was subsequently published from `03bfa73a`; this does not change the scope of tests conducted.
 
 ## Reviewable delivery and CI
 
@@ -15,7 +15,7 @@ This report originally covered the Agent Studio PR stack based on main `4589e30`
 
 PRs are stacked in dependency order to keep each diff reviewable. The existing main-only PR
 workflow does not automatically check stacked targets, so the same workflow was explicitly
-dispatched on each exact branch. All six feature PRs (#13–#18) have now been merged (some onto stacked feature branches); integration PR #19 brought the remaining Studio UI/hardening to main. The package version is updated to 0.6.0 by the separate release-preparation PR, not yet released.
+dispatched on each exact branch. All six feature PRs (#13–#18) have now been merged (some onto stacked feature branches); integration PR #19 brought the remaining Studio UI/hardening to main. The package version is updated to 0.6.0 by the separate release-preparation PR, later released.
 
 ## Audit findings and fixes
 
