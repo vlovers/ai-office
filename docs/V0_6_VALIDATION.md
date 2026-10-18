@@ -5,14 +5,14 @@ paid inference, real login flow or authentication-store access was performed.
 
 ## Reviewable delivery and CI
 
-| Milestone                                | PR                                                  | Implementation commit | Validation workflow                                                                                                 |
-| ---------------------------------------- | --------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Discovery + independent schema-6 fixture | [#13](https://github.com/vlovers/ai-office/pull/13) | `083a799`             | [39111888200](https://github.com/vlovers/ai-office/actions/runs/39111888200) — green                                |
-| Registry/schema 7                        | [#14](https://github.com/vlovers/ai-office/pull/14) | `367af5e`             | [39112178669](https://github.com/vlovers/ai-office/actions/runs/39112178669) — green                                |
-| Configuration/schema 8                   | [#15](https://github.com/vlovers/ai-office/pull/15) | `5bd4731`             | [39112867656](https://github.com/vlovers/ai-office/actions/runs/39112867656) — green                                |
-| Dynamic scheduler                        | [#16](https://github.com/vlovers/ai-office/pull/16) | `d591626`             | [39113049799](https://github.com/vlovers/ai-office/actions/runs/39113049799) — green                                |
-| Studio/browser coverage                  | [#17](https://github.com/vlovers/ai-office/pull/17) | `b9964e8`, `8ba6058`  | [39114100818](https://github.com/vlovers/ai-office/actions/runs/39114100818) — green after delayed-registration fix |
-| Final hardening/docs                     | final stacked PR                                    | includes this report  | Complete workflow will be linked from the final PR checks                                                           |
+| Milestone                                | PR                                                  | Implementation commit         | Validation workflow                                                                                                 |
+| ---------------------------------------- | --------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Discovery + independent schema-6 fixture | [#13](https://github.com/vlovers/ai-office/pull/13) | `083a799`                     | [39111888200](https://github.com/vlovers/ai-office/actions/runs/39111888200) — green                                |
+| Registry/schema 7                        | [#14](https://github.com/vlovers/ai-office/pull/14) | `367af5e`                     | [39112178669](https://github.com/vlovers/ai-office/actions/runs/39112178669) — green                                |
+| Configuration/schema 8                   | [#15](https://github.com/vlovers/ai-office/pull/15) | `5bd4731`                     | [39112867656](https://github.com/vlovers/ai-office/actions/runs/39112867656) — green                                |
+| Dynamic scheduler                        | [#16](https://github.com/vlovers/ai-office/pull/16) | `d591626`                     | [39113049799](https://github.com/vlovers/ai-office/actions/runs/39113049799) — green                                |
+| Studio/browser coverage                  | [#17](https://github.com/vlovers/ai-office/pull/17) | `b9964e8`, `8ba6058`          | [39114100818](https://github.com/vlovers/ai-office/actions/runs/39114100818) — green after delayed-registration fix |
+| Final hardening/docs                     | [#18](https://github.com/vlovers/ai-office/pull/18) | `22e2e41` plus evidence links | Final workflow/checks linked in PR #18                                                                              |
 
 PRs are stacked in dependency order to keep each diff reviewable. The existing main-only PR
 workflow does not automatically check stacked targets, so the same workflow was explicitly
