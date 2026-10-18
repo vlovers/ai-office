@@ -124,6 +124,15 @@ it('persists draft edits, rejects invalid anchors and optimistic conflicts, and 
 });
 it('resumes exactly one existing SDK thread, generates a new revision, preserves submitted feedback and allows rejection', async () => {
   const env = await fixture();
+  const pinned = env.store.sessionConfiguration(env.store.task(env.task.id)!.sessionId!);
+  const profile = env.store.requireAgent(env.task.agentId);
+  env.store.editAgent(profile.id, profile.revision, {
+    ...profile,
+    maximumMode: 'read-only',
+    instructions: 'Different instructions',
+    model: 'unavailable-model',
+  });
+  env.store.editAgent(profile.id, profile.revision + 1, { archived: true });
   await env.save();
   const submitted = await env.request();
   expect((await env.request()).continuationTaskId).toBe(submitted.continuationTaskId);
@@ -134,6 +143,7 @@ it('resumes exactly one existing SDK thread, generates a new revision, preserves
   const next = env.store.task(submitted.continuationTaskId!)!;
   expect(next.sessionId).toBe(env.store.task(env.task.id)?.sessionId);
   expect(env.store.sessions()).toHaveLength(1);
+  expect(env.store.taskConfiguration(next.id)).toEqual(pinned);
   expect(await readFile(join(env.workspace.path, 'README.md'), 'utf8')).toContain(
     'Corrected by fixture',
   );

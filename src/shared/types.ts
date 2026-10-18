@@ -1,5 +1,19 @@
 export const AGENT_IDS = ['codex-1', 'codex-2'] as const;
 export type AgentId = (typeof AGENT_IDS)[number];
+export interface ExecutionConfiguration {
+  version: 1;
+  source: 'legacy' | 'profile';
+  agentId: string;
+  profileRevision: number;
+  name: string;
+  role: string;
+  instructions: string;
+  model: string | null;
+  maximumMode: ExecutionMode;
+  executionMode: ExecutionMode;
+  policy: 'v05-isolation-v1';
+  capability: 'codex-sdk-0.162.1';
+}
 export interface AgentProfile {
   id: string;
   provider: 'codex';
@@ -25,6 +39,7 @@ export interface Repository {
   createdAt: string;
 }
 export interface Session {
+  configuration?: ExecutionConfiguration;
   executionMode?: ExecutionMode;
   workspaceId?: string;
   id: string;
@@ -50,6 +65,7 @@ export interface ChangedFile {
   status: string;
 }
 export interface Task {
+  configuration?: ExecutionConfiguration;
   reviewRequest?: { revision: string; sessionId: string; threadId: string };
   executionMode?: ExecutionMode;
   workspaceId?: string;

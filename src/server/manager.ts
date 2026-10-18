@@ -1,3 +1,4 @@
+import { assertConfiguration, configuredPrompt } from './execution-config.js';
 import { validateAgentSettings } from './agents.js';
 import { diffLines } from '../shared/diff.js';
 import type { ReviewComment, ReviewRecord } from '../shared/types.js';
@@ -95,8 +96,13 @@ export class TaskManager {
     return {
       connection: this.auth.view(),
       repositories: this.store.repositories(),
-      tasks: this.store.tasks(),
-      sessions: this.store.sessions(),
+      tasks: this.store
+        .tasks()
+        .map((task) => ({ ...task, configuration: this.store.taskConfiguration(task.id) })),
+      sessions: this.store.sessions().map((session) => ({
+        ...session,
+        configuration: this.store.sessionConfiguration(session.id),
+      })),
       agents,
       agent: agents[0]!,
       concurrency: this.providers.size,
@@ -194,6 +200,8 @@ export class TaskManager {
       throw new AppError(409, 'Queue limit is 100 submitted tasks.');
     const repository = this.store.repository(task.repositoryId);
     if (!repository) throw new AppError(404, 'Repository not found.');
+    if (this.store.requireAgent(task.agentId).archived && !task.reviewRequest)
+      throw new AppError(409, 'Restore the archived agent before submitting new work.');
     const previous = this.validateResume(task, resumeSessionId);
     this.store.enqueue(taskId, this.auth.view().mode, previous?.id);
     this.emit(taskId, 'queue', 'Submitted to the assigned agent queue.');
@@ -231,6 +239,7 @@ export class TaskManager {
       );
     if (previous?.workspaceId && this.store.workspace(previous.workspaceId)?.decision !== 'pending')
       throw new AppError(409, 'Only pending workspaces can be resumed.');
+    if (previous) assertConfiguration(this.store.sessionConfiguration(previous.id), task);
     return previous;
   }
   private async run(
@@ -307,13 +316,37 @@ export class TaskManager {
       const previous = entry.resumeSessionId
         ? this.store.session(entry.resumeSessionId)!
         : undefined;
+      const pinned = assertConfiguration(this.store.taskConfiguration(task.id), task);
+      if (
+        previous &&
+        JSON.stringify(this.store.sessionConfiguration(previous.id)) !== JSON.stringify(pinned)
+      )
+        throw new AppError(
+          409,
+          'Pinned session configuration changed. No replacement session was started.',
+        );
       active.session = previous?.threadId
         ? await provider.resumeSession(
             workingPath,
             previous.threadId,
             this.store.sessionBinding(previous.id),
           )
-        : await provider.startSession(workingPath);
+        : await provider.startSession(workingPath, pinned.model);
+      const effective = { ...pinned, model: active.session.binding?.model ?? null };
+      if (pinned.model !== null && effective.model !== pinned.model)
+        throw new AppError(
+          409,
+          'Provider did not preserve the pinned model. No execution was started.',
+        );
+      if (
+        previous &&
+        JSON.stringify(active.session.binding) !==
+          JSON.stringify(this.store.sessionBinding(previous.id))
+      )
+        throw new AppError(
+          409,
+          'Provider did not preserve the saved connection binding. No execution was started.',
+        );
       const saved =
         previous ??
         this.store.createSession(
@@ -323,7 +356,9 @@ export class TaskManager {
           active.agentId,
           this.store.task(active.taskId)!.executionMode,
           this.store.task(active.taskId)!.workspaceId,
+          effective,
         );
+      this.store.effectiveConfiguration(active.taskId, effective);
       this.store.updateTask(active.taskId, { sessionId: saved.id });
       if (active.stopRequested) {
         state = 'stopped';
@@ -359,7 +394,10 @@ export class TaskManager {
         );
       }
       active.session.executionMode = currentTask.executionMode ?? 'read-only';
-      await provider.executeTask(active.session, this.store.task(active.taskId)!.prompt);
+      await provider.executeTask(
+        active.session,
+        configuredPrompt(effective, this.store.task(active.taskId)!.prompt),
+      );
       if (active.stopRequested) void provider.stopSession(active.session);
       timer = setTimeout(() => {
         failure = 'Task exceeded the 15 minute runtime limit.';
@@ -679,7 +717,7 @@ export class TaskManager {
             },
           });
           this.store.updateTask(next.id, { workspaceId: workspace.id });
-          this.store.enqueue(next.id, this.auth.view().mode, session.id);
+          this.store.enqueue(next.id, this.auth.view().mode, session.id, false);
           submitted = this.store.saveReviewRecord({
             ...record,
             submittedAt: new Date().toISOString(),

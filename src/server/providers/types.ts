@@ -25,7 +25,7 @@ export type ProviderEvent =
 export interface AgentProvider {
   readonly id: string;
   readonly capabilities: { cancellation: boolean; interactiveApprovals: boolean; writes: boolean };
-  startSession(repositoryPath: string): Promise<ProviderSession>;
+  startSession(repositoryPath: string, model?: string | null): Promise<ProviderSession>;
   resumeSession(
     repositoryPath: string,
     threadId: string,

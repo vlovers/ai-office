@@ -122,7 +122,10 @@ export class CodexAuth {
     else this.apiStatus = status;
     this.checkedAt = new Date().toISOString();
   }
-  async prepare(expected?: SessionBinding): Promise<CodexExecution> {
+  async prepare(
+    expected?: SessionBinding,
+    requestedModel?: string | null,
+  ): Promise<CodexExecution> {
     const mode = this.mode; // selection cannot change while the manager owns the agent
     if (expected && expected.mode !== mode)
       throw new AppError(409, 'Choose the saved session’s connection mode before resuming.');
@@ -142,7 +145,9 @@ export class CodexAuth {
       env = { PATH: local.env.PATH ?? '/usr/bin:/bin' };
       if (local.env.HOME) env.HOME = local.env.HOME;
       if (local.env.CODEX_HOME) env.CODEX_HOME = local.env.CODEX_HOME;
-      model = expected?.model ?? local.models.find((item) => item.isDefault)!.model;
+      model = expected
+        ? expected.model
+        : (requestedModel ?? local.models.find((item) => item.isDefault)!.model);
       if (!local.models.some((item) => item.model === model))
         throw new AppError(
           409,
@@ -161,7 +166,7 @@ export class CodexAuth {
         CODEX_HOME: home,
         CODEX_API_KEY: this.options.apiKey!,
       };
-      model = expected?.model ?? null;
+      model = expected ? expected.model : (requestedModel ?? null);
       version = supportedVersion;
     }
     const canonicalExecutable = await realpath(executable);

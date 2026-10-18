@@ -49,8 +49,8 @@ export class CodexProvider implements AgentProvider {
   private cleanupFailures = new Map<string, Error>();
   private prepared = new Map<string, CodexExecution>();
   constructor(private options: CodexProviderOptions) {}
-  async startSession(repositoryPath: string): Promise<ProviderSession> {
-    const execution = await this.options.auth.prepare();
+  async startSession(repositoryPath: string, model?: string | null): Promise<ProviderSession> {
+    const execution = await this.options.auth.prepare(undefined, model);
     const session = {
       id: randomUUID(),
       repositoryPath,
