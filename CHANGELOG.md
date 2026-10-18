@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] — release candidate (not yet tagged)
+## [0.5.0] — Released 2026-10-18
 
 - Code Review Center with directory-grouped file navigation, bounded unified diff lines and accessible feedback controls.
 - SQLite schema 6 preserves revision-bound comments, submitted feedback, iteration outcomes and attributed verification.
