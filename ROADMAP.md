@@ -7,8 +7,9 @@
 - **v0.3.0:** Two fixed Codex slots, persistent queues, read-only sessions, PHOSPHOR OS.
 - **v0.4.0:** Explicitly approved isolated write worktrees, Git diff review, Keep/Reject, conservative cleanup.
 - **v0.5.0:** Code Review Center, revision-bound feedback, Request Changes against the original Codex session, retained review history and safety audit. [Release](https://github.com/vlovers/ai-office/releases/tag/v0.5.0).
+- **v0.6.0:** Agent Studio, persisted Codex profiles, immutable submitted settings and bounded fair scheduling. [Release](https://github.com/vlovers/ai-office/releases/tag/v0.6.0).
 
-## v0.6.0 — Agent Studio (merged into main; release candidate, not tagged)
+## v0.6.0 — Agent Studio (released)
 
 **Goal:** Replace the hard-coded “Codex 01 / Codex 02” identity model with user-managed, persistently configured agent profiles while retaining the existing security and task lifecycle guarantees. v0.6 targets **Codex SDK only**. Provider adapters are a future extension, not a reason to claim unsupported functionality now.
 
@@ -45,8 +46,7 @@
 6. Comprehensive security, browser, native sandbox and release-validation documentation.
 
 Implementation and exact validation: [workflow/migrations](docs/V0_6_AGENT_STUDIO.md),
-[PR stack/security report](docs/V0_6_VALIDATION.md). Checkmarks describe this unmerged
-implementation, not an approved release. Known-pattern secret handling and macOS fixture
+[PR stack/security report](docs/V0_6_VALIDATION.md). Checkmarks describe the shipped implementation, not proof of general host isolation. Known-pattern secret handling and macOS fixture
 validation do not establish arbitrary-content secrecy or Linux runtime safety.
 
 ### v0.6 exit criteria
@@ -57,9 +57,22 @@ validation do not establish arbitrary-content secrecy or Linux runtime safety.
 - Typecheck, unit/integration, HTTP/SSE, browser, native macOS sandbox and build/format CI pass. No claim of Linux sandbox compatibility without real evidence.
 - New functionality is opt-in or backward-compatible; README, architecture, security, changelog, migration notes and release evidence reflect real behavior.
 
-## v0.7.0 — workflow orchestration (proposal)
+## v0.7.0 — controlled workflow handoffs (proposal; not started)
 
-User-approved agent handoffs such as Coder → Reviewer → QA, capability-aware routing, deterministic workflows with checkpoints and resumable approval gates. No autonomous merge/deploy by default.
+**User problem:** moving from implementation to review/verification currently takes manual task selection and context transfer, with risk of running a later agent on the wrong repository revision.
+
+**MVP:** one user-configured, linear workflow (Coder → Reviewer → optional QA), using existing Codex profiles and the current two-worker limit. Explicit per-stage approval remains mandatory. No new unrestricted worker pool or external provider abstraction.
+
+**Incremental PR plan:**
+1. Document current queue, review, revision and workspace ownership contracts; define recovery states and authorization matrix.
+2. Persist a versioned workflow definition and immutable stage input (repository/worktree, HEAD, profile revision, approved scope). Test migrations and restart.
+3. Implement deterministic stage transitions, idempotent retries and fail-closed cancellation; never infer completion from missing events.
+4. Build a checkpoint UI showing pending approval, revision drift, failed/retriable stages and review evidence.
+5. Test adversarial transitions, stop/restart, stale approvals, denied host actions and browser accessibility; document real capability limitations.
+
+**Release gates:** no automatically authorized writes, merges, deploys, command escalation or paid inference. No handoff when prior stage's trusted revision/ownership changed. Keep/Reject and existing review history must remain intact. A feature is not shipped until fixtures, CI and a manual local smoke pass.
+
+**Deferred:** DAG workflows, unlimited parallel agents, autonomous delegation, GitHub publishing, provider adapters and shared hosted access.
 
 ## v0.8.0 — delivery integration (proposal)
 
