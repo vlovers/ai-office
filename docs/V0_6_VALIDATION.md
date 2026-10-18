@@ -1,7 +1,6 @@
-# v0.6 validation and security audit (unreleased)
+# v0.6 validation and security audit (release candidate, not tagged)
 
-This report covers the Agent Studio PR stack based on main `4589e30`. No merge, tag, release,
-paid inference, real login flow or authentication-store access was performed.
+This report originally covered the Agent Studio PR stack based on main `4589e30` before integration. PRs #13–#19 are now merged to main. No tag, release, paid inference, real login flow or authentication-store access was performed.
 
 ## Reviewable delivery and CI
 
@@ -16,8 +15,7 @@ paid inference, real login flow or authentication-store access was performed.
 
 PRs are stacked in dependency order to keep each diff reviewable. The existing main-only PR
 workflow does not automatically check stacked targets, so the same workflow was explicitly
-dispatched on each exact branch. All are left unmerged. Package version remains 0.5.0 until
-an approved release preparation.
+dispatched on each exact branch. All six feature PRs (#13–#18) have now been merged (some onto stacked feature branches); integration PR #19 brought the remaining Studio UI/hardening to main. The package version is updated to 0.6.0 by the separate release-preparation PR, not yet released.
 
 ## Audit findings and fixes
 
@@ -100,6 +98,12 @@ runtime (3 scenarios) and scene rendering (4 tests). Final full-suite evidence s
 these overlapping targeted counts. Screenshots are reproducible with the production Studio
 browser command; [desktop](design/screenshots/v06-agent-studio-desktop.png) and
 [mobile](design/screenshots/v06-agent-studio-mobile.png) contain only synthetic data.
+
+## Post-merge integration evidence
+
+- PR #19 merged the remaining UI and hardening into `main` at `9335343a684a216c840de0f861faae685271b216`.
+- Main push validation [39116645458](https://github.com/vlovers/ai-office/actions/runs/39116645458) completed successfully on this exact commit.
+- No production real-inference, Linux native sandbox validation, or user-data backup/migration rehearsal has been performed as part of release preparation. These require separate explicit checks.
 
 ## Remaining limits
 
