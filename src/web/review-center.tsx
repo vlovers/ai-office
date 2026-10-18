@@ -238,7 +238,11 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
       {error && (
         <p role="alert">
           {error}{' '}
-          <button className="secondary" disabled={busy} onClick={() => void execute(refresh)}>
+          <button
+            className="secondary"
+            disabled={busy || unsaved}
+            onClick={() => void execute(refresh)}
+          >
             Retry review
           </button>
         </p>

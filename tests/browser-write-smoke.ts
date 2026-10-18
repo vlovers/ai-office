@@ -9,6 +9,9 @@ import { sandbox } from './helpers.js';
 import { TaskManager } from '../src/server/manager.js';
 import { Store } from '../src/server/store.js';
 import { Workspaces } from '../src/server/workspaces.js';
+import { CodexAuth } from '../src/server/providers/codex-auth.js';
+import { CodexProvider } from '../src/server/providers/codex.js';
+import { AGENT_IDS } from '../src/shared/types.js';
 const { createApp } = await import(pathToFileURL(resolve('dist/server/app.js')).href);
 const env = await sandbox();
 const root = await realpath(env.root);
@@ -92,6 +95,24 @@ try {
     .getByLabel('Review comment', { exact: true })
     .fill('CORRECT_FIXTURE: clarify the README');
   await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+  // A rejected save must retain the local draft and require explicit discard to reload.
+  await page.route(
+    '**/review/feedback',
+    (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic draft conflict' }),
+      }),
+    { times: 1 },
+  );
+  await page.getByRole('button', { name: 'Save draft feedback' }).click();
+  await expect(review).toContainText('Synthetic draft conflict');
+  await expect(review.getByRole('button', { name: 'Retry review', exact: true })).toBeDisabled();
+  await expect(review).toContainText('CORRECT_FIXTURE: clarify the README');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'Discard unsaved edits and reload' }).click();
+  await expect(review).toContainText('CORRECT_FIXTURE: clarify the README');
   await page.getByRole('button', { name: 'Save draft feedback' }).click();
   await expect(review).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('button', { name: 'Request Changes…' })).toBeEnabled();
@@ -155,7 +176,22 @@ try {
   await app.close();
   store.close();
   store = new Store(join(env.root, 'metadata.sqlite'));
-  manager = new TaskManager(store, env.providers, env.auth, undefined, undefined, service);
+  const restartedAuth = new CodexAuth({
+    dataDir: env.root,
+    inspectLocal: async () => env.inspection,
+  });
+  await restartedAuth.refresh();
+  const restartedProviders = AGENT_IDS.map(
+    (id) => new CodexProvider({ home: join(env.root, 'workers', id), auth: restartedAuth }),
+  );
+  manager = new TaskManager(
+    store,
+    restartedProviders,
+    restartedAuth,
+    undefined,
+    undefined,
+    service,
+  );
   app = await createApp(manager);
   const restartedAddress = await app.listen({ host: '127.0.0.1', port: 0 });
   await page.goto(restartedAddress);
@@ -166,6 +202,16 @@ try {
   await page.getByLabel('Review history').selectOption('');
   await page.getByLabel('Filter files').fill('README');
   await expect(page.getByLabel('Git diff')).toContainText('Corrected by fixture');
+  await page
+    .getByLabel('Review comment', { exact: true })
+    .fill('CORRECT_FIXTURE: continue the original session after restart');
+  await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+  await page.getByRole('button', { name: 'Save draft feedback' }).click();
+  await expect(review).toHaveAttribute('aria-busy', 'false');
+  await page.getByRole('button', { name: 'Request Changes…' }).click();
+  await confirmation.getByRole('button', { name: 'Confirm Request Changes' }).click();
+  await expect(review).toContainText('Review revision 4', { timeout: 15000 });
+  assert.equal(store.sessions().length, 1, 'Restarted feedback created a replacement session');
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     assert.equal(
