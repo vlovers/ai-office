@@ -27,3 +27,5 @@ worktree replacement, advanced HEAD, ignored/nested data preservation, filters, 
 pathspecs, subprocess cleanup and unauthorized filesystem access. See
 [V0_5_VALIDATION.md](V0_5_VALIDATION.md) for exact results and the inherited
 [v0.4 audit](V0_4_SECURITY_AUDIT.md) for the original findings and remaining boundaries.
+
+The follow-up [focused PR #9 audit](V0_5_SECURITY_AUDIT.md) records confirmed cancellation and unsaved-draft recovery defects, their fixes and final validation evidence.

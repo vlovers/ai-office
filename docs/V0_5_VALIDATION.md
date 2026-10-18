@@ -4,22 +4,32 @@ Validated on macOS / Node **24.21.0**, based on main
 `6a735351db43b70471ffcf857f0bed800c35afcc` (tagged v0.4.0).
 The branch uses the unchanged pinned Codex SDK 0.162.1; no new dependencies.
 All repositories, databases, tasks and feedback used below are disposable fixtures.
+The follow-up [focused audit](V0_5_SECURITY_AUDIT.md) records reproduced defects, fixes,
+regressions and the reviewed security boundaries for PR #9.
 No paid model call, real inference, authentication-store read, commit/push/merge by AI Office's
 Codex workers, branch deletion or package publication was performed during validation.
 
-| Command                                   | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run typecheck`                       | Passed.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `npm test`                                | **86 tests, 12 files passed**, 173.78 seconds.                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `npm test -- tests/review-center.test.ts` | **11 review-loop tests passed**, 71.92 seconds, including session identity replacement during asynchronous auth. Also included in the final full suite.                                                                                                                                                                                                                                                                                                           |
-| `npm run test:smoke`                      | **2 HTTP/SSE tests passed**, 6.59 seconds; real SDK with fixture CLI, persistent replay/restart/resume.                                                                                                                                                                                                                                                                                                                                                           |
-| `npm run build`                           | Passed server compilation and production Vite build. No new runtime/UI dependencies.                                                                                                                                                                                                                                                                                                                                                                              |
-| `npm run format:check`                    | Passed Prettier.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `npm run test:sandbox`                    | Passed credential-free native read-only and isolated-write policy checks on macOS.                                                                                                                                                                                                                                                                                                                                                                                |
-| `npm run test:browser`                    | Passed production two-agent dashboard, queue/SSE, cancellation, keyboard navigation, responsive 320–1440 px, reduced motion, auth selection and saved-session fixture resume; no page errors.                                                                                                                                                                                                                                                                     |
-| `npm run test:browser:write`              | Passed production Code Review Center: keyboard file/line navigation, diff selection, draft edits/removal/reload, cancel/focus restoration, exact-target confirmation, feedback submission, same-thread corrections, new revisions, outdated history, sanitized failed resume, full backend/SQLite restart, verification attribution, responsive widths and Keep/Reject after feedback. Preserved rejected history and unchanged primary checkout; no page errors. |
-| `git diff --check`                        | Passed.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `git merge-base HEAD origin/main`         | Matches the base above after fetching main; no unrelated local changes at audit start.                                                                                                                                                                                                                                                                                                                                                                            |
+| Command / coverage                        | Result                                                                                       |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `npm run typecheck`                       | Passed.                                                                                      |
+| `npm test`                                | **87 tests, 12 files passed**, 193.91 seconds.                                               |
+| Review-loop regressions in the full suite | **12 passed**, including pinned-session recovery and cancellation rollback.                  |
+| `npm run test:smoke`                      | **2 passed**, 7.10 seconds; SDK fixture, HTTP/SSE, replay and restart/resume.                |
+| `npm run build`                           | Passed server compilation and production Vite build; no new dependencies.                    |
+| `npm run format:check`                    | Passed Prettier.                                                                             |
+| `npm run test:sandbox`                    | Passed native read-only and isolated-write boundaries on macOS.                              |
+| `npm run test:browser`                    | Passed dashboard, keyboard, queue/SSE, reduced motion and responsive flows; no page errors.  |
+| `npm run test:browser:write`              | Passed complete review workflow, audit regressions and restart continuation; no page errors. |
+| `git diff --check`                        | Passed.                                                                                      |
+| `git merge-base HEAD origin/main`         | Matches the base above; no unrelated changes at audit start.                                 |
+
+The review browser covers file/line navigation, diff selection, comment edit/removal/save/reload,
+injected save-conflict protection and canceled discard, modal cancel/focus restoration and
+exact-target confirmation. It inspects corrected revisions, outdated anchors, sanitized
+failures and verification attribution. After recreating SQLite, manager, auth and providers,
+it resumes the same saved write session through Request Changes and asserts that no
+replacement session was created. Keep and Reject both run after feedback; rejected history
+and the primary checkout are preserved. Responsive checks cover 320–1440 px.
 
 The native probe verifies repository reads, denial of outside/secret/other-worktree reads,
 read-only writes denied, isolated worktree writes allowed, sibling/secret/nested metadata
@@ -32,7 +42,7 @@ New backend tests cover persisted draft edits and conflicts, invalid literal pat
 stale revisions before and after submission, session identity changes including during auth,
 exact-thread reuse, atomic task/queue/history rollback under an injected SQLite failure,
 concurrent/duplicate submissions, sensitive/binary/oversized findings, explicit HTTP
-confirmation, stop followed by Keep, rejection with retained history, and schema-5 migration.
+confirmation, stop followed by Keep, queued cancellation followed by a freshly confirmed retry, rejection with retained history, and schema-5 migration.
 Existing v0.4 suites retain worktree replacement, branch/base advancement, filter/pathspec
 injection, ignored/nested user-data preservation, timeout/cancellation, recovery and
 unauthorized-write coverage. No test was disabled for this milestone.
