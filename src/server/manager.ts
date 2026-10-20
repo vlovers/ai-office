@@ -560,6 +560,11 @@ export class TaskManager {
         this.waiting.delete(active.taskId);
         this.store.updateTask(active.taskId, { state, result, error: failure });
       }
+      if (!requeue && !active.preserveQueue) {
+        // A task ending does not validate its Git result. Block any workflow
+        // handoff until its output is independently inspected and approved.
+        new WorkflowStore(this.store.db).reconcileTerminals();
+      }
       if (cleanupConfirmed) this.active.delete(active.agentId);
       if (!requeue && !active.preserveQueue)
         this.emit(active.taskId, 'state', failure ?? `Task ${state}.`);
