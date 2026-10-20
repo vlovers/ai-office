@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { TaskManager } from './manager.js';
 import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
+import { WorkflowStore } from './workflows.js';
 import { validateRepository } from './repositories.js';
 import type { AgentEvent } from '../shared/types.js';
 
@@ -60,6 +61,16 @@ export async function createApp(manager: TaskManager) {
   });
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/dashboard', async () => manager.dashboard());
+  // Read-only checkpoints: mutation endpoints remain disabled until TaskManager
+  // validates operator approval, workspace identity and the exact Git revision.
+  app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
+  app.get('/api/workflows/:id', async (request) => {
+    const workflow = new WorkflowStore(manager.store.db).get(
+      id.parse((request.params as { id: string }).id),
+    );
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    return workflow;
+  });
   app.post('/api/connection', async (request) => {
     const input = z
       .object({ mode: z.enum(['local-cli-chatgpt', 'api-key']) })
