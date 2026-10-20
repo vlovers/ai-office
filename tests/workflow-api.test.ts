@@ -3,6 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { sandbox } from './helpers.js';
 import { validateRepository } from '../src/server/repositories.js';
 import { createApp } from '../src/server/app.js';
+import { Workspaces } from '../src/server/workspaces.js';
+import { TaskManager } from '../src/server/manager.js';
+import { join } from 'node:path';
 
 it('creates pinned inert workflows from server Git HEAD and exposes inspection only', async () => {
   const env = await sandbox();
@@ -146,6 +149,71 @@ it('creates pinned inert workflows from server Git HEAD and exposes inspection o
     expect(env.store.tasks()).toHaveLength(1);
   } finally {
     if (app) await app.close();
+    await env.cleanup();
+  }
+});
+
+it('submits an approved Coder exactly once through the TaskManager with isolated writes', async () => {
+  const env = await sandbox();
+  const workspaces = new Workspaces({
+    authorizedRoot: env.root,
+    workspaceRoot: join(env.root, 'worktrees'),
+    commands: {},
+    verificationTimeoutMs: 1000,
+    allowHostVerification: false,
+  });
+  const manager = new TaskManager(env.store, env.providers, env.auth, workspaces);
+  let app: Awaited<ReturnType<typeof createApp>> | undefined;
+  try {
+    const repository = env.store.register(await validateRepository(env.repository));
+    execFileSync('/usr/bin/git', ['-C', env.repository, 'add', 'README.md']);
+    execFileSync('/usr/bin/git', [
+      '-C', env.repository, '-c', 'user.name=Fixture',
+      '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'baseline',
+    ]);
+    app = await createApp(manager);
+    const send = (method: 'GET' | 'POST', url: string, payload?: unknown) =>
+      app!.inject({
+        method, url,
+        headers: { host: '127.0.0.1:4310', 'content-type': 'application/json' },
+        ...(payload ? { payload } : {}),
+      });
+    const create = await send('POST', '/api/workflows', {
+      repositoryId: repository.id,
+      coderAgentId: 'codex-1', reviewerAgentId: 'codex-2',
+    });
+    expect(create.statusCode).toBe(201);
+    const workflow = create.json();
+    const url = '/api/workflows/' + workflow.id;
+    const approved = await send('POST', url + '/approve-initial', {
+      version: workflow.version, confirmed: true,
+    });
+    expect(approved.statusCode).toBe(200);
+    const task = env.store.createTask({
+      repositoryId: repository.id, agentId: 'codex-1',
+      title: 'Fixture implementation', prompt: 'Finish fixture task',
+      executionMode: 'write',
+    });
+    const bound = await send('POST', url + '/bind-task', {
+      version: approved.json().version, taskId: task.id, confirmed: true,
+    });
+    expect(bound.statusCode).toBe(200);
+    expect((await send('POST', '/api/tasks/' + task.id + '/start', {
+      confirmedWrite: true,
+    })).statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    const submitted = await send('POST', url + '/submit-initial', {
+      version: bound.json().version, confirmed: true, confirmedWrite: true,
+    });
+    expect(submitted.statusCode).toBe(202);
+    expect(submitted.json().workflow.stages[0].state).toBe('running');
+    expect((await send('POST', url + '/submit-initial', {
+      version: bound.json().version, confirmed: true, confirmedWrite: true,
+    })).statusCode).toBe(409);
+    expect((await send('GET', url)).json().stages[1].state).toBe('pending');
+  } finally {
+    if (app) await app.close();
+    await manager.shutdown();
     await env.cleanup();
   }
 });
