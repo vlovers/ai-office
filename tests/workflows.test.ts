@@ -546,16 +546,22 @@ it('records verified review evidence once and rejects a mismatched workspace', a
     expect(captured.stages[0]?.evidence?.revision).toBe('b'.repeat(64));
     expect(captured.stages[1]?.state).toBe('pending');
     expect(captured.state).toBe('blocked');
-    expect(() => workflows.approveCoderEvidence(created.id, captured.version, task.id,
-      'c'.repeat(64))).toThrow();
-    const released = workflows.approveCoderEvidence(created.id, captured.version, task.id,
-      'b'.repeat(64));
+    expect(() =>
+      workflows.approveCoderEvidence(created.id, captured.version, task.id, 'c'.repeat(64)),
+    ).toThrow();
+    const released = workflows.approveCoderEvidence(
+      created.id,
+      captured.version,
+      task.id,
+      'b'.repeat(64),
+    );
     expect(released.stages[0]?.state).toBe('completed');
     expect(released.stages[1]?.state).toBe('awaiting_approval');
     expect(released.stages[1]?.approvedRevision).toBeNull();
     expect(released.stages[1]?.taskId).toBeNull();
-    expect(() => workflows.approveCoderEvidence(created.id, released.version, task.id,
-      'b'.repeat(64))).toThrow();
+    expect(() =>
+      workflows.approveCoderEvidence(created.id, released.version, task.id, 'b'.repeat(64)),
+    ).toThrow();
     expect(() =>
       workflows.captureCoderEvidence(created.id, captured.version, {
         taskId: task.id,
