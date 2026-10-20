@@ -276,22 +276,16 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     });
     expect(staleEvidence.statusCode).toBe(409);
     expect((await send('GET', url)).json().state).toBe('blocked');
-    await writeFile(join(workspace!.path, 'README.md'), 'Modified by fixture\n');
-    const released = await send('POST', url + '/approve-coder-evidence', {
+    // Restoring the bytes is not sufficient: Review Center also fingerprints
+    // workspace identity and metadata. A stale approval must remain denied.
+    await writeFile(join(workspace!.path, 'README.md'), 'Modified by fixture\\n');
+    const restored = await send('POST', url + '/approve-coder-evidence', {
       version: evidence.json().version,
       confirmed: true,
       revision: fingerprint,
     });
-    expect(released.statusCode).toBe(200);
-    expect(released.json().stages[1].state).toBe('awaiting_approval');
-    const reviewer = await send('POST', url + '/approve-reviewer', {
-      version: released.json().version,
-      confirmed: true,
-      revision: fingerprint,
-    });
-    expect(reviewer.statusCode).toBe(200);
-    expect(reviewer.json().stages[1].state).toBe('ready');
-    expect(reviewer.json().stages[1].taskId).toBeNull();
+    expect(restored.statusCode).toBe(409);
+    expect((await send('GET', url)).json().stages[1].state).toBe('pending');
     expect(env.store.queue()).toEqual([]);
   } finally {
     if (app) await app.close();
