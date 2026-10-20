@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { sandbox } from './helpers.js';
+import { sandbox, until } from './helpers.js';
+import { readFile, writeFile } from 'node:fs/promises';
 import { validateRepository } from '../src/server/repositories.js';
 import { createApp } from '../src/server/app.js';
 import { Workspaces } from '../src/server/workspaces.js';
@@ -173,7 +174,8 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
   let app: Awaited<ReturnType<typeof createApp>> | undefined;
   try {
     const repository = env.store.register(await validateRepository(env.repository));
-    execFileSync('/usr/bin/git', ['-C', env.repository, 'add', 'README.md']);
+    await writeFile(join(env.repository, 'deleted.txt'), 'tracked fixture\n');
+    execFileSync('/usr/bin/git', ['-C', env.repository, 'add', '.']);
     execFileSync('/usr/bin/git', [
       '-C',
       env.repository,
@@ -210,7 +212,7 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
       repositoryId: repository.id,
       agentId: 'codex-1',
       title: 'Fixture implementation',
-      prompt: 'Finish fixture task',
+      prompt: 'WRITE_FIXTURE',
       executionMode: 'write',
     });
     const bound = await send('POST', url + '/bind-task', {
@@ -244,6 +246,38 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
       ).statusCode,
     ).toBe(409);
     expect((await send('GET', url)).json().stages[1].state).toBe('pending');
+    const completed = await until(
+      () => env.store.task(task.id),
+      (value) => value?.state === 'completed' || value?.state === 'failed',
+      15000,
+    );
+    expect(completed?.state).toBe('completed');
+    expect(completed?.workspaceId).toBeTruthy();
+    const blocked = await send('GET', url);
+    expect(blocked.json().state).toBe('blocked');
+    expect(blocked.json().stages[1].state).toBe('pending');
+    expect(await readFile(join(env.repository, 'README.md'), 'utf8')).toBe(
+      '# Disposable example\\n',
+    );
+    const evidence = await send('POST', url + '/capture-coder-evidence', {
+      version: blocked.json().version, confirmed: true,
+    });
+    expect(evidence.statusCode).toBe(200);
+    expect(evidence.json().stages[0].evidence.fileCount).toBe(3);
+    const fingerprint = evidence.json().stages[0].evidence.revision;
+    const released = await send('POST', url + '/approve-coder-evidence', {
+      version: evidence.json().version, confirmed: true, revision: fingerprint,
+    });
+    expect(released.statusCode).toBe(200);
+    expect(released.json().stages[1].state).toBe('awaiting_approval');
+    const reviewer = await send('POST', url + '/approve-reviewer', {
+      version: released.json().version, confirmed: true, revision: fingerprint,
+    });
+    expect(reviewer.statusCode).toBe(200);
+    expect(reviewer.json().stages[1].state).toBe('ready');
+    expect(reviewer.json().stages[1].taskId).toBeNull();
+    expect(env.store.queue()).toEqual([]);
+
   } finally {
     if (app) await app.close();
     await manager.shutdown();
