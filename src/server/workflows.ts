@@ -1,0 +1,180 @@
+import { randomUUID } from 'node:crypto';
+import type { DatabaseSync } from 'node:sqlite';
+import { AppError } from './errors.js';
+
+export type WorkflowStageKind = 'coder' | 'reviewer' | 'qa';
+export type WorkflowStageState =
+  | 'pending' | 'awaiting_approval' | 'ready' | 'running'
+  | 'completed' | 'failed' | 'interrupted' | 'blocked';
+export type WorkflowState = 'active' | 'completed' | 'cancelled' | 'blocked';
+
+export interface WorkflowStage {
+  kind: WorkflowStageKind;
+  agentId: string;
+  agentRevision: number;
+  mode: 'read-only' | 'write';
+  state: WorkflowStageState;
+  taskId: string | null;
+  approvedRevision: string | null;
+  outputRevision: string | null;
+  approvedAt: string | null;
+}
+export interface Workflow {
+  id: string;
+  repositoryId: string;
+  workspaceId: string | null;
+  baselineRevision: string;
+  version: number;
+  state: WorkflowState;
+  stages: WorkflowStage[];
+  createdAt: string;
+  updatedAt: string;
+}
+export interface NewWorkflow {
+  repositoryId: string;
+  workspaceId?: string | null;
+  baselineRevision: string;
+  stages: Array<Pick<WorkflowStage, 'kind' | 'agentId' | 'agentRevision' | 'mode'>>;
+}
+
+/**
+ * Persistent workflow checkpoints. This layer NEVER starts an agent, runs Git,
+ * infers permissions, or grants host verification rights. The caller must
+ * revalidate the workspace identity, revision and operator authorization.
+ */
+export class WorkflowStore {
+  constructor(private readonly db: DatabaseSync) {}
+
+  list(): Workflow[] {
+    return this.db.prepare('SELECT json FROM workflows ORDER BY created_at DESC, id DESC')
+      .all().map((row) => JSON.parse(String(row.json)) as Workflow);
+  }
+
+  get(id: string): Workflow | undefined {
+    const row = this.db.prepare('SELECT json FROM workflows WHERE id=?').get(id);
+    return row ? JSON.parse(String(row.json)) as Workflow : undefined;
+  }
+
+  private require(id: string): Workflow {
+    const workflow = this.get(id);
+    if (!workflow) throw new AppError(404, 'Unknown workflow.');
+    return workflow;
+  }
+
+  create(input: NewWorkflow): Workflow {
+    if (!this.db.prepare('SELECT id FROM repositories WHERE id=?').get(input.repositoryId))
+      throw new AppError(404, 'Unknown repository.');
+    if (!/^[0-9a-f]{40,64}$/i.test(input.baselineRevision))
+      throw new AppError(400, 'Expected an exact Git revision.');
+    if (input.workspaceId) {
+      const workspace = this.db.prepare('SELECT json FROM workspaces WHERE id=?')
+        .get(input.workspaceId);
+      if (!workspace ||
+          (JSON.parse(String(workspace.json)) as { repositoryId: string }).repositoryId !== input.repositoryId)
+        throw new AppError(409, 'Workspace does not belong to repository.');
+    }
+    if (input.stages.length < 2 || input.stages.length > 3 ||
+        input.stages[0]?.kind !== 'coder' ||
+        input.stages[1]?.kind !== 'reviewer' ||
+        (input.stages[2] && input.stages[2].kind !== 'qa') ||
+        input.stages[0]?.mode !== 'write' ||
+        input.stages.slice(1).some(stage => stage.mode !== 'read-only'))
+      throw new AppError(400, 'Expected Coder (write), Reviewer (read-only), optional QA (read-only).');
+    for (const stage of input.stages) {
+      if (!stage.agentId || !Number.isSafeInteger(stage.agentRevision) || stage.agentRevision < 1)
+        throw new AppError(400, 'Invalid agent revision.');
+      const agent = this.db.prepare('SELECT json FROM agent_versions WHERE agent_id=? AND revision=?')
+        .get(stage.agentId, stage.agentRevision);
+      if (!agent) throw new AppError(409, 'Pinned agent revision not found.');
+      const profile = JSON.parse(String(agent.json)) as { maximumMode: string };
+      if (stage.mode === 'write' && profile.maximumMode !== 'write')
+        throw new AppError(403, 'Agent profile does not authorize writes.');
+    }
+    const at = new Date().toISOString();
+    const workflow: Workflow = {
+      id: randomUUID(), repositoryId: input.repositoryId,
+      workspaceId: input.workspaceId ?? null, baselineRevision: input.baselineRevision,
+      version: 0, state: 'active', createdAt: at, updatedAt: at,
+      stages: input.stages.map((stage, index) => ({
+        ...stage, state: index === 0 ? 'awaiting_approval' : 'pending',
+        taskId: null, approvedRevision: null, outputRevision: null, approvedAt: null,
+      })),
+    };
+    this.db.prepare('INSERT INTO workflows(id,repository_id,created_at,json) VALUES (?,?,?,?)')
+      .run(workflow.id, workflow.repositoryId, at, JSON.stringify(workflow));
+    return workflow;
+  }
+
+  /**
+   * Optimistic concurrency prevents duplicate actions from two open tabs.
+   * A revision supplied by a browser is a claim, NOT independently verified
+   * Git evidence; the integration layer must recompute current revision.
+   */
+  transition(id: string, expectedVersion: number, action:
+    | { type: 'approve'; revision: string }
+    | { type: 'start'; taskId: string; revision: string }
+    | { type: 'finish'; taskId: string; revision: string; succeeded: boolean }
+    | { type: 'interrupt'; taskId: string }
+    | { type: 'cancel' }
+  ): Workflow {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.require(id);
+      if (current.version !== expectedVersion) throw new AppError(409, 'Stale workflow version.');
+      if (current.state !== 'active') throw new AppError(409, 'Workflow is no longer active.');
+      const next: Workflow = structuredClone(current);
+      if (action.type === 'cancel') {
+        if (next.stages.some(s => s.state === 'running'))
+          throw new AppError(409, 'Stop running task with TaskManager before cancelling workflow.');
+        next.state = 'cancelled';
+      } else {
+        const stage = next.stages.find(s =>
+          action.type === 'approve' ? s.state === 'awaiting_approval' :
+          action.type === 'start' ? s.state === 'ready' :
+          s.state === 'running' && s.taskId === action.taskId);
+        if (!stage) throw new AppError(409, 'No stage available for this action.');
+        if (action.type === 'approve') {
+          const predecessor = next.stages[next.stages.indexOf(stage) - 1];
+          const expected = predecessor?.outputRevision ?? next.baselineRevision;
+          if (action.revision !== expected)
+            throw new AppError(409, 'Stage approval revision mismatch.');
+          stage.approvedRevision = action.revision;
+          stage.approvedAt = new Date().toISOString();
+          stage.state = 'ready';
+        } else if (action.type === 'start') {
+          if (!action.taskId || next.stages.some(s => s.taskId === action.taskId) ||
+              action.revision !== stage.approvedRevision)
+            throw new AppError(409, 'Task or pinned revision mismatch.');
+          stage.taskId = action.taskId;
+          stage.state = 'running';
+        } else if (action.type === 'interrupt') {
+          stage.state = 'interrupted';
+          next.state = 'blocked';
+        } else {
+          if (action.revision.length < 40 || !/^[0-9a-f]{40,64}$/i.test(action.revision))
+            throw new AppError(400, 'Invalid output revision.');
+          if (!action.succeeded) {
+            stage.state = 'failed';
+            next.state = 'blocked';
+          } else {
+            stage.state = 'completed';
+            stage.outputRevision = action.revision;
+            const following = next.stages[next.stages.indexOf(stage) + 1];
+            if (following) following.state = 'awaiting_approval';
+            else next.state = 'completed';
+          }
+        }
+      }
+      next.version++;
+      next.updatedAt = new Date().toISOString();
+      const updated = this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+        .run(JSON.stringify(next), id);
+      if (Number(updated.changes) !== 1) throw new AppError(409, 'Workflow disappeared.');
+      this.db.exec('COMMIT');
+      return next;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+}
