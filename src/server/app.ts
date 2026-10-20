@@ -283,6 +283,38 @@ export async function createApp(manager: TaskManager) {
       throw new AppError(409, 'Coder output changed. Capture fresh evidence before approval.');
     return workflows.approveCoderEvidence(workflowId, input.version, task.id, fresh.revision);
   });
+  app.post('/api/workflows/:id/approve-reviewer', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z.object({
+      version: z.number().int().nonnegative(),
+      revision: z.string().regex(/^[0-9a-f]{64}$/i),
+      confirmed: z.literal(true),
+    }).strict().parse(request.body);
+    const workflows = new WorkflowStore(manager.store.db);
+    const workflow = workflows.get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (!workflow || workflow.state !== 'active' ||
+        coder?.state !== 'completed' || !coder.taskId || !coder.evidence ||
+        reviewer?.state !== 'awaiting_approval' ||
+        workflow.version !== input.version ||
+        input.revision !== coder.evidence.revision)
+      throw new AppError(409, 'Reviewer handoff is stale or not available.');
+    const task = manager.store.task(coder.taskId);
+    if (!task || task.workspaceId !== coder.evidence.workspaceId)
+      throw new AppError(409, 'Coder workspace is no longer bound.');
+    // Revalidate Review Center's content fingerprint while holding its lease.
+    const review = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
+    if (review.revision !== coder.evidence.revision ||
+        review.workspace.id !== coder.evidence.workspaceId ||
+        review.files.length !== coder.evidence.fileCount)
+      throw new AppError(409, 'Coder content changed. Reviewer handoff denied.');
+    // Approval only, not a model run. A verified read-only workspace runner
+    // is required before allowing Reviewer to be submitted.
+    return workflows.transition(workflowId, input.version, {
+      type: 'approve', revision: review.revision,
+    });
+  });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
   app.get('/api/workflows/:id', async (request) => {
     const workflow = new WorkflowStore(manager.store.db).get(
