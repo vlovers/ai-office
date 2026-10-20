@@ -62,3 +62,7 @@ Before the restored queue dispatcher starts, schema initialization reconciles wo
 ## Explicit Coder review approval
 
 `POST /api/workflows/:id/approve-coder-evidence` accepts `{version, confirmed:true, revision}`. The API re-runs the existing Review Center workspace validation, lease acquisition, diff snapshot and content-revision calculation and refuses stale or mismatched evidence. The stored Coder stage becomes completed and the Reviewer enters `awaiting_approval`; no task is created, no worktree is mounted for Reviewer, and no model is run. The content revision is a Review Center fingerprint, **not** a Git commit SHA. A separate verified read-only handoff and explicit Reviewer authorization still must be implemented and tested.
+
+## Downstream execution fence
+
+Reviewer/QA submission is explicitly forbidden by both `TaskManager.start` and `WorkflowStore.enqueueApprovedTask` until a leased immutable read-only snapshot runner is available. Approving a Reviewer checkpoint is **not** execution authority. The approved Review Center fingerprint is not an ordinary Git commit, so running against the registered repository HEAD would inspect different content. Keep both checks when the snapshot runner is introduced; replace them only alongside a disposable-repository E2E demonstration and capability audit.
