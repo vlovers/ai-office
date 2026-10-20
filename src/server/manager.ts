@@ -245,6 +245,11 @@ export class TaskManager {
     if (workflow) {
       if (resumeSessionId || !bound || workflow.id !== bound.id)
         throw new AppError(409, 'Invalid workflow submission.');
+      // Reviewer/QA must never silently run against the repository HEAD.
+      // Their input is a reviewed worktree content fingerprint, not a commit.
+      // A dedicated leased, read-only snapshot runner is required first.
+      if (bound.stages[0]?.taskId !== taskId || bound.stages[0]?.kind !== 'coder')
+        throw new AppError(409, 'Reviewer/QA execution requires verified read-only handoff.');
       workflows.enqueueApprovedTask(
         this.store,
         workflow.id,
