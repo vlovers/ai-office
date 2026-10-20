@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
+import { sandbox } from './helpers.js';
+import { TaskManager } from '../src/server/manager.js';
 
 it('pins stages, requires explicit approval and survives restarts', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'ai-office-workflow-'));
@@ -581,5 +583,54 @@ it('records verified review evidence once and rejects a mismatched workspace', a
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('a fresh TaskManager cannot dispatch a workflow queue left by a crashed process', async () => {
+  const env = await sandbox();
+  let restarted: Store | undefined;
+  let manager: TaskManager | undefined;
+  try {
+    const repo = env.store.register({
+      path: env.repository,
+      gitDir: join(env.repository, '.git'),
+      name: 'recovery fixture',
+    });
+    const coder = env.store.agent('codex-1')!;
+    const workflows = new WorkflowStore(env.store.db);
+    const created = workflows.create({
+      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      stages: [
+        { kind: 'coder', agentId: coder.id, agentRevision: coder.revision, mode: 'write' },
+        { kind: 'reviewer', agentId: 'codex-2',
+          agentRevision: env.store.agent('codex-2')!.revision, mode: 'read-only' },
+      ],
+    });
+    const approved = workflows.transition(created.id, created.version, {
+      type: 'approve', revision: 'a'.repeat(40),
+    });
+    const task = env.store.createTask({
+      repositoryId: repo.id, agentId: coder.id,
+      title: 'Crash before worker claim', prompt: 'WRITE_FIXTURE',
+      executionMode: 'write',
+    });
+    const bound = workflows.bindApprovedTask(created.id, approved.version, task.id);
+    workflows.enqueueApprovedTask(env.store, created.id, bound.version,
+      task.id, 'local-cli-chatgpt', 'a'.repeat(40));
+    expect(env.store.queue()).toHaveLength(1);
+    // Simulate process restart without orderly shutdown: the original
+    // connection is deliberately left open, with no worker ever dispatched.
+    restarted = new Store(join(env.root, 'metadata.sqlite'));
+    manager = new TaskManager(restarted, env.providers, env.auth);
+    expect(restarted.queue()).toEqual([]);
+    expect(restarted.task(task.id)?.state).toBe('interrupted');
+    expect(new WorkflowStore(restarted.db).get(created.id)?.state).toBe('blocked');
+    expect(manager.dashboard().agents.every((agent) => agent.state !== 'running')).toBe(true);
+    expect(() => manager!.start(task.id, undefined, true)).toThrow();
+    expect(restarted.queue()).toEqual([]);
+  } finally {
+    if (manager) await manager.shutdown();
+    restarted?.close();
+    await env.cleanup();
   }
 });
