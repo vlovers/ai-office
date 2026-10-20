@@ -145,24 +145,34 @@ export class WorkflowStore {
       if (current.state !== 'active' || current.version !== expectedVersion)
         throw new AppError(409, 'Workflow has changed or is not active.');
       const next = structuredClone(current);
-      const stage = next.stages.find(s => s.state === 'ready');
-      if (!stage || !stage.approvedRevision || next.stages.some(s => s.taskId === taskId))
+      const stage = next.stages.find((s) => s.state === 'ready');
+      if (!stage || !stage.approvedRevision || next.stages.some((s) => s.taskId === taskId))
         throw new AppError(409, 'No uniquely approved stage available.');
       const row = this.db.prepare('SELECT json FROM tasks WHERE id=?').get(taskId);
       if (!row) throw new AppError(404, 'Task not found.');
       const task = JSON.parse(String(row.json)) as {
-        repositoryId: string; agentId: string; executionMode?: string;
-        state: string; sessionId: string | null;
+        repositoryId: string;
+        agentId: string;
+        executionMode?: string;
+        state: string;
+        sessionId: string | null;
       };
-      if (task.repositoryId !== next.repositoryId ||
-          task.agentId !== stage.agentId ||
-          (task.executionMode ?? 'read-only') !== stage.mode ||
-          task.state !== 'queued' || task.sessionId)
+      if (
+        task.repositoryId !== next.repositoryId ||
+        task.agentId !== stage.agentId ||
+        (task.executionMode ?? 'read-only') !== stage.mode ||
+        task.state !== 'queued' ||
+        task.sessionId
+      )
         throw new AppError(409, 'Task does not match the approved stage.');
       if (this.db.prepare('SELECT 1 FROM task_queue WHERE task_id=?').get(taskId))
         throw new AppError(409, 'Already submitted tasks cannot be rebound.');
-      if (this.list().some(workflow =>
-        workflow.id !== id && workflow.stages.some(candidate => candidate.taskId === taskId)))
+      if (
+        this.list().some(
+          (workflow) =>
+            workflow.id !== id && workflow.stages.some((candidate) => candidate.taskId === taskId),
+        )
+      )
         throw new AppError(409, 'Task already belongs to another workflow.');
       stage.taskId = taskId;
       // Bound is intentionally NOT running: TaskManager still needs explicit
@@ -170,8 +180,7 @@ export class WorkflowStore {
       stage.state = 'ready';
       next.version++;
       next.updatedAt = new Date().toISOString();
-      this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
-        .run(JSON.stringify(next), id);
+      this.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);
       this.db.exec('COMMIT');
       return next;
     } catch (error) {
