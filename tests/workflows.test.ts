@@ -558,6 +558,13 @@ it('records verified review evidence once and rejects a mismatched workspace', a
     expect(released.stages[0]?.state).toBe('completed');
     expect(released.stages[1]?.state).toBe('awaiting_approval');
     expect(released.stages[1]?.approvedRevision).toBeNull();
+    const reviewerApproved = workflows.transition(created.id, released.version, {
+      type: 'approve', revision: 'b'.repeat(64),
+    });
+    expect(reviewerApproved.stages[1]?.state).toBe('ready');
+    expect(reviewerApproved.stages[1]?.mode).toBe('read-only');
+    expect(reviewerApproved.stages[1]?.taskId).toBeNull();
+    expect(store.queue()).toEqual([]);
     expect(released.stages[1]?.taskId).toBeNull();
     expect(() =>
       workflows.approveCoderEvidence(created.id, released.version, task.id, 'b'.repeat(64)),
