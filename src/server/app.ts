@@ -108,10 +108,13 @@ export async function createApp(manager: TaskManager) {
   });
   app.post('/api/workflows/:id/approve-initial', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
-    const input = z.object({
-      version: z.number().int().nonnegative(),
-      confirmed: z.literal(true),
-    }).strict().parse(request.body);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
     const workflows = new WorkflowStore(manager.store.db);
     const workflow = workflows.get(workflowId);
     if (!workflow) throw new AppError(404, 'Workflow not found.');
@@ -123,26 +126,37 @@ export async function createApp(manager: TaskManager) {
     const head = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
     if (head !== workflow.baselineRevision)
       throw new AppError(409, 'Repository revision changed. Approval denied.');
-    const changes = await git(repository.path, ['status', '--porcelain=v1', '--untracked-files=all']);
+    const changes = await git(repository.path, [
+      'status',
+      '--porcelain=v1',
+      '--untracked-files=all',
+    ]);
     if (changes.trim())
       throw new AppError(409, 'Repository has uncommitted changes. Approval denied.');
     // This only changes durable state. It never submits a task or grants write authority.
     return workflows.transition(workflowId, input.version, {
-      type: 'approve', revision: head,
+      type: 'approve',
+      revision: head,
     });
   });
   app.post('/api/workflows/:id/bind-task', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
-    const input = z.object({
-      version: z.number().int().nonnegative(),
-      taskId: id,
-      confirmed: z.literal(true),
-    }).strict().parse(request.body);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        taskId: id,
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
     const workflows = new WorkflowStore(manager.store.db);
     const workflow = workflows.get(workflowId);
     if (!workflow) throw new AppError(404, 'Workflow not found.');
-    if (workflow.state !== 'active' || workflow.stages[0]?.state !== 'ready' ||
-        workflow.stages[0]?.taskId !== null)
+    if (
+      workflow.state !== 'active' ||
+      workflow.stages[0]?.state !== 'ready' ||
+      workflow.stages[0]?.taskId !== null
+    )
       throw new AppError(409, 'Initial stage is not available for task binding.');
     const repository = manager.store.repository(workflow.repositoryId);
     if (!repository) throw new AppError(409, 'Repository no longer exists.');
@@ -150,9 +164,12 @@ export async function createApp(manager: TaskManager) {
     const head = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
     if (head !== workflow.stages[0].approvedRevision)
       throw new AppError(409, 'Approved Git revision is stale.');
-    const changes = await git(repository.path, ['status', '--porcelain=v1', '--untracked-files=all']);
-    if (changes.trim())
-      throw new AppError(409, 'Repository has uncommitted changes.');
+    const changes = await git(repository.path, [
+      'status',
+      '--porcelain=v1',
+      '--untracked-files=all',
+    ]);
+    if (changes.trim()) throw new AppError(409, 'Repository has uncommitted changes.');
     // Task binding is inert: TaskManager alone owns queue submission and writes.
     return workflows.bindApprovedTask(workflowId, input.version, input.taskId);
   });
