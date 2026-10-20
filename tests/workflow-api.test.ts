@@ -278,7 +278,7 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect((await send('GET', url)).json().state).toBe('blocked');
     // Restoring the bytes is not sufficient: Review Center also fingerprints
     // workspace identity and metadata. A stale approval must remain denied.
-    await writeFile(join(workspace!.path, 'README.md'), 'Modified by fixture\\n');
+    await writeFile(join(workspace!.path, 'README.md'), 'Modified by fixture\n');
     const restored = await send('POST', url + '/approve-coder-evidence', {
       version: evidence.json().version,
       confirmed: true,
