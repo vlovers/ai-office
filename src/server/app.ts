@@ -106,6 +106,31 @@ export async function createApp(manager: TaskManager) {
       }),
     );
   });
+  app.post('/api/workflows/:id/approve-initial', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z.object({
+      version: z.number().int().nonnegative(),
+      confirmed: z.literal(true),
+    }).strict().parse(request.body);
+    const workflows = new WorkflowStore(manager.store.db);
+    const workflow = workflows.get(workflowId);
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    if (workflow.state !== 'active' || workflow.stages[0]?.state !== 'awaiting_approval')
+      throw new AppError(409, 'Initial stage is not awaiting approval.');
+    const repository = manager.store.repository(workflow.repositoryId);
+    if (!repository) throw new AppError(409, 'Workflow repository no longer exists.');
+    await revalidateRepository(repository);
+    const head = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
+    if (head !== workflow.baselineRevision)
+      throw new AppError(409, 'Repository revision changed. Approval denied.');
+    const changes = await git(repository.path, ['status', '--porcelain=v1', '--untracked-files=all']);
+    if (changes.trim())
+      throw new AppError(409, 'Repository has uncommitted changes. Approval denied.');
+    // This only changes durable state. It never submits a task or grants write authority.
+    return workflows.transition(workflowId, input.version, {
+      type: 'approve', revision: head,
+    });
+  });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
   app.get('/api/workflows/:id', async (request) => {
     const workflow = new WorkflowStore(manager.store.db).get(
