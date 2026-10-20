@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { AppError } from './errors.js';
+import type { Store } from './store.js';
+import type { AuthMode } from '../shared/types.js';
 
 export type WorkflowStageKind = 'coder' | 'reviewer' | 'qa';
 export type WorkflowStageState =
@@ -181,6 +183,50 @@ export class WorkflowStore {
       next.version++;
       next.updatedAt = new Date().toISOString();
       this.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);
+      this.db.exec('COMMIT');
+      return next;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  /**
+   * Make queue submission and stage transition a single SQLite transaction.
+   * Call only after TaskManager has validated the exact same task and provider.
+   */
+  enqueueApprovedTask(
+    store: Store, id: string, expectedVersion: number, taskId: string,
+    mode: AuthMode, confirmedRevision: string,
+  ): Workflow {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.require(id);
+      if (current.version !== expectedVersion || current.state !== 'active')
+        throw new AppError(409, 'Workflow is stale.');
+      const next = structuredClone(current);
+      const stage = next.stages.find(s => s.state === 'ready' && s.taskId === taskId);
+      if (!stage || !stage.approvedRevision || stage.approvedRevision !== confirmedRevision)
+        throw new AppError(409, 'Task is not bound to this approved revision.');
+      if (this.list().some(w => w.id !== id && w.stages.some(s => s.taskId === taskId)))
+        throw new AppError(409, 'Task already belongs to another workflow.');
+      const task = store.task(taskId);
+      if (!task || task.state !== 'queued' || task.repositoryId !== current.repositoryId ||
+          task.agentId !== stage.agentId || (task.executionMode ?? 'read-only') !== stage.mode)
+        throw new AppError(409, 'Bound task changed.');
+      const profile = store.agentVersion(stage.agentId, stage.agentRevision);
+      if (!profile || (stage.mode === 'write' && profile.maximumMode !== 'write'))
+        throw new AppError(403, 'Pinned agent authorization missing.');
+      store.enqueue(taskId, mode, undefined, false);
+      const snapshot = store.taskConfiguration(taskId);
+      if (!snapshot || snapshot.profileRevision !== stage.agentRevision ||
+          snapshot.agentId !== stage.agentId || snapshot.executionMode !== stage.mode)
+        throw new AppError(409, 'Execution configuration differs from approved profile.');
+      stage.state = 'running'; // includes waiting-in-queue; recover fail-closed after crash
+      next.version++;
+      next.updatedAt = new Date().toISOString();
+      this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+        .run(JSON.stringify(next), id);
       this.db.exec('COMMIT');
       return next;
     } catch (error) {
