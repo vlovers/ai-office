@@ -371,3 +371,46 @@ it('submits a bound workflow stage atomically and refuses duplicate submission',
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('never promotes a completed Coder task without verified output evidence', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-terminal-'));
+  const store = new Store(join(directory, 'metadata.sqlite'));
+  try {
+    const repo = store.register({
+      path: '/disposable/terminal', gitDir: '/disposable/terminal/.git',
+      name: 'fixture',
+    });
+    const coder = store.agent('codex-1')!;
+    store.db.prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
+      .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, 1);
+    const service = new WorkflowStore(store.db);
+    const initial = service.create({
+      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      stages: [
+        { kind: 'coder', agentId: 'codex-1', agentRevision: 1, mode: 'write' },
+        { kind: 'reviewer', agentId: 'codex-2', agentRevision: 1, mode: 'read-only' },
+      ],
+    });
+    const approved = service.transition(initial.id, 0, {
+      type: 'approve', revision: 'a'.repeat(40),
+    });
+    const task = store.createTask({
+      repositoryId: repo.id, agentId: 'codex-1', executionMode: 'write',
+      title: 'Coder', prompt: 'fixture',
+    });
+    const running = service.transition(initial.id, approved.version, {
+      type: 'start', taskId: task.id, revision: 'a'.repeat(40),
+    });
+    store.updateTask(task.id, { state: 'completed' });
+    expect(service.reconcileTerminals()).toBe(1);
+    const blocked = service.get(initial.id)!;
+    expect(blocked.state).toBe('blocked');
+    expect(blocked.stages[0]?.state).toBe('blocked');
+    expect(blocked.stages[1]?.state).toBe('pending');
+    expect(blocked.version).toBe(running.version + 1);
+    expect(service.reconcileTerminals()).toBe(0);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
