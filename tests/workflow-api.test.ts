@@ -123,6 +123,20 @@ it('creates pinned inert workflows from server Git HEAD and exposes inspection o
         })
       ).statusCode,
     ).toBe(409);
+    // A previously approved/bound task must also reject dispatch after Git
+    // advances. No Codex session, queue entry or workspace may be created.
+    const submit = await send('POST', '/api/workflows/' + workflow.id + '/submit-initial', {
+      version: bound.json().version,
+      confirmed: true,
+      confirmedWrite: true,
+    });
+    expect(submit.statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    expect(env.store.task(coderTask.id)?.state).toBe('queued');
+    expect((await send('GET', '/api/workflows/' + workflow.id)).json().stages[0].state).toBe(
+      'ready',
+    );
+
     const unknown = await send('POST', '/api/workflows', {
       repositoryId: repository.id,
       coderAgentId: 'missing',
