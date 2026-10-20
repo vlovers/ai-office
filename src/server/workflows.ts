@@ -106,6 +106,44 @@ export class WorkflowStore {
   }
 
   /**
+   * Reconcile after Store has recovered interrupted tasks. A running stage
+   * may not be dispatched again after process death, even when its task
+   * still exists in the persistent queue. Preserve evidence for inspection.
+   */
+  recoverInterrupted(): number {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      let changed = 0;
+      for (const current of this.list()) {
+        if (current.state !== 'active') continue;
+        const running = current.stages.filter(stage => stage.state === 'running');
+        if (!running.length) continue;
+        const next = structuredClone(current);
+        for (const stage of next.stages) {
+          if (stage.state !== 'running') continue;
+          const row = stage.taskId
+            ? this.db.prepare('SELECT state FROM tasks WHERE id=?').get(stage.taskId)
+            : undefined;
+          if (row?.state === 'running' || row?.state === 'stopping') continue;
+          stage.state = 'interrupted';
+          next.state = 'blocked';
+        }
+        if (next.state !== 'blocked') continue;
+        next.version++;
+        next.updatedAt = new Date().toISOString();
+        this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+          .run(JSON.stringify(next), next.id);
+        changed++;
+      }
+      this.db.exec('COMMIT');
+      return changed;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  /**
    * Optimistic concurrency prevents duplicate actions from two open tabs.
    * A revision supplied by a browser is a claim, NOT independently verified
    * Git evidence; the integration layer must recompute current revision.
