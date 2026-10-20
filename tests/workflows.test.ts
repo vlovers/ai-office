@@ -599,24 +599,38 @@ it('a fresh TaskManager cannot dispatch a workflow queue left by a crashed proce
     const coder = env.store.agent('codex-1')!;
     const workflows = new WorkflowStore(env.store.db);
     const created = workflows.create({
-      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      repositoryId: repo.id,
+      baselineRevision: 'a'.repeat(40),
       stages: [
         { kind: 'coder', agentId: coder.id, agentRevision: coder.revision, mode: 'write' },
-        { kind: 'reviewer', agentId: 'codex-2',
-          agentRevision: env.store.agent('codex-2')!.revision, mode: 'read-only' },
+        {
+          kind: 'reviewer',
+          agentId: 'codex-2',
+          agentRevision: env.store.agent('codex-2')!.revision,
+          mode: 'read-only',
+        },
       ],
     });
     const approved = workflows.transition(created.id, created.version, {
-      type: 'approve', revision: 'a'.repeat(40),
+      type: 'approve',
+      revision: 'a'.repeat(40),
     });
     const task = env.store.createTask({
-      repositoryId: repo.id, agentId: coder.id,
-      title: 'Crash before worker claim', prompt: 'WRITE_FIXTURE',
+      repositoryId: repo.id,
+      agentId: coder.id,
+      title: 'Crash before worker claim',
+      prompt: 'WRITE_FIXTURE',
       executionMode: 'write',
     });
     const bound = workflows.bindApprovedTask(created.id, approved.version, task.id);
-    workflows.enqueueApprovedTask(env.store, created.id, bound.version,
-      task.id, 'local-cli-chatgpt', 'a'.repeat(40));
+    workflows.enqueueApprovedTask(
+      env.store,
+      created.id,
+      bound.version,
+      task.id,
+      'local-cli-chatgpt',
+      'a'.repeat(40),
+    );
     expect(env.store.queue()).toHaveLength(1);
     // Simulate process restart without orderly shutdown: the original
     // connection is deliberately left open, with no worker ever dispatched.
