@@ -68,6 +68,21 @@ it('creates pinned inert workflows from server Git HEAD and exposes inspection o
       .toBe(409);
     expect(env.store.queue()).toEqual([]);
     expect(env.store.tasks()).toEqual([]);
+    const coderTask = env.store.createTask({
+      repositoryId: repository.id, agentId: 'codex-1',
+      executionMode: 'write', title: 'Coder implementation', prompt: 'Implement example',
+    });
+    const bindingUrl = '/api/workflows/' + workflow.id + '/bind-task';
+    const bound = await send('POST', bindingUrl, {
+      version: approved.json().version, taskId: coderTask.id, confirmed: true,
+    });
+    expect(bound.statusCode).toBe(200);
+    expect(bound.json().stages[0].taskId).toBe(coderTask.id);
+    expect((await send('POST', bindingUrl, {
+      version: approved.json().version, taskId: coderTask.id, confirmed: true,
+    })).statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    expect(env.store.task(coderTask.id)?.state).toBe('queued');
     // A new workflow bound to the old SHA cannot be approved after a new commit.
     const stale = await send('POST', '/api/workflows', {
       repositoryId: repository.id, coderAgentId: 'codex-1', reviewerAgentId: 'codex-2',
@@ -84,7 +99,7 @@ it('creates pinned inert workflows from server Git HEAD and exposes inspection o
       reviewerAgentId: 'codex-2',
     });
     expect(unknown.statusCode).toBe(400);
-    expect(env.store.tasks()).toEqual([]);
+    expect(env.store.tasks()).toHaveLength(1);
   } finally {
     if (app) await app.close();
     await env.cleanup();
