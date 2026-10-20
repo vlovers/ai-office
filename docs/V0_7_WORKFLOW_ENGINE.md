@@ -54,3 +54,7 @@ The TaskManager finalizer calls `WorkflowStore.reconcileTerminals()` after persi
 ## Restart queue invariant
 
 Before the restored queue dispatcher starts, schema initialization reconciles workflow-linked stages. A submitted workflow task still in `queued` state is changed to `interrupted` and its `task_queue` entry is deleted in the same SQLite transaction that blocks the workflow. This prevents pre-approved tasks from silently executing after a backend crash. Do not remove this constraint when introducing auto-handoff or retry policies. A new operator decision and fresh repository revision verification are required.
+
+## Coder output evidence capture
+
+`POST /api/workflows/:id/capture-coder-evidence` requires `{version, confirmed:true}` after a completed Coder task has been reconciled to a blocked workflow. It calls the existing Review Center path with its workspace identity validation, repository lease and exact 64-character content revision. It persists an immutable `{workspaceId, revision, fileCount, recordedAt}` alongside the Coder stage. Mismatched task, workspace, revision or repeated capture is rejected. Recording evidence **does not** approve the diff or unlock the Reviewer: that needs an explicit human decision and a robust read-only snapshot handoff.
