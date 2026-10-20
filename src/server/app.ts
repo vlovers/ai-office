@@ -7,7 +7,7 @@ import type { TaskManager } from './manager.js';
 import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
 import { WorkflowStore } from './workflows.js';
-import { validateRepository } from './repositories.js';
+import { git, revalidateRepository, validateRepository } from './repositories.js';
 import type { AgentEvent } from '../shared/types.js';
 
 const id = z.string().uuid();
@@ -61,8 +61,39 @@ export async function createApp(manager: TaskManager) {
   });
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/dashboard', async () => manager.dashboard());
-  // Read-only checkpoints: mutation endpoints remain disabled until TaskManager
-  // validates operator approval, workspace identity and the exact Git revision.
+  // Workflow creation persists only inert stage definitions; executable mutation
+  // actions remain disabled until TaskManager enforces approvals and leases.
+  app.post('/api/workflows', async (request, reply) => {
+    const input = z.object({
+      repositoryId: id,
+      coderAgentId: agentIdSchema,
+      reviewerAgentId: agentIdSchema,
+      qaAgentId: agentIdSchema.optional(),
+    }).strict().parse(request.body);
+    const repository = manager.store.repository(input.repositoryId);
+    if (!repository) throw new AppError(404, 'Repository not found.');
+    await revalidateRepository(repository);
+    // Use the server-observed HEAD, not a browser-supplied revision.
+    const revision = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
+    if (!/^[0-9a-f]{40,64}$/i.test(revision))
+      throw new AppError(409, 'Repository has no verifiable Git HEAD.');
+    const profiles = [
+      { kind: 'coder' as const, id: input.coderAgentId, mode: 'write' as const },
+      { kind: 'reviewer' as const, id: input.reviewerAgentId, mode: 'read-only' as const },
+      ...(input.qaAgentId
+        ? [{ kind: 'qa' as const, id: input.qaAgentId, mode: 'read-only' as const }]
+        : []),
+    ];
+    const stages = profiles.map(profile => {
+      const agent = manager.store.requireAgent(profile.id);
+      if (agent.archived)
+        throw new AppError(409, 'Restore archived agent before creating workflow.');
+      return { kind: profile.kind, agentId: agent.id, agentRevision: agent.revision, mode: profile.mode };
+    });
+    return reply.code(201).send(new WorkflowStore(manager.store.db).create({
+      repositoryId: repository.id, baselineRevision: revision, stages,
+    }));
+  });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
   app.get('/api/workflows/:id', async (request) => {
     const workflow = new WorkflowStore(manager.store.db).get(
