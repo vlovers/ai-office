@@ -161,8 +161,8 @@ export class WorkflowStore {
         throw new AppError(409, 'Task does not match the approved stage.');
       if (this.db.prepare('SELECT 1 FROM task_queue WHERE task_id=?').get(taskId))
         throw new AppError(409, 'Already submitted tasks cannot be rebound.');
-      if (this.db.prepare('SELECT 1 FROM workflows WHERE id<>? AND json LIKE ?').get(
-        id, '%"taskId":"' + taskId + '"%'))
+      if (this.list().some(workflow =>
+        workflow.id !== id && workflow.stages.some(candidate => candidate.taskId === taskId)))
         throw new AppError(409, 'Task already belongs to another workflow.');
       stage.taskId = taskId;
       // Bound is intentionally NOT running: TaskManager still needs explicit
@@ -264,7 +264,7 @@ export class WorkflowStore {
         } else if (action.type === 'start') {
           if (
             !action.taskId ||
-            next.stages.some((s) => s.taskId === action.taskId) ||
+            stage.taskId !== action.taskId ||
             action.revision !== stage.approvedRevision
           )
             throw new AppError(409, 'Task or pinned revision mismatch.');
