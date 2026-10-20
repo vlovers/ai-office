@@ -40,3 +40,9 @@ A fresh Coder task must not launch before explicit approval, Reviewer must obser
 ## Inert task binding
 
 `POST /api/workflows/:id/bind-task` accepts `{version, taskId, confirmed:true}` for the approved initial Coder stage. The server revalidates the repository, current Git HEAD and clean checkout, then atomically associates an existing unsubmitted task with the stage. It does **not** enqueue, execute or grant host permissions. Downstream handoffs remain disabled pending review/worktree revision validation and TaskManager integration.
+
+## Initial execution submission (experimental)
+
+After initial approval and task binding, `POST /api/workflows/:id/submit-initial` requires `{version, confirmed:true, confirmedWrite:true}`. The server revalidates the repository and current clean Git HEAD before invoking the existing TaskManager start preflight. The workflow's bound task cannot use the generic task start endpoint. Workflow stage transition and queue insertion share one SQLite transaction: if execution configuration pinning fails, both are rolled back. TaskManager still enforces local connection readiness, profile availability, provider write capability, workspace roots and write confirmation. No automatic Reviewer/QA handoff is enabled. This endpoint must be exercised on disposable repositories with configured isolated-write roots before v0.7 release.
+
+**Limitations:** the synchronous Git check precedes queue submission; pre-execution repository leases and identity are still revalidated by TaskManager. Completing a queued task does not yet advance workflow state. Shutdown/restart must block unresolved workflow stages rather than retry them automatically. Full end-to-end behavior remains unverified.
