@@ -220,6 +220,7 @@ export async function createApp(manager: TaskManager) {
       .object({
         version: z.number().int().nonnegative(),
         confirmed: z.literal(true),
+        replace: z.literal(true).optional(),
       })
       .strict()
       .parse(request.body);
@@ -232,7 +233,7 @@ export async function createApp(manager: TaskManager) {
       workflow.version !== input.version ||
       workflow.state !== 'blocked' ||
       coder.state !== 'blocked' ||
-      coder.evidence
+      (input.replace ? !coder.evidence : Boolean(coder.evidence))
     )
       throw new AppError(409, 'Coder is not awaiting evidence capture.');
     const task = manager.store.task(coder.taskId);
@@ -247,7 +248,7 @@ export async function createApp(manager: TaskManager) {
       workspaceId: review.workspace.id,
       revision: review.revision,
       fileCount: review.files.length,
-    });
+    }, input.replace === true);
   });
   app.post('/api/workflows/:id/approve-coder-evidence', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);

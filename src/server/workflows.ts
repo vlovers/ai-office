@@ -27,6 +27,7 @@ export interface WorkflowStage {
   outputRevision: string | null;
   approvedAt: string | null;
   evidence?: { revision: string; workspaceId: string; fileCount: number; recordedAt: string };
+  supersededEvidence?: NonNullable<WorkflowStage['evidence']>[];
 }
 export interface Workflow {
   id: string;
@@ -355,7 +356,7 @@ export class WorkflowStore {
   }
 
   /**
-   * Records server-observed Review Center provenance without authorizing
+   * Records or explicitly refreshes Review Center provenance without authorizing
    * a downstream agent. Only a completed, blocked Coder may be inspected.
    */
   captureCoderEvidence(
@@ -367,6 +368,7 @@ export class WorkflowStore {
       revision: string;
       fileCount: number;
     },
+    replace = false,
   ): Workflow {
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -387,7 +389,11 @@ export class WorkflowStore {
         stage.kind !== 'coder' ||
         stage.taskId !== evidence.taskId ||
         stage.state !== 'blocked' ||
-        stage.evidence ||
+        (!replace && stage.evidence) ||
+        (replace &&
+          (!stage.evidence ||
+            stage.evidence.workspaceId !== evidence.workspaceId ||
+            stage.evidence.revision === evidence.revision)) ||
         task?.state !== 'completed' ||
         task.workspaceId !== evidence.workspaceId ||
         task.repositoryId !== current.repositoryId ||
@@ -397,6 +403,12 @@ export class WorkflowStore {
       )
         throw new AppError(409, 'Coder evidence is incomplete or mismatched.');
       const next = structuredClone(current);
+      if (replace) {
+        const history = next.stages[0]!.supersededEvidence ?? [];
+        if (history.length >= 32)
+          throw new AppError(409, 'Evidence refresh history is full. Inspect manually.');
+        next.stages[0]!.supersededEvidence = [...history, next.stages[0]!.evidence!];
+      }
       next.stages[0]!.evidence = {
         revision: evidence.revision,
         workspaceId: evidence.workspaceId,

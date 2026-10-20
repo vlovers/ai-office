@@ -286,6 +286,61 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     });
     expect(restored.statusCode).toBe(409);
     expect((await send('GET', url)).json().stages[1].state).toBe('pending');
+    // Refresh requires a new explicit human checkpoint. Previous evidence is
+    // preserved for audit and cannot be used to approve the refreshed output.
+    const refreshed = await send('POST', url + '/capture-coder-evidence', {
+      version: evidence.json().version,
+      confirmed: true,
+      replace: true,
+    });
+    expect(refreshed.statusCode).toBe(200);
+    const currentFingerprint = refreshed.json().stages[0].evidence.revision;
+    expect(currentFingerprint).not.toBe(fingerprint);
+    expect(refreshed.json().stages[0].supersededEvidence).toEqual([
+      evidence.json().stages[0].evidence,
+    ]);
+    expect(refreshed.json().state).toBe('blocked');
+    expect(
+      (
+        await send('POST', url + '/capture-coder-evidence', {
+          version: refreshed.json().version,
+          confirmed: true,
+        })
+      ).statusCode,
+    ).toBe(409);
+    expect(
+      (
+        await send('POST', url + '/approve-coder-evidence', {
+          version: refreshed.json().version,
+          confirmed: true,
+          revision: fingerprint,
+        })
+      ).statusCode,
+    ).toBe(409);
+    const released = await send('POST', url + '/approve-coder-evidence', {
+      version: refreshed.json().version,
+      confirmed: true,
+      revision: currentFingerprint,
+    });
+    expect(released.statusCode).toBe(200);
+    expect(released.json().stages[1].state).toBe('awaiting_approval');
+    const reviewer = await send('POST', url + '/approve-reviewer', {
+      version: released.json().version,
+      confirmed: true,
+      revision: currentFingerprint,
+    });
+    expect(reviewer.statusCode).toBe(200);
+    expect(reviewer.json().stages[1].state).toBe('ready');
+    expect(reviewer.json().stages[1].taskId).toBeNull();
+    expect(
+      (
+        await send('POST', url + '/approve-reviewer', {
+          version: released.json().version,
+          confirmed: true,
+          revision: currentFingerprint,
+        })
+      ).statusCode,
+    ).toBe(409);
     expect(env.store.queue()).toEqual([]);
   } finally {
     if (app) await app.close();
