@@ -216,15 +216,24 @@ export async function createApp(manager: TaskManager) {
   });
   app.post('/api/workflows/:id/capture-coder-evidence', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
-    const input = z.object({
-      version: z.number().int().nonnegative(),
-      confirmed: z.literal(true),
-    }).strict().parse(request.body);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
     const workflows = new WorkflowStore(manager.store.db);
     const workflow = workflows.get(workflowId);
     const coder = workflow?.stages[0];
-    if (!workflow || !coder?.taskId || workflow.version !== input.version ||
-        workflow.state !== 'blocked' || coder.state !== 'blocked' || coder.evidence)
+    if (
+      !workflow ||
+      !coder?.taskId ||
+      workflow.version !== input.version ||
+      workflow.state !== 'blocked' ||
+      coder.state !== 'blocked' ||
+      coder.evidence
+    )
       throw new AppError(409, 'Coder is not awaiting evidence capture.');
     const task = manager.store.task(coder.taskId);
     if (!task || task.state !== 'completed' || !task.workspaceId)
@@ -234,8 +243,10 @@ export async function createApp(manager: TaskManager) {
     if (!review.revision || review.workspace.id !== task.workspaceId)
       throw new AppError(409, 'Review Center did not return a verified revision.');
     return workflows.captureCoderEvidence(workflowId, input.version, {
-      taskId: task.id, workspaceId: review.workspace.id,
-      revision: review.revision, fileCount: review.files.length,
+      taskId: task.id,
+      workspaceId: review.workspace.id,
+      revision: review.revision,
+      fileCount: review.files.length,
     });
   });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());

@@ -492,45 +492,68 @@ it('records verified review evidence once and rejects a mismatched workspace', a
   const store = new Store(join(directory, 'metadata.sqlite'));
   try {
     const repo = store.register({
-      path: '/disposable/evidence', gitDir: '/disposable/evidence/.git', name: 'fixture',
+      path: '/disposable/evidence',
+      gitDir: '/disposable/evidence/.git',
+      name: 'fixture',
     });
     const coder = store.agent('codex-1')!;
-    store.db.prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
+    store.db
+      .prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
       .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, 1);
     const workflows = new WorkflowStore(store.db);
     const created = workflows.create({
-      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      repositoryId: repo.id,
+      baselineRevision: 'a'.repeat(40),
       stages: [
         { kind: 'coder', agentId: 'codex-1', agentRevision: 1, mode: 'write' },
         { kind: 'reviewer', agentId: 'codex-2', agentRevision: 1, mode: 'read-only' },
       ],
     });
     const approved = workflows.transition(created.id, 0, {
-      type: 'approve', revision: 'a'.repeat(40),
+      type: 'approve',
+      revision: 'a'.repeat(40),
     });
     const task = store.createTask({
-      repositoryId: repo.id, agentId: 'codex-1', executionMode: 'write',
-      title: 'Coder', prompt: 'fixture',
+      repositoryId: repo.id,
+      agentId: 'codex-1',
+      executionMode: 'write',
+      title: 'Coder',
+      prompt: 'fixture',
     });
     const running = workflows.transition(created.id, approved.version, {
-      type: 'start', taskId: task.id, revision: 'a'.repeat(40),
+      type: 'start',
+      taskId: task.id,
+      revision: 'a'.repeat(40),
     });
     store.updateTask(task.id, { state: 'completed', workspaceId: 'worktree-1' });
     expect(workflows.reconcileTerminals()).toBe(1);
     const blocked = workflows.get(created.id)!;
     expect(blocked.version).toBe(running.version + 1);
-    expect(() => workflows.captureCoderEvidence(created.id, blocked.version, {
-      taskId: task.id, workspaceId: 'different', revision: 'b'.repeat(64), fileCount: 1,
-    })).toThrow();
+    expect(() =>
+      workflows.captureCoderEvidence(created.id, blocked.version, {
+        taskId: task.id,
+        workspaceId: 'different',
+        revision: 'b'.repeat(64),
+        fileCount: 1,
+      }),
+    ).toThrow();
     const captured = workflows.captureCoderEvidence(created.id, blocked.version, {
-      taskId: task.id, workspaceId: 'worktree-1', revision: 'b'.repeat(64), fileCount: 1,
+      taskId: task.id,
+      workspaceId: 'worktree-1',
+      revision: 'b'.repeat(64),
+      fileCount: 1,
     });
     expect(captured.stages[0]?.evidence?.revision).toBe('b'.repeat(64));
     expect(captured.stages[1]?.state).toBe('pending');
     expect(captured.state).toBe('blocked');
-    expect(() => workflows.captureCoderEvidence(created.id, captured.version, {
-      taskId: task.id, workspaceId: 'worktree-1', revision: 'b'.repeat(64), fileCount: 1,
-    })).toThrow();
+    expect(() =>
+      workflows.captureCoderEvidence(created.id, captured.version, {
+        taskId: task.id,
+        workspaceId: 'worktree-1',
+        revision: 'b'.repeat(64),
+        fileCount: 1,
+      }),
+    ).toThrow();
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
