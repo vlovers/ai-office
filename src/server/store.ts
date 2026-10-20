@@ -5,6 +5,7 @@ import {
 } from './execution-config.js';
 import type { ExecutionConfiguration } from '../shared/types.js';
 import { DatabaseSync } from 'node:sqlite';
+import { WorkflowStore } from './workflows.js';
 import { AppError } from './errors.js';
 import type { AgentSettings } from './agents.js';
 import type { AgentProfile } from '../shared/types.js';
@@ -161,6 +162,8 @@ export class Store {
       this.db.close();
       throw error;
     }
+    // Fail closed after schema migration and task recovery, before queue dispatch.
+    new WorkflowStore(this.db).recoverInterrupted();
   }
   taskConfiguration(id: string): ExecutionConfiguration | undefined {
     const row = this.db
