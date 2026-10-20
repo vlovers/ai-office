@@ -17,7 +17,7 @@ This branch introduces the **first backend milestone**, not a functioning multi-
 
 WorkflowStore never calls a model, spawns a process, runs Git, requests host verification, or automatically dispatches queued tasks. Its transitions represent durable intent, **not** authorization. In particular, caller-provided revision strings are untrusted and must be recomputed by the orchestrator from the existing worktree identity and review revision.
 
-The safe creation API is `POST /api/workflows` with `repositoryId`, `coderAgentId`, `reviewerAgentId`, and optional `qaAgentId`. The server derives a pinned baseline from validated repository Git HEAD, and stores only an inert definition. Inspection uses `GET /api/workflows` and `GET /api/workflows/:id`. There is intentionally **no HTTP endpoint for workflow approval, start, finish or cancellation** in this checkpoint. Do not wire transition() directly to arbitrary browser input.
+The safe creation API is `POST /api/workflows` with `repositoryId`, `coderAgentId`, `reviewerAgentId`, and optional `qaAgentId`. The server derives a pinned baseline from validated repository Git HEAD, and stores only an inert definition. Inspection uses `GET /api/workflows` and `GET /api/workflows/:id`. Initial approval is supported through `POST /api/workflows/:id/approve-initial` with `{version, confirmed:true}`; it verifies the canonical repository, exact current HEAD and clean working tree on the server. It changes only the checkpoint state. **No execution, downstream approval, finish or cancellation HTTP endpoint exists** in this checkpoint. Do not wire transition() directly to arbitrary browser input.
 
 ## Integration still required before v0.7 is usable
 
