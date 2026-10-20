@@ -58,6 +58,26 @@ it('creates pinned inert workflows from server Git HEAD and exposes inspection o
         })
       ).statusCode,
     ).toBe(404);
+    const approvalPath = '/api/workflows/' + workflow.id + '/approve-initial';
+    expect((await send('POST', approvalPath, { version: 0, confirmed: false })).statusCode)
+      .toBe(400);
+    const approved = await send('POST', approvalPath, { version: 0, confirmed: true });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json().stages[0].state).toBe('ready');
+    expect((await send('POST', approvalPath, { version: 0, confirmed: true })).statusCode)
+      .toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    expect(env.store.tasks()).toEqual([]);
+    // A new workflow bound to the old SHA cannot be approved after a new commit.
+    const stale = await send('POST', '/api/workflows', {
+      repositoryId: repository.id, coderAgentId: 'codex-1', reviewerAgentId: 'codex-2',
+    });
+    expect(stale.statusCode).toBe(201);
+    execFileSync('/usr/bin/git', ['-C', env.repository, '-c', 'user.name=Fixture',
+      '-c', 'user.email=fixture@example.test', 'commit', '--allow-empty', '-qm', 'new revision']);
+    expect((await send('POST', '/api/workflows/' + stale.json().id + '/approve-initial', {
+      version: 0, confirmed: true,
+    })).statusCode).toBe(409);
     const unknown = await send('POST', '/api/workflows', {
       repositoryId: repository.id,
       coderAgentId: 'missing',
