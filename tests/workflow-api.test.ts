@@ -260,24 +260,28 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
       '# Disposable example\n',
     );
     const evidence = await send('POST', url + '/capture-coder-evidence', {
-      version: blocked.json().version, confirmed: true,
+      version: blocked.json().version,
+      confirmed: true,
     });
     expect(evidence.statusCode).toBe(200);
     expect(evidence.json().stages[0].evidence.fileCount).toBe(3);
     const fingerprint = evidence.json().stages[0].evidence.revision;
     const released = await send('POST', url + '/approve-coder-evidence', {
-      version: evidence.json().version, confirmed: true, revision: fingerprint,
+      version: evidence.json().version,
+      confirmed: true,
+      revision: fingerprint,
     });
     expect(released.statusCode).toBe(200);
     expect(released.json().stages[1].state).toBe('awaiting_approval');
     const reviewer = await send('POST', url + '/approve-reviewer', {
-      version: released.json().version, confirmed: true, revision: fingerprint,
+      version: released.json().version,
+      confirmed: true,
+      revision: fingerprint,
     });
     expect(reviewer.statusCode).toBe(200);
     expect(reviewer.json().stages[1].state).toBe('ready');
     expect(reviewer.json().stages[1].taskId).toBeNull();
     expect(env.store.queue()).toEqual([]);
-
   } finally {
     if (app) await app.close();
     await manager.shutdown();
