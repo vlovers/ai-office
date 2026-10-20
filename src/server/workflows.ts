@@ -4,8 +4,14 @@ import { AppError } from './errors.js';
 
 export type WorkflowStageKind = 'coder' | 'reviewer' | 'qa';
 export type WorkflowStageState =
-  | 'pending' | 'awaiting_approval' | 'ready' | 'running'
-  | 'completed' | 'failed' | 'interrupted' | 'blocked';
+  | 'pending'
+  | 'awaiting_approval'
+  | 'ready'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'interrupted'
+  | 'blocked';
 export type WorkflowState = 'active' | 'completed' | 'cancelled' | 'blocked';
 
 export interface WorkflowStage {
@@ -46,13 +52,15 @@ export class WorkflowStore {
   constructor(private readonly db: DatabaseSync) {}
 
   list(): Workflow[] {
-    return this.db.prepare('SELECT json FROM workflows ORDER BY created_at DESC, id DESC')
-      .all().map((row) => JSON.parse(String(row.json)) as Workflow);
+    return this.db
+      .prepare('SELECT json FROM workflows ORDER BY created_at DESC, id DESC')
+      .all()
+      .map((row) => JSON.parse(String(row.json)) as Workflow);
   }
 
   get(id: string): Workflow | undefined {
     const row = this.db.prepare('SELECT json FROM workflows WHERE id=?').get(id);
-    return row ? JSON.parse(String(row.json)) as Workflow : undefined;
+    return row ? (JSON.parse(String(row.json)) as Workflow) : undefined;
   }
 
   private require(id: string): Workflow {
@@ -67,23 +75,34 @@ export class WorkflowStore {
     if (!/^[0-9a-f]{40,64}$/i.test(input.baselineRevision))
       throw new AppError(400, 'Expected an exact Git revision.');
     if (input.workspaceId) {
-      const workspace = this.db.prepare('SELECT json FROM workspaces WHERE id=?')
+      const workspace = this.db
+        .prepare('SELECT json FROM workspaces WHERE id=?')
         .get(input.workspaceId);
-      if (!workspace ||
-          (JSON.parse(String(workspace.json)) as { repositoryId: string }).repositoryId !== input.repositoryId)
+      if (
+        !workspace ||
+        (JSON.parse(String(workspace.json)) as { repositoryId: string }).repositoryId !==
+          input.repositoryId
+      )
         throw new AppError(409, 'Workspace does not belong to repository.');
     }
-    if (input.stages.length < 2 || input.stages.length > 3 ||
-        input.stages[0]?.kind !== 'coder' ||
-        input.stages[1]?.kind !== 'reviewer' ||
-        (input.stages[2] && input.stages[2].kind !== 'qa') ||
-        input.stages[0]?.mode !== 'write' ||
-        input.stages.slice(1).some(stage => stage.mode !== 'read-only'))
-      throw new AppError(400, 'Expected Coder (write), Reviewer (read-only), optional QA (read-only).');
+    if (
+      input.stages.length < 2 ||
+      input.stages.length > 3 ||
+      input.stages[0]?.kind !== 'coder' ||
+      input.stages[1]?.kind !== 'reviewer' ||
+      (input.stages[2] && input.stages[2].kind !== 'qa') ||
+      input.stages[0]?.mode !== 'write' ||
+      input.stages.slice(1).some((stage) => stage.mode !== 'read-only')
+    )
+      throw new AppError(
+        400,
+        'Expected Coder (write), Reviewer (read-only), optional QA (read-only).',
+      );
     for (const stage of input.stages) {
       if (!stage.agentId || !Number.isSafeInteger(stage.agentRevision) || stage.agentRevision < 1)
         throw new AppError(400, 'Invalid agent revision.');
-      const agent = this.db.prepare('SELECT json FROM agent_versions WHERE agent_id=? AND revision=?')
+      const agent = this.db
+        .prepare('SELECT json FROM agent_versions WHERE agent_id=? AND revision=?')
         .get(stage.agentId, stage.agentRevision);
       if (!agent) throw new AppError(409, 'Pinned agent revision not found.');
       const profile = JSON.parse(String(agent.json)) as { maximumMode: string };
@@ -92,15 +111,25 @@ export class WorkflowStore {
     }
     const at = new Date().toISOString();
     const workflow: Workflow = {
-      id: randomUUID(), repositoryId: input.repositoryId,
-      workspaceId: input.workspaceId ?? null, baselineRevision: input.baselineRevision,
-      version: 0, state: 'active', createdAt: at, updatedAt: at,
+      id: randomUUID(),
+      repositoryId: input.repositoryId,
+      workspaceId: input.workspaceId ?? null,
+      baselineRevision: input.baselineRevision,
+      version: 0,
+      state: 'active',
+      createdAt: at,
+      updatedAt: at,
       stages: input.stages.map((stage, index) => ({
-        ...stage, state: index === 0 ? 'awaiting_approval' : 'pending',
-        taskId: null, approvedRevision: null, outputRevision: null, approvedAt: null,
+        ...stage,
+        state: index === 0 ? 'awaiting_approval' : 'pending',
+        taskId: null,
+        approvedRevision: null,
+        outputRevision: null,
+        approvedAt: null,
       })),
     };
-    this.db.prepare('INSERT INTO workflows(id,repository_id,created_at,json) VALUES (?,?,?,?)')
+    this.db
+      .prepare('INSERT INTO workflows(id,repository_id,created_at,json) VALUES (?,?,?,?)')
       .run(workflow.id, workflow.repositoryId, at, JSON.stringify(workflow));
     return workflow;
   }
@@ -116,7 +145,7 @@ export class WorkflowStore {
       let changed = 0;
       for (const current of this.list()) {
         if (current.state !== 'active') continue;
-        const running = current.stages.filter(stage => stage.state === 'running');
+        const running = current.stages.filter((stage) => stage.state === 'running');
         if (!running.length) continue;
         const next = structuredClone(current);
         for (const stage of next.stages) {
@@ -131,7 +160,8 @@ export class WorkflowStore {
         if (next.state !== 'blocked') continue;
         next.version++;
         next.updatedAt = new Date().toISOString();
-        this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+        this.db
+          .prepare('UPDATE workflows SET json=? WHERE id=?')
           .run(JSON.stringify(next), next.id);
         changed++;
       }
@@ -148,12 +178,15 @@ export class WorkflowStore {
    * A revision supplied by a browser is a claim, NOT independently verified
    * Git evidence; the integration layer must recompute current revision.
    */
-  transition(id: string, expectedVersion: number, action:
-    | { type: 'approve'; revision: string }
-    | { type: 'start'; taskId: string; revision: string }
-    | { type: 'finish'; taskId: string; revision: string; succeeded: boolean }
-    | { type: 'interrupt'; taskId: string }
-    | { type: 'cancel' }
+  transition(
+    id: string,
+    expectedVersion: number,
+    action:
+      | { type: 'approve'; revision: string }
+      | { type: 'start'; taskId: string; revision: string }
+      | { type: 'finish'; taskId: string; revision: string; succeeded: boolean }
+      | { type: 'interrupt'; taskId: string }
+      | { type: 'cancel' },
   ): Workflow {
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -162,14 +195,17 @@ export class WorkflowStore {
       if (current.state !== 'active') throw new AppError(409, 'Workflow is no longer active.');
       const next: Workflow = structuredClone(current);
       if (action.type === 'cancel') {
-        if (next.stages.some(s => s.state === 'running'))
+        if (next.stages.some((s) => s.state === 'running'))
           throw new AppError(409, 'Stop running task with TaskManager before cancelling workflow.');
         next.state = 'cancelled';
       } else {
-        const stage = next.stages.find(s =>
-          action.type === 'approve' ? s.state === 'awaiting_approval' :
-          action.type === 'start' ? s.state === 'ready' :
-          s.state === 'running' && s.taskId === action.taskId);
+        const stage = next.stages.find((s) =>
+          action.type === 'approve'
+            ? s.state === 'awaiting_approval'
+            : action.type === 'start'
+              ? s.state === 'ready'
+              : s.state === 'running' && s.taskId === action.taskId,
+        );
         if (!stage) throw new AppError(409, 'No stage available for this action.');
         if (action.type === 'approve') {
           const predecessor = next.stages[next.stages.indexOf(stage) - 1];
@@ -180,8 +216,11 @@ export class WorkflowStore {
           stage.approvedAt = new Date().toISOString();
           stage.state = 'ready';
         } else if (action.type === 'start') {
-          if (!action.taskId || next.stages.some(s => s.taskId === action.taskId) ||
-              action.revision !== stage.approvedRevision)
+          if (
+            !action.taskId ||
+            next.stages.some((s) => s.taskId === action.taskId) ||
+            action.revision !== stage.approvedRevision
+          )
             throw new AppError(409, 'Task or pinned revision mismatch.');
           stage.taskId = action.taskId;
           stage.state = 'running';
@@ -205,7 +244,8 @@ export class WorkflowStore {
       }
       next.version++;
       next.updatedAt = new Date().toISOString();
-      const updated = this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+      const updated = this.db
+        .prepare('UPDATE workflows SET json=? WHERE id=?')
         .run(JSON.stringify(next), id);
       if (Number(updated.changes) !== 1) throw new AppError(409, 'Workflow disappeared.');
       this.db.exec('COMMIT');
