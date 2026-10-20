@@ -173,6 +173,33 @@ export async function createApp(manager: TaskManager) {
     // Task binding is inert: TaskManager alone owns queue submission and writes.
     return workflows.bindApprovedTask(workflowId, input.version, input.taskId);
   });
+  app.post('/api/workflows/:id/submit-initial', async (request, reply) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z.object({
+      version: z.number().int().nonnegative(),
+      confirmed: z.literal(true),
+      confirmedWrite: z.literal(true),
+    }).strict().parse(request.body);
+    const workflow = new WorkflowStore(manager.store.db).get(workflowId);
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    const stage = workflow.stages[0];
+    if (workflow.state !== 'active' || stage?.state !== 'ready' ||
+        !stage.taskId || !stage.approvedRevision || workflow.version !== input.version)
+      throw new AppError(409, 'Initial workflow stage is not ready.');
+    const repository = manager.store.repository(workflow.repositoryId);
+    if (!repository) throw new AppError(409, 'Workflow repository missing.');
+    await revalidateRepository(repository);
+    const head = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
+    if (head !== stage.approvedRevision)
+      throw new AppError(409, 'Approved Git revision is stale.');
+    const changes = await git(repository.path, ['status', '--porcelain=v1', '--untracked-files=all']);
+    if (changes.trim())
+      throw new AppError(409, 'Repository has uncommitted changes.');
+    const submitted = manager.start(stage.taskId, undefined, true, {
+      id: workflowId, version: input.version, revision: head,
+    });
+    return reply.code(202).send({ task: submitted, workflow: new WorkflowStore(manager.store.db).get(workflowId) });
+  });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
   app.get('/api/workflows/:id', async (request) => {
     const workflow = new WorkflowStore(manager.store.db).get(
