@@ -264,7 +264,7 @@ export class WorkflowStore {
         } else if (action.type === 'start') {
           if (
             !action.taskId ||
-            stage.taskId !== action.taskId ||
+            (stage.taskId !== null && stage.taskId !== action.taskId) ||
             action.revision !== stage.approvedRevision
           )
             throw new AppError(409, 'Task or pinned revision mismatch.');
