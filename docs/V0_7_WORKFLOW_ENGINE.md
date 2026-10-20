@@ -58,3 +58,7 @@ Before the restored queue dispatcher starts, schema initialization reconciles wo
 ## Coder output evidence capture
 
 `POST /api/workflows/:id/capture-coder-evidence` requires `{version, confirmed:true}` after a completed Coder task has been reconciled to a blocked workflow. It calls the existing Review Center path with its workspace identity validation, repository lease and exact 64-character content revision. It persists an immutable `{workspaceId, revision, fileCount, recordedAt}` alongside the Coder stage. Mismatched task, workspace, revision or repeated capture is rejected. Recording evidence **does not** approve the diff or unlock the Reviewer: that needs an explicit human decision and a robust read-only snapshot handoff.
+
+## Explicit Coder review approval
+
+`POST /api/workflows/:id/approve-coder-evidence` accepts `{version, confirmed:true, revision}`. The API re-runs the existing Review Center workspace validation, lease acquisition, diff snapshot and content-revision calculation and refuses stale or mismatched evidence. The stored Coder stage becomes completed and the Reviewer enters `awaiting_approval`; no task is created, no worktree is mounted for Reviewer, and no model is run. The content revision is a Review Center fingerprint, **not** a Git commit SHA. A separate verified read-only handoff and explicit Reviewer authorization still must be implemented and tested.
