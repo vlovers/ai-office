@@ -287,6 +287,44 @@ export class WorkflowStore {
   }
 
   /**
+   * Terminal task reconciliation is fail-closed: successful Codex completion
+   * is NOT proof of an approved Git/worktree revision. Block handoff until
+   * a separate verifier captures the exact output evidence.
+   */
+  reconcileTerminals(): number {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      let changed = 0;
+      for (const current of this.list()) {
+        if (current.state !== 'active') continue;
+        const next = structuredClone(current);
+        for (const stage of next.stages) {
+          if (stage.state !== 'running' || !stage.taskId) continue;
+          const row = this.db.prepare('SELECT state FROM tasks WHERE id=?').get(stage.taskId);
+          if (!row || !['completed', 'failed', 'stopped', 'interrupted'].includes(String(row.state)))
+            continue;
+          // A completed task still requires signed-off review evidence. Do
+          // not copy an unverified HEAD or blindly approve a next stage.
+          stage.state = row.state === 'completed' ? 'blocked' :
+            row.state === 'interrupted' ? 'interrupted' : 'failed';
+          next.state = 'blocked';
+        }
+        if (next.state !== 'blocked') continue;
+        next.version++;
+        next.updatedAt = new Date().toISOString();
+        this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+          .run(JSON.stringify(next), next.id);
+        changed++;
+      }
+      this.db.exec('COMMIT');
+      return changed;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  /**
    * Optimistic concurrency prevents duplicate actions from two open tabs.
    * A revision supplied by a browser is a claim, NOT independently verified
    * Git evidence; the integration layer must recompute current revision.
