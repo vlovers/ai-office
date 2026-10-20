@@ -267,7 +267,21 @@ export class WorkflowStore {
             ? this.db.prepare('SELECT state FROM tasks WHERE id=?').get(stage.taskId)
             : undefined;
           if (row?.state === 'running' || row?.state === 'stopping') continue;
-          stage.state = 'interrupted';
+          if (row?.state === 'queued' && stage.taskId) {
+            // A workflow queue entry must never escape its approval gate after
+            // restart. Remove the runnable entry in this same transaction.
+            const taskRow = this.db.prepare('SELECT json FROM tasks WHERE id=?').get(stage.taskId);
+            if (taskRow) {
+              const task = JSON.parse(String(taskRow.json)) as { state: string; error: string | null; updatedAt: string };
+              task.state = 'interrupted';
+              task.error = 'Workflow execution requires manual review after server restart.';
+              task.updatedAt = new Date().toISOString();
+              this.db.prepare('UPDATE tasks SET state=?, json=? WHERE id=?')
+                .run(task.state, JSON.stringify(task), stage.taskId);
+            }
+            this.db.prepare('DELETE FROM task_queue WHERE task_id=?').run(stage.taskId);
+          }
+          stage.state = row?.state === 'completed' ? 'blocked' : 'interrupted';
           next.state = 'blocked';
         }
         if (next.state !== 'blocked') continue;
