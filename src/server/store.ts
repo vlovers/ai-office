@@ -30,7 +30,7 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
-    if (version > 8) {
+    if (version > 9) {
       this.db.close();
       throw new Error('Metadata schema is newer than this AI Office version.');
     }
@@ -145,7 +145,13 @@ export class Store {
           this.pinConfiguration(task, config);
         }
       }
-      this.db.exec(`PRAGMA user_version=8; COMMIT;`);
+      this.db.exec(`CREATE TABLE IF NOT EXISTS workflows (
+        id TEXT PRIMARY KEY,
+        repository_id TEXT NOT NULL REFERENCES repositories(id),
+        created_at TEXT NOT NULL,
+        json TEXT NOT NULL
+      ); CREATE INDEX IF NOT EXISTS workflows_repository ON workflows(repository_id, created_at);
+      PRAGMA user_version=9; COMMIT;`);
     } catch (error) {
       try {
         this.db.exec('ROLLBACK');
