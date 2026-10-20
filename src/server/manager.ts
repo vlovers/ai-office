@@ -207,7 +207,12 @@ export class TaskManager {
     );
     this.events.emit('event', event);
   }
-  start(taskId: string, resumeSessionId?: string, confirmedWrite = false, workflow?: { id: string; version: number; revision: string }) {
+  start(
+    taskId: string,
+    resumeSessionId?: string,
+    confirmedWrite = false,
+    workflow?: { id: string; version: number; revision: string },
+  ) {
     if (this.closing) throw new AppError(503, 'Server is shutting down.');
     if (this.connectionBusy) throw new AppError(409, 'Wait for the connection check to finish.');
     if (!this.dashboard().ready) throw new AppError(503, this.dashboard().readinessMessage);
@@ -234,15 +239,19 @@ export class TaskManager {
       throw new AppError(409, 'Restore the archived agent before submitting new work.');
     const previous = this.validateResume(task, resumeSessionId);
     const workflows = new WorkflowStore(this.store.db);
-    const bound = workflows.list().find(w => w.stages.some(s => s.taskId === taskId));
+    const bound = workflows.list().find((w) => w.stages.some((s) => s.taskId === taskId));
     if (bound && (!workflow || workflow.id !== bound.id))
       throw new AppError(409, 'Workflow-bound tasks must use the approved workflow submission.');
     if (workflow) {
       if (resumeSessionId || !bound || workflow.id !== bound.id)
         throw new AppError(409, 'Invalid workflow submission.');
       workflows.enqueueApprovedTask(
-        this.store, workflow.id, workflow.version, taskId,
-        this.auth.view().mode, workflow.revision,
+        this.store,
+        workflow.id,
+        workflow.version,
+        taskId,
+        this.auth.view().mode,
+        workflow.revision,
       );
     } else {
       this.store.enqueue(taskId, this.auth.view().mode, previous?.id);
