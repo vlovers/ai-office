@@ -377,29 +377,38 @@ it('never promotes a completed Coder task without verified output evidence', asy
   const store = new Store(join(directory, 'metadata.sqlite'));
   try {
     const repo = store.register({
-      path: '/disposable/terminal', gitDir: '/disposable/terminal/.git',
+      path: '/disposable/terminal',
+      gitDir: '/disposable/terminal/.git',
       name: 'fixture',
     });
     const coder = store.agent('codex-1')!;
-    store.db.prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
+    store.db
+      .prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
       .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, 1);
     const service = new WorkflowStore(store.db);
     const initial = service.create({
-      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      repositoryId: repo.id,
+      baselineRevision: 'a'.repeat(40),
       stages: [
         { kind: 'coder', agentId: 'codex-1', agentRevision: 1, mode: 'write' },
         { kind: 'reviewer', agentId: 'codex-2', agentRevision: 1, mode: 'read-only' },
       ],
     });
     const approved = service.transition(initial.id, 0, {
-      type: 'approve', revision: 'a'.repeat(40),
+      type: 'approve',
+      revision: 'a'.repeat(40),
     });
     const task = store.createTask({
-      repositoryId: repo.id, agentId: 'codex-1', executionMode: 'write',
-      title: 'Coder', prompt: 'fixture',
+      repositoryId: repo.id,
+      agentId: 'codex-1',
+      executionMode: 'write',
+      title: 'Coder',
+      prompt: 'fixture',
     });
     const running = service.transition(initial.id, approved.version, {
-      type: 'start', taskId: task.id, revision: 'a'.repeat(40),
+      type: 'start',
+      taskId: task.id,
+      revision: 'a'.repeat(40),
     });
     store.updateTask(task.id, { state: 'completed' });
     expect(service.reconcileTerminals()).toBe(1);
@@ -421,32 +430,48 @@ it('removes persisted workflow queue entry on restart so it cannot execute witho
   let store = new Store(path);
   try {
     const repo = store.register({
-      path: '/disposable/queue-restart', gitDir: '/disposable/queue-restart/.git',
+      path: '/disposable/queue-restart',
+      gitDir: '/disposable/queue-restart/.git',
       name: 'fixture',
     });
     const original = store.agent('codex-1')!;
     const profile = store.editAgent(original.id, original.revision, {
-      name: original.name, role: original.role, description: original.description,
-      instructions: original.instructions, model: original.model, maximumMode: 'write',
+      name: original.name,
+      role: original.role,
+      description: original.description,
+      instructions: original.instructions,
+      model: original.model,
+      maximumMode: 'write',
     });
     const workflows = new WorkflowStore(store.db);
     const created = workflows.create({
-      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      repositoryId: repo.id,
+      baselineRevision: 'a'.repeat(40),
       stages: [
         { kind: 'coder', agentId: profile.id, agentRevision: profile.revision, mode: 'write' },
         { kind: 'reviewer', agentId: 'codex-2', agentRevision: 1, mode: 'read-only' },
       ],
     });
     const approved = workflows.transition(created.id, created.version, {
-      type: 'approve', revision: 'a'.repeat(40),
+      type: 'approve',
+      revision: 'a'.repeat(40),
     });
     const task = store.createTask({
-      repositoryId: repo.id, agentId: profile.id, title: 'Writing',
-      prompt: 'Fixture', executionMode: 'write',
+      repositoryId: repo.id,
+      agentId: profile.id,
+      title: 'Writing',
+      prompt: 'Fixture',
+      executionMode: 'write',
     });
     const bound = workflows.bindApprovedTask(created.id, approved.version, task.id);
-    workflows.enqueueApprovedTask(store, created.id, bound.version, task.id,
-      'local-cli-chatgpt', 'a'.repeat(40));
+    workflows.enqueueApprovedTask(
+      store,
+      created.id,
+      bound.version,
+      task.id,
+      'local-cli-chatgpt',
+      'a'.repeat(40),
+    );
     expect(store.queue()).toHaveLength(1);
     store.close();
     store = new Store(path);

@@ -272,11 +272,16 @@ export class WorkflowStore {
             // restart. Remove the runnable entry in this same transaction.
             const taskRow = this.db.prepare('SELECT json FROM tasks WHERE id=?').get(stage.taskId);
             if (taskRow) {
-              const task = JSON.parse(String(taskRow.json)) as { state: string; error: string | null; updatedAt: string };
+              const task = JSON.parse(String(taskRow.json)) as {
+                state: string;
+                error: string | null;
+                updatedAt: string;
+              };
               task.state = 'interrupted';
               task.error = 'Workflow execution requires manual review after server restart.';
               task.updatedAt = new Date().toISOString();
-              this.db.prepare('UPDATE tasks SET state=?, json=? WHERE id=?')
+              this.db
+                .prepare('UPDATE tasks SET state=?, json=? WHERE id=?')
                 .run(task.state, JSON.stringify(task), stage.taskId);
             }
             this.db.prepare('DELETE FROM task_queue WHERE task_id=?').run(stage.taskId);
@@ -315,18 +320,26 @@ export class WorkflowStore {
         for (const stage of next.stages) {
           if (stage.state !== 'running' || !stage.taskId) continue;
           const row = this.db.prepare('SELECT state FROM tasks WHERE id=?').get(stage.taskId);
-          if (!row || !['completed', 'failed', 'stopped', 'interrupted'].includes(String(row.state)))
+          if (
+            !row ||
+            !['completed', 'failed', 'stopped', 'interrupted'].includes(String(row.state))
+          )
             continue;
           // A completed task still requires signed-off review evidence. Do
           // not copy an unverified HEAD or blindly approve a next stage.
-          stage.state = row.state === 'completed' ? 'blocked' :
-            row.state === 'interrupted' ? 'interrupted' : 'failed';
+          stage.state =
+            row.state === 'completed'
+              ? 'blocked'
+              : row.state === 'interrupted'
+                ? 'interrupted'
+                : 'failed';
           next.state = 'blocked';
         }
         if (next.state !== 'blocked') continue;
         next.version++;
         next.updatedAt = new Date().toISOString();
-        this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+        this.db
+          .prepare('UPDATE workflows SET json=? WHERE id=?')
           .run(JSON.stringify(next), next.id);
         changed++;
       }
