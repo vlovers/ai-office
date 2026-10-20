@@ -10,6 +10,7 @@ import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
+import { WorkflowStore } from './workflows.js';
 import { AppError } from './errors.js';
 import { acquireLocks, acquireLock, ResourceLockedError } from './lock.js';
 import { changedFiles, revalidateRepository, repositoryLeaseDirectories } from './repositories.js';
@@ -206,7 +207,7 @@ export class TaskManager {
     );
     this.events.emit('event', event);
   }
-  start(taskId: string, resumeSessionId?: string, confirmedWrite = false) {
+  start(taskId: string, resumeSessionId?: string, confirmedWrite = false, workflow?: { id: string; version: number; revision: string }) {
     if (this.closing) throw new AppError(503, 'Server is shutting down.');
     if (this.connectionBusy) throw new AppError(409, 'Wait for the connection check to finish.');
     if (!this.dashboard().ready) throw new AppError(503, this.dashboard().readinessMessage);
@@ -232,7 +233,20 @@ export class TaskManager {
     if (this.store.requireAgent(task.agentId).archived && !task.reviewRequest)
       throw new AppError(409, 'Restore the archived agent before submitting new work.');
     const previous = this.validateResume(task, resumeSessionId);
-    this.store.enqueue(taskId, this.auth.view().mode, previous?.id);
+    const workflows = new WorkflowStore(this.store.db);
+    const bound = workflows.list().find(w => w.stages.some(s => s.taskId === taskId));
+    if (bound && (!workflow || workflow.id !== bound.id))
+      throw new AppError(409, 'Workflow-bound tasks must use the approved workflow submission.');
+    if (workflow) {
+      if (resumeSessionId || !bound || workflow.id !== bound.id)
+        throw new AppError(409, 'Invalid workflow submission.');
+      workflows.enqueueApprovedTask(
+        this.store, workflow.id, workflow.version, taskId,
+        this.auth.view().mode, workflow.revision,
+      );
+    } else {
+      this.store.enqueue(taskId, this.auth.view().mode, previous?.id);
+    }
     this.emit(taskId, 'queue', 'Submitted to the assigned agent queue.');
     this.pump();
     return this.store.task(taskId)!;
