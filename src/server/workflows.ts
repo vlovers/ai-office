@@ -26,6 +26,7 @@ export interface WorkflowStage {
   approvedRevision: string | null;
   outputRevision: string | null;
   approvedAt: string | null;
+  evidence?: { revision: string; workspaceId: string; fileCount: number; recordedAt: string };
 }
 export interface Workflow {
   id: string;
@@ -345,6 +346,50 @@ export class WorkflowStore {
       }
       this.db.exec('COMMIT');
       return changed;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  /**
+   * Records server-observed Review Center provenance without authorizing
+   * a downstream agent. Only a completed, blocked Coder may be inspected.
+   */
+  captureCoderEvidence(
+    id: string, expectedVersion: number, evidence: {
+      taskId: string; workspaceId: string; revision: string; fileCount: number;
+    },
+  ): Workflow {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.require(id);
+      if (current.version !== expectedVersion || current.state !== 'blocked')
+        throw new AppError(409, 'Workflow is not at a blocked review checkpoint.');
+      const stage = current.stages[0];
+      const row = this.db.prepare('SELECT json FROM tasks WHERE id=?').get(evidence.taskId);
+      const task = row ? JSON.parse(String(row.json)) as {
+        state: string; workspaceId?: string; repositoryId: string;
+      } : undefined;
+      if (!stage || stage.kind !== 'coder' || stage.taskId !== evidence.taskId ||
+          stage.state !== 'blocked' || stage.evidence ||
+          task?.state !== 'completed' ||
+          task.workspaceId !== evidence.workspaceId ||
+          task.repositoryId !== current.repositoryId ||
+          !/^[0-9a-f]{64}$/i.test(evidence.revision) ||
+          !Number.isSafeInteger(evidence.fileCount) || evidence.fileCount < 0)
+        throw new AppError(409, 'Coder evidence is incomplete or mismatched.');
+      const next = structuredClone(current);
+      next.stages[0]!.evidence = {
+        revision: evidence.revision, workspaceId: evidence.workspaceId,
+        fileCount: evidence.fileCount, recordedAt: new Date().toISOString(),
+      };
+      next.version++;
+      next.updatedAt = new Date().toISOString();
+      this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+        .run(JSON.stringify(next), id);
+      this.db.exec('COMMIT');
+      return next;
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
