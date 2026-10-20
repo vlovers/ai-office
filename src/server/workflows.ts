@@ -413,6 +413,48 @@ export class WorkflowStore {
   }
 
   /**
+   * Human-reviewed evidence release. Only opens the next approval gate;
+   * it does not grant Reviewer execution or infer a Git commit SHA.
+   */
+  approveCoderEvidence(
+    id: string, expectedVersion: number, taskId: string, verifiedRevision: string,
+  ): Workflow {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.require(id);
+      const coder = current.stages[0];
+      const reviewer = current.stages[1];
+      if (current.version !== expectedVersion || current.state !== 'blocked' ||
+          coder?.kind !== 'coder' || coder.state !== 'blocked' || coder.taskId !== taskId ||
+          !coder.evidence || coder.evidence.revision !== verifiedRevision ||
+          reviewer?.kind !== 'reviewer' || reviewer.state !== 'pending')
+        throw new AppError(409, 'Coder evidence changed or is not ready for approval.');
+      const task = this.db.prepare('SELECT json FROM tasks WHERE id=?').get(taskId);
+      const saved = task ? JSON.parse(String(task.json)) as {
+        state: string; workspaceId?: string; repositoryId: string
+      } : undefined;
+      if (saved?.state !== 'completed' ||
+          saved.workspaceId !== coder.evidence.workspaceId ||
+          saved.repositoryId !== current.repositoryId)
+        throw new AppError(409, 'Coder task or workspace changed since evidence capture.');
+      const next = structuredClone(current);
+      next.stages[0]!.state = 'completed';
+      next.stages[0]!.outputRevision = verifiedRevision;
+      next.stages[1]!.state = 'awaiting_approval';
+      next.state = 'active';
+      next.version++;
+      next.updatedAt = new Date().toISOString();
+      this.db.prepare('UPDATE workflows SET json=? WHERE id=?')
+        .run(JSON.stringify(next), id);
+      this.db.exec('COMMIT');
+      return next;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  /**
    * Optimistic concurrency prevents duplicate actions from two open tabs.
    * A revision supplied by a browser is a claim, NOT independently verified
    * Git evidence; the integration layer must recompute current revision.
