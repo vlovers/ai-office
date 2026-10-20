@@ -162,7 +162,7 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     verificationTimeoutMs: 1000,
     allowHostVerification: false,
   });
-  const manager = new TaskManager(env.store, env.providers, env.auth, workspaces);
+  const manager = new TaskManager(env.store, env.providers, env.auth, undefined, undefined, workspaces);
   let app: Awaited<ReturnType<typeof createApp>> | undefined;
   try {
     const repository = env.store.register(await validateRepository(env.repository));
