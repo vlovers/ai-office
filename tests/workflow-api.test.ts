@@ -257,7 +257,7 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(blocked.json().state).toBe('blocked');
     expect(blocked.json().stages[1].state).toBe('pending');
     expect(await readFile(join(env.repository, 'README.md'), 'utf8')).toBe(
-      '# Disposable example\\n',
+      '# Disposable example\n',
     );
     const evidence = await send('POST', url + '/capture-coder-evidence', {
       version: blocked.json().version, confirmed: true,
