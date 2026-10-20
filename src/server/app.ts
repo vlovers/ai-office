@@ -64,12 +64,15 @@ export async function createApp(manager: TaskManager) {
   // Workflow creation persists only inert stage definitions; executable mutation
   // actions remain disabled until TaskManager enforces approvals and leases.
   app.post('/api/workflows', async (request, reply) => {
-    const input = z.object({
-      repositoryId: id,
-      coderAgentId: agentIdSchema,
-      reviewerAgentId: agentIdSchema,
-      qaAgentId: agentIdSchema.optional(),
-    }).strict().parse(request.body);
+    const input = z
+      .object({
+        repositoryId: id,
+        coderAgentId: agentIdSchema,
+        reviewerAgentId: agentIdSchema,
+        qaAgentId: agentIdSchema.optional(),
+      })
+      .strict()
+      .parse(request.body);
     const repository = manager.store.repository(input.repositoryId);
     if (!repository) throw new AppError(404, 'Repository not found.');
     await revalidateRepository(repository);
@@ -84,15 +87,24 @@ export async function createApp(manager: TaskManager) {
         ? [{ kind: 'qa' as const, id: input.qaAgentId, mode: 'read-only' as const }]
         : []),
     ];
-    const stages = profiles.map(profile => {
+    const stages = profiles.map((profile) => {
       const agent = manager.store.requireAgent(profile.id);
       if (agent.archived)
         throw new AppError(409, 'Restore archived agent before creating workflow.');
-      return { kind: profile.kind, agentId: agent.id, agentRevision: agent.revision, mode: profile.mode };
+      return {
+        kind: profile.kind,
+        agentId: agent.id,
+        agentRevision: agent.revision,
+        mode: profile.mode,
+      };
     });
-    return reply.code(201).send(new WorkflowStore(manager.store.db).create({
-      repositoryId: repository.id, baselineRevision: revision, stages,
-    }));
+    return reply.code(201).send(
+      new WorkflowStore(manager.store.db).create({
+        repositoryId: repository.id,
+        baselineRevision: revision,
+        stages,
+      }),
+    );
   });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
   app.get('/api/workflows/:id', async (request) => {
