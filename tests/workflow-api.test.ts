@@ -266,6 +266,17 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(evidence.statusCode).toBe(200);
     expect(evidence.json().stages[0].evidence.fileCount).toBe(3);
     const fingerprint = evidence.json().stages[0].evidence.revision;
+    const workspace = env.store.workspace(completed!.workspaceId!);
+    expect(workspace).toBeTruthy();
+    await writeFile(join(workspace!.path, 'README.md'), 'tampered after capture\n');
+    const staleEvidence = await send('POST', url + '/approve-coder-evidence', {
+      version: evidence.json().version,
+      confirmed: true,
+      revision: fingerprint,
+    });
+    expect(staleEvidence.statusCode).toBe(409);
+    expect((await send('GET', url)).json().state).toBe('blocked');
+    await writeFile(join(workspace!.path, 'README.md'), 'Modified by fixture\n');
     const released = await send('POST', url + '/approve-coder-evidence', {
       version: evidence.json().version,
       confirmed: true,
