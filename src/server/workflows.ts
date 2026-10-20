@@ -211,6 +211,8 @@ export class WorkflowStore {
         throw new AppError(409, 'Workflow is stale.');
       const next = structuredClone(current);
       const stage = next.stages.find((s) => s.state === 'ready' && s.taskId === taskId);
+      if (stage?.kind !== 'coder')
+        throw new AppError(409, 'Downstream execution requires an immutable read-only snapshot.');
       if (!stage || !stage.approvedRevision || stage.approvedRevision !== confirmedRevision)
         throw new AppError(409, 'Task is not bound to this approved revision.');
       if (this.list().some((w) => w.id !== id && w.stages.some((s) => s.taskId === taskId)))
