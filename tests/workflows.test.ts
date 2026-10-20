@@ -291,3 +291,51 @@ it('atomically binds only a matching unsubmitted task and rejects reuse', async 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('submits a bound workflow stage atomically and refuses duplicate submission', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-workflow-queue-'));
+  const store = new Store(join(directory, 'metadata.sqlite'));
+  try {
+    const repo = store.register({
+      path: '/disposable/workflow-queue', gitDir: '/disposable/workflow-queue/.git',
+      name: 'fixture',
+    });
+    const coder = store.agent('codex-1')!;
+    // Update the current profile and its immutable version consistently.
+    const write = store.editAgent(coder.id, coder.revision, {
+      name: coder.name, role: coder.role, description: coder.description,
+      instructions: coder.instructions, model: coder.model, maximumMode: 'write',
+    });
+    const workflows = new WorkflowStore(store.db);
+    const workflow = workflows.create({
+      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      stages: [
+        { kind: 'coder', agentId: write.id, agentRevision: write.revision, mode: 'write' },
+        { kind: 'reviewer', agentId: 'codex-2', agentRevision: 1, mode: 'read-only' },
+      ],
+    });
+    const approved = workflows.transition(workflow.id, 0, {
+      type: 'approve', revision: 'a'.repeat(40),
+    });
+    const task = store.createTask({
+      repositoryId: repo.id, agentId: write.id, title: 'Implement',
+      prompt: 'No execution', executionMode: 'write',
+    });
+    const bound = workflows.bindApprovedTask(workflow.id, approved.version, task.id);
+    expect(() => workflows.enqueueApprovedTask(store, workflow.id, bound.version, task.id,
+      'local-cli-chatgpt', 'b'.repeat(40))).toThrow();
+    expect(store.queue()).toEqual([]);
+    expect(store.taskConfiguration(task.id)).toBeUndefined();
+    const queued = workflows.enqueueApprovedTask(store, workflow.id, bound.version, task.id,
+      'local-cli-chatgpt', 'a'.repeat(40));
+    expect(queued.stages[0]?.state).toBe('running');
+    expect(store.queue()).toHaveLength(1);
+    expect(store.taskConfiguration(task.id)?.profileRevision).toBe(write.revision);
+    expect(() => workflows.enqueueApprovedTask(store, workflow.id, queued.version, task.id,
+      'local-cli-chatgpt', 'a'.repeat(40))).toThrow();
+    expect(store.queue()).toHaveLength(1);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
