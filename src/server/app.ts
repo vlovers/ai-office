@@ -8,7 +8,7 @@ import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
 import { WorkflowStore } from './workflows.js';
 import { git, revalidateRepository, validateRepository } from './repositories.js';
-import type { AgentEvent } from '../shared/types.js';
+import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
 
 const id = z.string().uuid();
 export async function createApp(manager: TaskManager) {
@@ -230,7 +230,7 @@ export async function createApp(manager: TaskManager) {
     if (!task || task.state !== 'completed' || !task.workspaceId)
       throw new AppError(409, 'Completed Coder workspace missing.');
     // Reuse Review Center's worktree identity, lease and revision validation.
-    const review = await manager.reviewOperation(task.id, 'review');
+    const review = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
     if (!review.revision || review.workspace.id !== task.workspaceId)
       throw new AppError(409, 'Review Center did not return a verified revision.');
     return workflows.captureCoderEvidence(workflowId, input.version, {
