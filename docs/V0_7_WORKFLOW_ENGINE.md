@@ -36,3 +36,7 @@ Schema 9 is forward-only. Older AI Office versions must refuse to open metadata 
 ## Acceptance for next milestone
 
 A fresh Coder task must not launch before explicit approval, Reviewer must observe precisely the approved Coder revision, and QA must never run tests with unauthorized host permissions. End-to-end interruption/restart must not produce duplicate execution.
+
+## Inert task binding
+
+`POST /api/workflows/:id/bind-task` accepts `{version, taskId, confirmed:true}` for the approved initial Coder stage. The server revalidates the repository, current Git HEAD and clean checkout, then atomically associates an existing unsubmitted task with the stage. It does **not** enqueue, execute or grant host permissions. Downstream handoffs remain disabled pending review/worktree revision validation and TaskManager integration.
