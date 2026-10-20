@@ -224,3 +224,55 @@ it('blocks a persisted running workflow after unexpected backend restart', async
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('atomically binds only a matching unsubmitted task and rejects reuse', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-workflow-bind-'));
+  const store = new Store(join(directory, 'metadata.sqlite'));
+  try {
+    const repo = store.register({
+      path: '/disposable/binding', gitDir: '/disposable/binding/.git', name: 'fixture'
+    });
+    const coder = store.agent('codex-1')!;
+    store.db.prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
+      .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, 1);
+    const service = new WorkflowStore(store.db);
+    const create = () => service.create({
+      repositoryId: repo.id, baselineRevision: 'a'.repeat(40),
+      stages: [
+        { kind: 'coder', agentId: 'codex-1', agentRevision: 1, mode: 'write' },
+        { kind: 'reviewer', agentId: 'codex-2', agentRevision: 1, mode: 'read-only' },
+      ],
+    });
+    const original = create();
+    const approved = service.transition(original.id, 0, {
+      type: 'approve', revision: 'a'.repeat(40),
+    });
+    const mismatch = store.createTask({
+      repositoryId: repo.id, agentId: 'codex-2',
+      title: 'Wrong agent', prompt: 'review', executionMode: 'read-only',
+    });
+    expect(() => service.bindApprovedTask(original.id, approved.version, mismatch.id)).toThrow();
+    const task = store.createTask({
+      repositoryId: repo.id, agentId: 'codex-1',
+      title: 'Coder', prompt: 'write', executionMode: 'write',
+    });
+    const bound = service.bindApprovedTask(original.id, approved.version, task.id);
+    expect(bound.stages[0]?.taskId).toBe(task.id);
+    expect(bound.stages[0]?.state).toBe('ready');
+    expect(store.queue()).toEqual([]);
+    expect(() => service.bindApprovedTask(original.id, approved.version, task.id)).toThrow();
+    const other = create();
+    const otherReady = service.transition(other.id, 0, {
+      type: 'approve', revision: 'a'.repeat(40),
+    });
+    expect(() => service.bindApprovedTask(other.id, otherReady.version, task.id)).toThrow();
+    const running = service.transition(original.id, bound.version, {
+      type: 'start', taskId: task.id, revision: 'a'.repeat(40),
+    });
+    expect(running.stages[0]?.state).toBe('running');
+    expect(store.queue()).toEqual([]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
