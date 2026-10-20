@@ -50,3 +50,7 @@ After initial approval and task binding, `POST /api/workflows/:id/submit-initial
 ## Terminal reconciliation (fail-closed)
 
 The TaskManager finalizer calls `WorkflowStore.reconcileTerminals()` after persisting terminal task state. For completed Coder tasks, the workflow and stage become **blocked**, not approved or ready for Reviewer. Failed, stopped and interrupted tasks likewise block the chain. A separate provenance verifier and explicit operator approval are required before any downstream handoff can be safely enabled. This is intentional: task completion is not proof that the intended Git revision was produced. The transition is idempotent and transactional; unfinished queue tasks are not treated as completed.
+
+## Restart queue invariant
+
+Before the restored queue dispatcher starts, schema initialization reconciles workflow-linked stages. A submitted workflow task still in `queued` state is changed to `interrupted` and its `task_queue` entry is deleted in the same SQLite transaction that blocks the workflow. This prevents pre-approved tasks from silently executing after a backend crash. Do not remove this constraint when introducing auto-handoff or retry policies. A new operator decision and fresh repository revision verification are required.
