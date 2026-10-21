@@ -152,3 +152,15 @@ and the next available **operator checkpoint**. The response explicitly reports
 `nextAction` is never an authorization grant: every actual mutation endpoint
 rechecks versions, repository identity, Git leases, evidence and permissions.
 The endpoint does not run a model, construct a snapshot or enqueue work.
+
+## Reviewer handoff inspection (non-executing)
+
+`POST /api/workflows/:id/inspect-handoff` accepts a pinned `{version,revision}`
+after explicit Reviewer approval. It re-runs Review Center verification under
+its existing repository lease, checks exact worktree identity, revision and
+file count, and reports file inspection availability without returning file
+contents. Sensitive, oversized, binary or unavailable entries require manual
+inspection. The response always declares `snapshotCreated:false` and
+`downstreamExecutable:false`: inspection creates no immutable snapshot, no
+model session and no task queue entry. This endpoint is a diagnostic, not a
+security grant or a replacement for lease-held snapshot construction.

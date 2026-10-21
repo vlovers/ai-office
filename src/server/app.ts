@@ -333,6 +333,55 @@ export async function createApp(manager: TaskManager) {
       revision: review.revision,
     });
   });
+  app.post('/api/workflows/:id/inspect-handoff', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        revision: z.string().regex(/^[0-9a-f]{64}$/i),
+      })
+      .strict()
+      .parse(request.body);
+    const workflow = new WorkflowStore(manager.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (
+      !workflow ||
+      workflow.version !== input.version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      !coder.taskId ||
+      !coder.evidence ||
+      coder.evidence.revision !== input.revision ||
+      reviewer?.state !== 'ready' ||
+      reviewer.approvedRevision !== input.revision
+    )
+      throw new AppError(409, 'Reviewer handoff checkpoint is stale or unapproved.');
+    const task = manager.store.task(coder.taskId);
+    if (!task || task.workspaceId !== coder.evidence.workspaceId)
+      throw new AppError(409, 'Coder workspace binding changed.');
+    const review = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
+    if (
+      review.revision !== input.revision ||
+      review.workspace.id !== coder.evidence.workspaceId ||
+      review.files.length !== coder.evidence.fileCount
+    )
+      throw new AppError(409, 'Handoff evidence changed. Reapprove Coder output.');
+    const excluded = review.files.filter(
+      (file) => file.availability && file.availability !== 'text',
+    );
+    return {
+      workflowId,
+      version: workflow.version,
+      revision: input.revision,
+      fileCount: review.files.length,
+      inspectableFileCount: review.files.length - excluded.length,
+      excludedFileCount: excluded.length,
+      snapshotCreated: false,
+      downstreamExecutable: false,
+      result: excluded.length ? 'manual-inspection-required' : 'snapshot-runner-required',
+    };
+  });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
   app.get('/api/workflows/:id/timeline', async (request) => {
     const workflow = new WorkflowStore(manager.store.db).get(

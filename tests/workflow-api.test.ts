@@ -398,6 +398,24 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(approvedTimeline.json().stages[1].status).toBe('ready');
     expect(approvedTimeline.json().stages[1].nextAction).toBeNull();
     expect(approvedTimeline.json().downstreamExecutable).toBe(false);
+    const handoffUrl = url + '/inspect-handoff';
+    const handoff = await send('POST', handoffUrl, {
+      version: reviewer.json().version,
+      revision: currentFingerprint,
+    });
+    expect(handoff.statusCode).toBe(200);
+    expect(handoff.json().snapshotCreated).toBe(false);
+    expect(handoff.json().downstreamExecutable).toBe(false);
+    expect(handoff.json().fileCount).toBe(3);
+    expect(
+      (
+        await send('POST', handoffUrl, {
+          version: released.json().version,
+          revision: currentFingerprint,
+        })
+      ).statusCode,
+    ).toBe(409);
+    expect(env.store.queue()).toEqual([]);
     expect(env.store.queue()).toEqual([]);
   } finally {
     if (app) await app.close();
