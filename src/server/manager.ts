@@ -8,6 +8,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
+import { stageReviewerGitContext, removeReviewerGitContext } from './reviewer-runtime.js';
 import {
   createReviewerSourceCandidate,
   verifyReviewerSourceCandidate,
@@ -840,6 +841,120 @@ export class TaskManager {
    * Recheck durable full-source provenance. Never returns execution approval.
    * This is deliberately a separate check from evidence-bundle integrity.
    */
+  /** Stages a separate Git repository; does not start Codex or grant execution. */
+  async prepareReviewerRuntime(workflowId: string, version: number) {
+    if (this.closing || !this.workspaces)
+      throw new AppError(503, 'Reviewer staging unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const source = reviewer?.sourceCandidate;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !source ||
+      !reviewer.bundle ||
+      reviewer.runtimeCandidate ||
+      reviewer.approvedRevision !== source.revision ||
+      reviewer.bundle.revision !== source.revision
+    )
+      throw new AppError(409, 'Reviewer staging checkpoint is stale.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const repo = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !task ||
+      task.state !== 'completed' ||
+      !repo ||
+      !workspace ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repo.id
+    )
+      throw new AppError(409, 'Coder source workspace changed.');
+    const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    const paths = (await repositoryLeaseDirectories(repo, workspace.gitDir)).map(
+      (directory) => join(root, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(paths, repo.path);
+    } catch {
+      throw new AppError(409, 'Repository is busy or has an unresolved lease.');
+    }
+    try {
+      await this.workspaces.validate(repo, workspace);
+      if ([...this.active.values()].some((run) => run.gitDir === repo.gitDir))
+        throw new AppError(409, 'Agent is currently using the repository.');
+      const revision = await this.workspaces.revision(repo, workspace);
+      const authorized = await this.workspaces.authorize(repo);
+      const sourceId = basename(source.directory);
+      if (
+        revision !== source.revision ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(sourceId) ||
+        source.directory !== join(authorized, 'workflow-reviewer-source', sourceId) ||
+        reviewer.bundle.directory !== join(authorized, 'workflow-evidence', reviewer.bundle.id)
+      )
+        throw new AppError(409, 'Reviewer snapshot identity changed.');
+      let manifest: ReviewerSourceManifest | undefined;
+      let evidenceValid = false;
+      try {
+        manifest = JSON.parse(
+          await readFile(join(source.directory, 'source-manifest.json'), 'utf8'),
+        ) as ReviewerSourceManifest;
+        const evidence = JSON.parse(
+          await readFile(join(reviewer.bundle.directory, 'manifest.json'), 'utf8'),
+        ) as SnapshotManifest;
+        evidenceValid =
+          evidence.id === reviewer.bundle.id &&
+          evidence.digest === reviewer.bundle.digest &&
+          evidence.evidenceRevision === revision &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, evidence));
+      } catch {
+        // Malformed, missing and inaccessible evidence must fail closed.
+      }
+      if (
+        !evidenceValid ||
+        !manifest ||
+        manifest.revision !== revision ||
+        manifest.digest !== source.digest ||
+        !Array.isArray(manifest.files) ||
+        manifest.files.length !== source.fileCount ||
+        !(await verifyReviewerSourceCandidate(source.directory, manifest))
+      )
+        throw new AppError(409, 'Reviewer source integrity check failed.');
+      const destinationRoot = join(authorized, 'workflow-reviewer-runtime');
+      await mkdir(destinationRoot, { recursive: true, mode: 0o700 });
+      const staged = await stageReviewerGitContext({
+        sourceDirectory: source.directory,
+        manifest,
+        destinationRoot,
+        verifyRevision: () => this.workspaces!.revision(repo, workspace),
+      });
+      try {
+        const saved = new WorkflowStore(this.store.db).recordReviewerRuntime(
+          workflowId,
+          version,
+          revision,
+          {
+            directory: staged.directory,
+            commit: staged.commit,
+            sourceDigest: staged.sourceDigest,
+          },
+        );
+        return { workflow: saved, runtimeCommit: staged.commit, staged: true, runnable: false };
+      } catch (error) {
+        await removeReviewerGitContext(destinationRoot, staged.directory);
+        throw error;
+      }
+    } finally {
+      await release();
+    }
+  }
+
   async verifyPreparedReviewerSource(workflowId: string, version: number) {
     const workflow = new WorkflowStore(this.store.db).get(workflowId);
     const coder = workflow?.stages[0];
