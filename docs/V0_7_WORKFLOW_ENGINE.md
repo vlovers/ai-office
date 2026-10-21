@@ -302,3 +302,10 @@ original approved evidence, Coder revision and workflow version under a
 repository lease. Missing or altered metadata and files are rejected. It does
 not queue an agent, and returns `runnable:false`. Actual model execution
 remains blocked pending a separately proven sandbox and lifecycle runner.
+
+### Git metadata tamper protection
+Runtime preflight checks the local `.git` directory before invoking Git:
+no symlinks, special entries, shared object alternates or worktree config,
+and a SHA-256 pin of the locally generated Git configuration stored alongside
+runtime provenance. A changed Git config fails closed before any Git command.
+This is not equivalent to OS process isolation and grants no execution authority.

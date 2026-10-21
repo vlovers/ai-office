@@ -50,6 +50,12 @@ it('creates a remote-free clean Git context from an approved source candidate', 
       manifest: snapshot.manifest,
     };
     expect(await verifyReviewerGitContext(verifyInput)).toBe(true);
+    const gitConfigPath = join(runtime.directory, '.git', 'config');
+    const gitConfig = await readFile(gitConfigPath, 'utf8');
+    await writeFile(gitConfigPath, gitConfig + '\n[core]\nfsmonitor = evil\n');
+    expect(await verifyReviewerGitContext(verifyInput)).toBe(false);
+    await writeFile(gitConfigPath, gitConfig);
+    expect(await verifyReviewerGitContext(verifyInput)).toBe(true);
     await writeFile(join(runtime.directory, 'README.md'), 'tampered');
     expect(await verifyReviewerGitContext(verifyInput)).toBe(false);
     await writeFile(join(runtime.directory, 'README.md'), 'reviewable');

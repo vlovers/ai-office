@@ -10,6 +10,39 @@ import { verifyReviewerSourceCandidate, type ReviewerSourceManifest } from './re
 const exec = promisify(execFile);
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+async function gitMetadataFingerprint(directory: string): Promise<string> {
+  const metadata = join(directory, '.git');
+  const stat = await lstat(metadata);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new AppError(409, 'Unsafe Git metadata.');
+  let count = 0;
+  const walk = async (path: string): Promise<void> => {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      if (++count > 10000 || entry.isSymbolicLink())
+        throw new AppError(409, 'Unsafe Git metadata entry.');
+      if (entry.isDirectory()) await walk(join(path, entry.name));
+      else if (!entry.isFile()) throw new AppError(409, 'Unsupported Git metadata entry.');
+    }
+  };
+  await walk(metadata);
+  for (const forbidden of ['commondir', 'objects/info/alternates', 'config.worktree']) {
+    try {
+      await lstat(join(metadata, forbidden));
+      throw new AppError(409, 'External or overridden Git metadata is prohibited.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  const config = join(metadata, 'config');
+  const handle = await open(config, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const bytes = await readFile(handle);
+    if (bytes.length > 64 * 1024) throw new AppError(409, 'Oversized Git config.');
+    return createHash('sha256').update(bytes).digest('hex');
+  } finally {
+    await handle.close();
+  }
+}
+
 /**
  * Git-context staging for a verified source candidate, not agent execution.
  * A local repository is initialized without a remote, external objects,
@@ -96,10 +129,11 @@ export async function stageReviewerGitContext(input: {
       JSON.stringify(files) !== JSON.stringify(input.manifest.files.map((item) => item.path).sort())
     )
       throw new AppError(409, 'Runtime Git inventory mismatch.');
+    const configDigest = await gitMetadataFingerprint(directory);
     // Metadata is intentionally never an execution grant.
     await writeFile(
       join(input.destinationRoot, basename(directory) + '.provenance.json'),
-      JSON.stringify({ commit, sourceDigest: input.manifest.digest }),
+      JSON.stringify({ commit, sourceDigest: input.manifest.digest, configDigest }),
       { flag: 'wx', mode: 0o600 },
     );
     return { directory, commit, sourceDigest: input.manifest.digest };
@@ -156,8 +190,13 @@ export async function verifyReviewerGitContext(input: {
     const provenance = JSON.parse(await readFile(join(root, id + '.provenance.json'), 'utf8')) as {
       commit?: string;
       sourceDigest?: string;
+      configDigest?: string;
     };
-    if (provenance.commit !== input.commit || provenance.sourceDigest !== input.manifest.digest)
+    if (
+      provenance.commit !== input.commit ||
+      provenance.sourceDigest !== input.manifest.digest ||
+      provenance.configDigest !== (await gitMetadataFingerprint(input.directory))
+    )
       return false;
     const run = async (args: string[]) =>
       (
