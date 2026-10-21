@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { chmod, lstat, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { AppError } from './errors.js';
 import { git } from './repositories.js';
@@ -146,5 +146,80 @@ export async function createReviewerSourceCandidate(input: {
     await chmod(directory, 0o700);
     await rm(directory, { recursive: true, force: true });
     throw error;
+  }
+}
+
+/**
+ * A strict preflight integrity check; verification never grants execution.
+ * Any unexpected file, directory, symlink or changed digest is rejected.
+ */
+export async function verifyReviewerSourceCandidate(
+  directory: string,
+  manifest: ReviewerSourceManifest,
+): Promise<boolean> {
+  try {
+    const root = await lstat(directory);
+    if (!root.isDirectory() || root.isSymbolicLink()) return false;
+    if (
+      !/^[a-f0-9]{64}$/i.test(manifest.revision) ||
+      manifest.files.length < 1 ||
+      manifest.files.length > MAX_FILES ||
+      createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex') !== manifest.digest
+    )
+      return false;
+    const expected = new Set(['source-manifest.json']);
+    let size = 0;
+    for (const file of manifest.files) {
+      if (
+        !file.path ||
+        file.path.startsWith('/') ||
+        file.path.includes('\\') ||
+        file.path.split('/').some((part) => !part || part === '.' || part === '..') ||
+        forbidden.test(file.path) ||
+        !Number.isSafeInteger(file.size) ||
+        file.size < 0 ||
+        file.size > MAX_FILE_BYTES ||
+        !/^[a-f0-9]{64}$/.test(file.sha256) ||
+        expected.has(file.path)
+      )
+        return false;
+      expected.add(file.path);
+      size += file.size;
+    }
+    if (size > MAX_TOTAL_BYTES) return false;
+    const seen = new Set<string>();
+    const check = async (path: string, prefix: string): Promise<boolean> => {
+      for (const entry of await readdir(path, { withFileTypes: true })) {
+        const name = prefix ? prefix + '/' + entry.name : entry.name;
+        if (entry.isSymbolicLink()) return false;
+        if (entry.isDirectory()) {
+          if (![...expected].some((file) => file.startsWith(name + '/'))) return false;
+          if (!(await check(join(path, entry.name), name))) return false;
+        } else if (!entry.isFile() || !expected.has(name)) {
+          return false;
+        } else {
+          seen.add(name);
+        }
+      }
+      return true;
+    };
+    if (!(await check(directory, '')) || seen.size !== expected.size) return false;
+    if ((await readFile(join(directory, 'source-manifest.json'), 'utf8')) !== JSON.stringify(manifest))
+      return false;
+    for (const file of manifest.files) {
+      const path = join(directory, file.path);
+      const stat = await lstat(path);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== file.size) return false;
+      const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        if (createHash('sha256').update(await readFile(handle)).digest('hex') !== file.sha256)
+          return false;
+      } finally {
+        await handle.close();
+      }
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
