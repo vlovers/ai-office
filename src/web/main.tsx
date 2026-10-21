@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
+import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
@@ -501,6 +502,7 @@ function App() {
                   }}
                 />
               )}
+              <WorkflowBoard />
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>

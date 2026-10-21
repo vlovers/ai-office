@@ -174,3 +174,11 @@ The inspector returns `eligible` and machine-readable `reasons`, but always
 returns `snapshotCreated:false` and `downstreamExecutable:false`. A clean
 manifest is **necessary but not sufficient**: only a future lease-held native
 snapshot operation can authenticate file bytes and prove immutable isolation.
+
+## Browser workflow monitor (read-only)
+
+The Workflow Timeline panel lists persisted workflows and displays each pinned
+stage using `GET /api/workflows/:id/timeline`. The panel is explicitly
+read-only: it has no approval, write, queue or model launch button. An operator
+may refresh status and inspect the next checkpoint without accidentally
+converting a UI suggestion into execution authority. Reviewer/QA remain fenced.
