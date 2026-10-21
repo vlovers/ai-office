@@ -9,7 +9,7 @@ const MAX_FILES = 2000;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
 const forbidden =
-  /(^|\/)(\.git|\.env[^/]*|\.aws|\.codex|\.agents|node_modules|credentials[^/]*|auth\.json)(\/|$)|\.pem$/i;
+  /(^|\/)(\.git|\.env[^/]*|\.aws|\.codex|\.agents|node_modules|credentials[^/]*|auth\.json|\.gitattributes|\.gitmodules|\.lfsconfig)(\/|$)|\.pem$/i;
 
 export interface ReviewerSourceManifest {
   revision: string;

@@ -69,7 +69,7 @@ export async function stageReviewerGitContext(input: {
       await writeFile(target, bytes, { flag: 'wx', mode: 0o600 });
     }
     await runGit(['init', '-q', '--initial-branch=reviewer']);
-    await runGit(['-c', 'core.hooksPath=/dev/null', 'add', '--all']);
+    await runGit(['-c', 'core.hooksPath=/dev/null', 'add', '-f', '--all']);
     await runGit([
       '-c',
       'core.hooksPath=/dev/null',
