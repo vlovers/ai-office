@@ -461,6 +461,15 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(verification.statusCode).toBe(200);
     expect(verification.json().verified).toBe(true);
     expect(verification.json().runnable).toBe(false);
+    await chmod(join(bundle.directory, 'manifest.json'), 0o600);
+    await writeFile(join(bundle.directory, 'manifest.json'), '{invalid json');
+    const corrupted = await send('POST', url + '/verify-bundle', {
+      version: recorded.workflow.version,
+    });
+    expect(corrupted.statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    await writeFile(join(bundle.directory, 'manifest.json'), JSON.stringify(recorded.manifest));
+    await chmod(join(bundle.directory, 'manifest.json'), 0o400);
     const repeated = await send('POST', url + '/capture-bundle', {
       version: recorded.workflow.version,
       revision: currentFingerprint,
@@ -481,13 +490,6 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     });
     expect(invalidatedBundle.statusCode).toBe(409);
     expect((await send('GET', url)).json().version).toBe(recorded.workflow.version);
-    expect(env.store.queue()).toEqual([]);
-    await chmod(join(bundle.directory, 'manifest.json'), 0o600);
-    await writeFile(join(bundle.directory, 'manifest.json'), '{invalid json');
-    const corrupted = await send('POST', url + '/verify-bundle', {
-      version: recorded.workflow.version,
-    });
-    expect(corrupted.statusCode).toBe(409);
     expect(env.store.queue()).toEqual([]);
     await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);
   } finally {
