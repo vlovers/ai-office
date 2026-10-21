@@ -218,3 +218,12 @@ Reviewer workspace. A process failure after bundle creation but before SQLite
 commit can leave an orphan bundle for manual recovery; automatic cleanup and
 snapshot verification before real execution remain future work. The response
 always reports `runnable:false` and never queues a model.
+
+## Bundle verification before downstream use
+
+`POST /api/workflows/:id/verify-bundle` revalidates the Reviewer checkpoint,
+locks the repository, verifies Coder worktree identity and current fingerprint,
+then checks persisted bundle provenance against the complete on-disk manifest.
+It returns `runnable:false` even when verification passes. It cannot create
+Reviewer tasks and does not elevate permissions. This is a diagnostic safety
+check, not an immutable sandbox or resumable execution authorization.

@@ -455,6 +455,12 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(bundle.revision).toBe(currentFingerprint);
     expect(bundle.digest).toBe(recorded.manifest.digest);
     expect(await verifyEvidenceBundle(bundle.directory, recorded.manifest)).toBe(true);
+    const verification = await send('POST', url + '/verify-bundle', {
+      version: recorded.workflow.version,
+    });
+    expect(verification.statusCode).toBe(200);
+    expect(verification.json().verified).toBe(true);
+    expect(verification.json().runnable).toBe(false);
     const repeated = await send('POST', url + '/capture-bundle', {
       version: recorded.workflow.version,
       revision: currentFingerprint,
@@ -470,6 +476,11 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
       revision: currentFingerprint,
     });
     expect(mutated.statusCode).toBe(409);
+    expect(
+      (await send('POST', url + '/verify-bundle', {
+        version: recorded.workflow.version,
+      })).statusCode,
+    ).toBe(409);
     expect((await send('GET', url)).json().version).toBe(recorded.workflow.version);
     expect(env.store.queue()).toEqual([]);
     await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);

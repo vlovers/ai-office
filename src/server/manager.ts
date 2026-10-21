@@ -4,11 +4,16 @@ import { diffLines } from '../shared/diff.js';
 import type { ReviewComment, ReviewRecord } from '../shared/types.js';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
-import { materializeEvidenceBundle, removeEvidenceBundle } from './evidence-bundle.js';
+import {
+  materializeEvidenceBundle,
+  removeEvidenceBundle,
+  verifyEvidenceBundle,
+  type SnapshotManifest,
+} from './evidence-bundle.js';
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
 import { WorkflowStore } from './workflows.js';
@@ -713,6 +718,72 @@ export class TaskManager {
         await removeEvidenceBundle(destinationRoot, bundle.path);
         throw error;
       }
+    } finally {
+      await release();
+    }
+  }
+
+  /**
+   * Revalidates a recorded bundle without permitting downstream execution.
+   * Untrusted bundles never become permission grants.
+   */
+  async inspectWorkflowBundle(workflowId: string, version: number) {
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const bundle = reviewer?.bundle;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !bundle ||
+      bundle.revision !== coder.evidence?.revision ||
+      bundle.revision !== reviewer.approvedRevision
+    )
+      throw new AppError(409, 'Reviewer evidence checkpoint is stale or unavailable.');
+    const repository = this.store.repository(workflow.repositoryId);
+    if (!repository || !this.workspaces)
+      throw new AppError(409, 'Repository verification is unavailable.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (!workspace || workspace.id !== coder.evidence?.workspaceId)
+      throw new AppError(409, 'Coder worktree identity changed.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const locks = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    const release = await acquireLocks(locks, repository.path);
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const currentRevision = await this.workspaces.revision(repository, workspace);
+      const destinationRoot = join(await this.workspaces.authorize(repository), 'workflow-evidence');
+      if (
+        currentRevision !== bundle.revision ||
+        bundle.directory !== join(destinationRoot, bundle.id)
+      )
+        throw new AppError(409, 'Coder revision or evidence location changed.');
+      const content = await readFile(join(bundle.directory, 'manifest.json'), 'utf8');
+      const manifest = JSON.parse(content) as SnapshotManifest;
+      if (
+        manifest.id !== bundle.id ||
+        manifest.digest !== bundle.digest ||
+        manifest.evidenceRevision !== bundle.revision ||
+        manifest.entries.length !== bundle.fileCount ||
+        !(await verifyEvidenceBundle(bundle.directory, manifest))
+      )
+        throw new AppError(409, 'Evidence bundle integrity verification failed.');
+      if (new WorkflowStore(this.store.db).get(workflowId)?.version !== version)
+        throw new AppError(409, 'Workflow changed during bundle verification.');
+      return {
+        workflowId,
+        version,
+        digest: bundle.digest,
+        verified: true,
+        runnable: false,
+      };
     } finally {
       await release();
     }
