@@ -123,3 +123,101 @@ export async function removeReviewerGitContext(
   await rm(directory, { recursive: true, force: true });
   await rm(join(root, basename(directory) + '.provenance.json'), { force: true });
 }
+
+/**
+ * Durable, fail-closed runtime preflight. The runtime is not trusted just
+ * because SQLite remembers its commit: verify its files and Git context.
+ * This does not authorize an SDK execution.
+ */
+export async function verifyReviewerGitContext(input: {
+  destinationRoot: string;
+  directory: string;
+  commit: string;
+  manifest: ReviewerSourceManifest;
+}): Promise<boolean> {
+  try {
+    const root = resolve(input.destinationRoot);
+    const id = basename(input.directory);
+    if (
+      !ID.test(id) ||
+      resolve(input.directory) !== join(root, id) ||
+      !/^[0-9a-f]{40}$/.test(input.commit)
+    )
+      return false;
+    const rootInfo = await lstat(root);
+    const runtimeInfo = await lstat(input.directory);
+    if (
+      !rootInfo.isDirectory() ||
+      rootInfo.isSymbolicLink() ||
+      !runtimeInfo.isDirectory() ||
+      runtimeInfo.isSymbolicLink()
+    )
+      return false;
+    const provenance = JSON.parse(
+      await readFile(join(root, id + '.provenance.json'), 'utf8'),
+    ) as { commit?: string; sourceDigest?: string };
+    if (
+      provenance.commit !== input.commit ||
+      provenance.sourceDigest !== input.manifest.digest
+    )
+      return false;
+    const run = async (args: string[]) =>
+      (
+        await exec('/usr/bin/git', ['-C', input.directory, ...args], {
+          timeout: 8000,
+          maxBuffer: 1024 * 1024,
+          env: {
+            PATH: '/usr/bin:/bin',
+            HOME: root,
+            GIT_CONFIG_NOSYSTEM: '1',
+            GIT_CONFIG_GLOBAL: '/dev/null',
+            GIT_TERMINAL_PROMPT: '0',
+            GIT_OPTIONAL_LOCKS: '0',
+            GIT_NO_REPLACE_OBJECTS: '1',
+          },
+        })
+      ).stdout.trim();
+    if ((await run(['rev-parse', 'HEAD'])) !== input.commit) return false;
+    if ((await run(['remote'])).length || (await run(['status', '--porcelain'])).length)
+      return false;
+    const expected = input.manifest.files.map((file) => file.path).sort();
+    const actual = (await run(['ls-files', '-z'])).split('\0').filter(Boolean).sort();
+    if (JSON.stringify(expected) !== JSON.stringify(actual)) return false;
+    // Reject files hidden from Git status by per-repository exclude rules.
+    const allowed = new Set(expected);
+    const walk = async (path: string, prefix = ''): Promise<boolean> => {
+      for (const entry of await readdir(path, { withFileTypes: true })) {
+        if (!prefix && entry.name === '.git') {
+          if (!entry.isDirectory() || entry.isSymbolicLink()) return false;
+          continue;
+        }
+        const relative = prefix ? prefix + '/' + entry.name : entry.name;
+        if (entry.isSymbolicLink()) return false;
+        if (entry.isDirectory()) {
+          if (![...allowed].some((file) => file.startsWith(relative + '/'))) return false;
+          if (!(await walk(join(path, entry.name), relative))) return false;
+        } else if (!entry.isFile() || !allowed.has(relative)) {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (!(await walk(input.directory))) return false;
+    for (const file of input.manifest.files) {
+      const path = resolve(input.directory, file.path);
+      if (!path.startsWith(input.directory + sep)) return false;
+      const stat = await lstat(path);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== file.size) return false;
+      const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        if (createHash('sha256').update(await readFile(handle)).digest('hex') !== file.sha256)
+          return false;
+      } finally {
+        await handle.close();
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}

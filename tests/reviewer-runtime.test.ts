@@ -42,6 +42,17 @@ it('creates a remote-free clean Git context from an approved source candidate', 
     expect(run(['remote'])).toBe('');
     expect(run(['status', '--porcelain'])).toBe('');
     expect(run(['rev-parse', 'HEAD'])).toBe(runtime.commit);
+    const verifyInput = {
+      destinationRoot: runtimes,
+      directory: runtime.directory,
+      commit: runtime.commit,
+      manifest: snapshot.manifest,
+    };
+    expect(await verifyReviewerGitContext(verifyInput)).toBe(true);
+    await writeFile(join(runtime.directory, 'README.md'), 'tampered');
+    expect(await verifyReviewerGitContext(verifyInput)).toBe(false);
+    await writeFile(join(runtime.directory, 'README.md'), 'reviewable');
+    expect(await verifyReviewerGitContext(verifyInput)).toBe(true);
     expect(await readFile(join(runtime.directory, 'README.md'), 'utf8')).toBe('reviewable');
     expect(await verifyReviewerSourceCandidate(snapshot.directory, snapshot.manifest)).toBe(true);
     await removeReviewerGitContext(runtimes, runtime.directory);
