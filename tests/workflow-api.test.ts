@@ -461,12 +461,22 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(verification.statusCode).toBe(200);
     expect(verification.json().verified).toBe(true);
     expect(verification.json().runnable).toBe(false);
+    const audit = await send('GET', '/api/workflows/bundles/audit');
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json().valid).toBe(1);
+    expect(audit.json().invalid).toBe(0);
+    expect(audit.json().executionAuthorized).toBe(false);
     await chmod(join(bundle.directory, 'manifest.json'), 0o600);
     await writeFile(join(bundle.directory, 'manifest.json'), '{invalid json');
     const corrupted = await send('POST', url + '/verify-bundle', {
       version: recorded.workflow.version,
     });
     expect(corrupted.statusCode).toBe(409);
+    const brokenAudit = await send('GET', '/api/workflows/bundles/audit');
+    expect(brokenAudit.statusCode).toBe(200);
+    expect(brokenAudit.json().valid).toBe(0);
+    expect(brokenAudit.json().invalid).toBe(1);
+    expect(brokenAudit.json().executionAuthorized).toBe(false);
     expect(env.store.queue()).toEqual([]);
     await writeFile(join(bundle.directory, 'manifest.json'), JSON.stringify(recorded.manifest));
     await chmod(join(bundle.directory, 'manifest.json'), 0o400);
