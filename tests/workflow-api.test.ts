@@ -490,6 +490,13 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     const candidate = prepared.json().workflow.stages[1].sourceCandidate;
     expect(candidate.revision).toBe(currentFingerprint);
     expect(prepared.json().runnable).toBe(false);
+    const verifiedSource = await send('POST', url + '/verify-reviewer-source', {
+      version: prepared.json().workflow.version,
+    });
+    expect(verifiedSource.statusCode).toBe(200);
+    expect(verifiedSource.json().sourceDigest).toBe(candidate.digest);
+    expect(verifiedSource.json().verified).toBe(true);
+    expect(verifiedSource.json().runnable).toBe(false);
     expect(
       await verifyReviewerSourceCandidate(candidate.directory, prepared.json().sourceManifest),
     ).toBe(true);
@@ -520,6 +527,10 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(invalidatedBundle.statusCode).toBe(409);
     expect((await send('GET', url)).json().version).toBe(prepared.json().workflow.version);
     expect(env.store.queue()).toEqual([]);
+    const staleSource = await send('POST', url + '/verify-reviewer-source', {
+      version: prepared.json().workflow.version,
+    });
+    expect(staleSource.statusCode).toBe(409);
     await removeEvidenceBundle(dirname(candidate.directory), candidate.directory);
     await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);
   } finally {

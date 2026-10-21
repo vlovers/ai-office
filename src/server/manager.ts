@@ -8,7 +8,11 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
-import { createReviewerSourceCandidate, verifyReviewerSourceCandidate } from './reviewer-source.js';
+import {
+  createReviewerSourceCandidate,
+  verifyReviewerSourceCandidate,
+  type ReviewerSourceManifest,
+} from './reviewer-source.js';
 import {
   materializeEvidenceBundle,
   removeEvidenceBundle,
@@ -827,6 +831,104 @@ export class TaskManager {
         await removeEvidenceBundle(snapshotRoot, candidate.directory);
         throw error;
       }
+    } finally {
+      await release();
+    }
+  }
+
+  /**
+   * Recheck durable full-source provenance. Never returns execution approval.
+   * This is deliberately a separate check from evidence-bundle integrity.
+   */
+  async verifyPreparedReviewerSource(workflowId: string, version: number) {
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const source = reviewer?.sourceCandidate;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !reviewer.bundle ||
+      !source ||
+      source.revision !== reviewer.approvedRevision ||
+      source.revision !== coder.evidence?.revision ||
+      source.revision !== reviewer.bundle.revision
+    )
+      throw new AppError(409, 'Reviewer source checkpoint is stale or missing.');
+    const repository = this.store.repository(workflow.repositoryId);
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !this.workspaces ||
+      !repository ||
+      !workspace ||
+      !task ||
+      task.state !== 'completed' ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Source worktree binding is invalid.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockPaths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(lockPaths, repository.path);
+    } catch {
+      throw new AppError(409, 'Repository is busy or has an unresolved lease.');
+    }
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const revision = await this.workspaces.revision(repository, workspace);
+      const authorizedRoot = await this.workspaces.authorize(repository);
+      const sourceRoot = join(authorizedRoot, 'workflow-reviewer-source');
+      const evidenceRoot = join(authorizedRoot, 'workflow-evidence');
+      if (
+        revision !== source.revision ||
+        source.directory !== join(sourceRoot, source.directory.split('/').at(-1) ?? '') ||
+        reviewer.bundle.directory !== join(evidenceRoot, reviewer.bundle.id)
+      )
+        throw new AppError(409, 'Reviewer source location or revision changed.');
+      let verified = false;
+      try {
+        const evidenceJson = await readFile(
+          join(reviewer.bundle.directory, 'manifest.json'),
+          'utf8',
+        );
+        const evidenceManifest = JSON.parse(evidenceJson) as SnapshotManifest;
+        const sourceJson = await readFile(join(source.directory, 'source-manifest.json'), 'utf8');
+        const sourceManifest = JSON.parse(sourceJson) as ReviewerSourceManifest;
+        verified =
+          evidenceManifest.id === reviewer.bundle.id &&
+          evidenceManifest.digest === reviewer.bundle.digest &&
+          evidenceManifest.evidenceRevision === source.revision &&
+          Array.isArray(evidenceManifest.entries) &&
+          evidenceManifest.entries.length === reviewer.bundle.fileCount &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, evidenceManifest)) &&
+          sourceManifest.revision === source.revision &&
+          sourceManifest.digest === source.digest &&
+          Array.isArray(sourceManifest.files) &&
+          sourceManifest.files.length === source.fileCount &&
+          (await verifyReviewerSourceCandidate(source.directory, sourceManifest));
+      } catch {
+        // Reject missing, malformed or inaccessible manifests without execution.
+      }
+      if (!verified) throw new AppError(409, 'Reviewer source verification failed.');
+      if (new WorkflowStore(this.store.db).get(workflowId)?.version !== version)
+        throw new AppError(409, 'Reviewer workflow changed during verification.');
+      return {
+        workflowId,
+        version,
+        sourceDigest: source.digest,
+        evidenceDigest: reviewer.bundle.digest,
+        verified: true,
+        runnable: false,
+      };
     } finally {
       await release();
     }

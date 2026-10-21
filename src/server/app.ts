@@ -347,6 +347,14 @@ export async function createApp(manager: TaskManager) {
     return manager.captureWorkflowBundle(workflowId, input.version, input.revision);
   });
   app.get('/api/workflows/bundles/audit', async () => manager.auditWorkflowBundles());
+  app.post('/api/workflows/:id/verify-reviewer-source', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative() })
+      .strict()
+      .parse(request.body);
+    return manager.verifyPreparedReviewerSource(workflowId, input.version);
+  });
   app.post('/api/workflows/:id/prepare-reviewer-source', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
     const input = z

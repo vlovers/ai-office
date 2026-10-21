@@ -260,3 +260,12 @@ atomically records its provenance in the Reviewer stage. Duplicate preparation
 fails closed, and partial copies are cleaned up on ordinary errors. Restart
 and abandoned-directory reconciliation remain unfinished. It does **not**
 launch Reviewer and always returns `runnable:false`.
+
+## Persisted source verification (execution disabled)
+
+`POST /api/workflows/:id/verify-reviewer-source` verifies the previously
+persisted full source checkpoint against the current worktree revision, the
+approved evidence bundle and both on-disk manifests. The check holds a Git
+lease, rejects stale workflow versions and reports `runnable:false`. This
+survives metadata reopening, but is not an independent OS sandbox and does
+not provide restart-safe Reviewer execution.
