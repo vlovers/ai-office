@@ -517,7 +517,7 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
       version: recorded.workflow.version,
     });
     expect(invalidatedBundle.statusCode).toBe(409);
-    expect((await send('GET', url)).json().version).toBe(recorded.workflow.version);
+    expect((await send('GET', url)).json().version).toBe(prepared.json().workflow.version);
     expect(env.store.queue()).toEqual([]);
     await removeEvidenceBundle(dirname(candidate.directory), candidate.directory);
     await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);
