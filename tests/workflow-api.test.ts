@@ -7,6 +7,9 @@ import { createApp } from '../src/server/app.js';
 import { Workspaces } from '../src/server/workspaces.js';
 import { TaskManager } from '../src/server/manager.js';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { acquireLock } from '../src/server/lock.js';
+import { repositoryLeaseDirectories } from '../src/server/repositories.js';
 
 it('creates pinned inert workflows from server Git HEAD and exposes inspection only', async () => {
   const env = await sandbox();
@@ -259,6 +262,27 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(await readFile(join(env.repository, 'README.md'), 'utf8')).toBe(
       '# Disposable example\n',
     );
+    // Another process holding the repository lease must prevent evidence
+    // inspection and must not change the workflow's durable checkpoint.
+    const completedWorkspace = env.store.workspace(completed!.workspaceId!);
+    expect(completedWorkspace).toBeTruthy();
+    const leaseDirectories = await repositoryLeaseDirectories(repository, completedWorkspace!.gitDir);
+    const leasePath = join(
+      '/tmp',
+      `ai-office-worktrees-${process.getuid?.() ?? 'local'}`,
+      createHash('sha256').update(leaseDirectories[0]!).digest('hex'),
+    );
+    const releaseLease = await acquireLock(leasePath, 'external test lease');
+    try {
+      const conflict = await send('POST', url + '/capture-coder-evidence', {
+        version: blocked.json().version,
+        confirmed: true,
+      });
+      expect(conflict.statusCode).toBe(409);
+      expect((await send('GET', url)).json().version).toBe(blocked.json().version);
+    } finally {
+      await releaseLease();
+    }
     const evidence = await send('POST', url + '/capture-coder-evidence', {
       version: blocked.json().version,
       confirmed: true,
