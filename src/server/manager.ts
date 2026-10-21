@@ -682,10 +682,7 @@ export class TaskManager {
     try {
       await this.workspaces.validate(repository, workspace);
       const review = await this.workspaces.review(repository, workspace);
-      if (
-        review.revision !== revision ||
-        review.files.length !== coder.evidence.fileCount
-      )
+      if (review.revision !== revision || review.files.length !== coder.evidence.fileCount)
         throw new AppError(409, 'Coder evidence changed before bundle capture.');
       if ([...this.active.values()].some((run) => run.gitDir === repository.gitDir))
         throw new AppError(409, 'Active agent is using the repository.');

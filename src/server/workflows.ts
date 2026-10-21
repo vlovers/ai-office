@@ -28,7 +28,14 @@ export interface WorkflowStage {
   approvedAt: string | null;
   evidence?: { revision: string; workspaceId: string; fileCount: number; recordedAt: string };
   supersededEvidence?: NonNullable<WorkflowStage['evidence']>[];
-  bundle?: { id: string; directory: string; digest: string; fileCount: number; revision: string; recordedAt: string };
+  bundle?: {
+    id: string;
+    directory: string;
+    digest: string;
+    fileCount: number;
+    revision: string;
+    recordedAt: string;
+  };
 }
 export interface Workflow {
   id: string;

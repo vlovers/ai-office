@@ -122,9 +122,8 @@ it('rejects extra unapproved files and manifest identity substitution', async ()
       verifyRevision: async () => 'a'.repeat(64),
     });
     expect(await verifyEvidenceBundle(bundle.path, bundle.manifest)).toBe(true);
-    expect(
-      await verifyEvidenceBundle(bundle.path, { ...bundle.manifest, id: 'different' }),
-    ).toBe(false);
+    const wrongIdentity = { ...bundle.manifest, id: 'different' };
+    expect(await verifyEvidenceBundle(bundle.path, wrongIdentity)).toBe(false);
     await chmod(bundle.path, 0o700);
     await writeFile(join(bundle.path, 'unapproved.txt'), 'unapproved');
     expect(await verifyEvidenceBundle(bundle.path, bundle.manifest)).toBe(false);
