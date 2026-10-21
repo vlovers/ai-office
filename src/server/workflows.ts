@@ -28,6 +28,7 @@ export interface WorkflowStage {
   approvedAt: string | null;
   evidence?: { revision: string; workspaceId: string; fileCount: number; recordedAt: string };
   supersededEvidence?: NonNullable<WorkflowStage['evidence']>[];
+  bundle?: { id: string; directory: string; digest: string; fileCount: number; revision: string; recordedAt: string };
 }
 export interface Workflow {
   id: string;
@@ -472,6 +473,52 @@ export class WorkflowStore {
       next.stages[0]!.outputRevision = verifiedRevision;
       next.stages[1]!.state = 'awaiting_approval';
       next.state = 'active';
+      next.version++;
+      next.updatedAt = new Date().toISOString();
+      this.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);
+      this.db.exec('COMMIT');
+      return next;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  recordReviewerBundle(
+    id: string,
+    version: number,
+    revision: string,
+    bundle: { id: string; directory: string; digest: string; fileCount: number },
+  ): Workflow {
+    if (
+      !/^[0-9a-f]{64}$/i.test(revision) ||
+      !/^[0-9a-f]{64}$/i.test(bundle.digest) ||
+      !Number.isSafeInteger(bundle.fileCount) ||
+      bundle.fileCount < 1
+    )
+      throw new AppError(400, 'Invalid bundle provenance.');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.require(id);
+      const coder = current.stages[0];
+      const reviewer = current.stages[1];
+      if (
+        current.version !== version ||
+        current.state !== 'active' ||
+        coder?.state !== 'completed' ||
+        coder.evidence?.revision !== revision ||
+        reviewer?.state !== 'ready' ||
+        reviewer.approvedRevision !== revision ||
+        reviewer.bundle ||
+        coder.evidence.fileCount !== bundle.fileCount
+      )
+        throw new AppError(409, 'Bundle approval checkpoint changed.');
+      const next = structuredClone(current);
+      next.stages[1]!.bundle = {
+        ...bundle,
+        revision,
+        recordedAt: new Date().toISOString(),
+      };
       next.version++;
       next.updatedAt = new Date().toISOString();
       this.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);

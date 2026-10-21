@@ -203,3 +203,18 @@ without following a replaced bundle root. Cleanup explicitly restores write
 permissions to the private bundle directory so non-root operators can delete
 completed evidence; no arbitrary directory is accepted. These functions do
 not confer immutability or grant Reviewer execution permissions.
+
+## Leased evidence bundle capture (experimental)
+
+`POST /api/workflows/:id/capture-bundle` requires the approved Reviewer
+checkpoint, optimistic workflow version, exact Coder evidence fingerprint and
+`confirmed:true`. TaskManager obtains the same repository/worktree lease as
+Review Center and holds it across workspace validation, content review,
+creation of a bounded file bundle and a SQLite provenance checkpoint. The
+stored Reviewer bundle identity, directory, digest and file count are versioned.
+Concurrent or repeated captures fail closed; failed checkpoints remove the
+new bundle. A bundle is **not** an immutable source tree or an executable
+Reviewer workspace. A process failure after bundle creation but before SQLite
+commit can leave an orphan bundle for manual recovery; automatic cleanup and
+snapshot verification before real execution remain future work. The response
+always reports `runnable:false` and never queues a model.

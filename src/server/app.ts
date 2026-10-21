@@ -334,6 +334,18 @@ export async function createApp(manager: TaskManager) {
       revision: review.revision,
     });
   });
+  app.post('/api/workflows/:id/capture-bundle', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        revision: z.string().regex(/^[0-9a-f]{64}$/i),
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    return manager.captureWorkflowBundle(workflowId, input.version, input.revision);
+  });
   app.post('/api/workflows/:id/inspect-handoff', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
     const input = z

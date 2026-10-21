@@ -8,6 +8,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
+import { materializeEvidenceBundle, removeEvidenceBundle } from './evidence-bundle.js';
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
 import { WorkflowStore } from './workflows.js';
@@ -633,6 +634,93 @@ export class TaskManager {
     });
     return this.store.saveComments(record, this.clean(comments));
   }
+  /**
+   * This creates an evidence bundle, NOT a runnable immutable worktree.
+   * The lease covers the entire review + capture + provenance transaction.
+   */
+  async captureWorkflowBundle(workflowId: string, version: number, revision: string) {
+    if (this.closing || !this.workspaces)
+      throw new AppError(503, 'Snapshot capture is unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      !coder.taskId ||
+      coder.evidence?.revision !== revision ||
+      reviewer?.state !== 'ready' ||
+      reviewer.approvedRevision !== revision ||
+      reviewer.bundle
+    )
+      throw new AppError(409, 'Reviewer handoff is not approved or is stale.');
+    const task = this.store.task(coder.taskId);
+    const repository = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !task ||
+      task.state !== 'completed' ||
+      !repository ||
+      !workspace ||
+      workspace.id !== coder.evidence.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Coder task and workspace binding changed.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockPaths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(lockPaths, repository.path);
+    } catch {
+      throw new AppError(409, 'Repository is busy or has an unresolved lease.');
+    }
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const review = await this.workspaces.review(repository, workspace);
+      if (
+        review.revision !== revision ||
+        review.files.length !== coder.evidence.fileCount
+      )
+        throw new AppError(409, 'Coder evidence changed before bundle capture.');
+      if ([...this.active.values()].some((run) => run.gitDir === repository.gitDir))
+        throw new AppError(409, 'Active agent is using the repository.');
+      const authorizedRoot = await this.workspaces.authorize(repository);
+      const destinationRoot = join(authorizedRoot, 'workflow-evidence');
+      await mkdir(destinationRoot, { recursive: true, mode: 0o700 });
+      const bundle = await materializeEvidenceBundle({
+        workspacePath: workspace.path,
+        destinationRoot,
+        files: review.files,
+        evidenceRevision: revision,
+        verifyRevision: () => this.workspaces!.revision(repository, workspace),
+      });
+      try {
+        const saved = new WorkflowStore(this.store.db).recordReviewerBundle(
+          workflowId,
+          version,
+          revision,
+          {
+            directory: bundle.path,
+            digest: bundle.manifest.digest,
+            id: bundle.manifest.id,
+            fileCount: bundle.manifest.entries.length,
+          },
+        );
+        return { workflow: saved, manifest: bundle.manifest, runnable: false };
+      } catch (error) {
+        await removeEvidenceBundle(destinationRoot, bundle.path);
+        throw error;
+      }
+    } finally {
+      await release();
+    }
+  }
+
   reviewOperation(
     taskId: string,
     action: 'review' | 'keep' | 'reject' | 'verify' | 'feedback' | 'request-changes',
