@@ -204,7 +204,10 @@ export async function verifyReviewerSourceCandidate(
       return true;
     };
     if (!(await check(directory, '')) || seen.size !== expected.size) return false;
-    if ((await readFile(join(directory, 'source-manifest.json'), 'utf8')) !== JSON.stringify(manifest))
+    if (
+      (await readFile(join(directory, 'source-manifest.json'), 'utf8')) !==
+      JSON.stringify(manifest)
+    )
       return false;
     for (const file of manifest.files) {
       const path = join(directory, file.path);
