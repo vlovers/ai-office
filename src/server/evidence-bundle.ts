@@ -137,7 +137,10 @@ export async function removeEvidenceBundle(root: string, directory: string): Pro
 }
 
 /** Re-hash every captured byte; detecting corruption is not immutable storage. */
-export async function verifyEvidenceBundle(path: string, manifest: SnapshotManifest): Promise<boolean> {
+export async function verifyEvidenceBundle(
+  path: string,
+  manifest: SnapshotManifest,
+): Promise<boolean> {
   if (!/^[0-9a-f]{64}$/.test(manifest.digest)) return false;
   const metadata = await readFile(join(path, 'manifest.json'), 'utf8');
   if (metadata !== JSON.stringify(manifest)) return false;
@@ -165,5 +168,7 @@ export async function verifyEvidenceBundle(path: string, manifest: SnapshotManif
       await handle.close();
     }
   }
-  return createHash('sha256').update(JSON.stringify(manifest.entries)).digest('hex') === manifest.digest;
+  return (
+    createHash('sha256').update(JSON.stringify(manifest.entries)).digest('hex') === manifest.digest
+  );
 }
