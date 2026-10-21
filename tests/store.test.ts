@@ -229,3 +229,37 @@ it('migrates an actual schema-5 database without changing tasks and preserves sc
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('upgrades v8 metadata to v9 without losing existing work', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-v8-v9-'));
+  const path = join(directory, 'office.sqlite');
+  let store = new Store(path);
+  try {
+    const repo = store.register({
+      path: '/disposable/upgrade-v8',
+      gitDir: '/disposable/upgrade-v8/.git',
+      name: 'v8 fixture',
+    });
+    const task = store.createTask({
+      repositoryId: repo.id,
+      title: 'Preserve v8 task',
+      prompt: 'no dispatch',
+    });
+    const session = store.createSession(repo.id);
+    store.db.exec('DROP TABLE workflows; PRAGMA user_version=8;');
+    store.close();
+    store = new Store(path);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.task(task.id)?.title).toBe('Preserve v8 task');
+    expect(store.session(session.id)).toBeDefined();
+    expect(store.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflows'").get()?.name).toBe('workflows');
+    expect(store.queue()).toEqual([]);
+    store.close();
+    store = new Store(path);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.task(task.id)).toBeDefined();
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
