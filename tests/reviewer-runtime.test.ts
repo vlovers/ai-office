@@ -10,6 +10,7 @@ import {
 import {
   stageReviewerGitContext,
   removeReviewerGitContext,
+  verifyReviewerGitContext,
 } from '../src/server/reviewer-runtime.js';
 
 it('creates a remote-free clean Git context from an approved source candidate', async () => {
