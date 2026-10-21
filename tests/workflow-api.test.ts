@@ -6,9 +6,10 @@ import { validateRepository } from '../src/server/repositories.js';
 import { createApp } from '../src/server/app.js';
 import { Workspaces } from '../src/server/workspaces.js';
 import { TaskManager } from '../src/server/manager.js';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { acquireLock } from '../src/server/lock.js';
+import { removeEvidenceBundle, verifyEvidenceBundle } from '../src/server/evidence-bundle.js';
 import { repositoryLeaseDirectories } from '../src/server/repositories.js';
 
 it('creates pinned inert workflows from server Git HEAD and exposes inspection only', async () => {
@@ -430,23 +431,48 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
           version: reviewer.json().version,
           revision: currentFingerprint,
         }),
+        send('POST', url + '/capture-bundle', {
+          version: reviewer.json().version,
+          revision: currentFingerprint,
+          confirmed: true,
+        }),
       ]);
-      expect(conflicts.map((response) => response.statusCode)).toEqual([409, 409]);
+      expect(conflicts.map((response) => response.statusCode)).toEqual([409, 409, 409]);
     } finally {
       await releaseHandoffLease();
     }
     expect((await send('GET', url)).json().version).toBe(reviewer.json().version);
     expect(env.store.queue()).toEqual([]);
-    // A post-approval mutation must invalidate the previously inspected
-    // fingerprint, without spawning a session or advancing any stage.
+    const capture = await send('POST', url + '/capture-bundle', {
+      version: reviewer.json().version,
+      revision: currentFingerprint,
+      confirmed: true,
+    });
+    expect(capture.statusCode).toBe(200);
+    const recorded = capture.json();
+    const bundle = recorded.workflow.stages[1].bundle;
+    expect(recorded.runnable).toBe(false);
+    expect(bundle.revision).toBe(currentFingerprint);
+    expect(bundle.digest).toBe(recorded.manifest.digest);
+    expect(await verifyEvidenceBundle(bundle.directory, recorded.manifest)).toBe(true);
+    const repeated = await send('POST', url + '/capture-bundle', {
+      version: recorded.workflow.version,
+      revision: currentFingerprint,
+      confirmed: true,
+    });
+    expect(repeated.statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    // Post-approval mutations invalidate the fingerprint even after provenance
+    // is persisted. The model is never launched.
     await writeFile(join(workspace!.path, 'README.md'), 'changed after reviewer approval\n');
     const mutated = await send('POST', handoffUrl, {
-      version: reviewer.json().version,
+      version: recorded.workflow.version,
       revision: currentFingerprint,
     });
     expect(mutated.statusCode).toBe(409);
-    expect((await send('GET', url)).json().version).toBe(reviewer.json().version);
+    expect((await send('GET', url)).json().version).toBe(recorded.workflow.version);
     expect(env.store.queue()).toEqual([]);
+    await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);
   } finally {
     if (app) await app.close();
     await manager.shutdown();

@@ -586,32 +586,18 @@ it('records verified review evidence once and rejects a mismatched workspace', a
       digest: 'c'.repeat(64),
       fileCount: 1,
     };
-    expect(() =>
-      workflows.recordReviewerBundle(
-        created.id,
-        reviewerApproved.version,
-        'b'.repeat(64),
-        { ...bundle, fileCount: 2 },
-      ),
-    ).toThrow();
-    const saved = workflows.recordReviewerBundle(
-      created.id,
-      reviewerApproved.version,
-      'b'.repeat(64),
-      bundle,
-    );
+    const recordBundle = (version: number, fileCount = 1) =>
+      workflows.recordReviewerBundle(created.id, version, 'b'.repeat(64), {
+        ...bundle,
+        fileCount,
+      });
+    expect(() => recordBundle(reviewerApproved.version, 2)).toThrow();
+    const saved = recordBundle(reviewerApproved.version);
     expect(saved.stages[1]?.bundle?.digest).toBe(bundle.digest);
     expect(saved.stages[1]?.bundle?.revision).toBe('b'.repeat(64));
     expect(saved.version).toBe(reviewerApproved.version + 1);
     expect(workflows.get(created.id)?.stages[1]?.bundle).toEqual(saved.stages[1]?.bundle);
-    expect(() =>
-      workflows.recordReviewerBundle(
-        created.id,
-        reviewerApproved.version,
-        'b'.repeat(64),
-        bundle,
-      ),
-    ).toThrow();
+    expect(() => recordBundle(reviewerApproved.version)).toThrow();
     expect(store.queue()).toEqual([]);
     expect(store.queue()).toEqual([]);
     expect(released.stages[1]?.taskId).toBeNull();
