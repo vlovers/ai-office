@@ -843,8 +843,7 @@ export class TaskManager {
    */
   /** Stages a separate Git repository; does not start Codex or grant execution. */
   async prepareReviewerRuntime(workflowId: string, version: number) {
-    if (this.closing || !this.workspaces)
-      throw new AppError(503, 'Reviewer staging unavailable.');
+    if (this.closing || !this.workspaces) throw new AppError(503, 'Reviewer staging unavailable.');
     const workflow = new WorkflowStore(this.store.db).get(workflowId);
     const coder = workflow?.stages[0];
     const reviewer = workflow?.stages[1];
@@ -876,8 +875,8 @@ export class TaskManager {
       throw new AppError(409, 'Coder source workspace changed.');
     const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
     await mkdir(root, { recursive: true, mode: 0o700 });
-    const paths = (await repositoryLeaseDirectories(repo, workspace.gitDir)).map(
-      (directory) => join(root, createHash('sha256').update(directory).digest('hex')),
+    const paths = (await repositoryLeaseDirectories(repo, workspace.gitDir)).map((directory) =>
+      join(root, createHash('sha256').update(directory).digest('hex')),
     );
     let release: () => Promise<void>;
     try {

@@ -92,7 +92,9 @@ export async function stageReviewerGitContext(input: {
     if ((await input.verifyRevision()) !== input.manifest.revision)
       throw new AppError(409, 'Coder revision changed during staging.');
     const files = (await runGit(['ls-files', '-z'])).split('\0').filter(Boolean).sort();
-    if (JSON.stringify(files) !== JSON.stringify(input.manifest.files.map((item) => item.path).sort()))
+    if (
+      JSON.stringify(files) !== JSON.stringify(input.manifest.files.map((item) => item.path).sort())
+    )
       throw new AppError(409, 'Runtime Git inventory mismatch.');
     // Metadata is intentionally never an execution grant.
     await writeFile(
