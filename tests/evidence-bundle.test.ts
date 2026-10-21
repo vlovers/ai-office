@@ -2,7 +2,11 @@ import { expect, it } from 'vitest';
 import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { materializeEvidenceBundle, removeEvidenceBundle, verifyEvidenceBundle } from '../src/server/evidence-bundle.js';
+import {
+  materializeEvidenceBundle,
+  removeEvidenceBundle,
+  verifyEvidenceBundle,
+} from '../src/server/evidence-bundle.js';
 
 it('captures additions, edits, deletions and a deterministic evidence digest', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-office-evidence-bundle-'));
