@@ -252,7 +252,11 @@ it('upgrades v8 metadata to v9 without losing existing work', async () => {
     expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
     expect(store.task(task.id)?.title).toBe('Preserve v8 task');
     expect(store.session(session.id)).toBeDefined();
-    expect(store.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflows'").get()?.name).toBe('workflows');
+    expect(
+      store.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflows'")
+        .get()?.name,
+    ).toBe('workflows');
     expect(store.queue()).toEqual([]);
     store.close();
     store = new Store(path);
