@@ -497,6 +497,22 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(verifiedSource.json().sourceDigest).toBe(candidate.digest);
     expect(verifiedSource.json().verified).toBe(true);
     expect(verifiedSource.json().runnable).toBe(false);
+    await chmod(join(candidate.directory, 'source-manifest.json'), 0o600);
+    await writeFile(join(candidate.directory, 'source-manifest.json'), '{invalid');
+    const tamperedSource = await send('POST', url + '/verify-reviewer-source', {
+      version: prepared.json().workflow.version,
+    });
+    expect(tamperedSource.statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    await writeFile(
+      join(candidate.directory, 'source-manifest.json'),
+      JSON.stringify(prepared.json().sourceManifest),
+    );
+    await chmod(join(candidate.directory, 'source-manifest.json'), 0o400);
+    const restoredSource = await send('POST', url + '/verify-reviewer-source', {
+      version: prepared.json().workflow.version,
+    });
+    expect(restoredSource.statusCode).toBe(200);
     expect(
       await verifyReviewerSourceCandidate(candidate.directory, prepared.json().sourceManifest),
     ).toBe(true);
