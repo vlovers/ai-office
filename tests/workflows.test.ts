@@ -550,30 +550,16 @@ it('records verified review evidence once and rejects a mismatched workspace', a
     expect(captured.state).toBe('blocked');
     // The audit log must be bounded. Stale versions and unchanged snapshots
     // cannot turn a refresh into a second authorization.
-    expect(() =>
-      workflows.captureCoderEvidence(created.id, captured.version, {
-        taskId: task.id,
-        workspaceId: 'worktree-1',
-        revision: 'b'.repeat(64),
-        fileCount: 1,
-      }, true),
-    ).toThrow();
-    expect(() =>
-      workflows.captureCoderEvidence(created.id, blocked.version, {
-        taskId: task.id,
-        workspaceId: 'worktree-1',
-        revision: 'c'.repeat(64),
-        fileCount: 1,
-      }, true),
-    ).toThrow();
-    expect(() =>
-      workflows.captureCoderEvidence(created.id, captured.version, {
-        taskId: task.id,
-        workspaceId: 'different',
-        revision: 'c'.repeat(64),
-        fileCount: 1,
-      }, true),
-    ).toThrow();
+    const refresh = (version: number, workspaceId: string, revision: string) =>
+      workflows.captureCoderEvidence(
+        created.id,
+        version,
+        { taskId: task.id, workspaceId, revision, fileCount: 1 },
+        true,
+      );
+    expect(() => refresh(captured.version, 'worktree-1', 'b'.repeat(64))).toThrow();
+    expect(() => refresh(blocked.version, 'worktree-1', 'c'.repeat(64))).toThrow();
+    expect(() => refresh(captured.version, 'different', 'c'.repeat(64))).toThrow();
     expect(workflows.get(created.id)?.version).toBe(captured.version);
     expect(() =>
       workflows.approveCoderEvidence(created.id, captured.version, task.id, 'c'.repeat(64)),
