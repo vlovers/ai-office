@@ -266,7 +266,10 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     // inspection and must not change the workflow's durable checkpoint.
     const completedWorkspace = env.store.workspace(completed!.workspaceId!);
     expect(completedWorkspace).toBeTruthy();
-    const leaseDirectories = await repositoryLeaseDirectories(repository, completedWorkspace!.gitDir);
+    const leaseDirectories = await repositoryLeaseDirectories(
+      repository,
+      completedWorkspace!.gitDir,
+    );
     const leasePath = join(
       '/tmp',
       `ai-office-worktrees-${process.getuid?.() ?? 'local'}`,
