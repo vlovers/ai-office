@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { chmod, lstat, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import type { ReviewFile } from '../shared/types.js';
 import { AppError } from './errors.js';
 import { assessHandoff } from './handoff-assessment.js';
@@ -108,7 +108,62 @@ export async function materializeEvidenceBundle(input: {
     await chmod(directory, 0o500);
     return { path: directory, manifest };
   } catch (error) {
-    await rm(directory, { recursive: true, force: true });
+    await removeEvidenceBundle(input.destinationRoot, directory);
     throw error;
   }
+}
+
+/**
+ * Deletes only a UUID-named bundle directly below the configured root.
+ * The caller must ensure the directory is not in use by another process.
+ */
+export async function removeEvidenceBundle(root: string, directory: string): Promise<void> {
+  if (
+    dirname(directory) !== root ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      directory.slice(root.length + 1),
+    )
+  )
+    throw new AppError(403, 'Refusing to remove a non-bundle directory.');
+  const info = await lstat(directory).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  });
+  if (!info) return;
+  if (!info.isDirectory() || info.isSymbolicLink())
+    throw new AppError(403, 'Bundle identity is unsafe; inspect manually.');
+  await chmod(directory, 0o700);
+  await rm(directory, { recursive: true, force: true });
+}
+
+/** Re-hash every captured byte; detecting corruption is not immutable storage. */
+export async function verifyEvidenceBundle(path: string, manifest: SnapshotManifest): Promise<boolean> {
+  if (!/^[0-9a-f]{64}$/.test(manifest.digest)) return false;
+  const metadata = await readFile(join(path, 'manifest.json'), 'utf8');
+  if (metadata !== JSON.stringify(manifest)) return false;
+  for (const entry of manifest.entries) {
+    if (!assessHandoff([{ path: entry.path, status: entry.status }]).eligible) return false;
+    if (entry.status === 'D') {
+      if (entry.sha256 !== null || entry.size !== 0) return false;
+      continue;
+    }
+    const pathname = resolve(path, entry.path);
+    if (!pathname.startsWith(path + sep)) return false;
+    let parent = path;
+    for (const segment of entry.path.split('/').slice(0, -1)) {
+      parent = join(parent, segment);
+      const info = await lstat(parent);
+      if (!info.isDirectory() || info.isSymbolicLink()) return false;
+    }
+    const info = await lstat(pathname);
+    if (!info.isFile() || info.isSymbolicLink() || info.size !== entry.size) return false;
+    const handle = await open(pathname, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const bytes = await readFile(handle);
+      if (createHash('sha256').update(bytes).digest('hex') !== entry.sha256) return false;
+    } finally {
+      await handle.close();
+    }
+  }
+  return createHash('sha256').update(JSON.stringify(manifest.entries)).digest('hex') === manifest.digest;
 }

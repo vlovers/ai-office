@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { materializeEvidenceBundle } from '../src/server/evidence-bundle.js';
+import { materializeEvidenceBundle, removeEvidenceBundle, verifyEvidenceBundle } from '../src/server/evidence-bundle.js';
 
 it('captures additions, edits, deletions and a deterministic evidence digest', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-office-evidence-bundle-'));
@@ -31,6 +31,8 @@ it('captures additions, edits, deletions and a deterministic evidence digest', a
     expect(JSON.parse(await readFile(join(bundle.path, 'manifest.json'), 'utf8'))).toEqual(
       bundle.manifest,
     );
+    expect(await verifyEvidenceBundle(bundle.path, bundle.manifest)).toBe(true);
+    await removeEvidenceBundle(destinationRoot, bundle.path);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -69,6 +71,32 @@ it('rejects changed revisions, symlinks and an unsafe destination', async () => 
         files: [{ path: 'real.txt', status: 'M' }],
       }),
     ).rejects.toThrow();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it('detects tampering and safely removes read-only evidence', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-office-evidence-tamper-'));
+  try {
+    const workspace = join(dir, 'source');
+    const destinationRoot = join(dir, 'bundles');
+    await mkdir(workspace);
+    await mkdir(destinationRoot);
+    await writeFile(join(workspace, 'change.txt'), 'approved');
+    const result = await materializeEvidenceBundle({
+      workspacePath: workspace,
+      destinationRoot,
+      files: [{ path: 'change.txt', status: 'M' }],
+      evidenceRevision: 'a'.repeat(64),
+      verifyRevision: async () => 'a'.repeat(64),
+    });
+    expect(await verifyEvidenceBundle(result.path, result.manifest)).toBe(true);
+    await chmod(join(result.path, 'change.txt'), 0o600);
+    await writeFile(join(result.path, 'change.txt'), 'tampered');
+    expect(await verifyEvidenceBundle(result.path, result.manifest)).toBe(false);
+    await expect(removeEvidenceBundle(destinationRoot, workspace)).rejects.toThrow();
+    await removeEvidenceBundle(destinationRoot, result.path);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

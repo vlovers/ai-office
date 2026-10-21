@@ -194,3 +194,12 @@ calls and materialization. A chmod read-only directory is not a true immutable
 filesystem or a Codex security boundary. It must not be passed to Reviewer as
 an execution workspace. Durable provenance, restart cleanup and native read-only
 execution are still required.
+
+## Bundle verification and cleanup
+
+The evidence bundle module also provides `verifyEvidenceBundle` to rehash
+captured contents and `removeEvidenceBundle` to clean up UUID-named bundles
+without following a replaced bundle root. Cleanup explicitly restores write
+permissions to the private bundle directory so non-root operators can delete
+completed evidence; no arbitrary directory is accepted. These functions do
+not confer immutability or grant Reviewer execution permissions.
