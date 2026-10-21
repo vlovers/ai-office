@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { chmod, lstat, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { ReviewFile } from '../shared/types.js';
 import { AppError } from './errors.js';
@@ -142,6 +142,27 @@ export async function verifyEvidenceBundle(
   manifest: SnapshotManifest,
 ): Promise<boolean> {
   if (!/^[0-9a-f]{64}$/.test(manifest.digest)) return false;
+  const root = await lstat(path).catch(() => null);
+  if (!root?.isDirectory() || root.isSymbolicLink()) return false;
+  if (manifest.id !== path.slice(path.lastIndexOf('/') + 1)) return false;
+  if (!assessHandoff(manifest.entries).eligible) return false;
+  const permitted = new Set(['manifest.json']);
+  for (const entry of manifest.entries) {
+    if (entry.status !== 'D') permitted.add(entry.path);
+  }
+  const visit = async (directory: string, prefix: string): Promise<boolean> => {
+    for (const child of await readdir(directory, { withFileTypes: true })) {
+      const relative = prefix ? prefix + '/' + child.name : child.name;
+      if (child.isSymbolicLink()) return false;
+      if (child.isDirectory()) {
+        if (!(await visit(join(directory, child.name), relative))) return false;
+      } else if (!child.isFile() || !permitted.has(relative)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  if (!(await visit(path, ''))) return false;
   const metadata = await readFile(join(path, 'manifest.json'), 'utf8');
   if (metadata !== JSON.stringify(manifest)) return false;
   for (const entry of manifest.entries) {

@@ -105,3 +105,31 @@ it('detects tampering and safely removes read-only evidence', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it('rejects extra unapproved files and manifest identity substitution', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ai-office-bundle-extra-'));
+  try {
+    const workspace = join(root, 'source');
+    const destinationRoot = join(root, 'bundles');
+    await mkdir(workspace);
+    await mkdir(destinationRoot);
+    await writeFile(join(workspace, 'approved.txt'), 'approved');
+    const bundle = await materializeEvidenceBundle({
+      workspacePath: workspace,
+      destinationRoot,
+      files: [{ path: 'approved.txt', status: 'M' }],
+      evidenceRevision: 'a'.repeat(64),
+      verifyRevision: async () => 'a'.repeat(64),
+    });
+    expect(await verifyEvidenceBundle(bundle.path, bundle.manifest)).toBe(true);
+    expect(
+      await verifyEvidenceBundle(bundle.path, { ...bundle.manifest, id: 'different' }),
+    ).toBe(false);
+    await chmod(bundle.path, 0o700);
+    await writeFile(join(bundle.path, 'unapproved.txt'), 'unapproved');
+    expect(await verifyEvidenceBundle(bundle.path, bundle.manifest)).toBe(false);
+    await removeEvidenceBundle(destinationRoot, bundle.path);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
