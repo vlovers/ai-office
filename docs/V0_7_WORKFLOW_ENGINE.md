@@ -66,3 +66,81 @@ Before the restored queue dispatcher starts, schema initialization reconciles wo
 ## Downstream execution fence
 
 Reviewer/QA submission is explicitly forbidden by both `TaskManager.start` and `WorkflowStore.enqueueApprovedTask` until a leased immutable read-only snapshot runner is available. Approving a Reviewer checkpoint is **not** execution authority. The approved Review Center fingerprint is not an ordinary Git commit, so running against the registered repository HEAD would inspect different content. Keep both checks when the snapshot runner is introduced; replace them only alongside a disposable-repository E2E demonstration and capability audit.
+
+## Reviewer/QA handoff — implementation contract (not yet implemented)
+
+This is the acceptance contract for the next integrated vertical slice in **this PR**, not a
+claim that downstream agent execution already works.
+
+### Evidence is not a Git commit
+
+The Coder evidence revision is a Review Center **content fingerprint**. Passing it as a
+Git SHA, checking out the initial repository HEAD, or giving Reviewer access to the
+mutable Coder worktree would silently inspect the wrong output. A valid handoff must
+be derived from the approved Coder workspace, including tracked changes, added and
+deleted files, and must be reproducible independently of subsequent Coder edits.
+
+### Snapshot and identity invariants
+
+1. Resolve repository and Coder worktree identities again from trusted server metadata
+   immediately before snapshot creation. Reject worktree replacement, symlink escape,
+   changed Git common directory, changed base commit, and unexpected dirty repository
+   state. Do not trust a client-provided path, hash, or workspace identifier.
+2. Acquire the same OS-local repository/worktree leases used by Review Center and
+   hold them over the whole fingerprint verification **and snapshot creation**. Never
+   release the lock between checking a revision and reading its bytes (TOCTOU).
+3. Recompute the complete content fingerprint under the lease and require an exact
+   match with the approved evidence revision and the workflow's optimistic version.
+   Reject missing/unreadable files and entries with unsupported types; do not resolve
+   symlinks outside the authorized root.
+4. Materialize a private, disposable, **immutable snapshot** which includes additions,
+   modifications and deletions relative to the approved base. The original checkout
+   and Coder worktree must not be used as the Reviewer's writable workspace.
+5. Persist the snapshot's identity, content digest, source evidence revision, source
+   workspace identity, approved workflow version, creation time, and provenance before
+   a downstream task can be queued. Create the checkpoint and dispatch intent
+   atomically; never infer readiness from a partially written snapshot.
+6. On every downstream start/resume, revalidate the stored snapshot identity and
+   content digest. Any mismatch blocks the workflow and requires a new human review.
+   After restart, an uncertain running/queued downstream task is **interrupted** and
+   never silently retried.
+
+### Capability and permission fence
+
+- Reviewer and QA must always use pinned read-only profiles. No write escalation,
+  shell-based copy, host verification, network expansion, or token/secret inheritance
+  from the Coder task. Verify actual Codex SDK filesystem controls on macOS/Linux;
+  a prompt saying "read-only" is not a sandbox security boundary.
+- Prefer a snapshot reader with explicit allowlisted files and no process-spawning
+  capability if OS-enforced read-only sandbox semantics cannot be demonstrated.
+- Workspace lease ownership, snapshot cleanup, cancellation and failure recovery must
+  be explicit. Unknown lease owners after a crash fail closed for manual inspection.
+- Never dispatch Reviewer just because a user clicked **Approve Reviewer**: approval
+  authorizes only the exact snapshot digest and pinned agent revision checked at
+  submission time.
+
+### Disposable end-to-end acceptance matrix
+
+| Scenario | Required outcome |
+| --- | --- |
+| Coder changes tracked file and adds/deletes files | Reviewer sees all three exact approved changes |
+| Coder worktree changes after evidence approval | Old revision denied; no downstream dispatch |
+| Worktree replaced or symlink escapes root | Handoff fails closed; original checkout intact |
+| External Git lease held during snapshot creation | HTTP conflict; no snapshot or queue entry |
+| Two simultaneous Reviewer approvals/submissions | One winner; no duplicate task or session |
+| Archived or changed agent profile after approval | Pinned authorization rechecked; no escalation |
+| Snapshot modified before Reviewer launch | Fingerprint mismatch; task blocked |
+| Crash after snapshot persist but before queue claim | Interrupt and require explicit reapproval |
+| Native SDK read-only policy unavailable | No Reviewer model run; safe diagnostic |
+| QA verification requests host command | Separate authorization gate; never inherited |
+| Snapshot cleanup fails | Preserve evidence and record recoverable error; never delete user checkout |
+
+### Release gates and batching
+
+Implement snapshot construction, lease-held verification, durable handoff record,
+read-only runner adapter, restart handling, and integration/browser tests as **one
+coherent feature batch** within PR #22. Keep Reviewer/QA execution denied until the
+whole batch passes on the exact head SHA. Separately require a supervised live
+model test with explicit authorization; fixture tests alone do not prove the SDK
+provides native OS-level read-only isolation. Squash the feature history at merge
+only after review and approval; do not create a PR per endpoint or test.
