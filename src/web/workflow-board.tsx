@@ -42,9 +42,10 @@ export function WorkflowBoard() {
     try {
       const workflows = await request<WorkflowSummary[]>('/api/workflows');
       setItems(workflows);
-      const id = selected && workflows.some((item) => item.id === selected)
-        ? selected
-        : (workflows[0]?.id ?? '');
+      const id =
+        selected && workflows.some((item) => item.id === selected)
+          ? selected
+          : (workflows[0]?.id ?? '');
       setSelected(id);
       setTimeline(id ? await request<Timeline>(`/api/workflows/${id}/timeline`) : null);
       setError('');
@@ -62,7 +63,12 @@ export function WorkflowBoard() {
     <section className="panel" id="workflows" aria-label="Workflow timeline">
       <div className="panel-heading">
         <h2>Workflow Timeline</h2>
-        <button className="secondary" type="button" disabled={loading} onClick={() => void refresh()}>
+        <button
+          className="secondary"
+          type="button"
+          disabled={loading}
+          onClick={() => void refresh()}
+        >
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
@@ -87,14 +93,20 @@ export function WorkflowBoard() {
           </select>
           {timeline && (
             <div>
-              <p role="status">State: {timeline.state} · version {timeline.version}</p>
+              <p role="status">
+                State: {timeline.state} · version {timeline.version}
+              </p>
               <ol>
                 {timeline.stages.map((stage) => (
                   <li key={stage.kind}>
                     <strong>{stage.kind.toUpperCase()}</strong> — {stage.status}
-                    <p>{stage.agentId} · profile v{stage.agentRevision} · {stage.mode}</p>
+                    <p>
+                      {stage.agentId} · profile v{stage.agentRevision} · {stage.mode}
+                    </p>
                     {stage.nextAction && <p>Operator checkpoint: {stage.nextAction}</p>}
-                    {stage.evidenceRevision && <p>Evidence: {stage.evidenceRevision.slice(0, 12)}…</p>}
+                    {stage.evidenceRevision && (
+                      <p>Evidence: {stage.evidenceRevision.slice(0, 12)}…</p>
+                    )}
                   </li>
                 ))}
               </ol>
