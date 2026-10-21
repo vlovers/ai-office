@@ -324,23 +324,24 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     });
     expect(released.statusCode).toBe(200);
     expect(released.json().stages[1].state).toBe('awaiting_approval');
-    const reviewer = await send('POST', url + '/approve-reviewer', {
-      version: released.json().version,
-      confirmed: true,
-      revision: currentFingerprint,
-    });
-    expect(reviewer.statusCode).toBe(200);
+    // Race two identical HTTP confirmations against one checkpoint.
+    // Exactly one must win; the loser cannot repeat downstream authorization.
+    const attempts = await Promise.all([
+      send('POST', url + '/approve-reviewer', {
+        version: released.json().version,
+        confirmed: true,
+        revision: currentFingerprint,
+      }),
+      send('POST', url + '/approve-reviewer', {
+        version: released.json().version,
+        confirmed: true,
+        revision: currentFingerprint,
+      }),
+    ]);
+    expect(attempts.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    const reviewer = attempts.find((response) => response.statusCode === 200)!;
     expect(reviewer.json().stages[1].state).toBe('ready');
     expect(reviewer.json().stages[1].taskId).toBeNull();
-    expect(
-      (
-        await send('POST', url + '/approve-reviewer', {
-          version: released.json().version,
-          confirmed: true,
-          revision: currentFingerprint,
-        })
-      ).statusCode,
-    ).toBe(409);
     expect(env.store.queue()).toEqual([]);
   } finally {
     if (app) await app.close();
