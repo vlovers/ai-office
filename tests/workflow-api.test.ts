@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { acquireLock } from '../src/server/lock.js';
 import { removeEvidenceBundle, verifyEvidenceBundle } from '../src/server/evidence-bundle.js';
 import { verifyReviewerSourceCandidate } from '../src/server/reviewer-source.js';
+import { removeReviewerGitContext } from '../src/server/reviewer-runtime.js';
 import { repositoryLeaseDirectories } from '../src/server/repositories.js';
 
 it('creates pinned inert workflows from server Git HEAD and exposes inspection only', async () => {
@@ -516,6 +517,22 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(
       await verifyReviewerSourceCandidate(candidate.directory, prepared.json().sourceManifest),
     ).toBe(true);
+    const staged = await send('POST', url + '/prepare-reviewer-runtime', {
+      version: prepared.json().workflow.version,
+      confirmed: true,
+    });
+    expect(staged.statusCode).toBe(200);
+    expect(staged.json().staged).toBe(true);
+    expect(staged.json().runnable).toBe(false);
+    const runtime = staged.json().workflow.stages[1].runtimeCandidate;
+    expect(runtime.commit).toMatch(/^[a-f0-9]{40}$/);
+    expect(runtime.sourceDigest).toBe(candidate.digest);
+    expect(env.store.queue()).toEqual([]);
+    const duplicateStaging = await send('POST', url + '/prepare-reviewer-runtime', {
+      version: staged.json().workflow.version,
+      confirmed: true,
+    });
+    expect(duplicateStaging.statusCode).toBe(409);
     const duplicated = await send('POST', url + '/prepare-reviewer-source', {
       version: prepared.json().workflow.version,
       confirmed: true,
@@ -541,12 +558,13 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
       version: recorded.workflow.version,
     });
     expect(invalidatedBundle.statusCode).toBe(409);
-    expect((await send('GET', url)).json().version).toBe(prepared.json().workflow.version);
+    expect((await send('GET', url)).json().version).toBe(staged.json().workflow.version);
     expect(env.store.queue()).toEqual([]);
     const staleSource = await send('POST', url + '/verify-reviewer-source', {
       version: prepared.json().workflow.version,
     });
     expect(staleSource.statusCode).toBe(409);
+    await removeReviewerGitContext(dirname(runtime.directory), runtime.directory);
     await removeEvidenceBundle(dirname(candidate.directory), candidate.directory);
     await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);
   } finally {

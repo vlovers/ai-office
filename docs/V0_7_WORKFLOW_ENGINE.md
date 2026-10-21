@@ -281,3 +281,15 @@ filesystem paths. A Git staging directory does **not** constitute a sandbox,
 does **not** permit model execution, and is not connected to TaskManager
 yet. In particular, no Reviewer agent is started and there is no auto-resume
 or automatic approval.
+
+## Connected Reviewer Git staging
+
+`POST /api/workflows/:id/prepare-reviewer-runtime` requires explicit
+confirmation and the optimistic workflow version. Under the repository Git
+lease it verifies both manifests and the Coder revision, prepares a local
+remote-free Git context with hooks disabled, and atomically records the
+runtime commit and source digest. Replays and stale versions are rejected.
+If the database update fails, the staged context is removed. This endpoint
+never launches Codex or changes agent queues; the result remains
+`runnable:false`. Full sandbox verification and process recovery are not
+implemented yet.
