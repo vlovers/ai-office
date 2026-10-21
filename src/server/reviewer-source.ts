@@ -34,16 +34,24 @@ export async function createReviewerSourceCandidate(input: {
   const rootStat = await lstat(input.destinationRoot);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink())
     throw new AppError(403, 'Snapshot destination must be a real directory.');
-  const entries = (await git(input.workspace, [
-    'ls-files',
-    '--cached',
-    '--others',
-    '--exclude-standard',
-    '-z',
-  ]))
-    .split('\0')
-    .filter(Boolean)
-    .sort();
+  const visibleFiles = async () => {
+    const deleted = new Set(
+      (await git(input.workspace, ['ls-files', '--deleted', '-z']))
+        .split('\0')
+        .filter(Boolean),
+    );
+    return (await git(input.workspace, [
+      'ls-files',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '-z',
+    ]))
+      .split('\0')
+      .filter((name) => name && !deleted.has(name))
+      .sort();
+  };
+  const entries = await visibleFiles();
   if (!entries.length || entries.length > MAX_FILES)
     throw new AppError(409, 'Snapshot file count is outside supported limits.');
   if (new Set(entries.map((path) => path.toLocaleLowerCase('en-US'))).size !== entries.length)
@@ -115,16 +123,7 @@ export async function createReviewerSourceCandidate(input: {
         sha256: createHash('sha256').update(bytes).digest('hex'),
       });
     }
-    const postEntries = (await git(input.workspace, [
-      'ls-files',
-      '--cached',
-      '--others',
-      '--exclude-standard',
-      '-z',
-    ]))
-      .split('\0')
-      .filter(Boolean)
-      .sort();
+    const postEntries = await visibleFiles();
     if (
       JSON.stringify(postEntries) !== JSON.stringify(entries) ||
       (await input.verifyRevision()) !== input.revision

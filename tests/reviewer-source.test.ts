@@ -114,3 +114,31 @@ it('rejects duplicate case-folded names in a forged source manifest', async () =
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('preserves intentional tracked deletions in the source inventory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ai-office-reviewer-deleted-'));
+  const workspace = join(root, 'repo');
+  const destinationRoot = join(root, 'snapshots');
+  try {
+    await mkdir(workspace);
+    await mkdir(destinationRoot);
+    execFileSync('git', ['init', '-q'], { cwd: workspace });
+    await writeFile(join(workspace, 'README.md'), 'kept');
+    await writeFile(join(workspace, 'deleted.txt'), 'removed');
+    execFileSync('git', ['add', '.'], { cwd: workspace });
+    await rm(join(workspace, 'deleted.txt'));
+    const revision = 'a'.repeat(64);
+    const snapshot = await createReviewerSourceCandidate({
+      workspace,
+      destinationRoot,
+      revision,
+      verifyRevision: async () => revision,
+    });
+    expect(snapshot.manifest.files.map((file) => file.path)).toEqual(['README.md']);
+    expect(await verifyReviewerSourceCandidate(snapshot.directory, snapshot.manifest)).toBe(true);
+    await chmod(snapshot.directory, 0o700);
+    await rm(snapshot.directory, { recursive: true, force: true });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
