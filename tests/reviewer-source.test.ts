@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -74,6 +75,41 @@ it('fails closed on linked source, secrets, and changed revisions', async () => 
         verifyRevision: async () => 'b'.repeat(64),
       }),
     ).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('rejects duplicate case-folded names in a forged source manifest', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ai-office-reviewer-duplicate-'));
+  const workspace = join(root, 'repo');
+  const destinationRoot = join(root, 'snapshots');
+  try {
+    await mkdir(workspace);
+    await mkdir(destinationRoot);
+    execFileSync('git', ['init', '-q'], { cwd: workspace });
+    await writeFile(join(workspace, 'README.md'), 'original');
+    execFileSync('git', ['add', 'README.md'], { cwd: workspace });
+    const revision = 'a'.repeat(64);
+    const snapshot = await createReviewerSourceCandidate({
+      workspace,
+      destinationRoot,
+      revision,
+      verifyRevision: async () => revision,
+    });
+    const forged = {
+      ...snapshot.manifest,
+      files: [
+        ...snapshot.manifest.files,
+        { path: 'readme.md', size: 8, sha256: 'b'.repeat(64) },
+      ],
+    };
+    const digest = createHash('sha256').update(JSON.stringify(forged.files)).digest('hex');
+    expect(
+      await verifyReviewerSourceCandidate(snapshot.directory, { ...forged, digest }),
+    ).toBe(false);
+    await chmod(snapshot.directory, 0o700);
+    await rm(snapshot.directory, { recursive: true, force: true });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

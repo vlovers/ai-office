@@ -186,6 +186,12 @@ export async function verifyReviewerSourceCandidate(
       expected.add(file.path);
       size += file.size;
     }
+    const paths = manifest.files.map((file) => file.path.toLocaleLowerCase('en-US'));
+    if (new Set(paths).size !== paths.length) return false;
+    if (expected.has('source-manifest.json') && manifest.files.some((file) =>
+      file.path.toLocaleLowerCase('en-US') === 'source-manifest.json'
+    ))
+      return false;
     if (size > MAX_TOTAL_BYTES) return false;
     const seen = new Set<string>();
     const check = async (path: string, prefix: string): Promise<boolean> => {
