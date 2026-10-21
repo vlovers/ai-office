@@ -1,12 +1,13 @@
 import { expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { sandbox, until } from './helpers.js';
-import { chmod, readFile, writeFile } from 'node:fs/promises';
+import { chmod, lstat, readFile, readdir, writeFile } from 'node:fs/promises';
 import { validateRepository } from '../src/server/repositories.js';
 import { createApp } from '../src/server/app.js';
 import { Workspaces } from '../src/server/workspaces.js';
 import { TaskManager } from '../src/server/manager.js';
 import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { acquireLock } from '../src/server/lock.js';
 import { removeEvidenceBundle, verifyEvidenceBundle } from '../src/server/evidence-bundle.js';
@@ -524,6 +525,19 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
   } finally {
     if (app) await app.close();
     await manager.shutdown();
+    // Test teardown must not hide the original assertion failure when a
+    // capture intentionally leaves a sealed directory for inspection.
+    const unlock = async (path: string): Promise<void> => {
+      if (!existsSync(path)) return;
+      const stat = await lstat(path);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) return;
+      await chmod(path, 0o700);
+      for (const entry of await readdir(path, { withFileTypes: true })) {
+        if (entry.isDirectory()) await unlock(join(path, entry.name));
+      }
+    };
+    await unlock(join(env.root, 'worktrees', 'workflow-evidence'));
+    await unlock(join(env.root, 'worktrees', 'workflow-reviewer-source'));
     await env.cleanup();
   }
 });
