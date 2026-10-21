@@ -68,11 +68,23 @@ export async function materializeEvidenceBundle(input: {
       let bytes: Buffer;
       try {
         const opened = await handle.stat();
-        if (opened.ino !== before.ino || opened.dev !== before.dev)
+        if (
+          opened.ino !== before.ino ||
+          opened.dev !== before.dev ||
+          opened.size !== before.size ||
+          opened.mtimeMs !== before.mtimeMs ||
+          opened.ctimeMs !== before.ctimeMs
+        )
           throw new AppError(409, 'Evidence file changed during open.');
         bytes = await readFile(handle);
         const after = await handle.stat();
-        if (after.ino !== before.ino || after.dev !== before.dev || after.size !== before.size)
+        if (
+          after.ino !== before.ino ||
+          after.dev !== before.dev ||
+          after.size !== before.size ||
+          after.mtimeMs !== before.mtimeMs ||
+          after.ctimeMs !== before.ctimeMs
+        )
           throw new AppError(409, 'Evidence file changed during read.');
       } finally {
         await handle.close();
@@ -155,6 +167,7 @@ export async function verifyEvidenceBundle(
       const relative = prefix ? prefix + '/' + child.name : child.name;
       if (child.isSymbolicLink()) return false;
       if (child.isDirectory()) {
+        if (![...permitted].some((allowed) => allowed.startsWith(relative + '/'))) return false;
         if (!(await visit(join(directory, child.name), relative))) return false;
       } else if (!child.isFile() || !permitted.has(relative)) {
         return false;
@@ -171,6 +184,14 @@ export async function verifyEvidenceBundle(
       if (entry.sha256 !== null || entry.size !== 0) return false;
       continue;
     }
+    if (
+      !Number.isSafeInteger(entry.size) ||
+      entry.size < 0 ||
+      entry.size > MAX_FILE ||
+      typeof entry.sha256 !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(entry.sha256)
+    )
+      return false;
     const pathname = resolve(path, entry.path);
     if (!pathname.startsWith(path + sep)) return false;
     let parent = path;

@@ -132,3 +132,28 @@ it('rejects extra unapproved files and manifest identity substitution', async ()
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('rejects unmanifested empty directories and tampered file metadata', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ai-office-bundle-dir-'));
+  try {
+    const workspace = join(root, 'workspace');
+    const destinationRoot = join(root, 'bundles');
+    await mkdir(workspace);
+    await mkdir(destinationRoot);
+    await writeFile(join(workspace, 'file.txt'), 'original');
+    const bundle = await materializeEvidenceBundle({
+      workspacePath: workspace,
+      destinationRoot,
+      files: [{ path: 'file.txt', status: 'M' }],
+      evidenceRevision: 'a'.repeat(64),
+      verifyRevision: async () => 'a'.repeat(64),
+    });
+    expect(await verifyEvidenceBundle(bundle.path, bundle.manifest)).toBe(true);
+    await chmod(bundle.path, 0o700);
+    await mkdir(join(bundle.path, 'empty-unapproved'));
+    expect(await verifyEvidenceBundle(bundle.path, bundle.manifest)).toBe(false);
+    await removeEvidenceBundle(destinationRoot, bundle.path);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
