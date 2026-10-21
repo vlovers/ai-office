@@ -527,6 +527,20 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     const runtime = staged.json().workflow.stages[1].runtimeCandidate;
     expect(runtime.commit).toMatch(/^[a-f0-9]{40}$/);
     expect(runtime.sourceDigest).toBe(candidate.digest);
+    const verifiedRuntime = await send('POST', url + '/verify-reviewer-runtime', {
+      version: staged.json().workflow.version,
+    });
+    expect(verifiedRuntime.statusCode).toBe(200);
+    expect(verifiedRuntime.json().verified).toBe(true);
+    expect(verifiedRuntime.json().runnable).toBe(false);
+    await writeFile(join(runtime.directory, 'README.md'), 'malicious runtime change');
+    const corruptedRuntime = await send('POST', url + '/verify-reviewer-runtime', {
+      version: staged.json().workflow.version,
+    });
+    expect(corruptedRuntime.statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    await writeFile(join(runtime.directory, 'README.md'), 'Modified by fixture\n');
+
     expect(env.store.queue()).toEqual([]);
     const duplicateStaging = await send('POST', url + '/prepare-reviewer-runtime', {
       version: staged.json().workflow.version,

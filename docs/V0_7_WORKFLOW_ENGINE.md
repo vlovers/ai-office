@@ -293,3 +293,12 @@ If the database update fails, the staged context is removed. This endpoint
 never launches Codex or changes agent queues; the result remains
 `runnable:false`. Full sandbox verification and process recovery are not
 implemented yet.
+
+## Reviewer runtime verification gate
+
+`POST /api/workflows/:id/verify-reviewer-runtime` checks the persisted
+runtime commit, remote-free Git context, source inventory, file SHA-256,
+original approved evidence, Coder revision and workflow version under a
+repository lease. Missing or altered metadata and files are rejected. It does
+not queue an agent, and returns `runnable:false`. Actual model execution
+remains blocked pending a separately proven sandbox and lifecycle runner.

@@ -8,7 +8,11 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
-import { stageReviewerGitContext, removeReviewerGitContext } from './reviewer-runtime.js';
+import {
+  stageReviewerGitContext,
+  removeReviewerGitContext,
+  verifyReviewerGitContext,
+} from './reviewer-runtime.js';
 import {
   createReviewerSourceCandidate,
   verifyReviewerSourceCandidate,
@@ -842,6 +846,102 @@ export class TaskManager {
    * This is deliberately a separate check from evidence-bundle integrity.
    */
   /** Stages a separate Git repository; does not start Codex or grant execution. */
+  /** Verify an already persisted runtime before any future Reviewer dispatch. */
+  async verifyPreparedReviewerRuntime(workflowId: string, version: number) {
+    if (this.closing || !this.workspaces)
+      throw new AppError(503, 'Reviewer runtime verification unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const source = reviewer?.sourceCandidate;
+    const runtime = reviewer?.runtimeCandidate;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !source ||
+      !runtime ||
+      !reviewer.bundle ||
+      runtime.revision !== reviewer.approvedRevision ||
+      runtime.sourceDigest !== source.digest
+    )
+      throw new AppError(409, 'Reviewer runtime checkpoint is missing or stale.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const repository = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !repository ||
+      !task ||
+      task.state !== 'completed' ||
+      !workspace ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Coder workspace binding changed.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const paths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(paths, repository.path);
+    } catch {
+      throw new AppError(409, 'Repository lease unavailable.');
+    }
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const revision = await this.workspaces.revision(repository, workspace);
+      const authorized = await this.workspaces.authorize(repository);
+      const sourceId = basename(source.directory);
+      const runtimeId = basename(runtime.directory);
+      if (
+        revision !== runtime.revision ||
+        revision !== source.revision ||
+        reviewer.bundle.revision !== revision ||
+        source.directory !== join(authorized, 'workflow-reviewer-source', sourceId) ||
+        runtime.directory !== join(authorized, 'workflow-reviewer-runtime', runtimeId) ||
+        reviewer.bundle.directory !== join(authorized, 'workflow-evidence', reviewer.bundle.id)
+      )
+        throw new AppError(409, 'Reviewer runtime location or revision changed.');
+      let valid = false;
+      try {
+        const manifest = JSON.parse(
+          await readFile(join(source.directory, 'source-manifest.json'), 'utf8'),
+        ) as ReviewerSourceManifest;
+        const evidence = JSON.parse(
+          await readFile(join(reviewer.bundle.directory, 'manifest.json'), 'utf8'),
+        ) as SnapshotManifest;
+        valid =
+          manifest.revision === revision &&
+          manifest.digest === source.digest &&
+          Array.isArray(manifest.files) &&
+          manifest.files.length === source.fileCount &&
+          evidence.id === reviewer.bundle.id &&
+          evidence.digest === reviewer.bundle.digest &&
+          evidence.evidenceRevision === revision &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, evidence)) &&
+          (await verifyReviewerSourceCandidate(source.directory, manifest)) &&
+          (await verifyReviewerGitContext({
+            destinationRoot: join(authorized, 'workflow-reviewer-runtime'),
+            directory: runtime.directory,
+            commit: runtime.commit,
+            manifest,
+          }));
+      } catch {
+        // Fail closed when any durable source or Git metadata is corrupted.
+      }
+      if (!valid) throw new AppError(409, 'Reviewer runtime integrity validation failed.');
+      if (new WorkflowStore(this.store.db).get(workflowId)?.version !== version)
+        throw new AppError(409, 'Workflow changed during runtime verification.');
+      return { workflowId, version, commit: runtime.commit, verified: true, runnable: false };
+    } finally {
+      await release();
+    }
+  }
+
   async prepareReviewerRuntime(workflowId: string, version: number) {
     if (this.closing || !this.workspaces) throw new AppError(503, 'Reviewer staging unavailable.');
     const workflow = new WorkflowStore(this.store.db).get(workflowId);
