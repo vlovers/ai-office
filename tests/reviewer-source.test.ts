@@ -105,9 +105,8 @@ it('rejects duplicate case-folded names in a forged source manifest', async () =
       ],
     };
     const digest = createHash('sha256').update(JSON.stringify(forged.files)).digest('hex');
-    expect(
-      await verifyReviewerSourceCandidate(snapshot.directory, { ...forged, digest }),
-    ).toBe(false);
+    const forgedManifest = { ...forged, digest };
+    expect(await verifyReviewerSourceCandidate(snapshot.directory, forgedManifest)).toBe(false);
     await chmod(snapshot.directory, 0o700);
     await rm(snapshot.directory, { recursive: true, force: true });
   } finally {

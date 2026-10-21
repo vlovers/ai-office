@@ -8,7 +8,8 @@ import { git } from './repositories.js';
 const MAX_FILES = 2000;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
-const forbidden = /(^|\/)(\.git|\.env[^/]*|\.aws|\.codex|\.agents|node_modules|credentials[^/]*|auth\.json)(\/|$)|\.pem$/i;
+const forbidden =
+  /(^|\/)(\.git|\.env[^/]*|\.aws|\.codex|\.agents|node_modules|credentials[^/]*|auth\.json)(\/|$)|\.pem$/i;
 
 export interface ReviewerSourceManifest {
   revision: string;
@@ -36,9 +37,7 @@ export async function createReviewerSourceCandidate(input: {
     throw new AppError(403, 'Snapshot destination must be a real directory.');
   const visibleFiles = async () => {
     const deleted = new Set(
-      (await git(input.workspace, ['ls-files', '--deleted', '-z']))
-        .split('\0')
-        .filter(Boolean),
+      (await git(input.workspace, ['ls-files', '--deleted', '-z'])).split('\0').filter(Boolean),
     );
     return (await git(input.workspace, [
       'ls-files',
@@ -187,9 +186,11 @@ export async function verifyReviewerSourceCandidate(
     }
     const paths = manifest.files.map((file) => file.path.toLocaleLowerCase('en-US'));
     if (new Set(paths).size !== paths.length) return false;
-    if (expected.has('source-manifest.json') && manifest.files.some((file) =>
-      file.path.toLocaleLowerCase('en-US') === 'source-manifest.json'
-    ))
+    if (
+      manifest.files.some(
+        (file) => file.path.toLocaleLowerCase('en-US') === 'source-manifest.json',
+      )
+    )
       return false;
     if (size > MAX_TOTAL_BYTES) return false;
     const seen = new Set<string>();

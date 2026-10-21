@@ -793,7 +793,10 @@ export class TaskManager {
         // Fail closed on corrupted, missing or inaccessible evidence.
       }
       if (!validEvidence) throw new AppError(409, 'Evidence bundle failed integrity validation.');
-      const snapshotRoot = join(await this.workspaces.authorize(repository), 'workflow-reviewer-source');
+      const snapshotRoot = join(
+        await this.workspaces.authorize(repository),
+        'workflow-reviewer-source',
+      );
       await mkdir(snapshotRoot, { recursive: true, mode: 0o700 });
       const candidate = await createReviewerSourceCandidate({
         workspace: workspace.path,
