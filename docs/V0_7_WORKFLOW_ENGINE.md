@@ -238,3 +238,14 @@ permissions or deletes unknown filesystem data. A failed verification is
 reported as invalid and requires operator inspection. Orphan bundle garbage
 collection remains intentionally disabled until crash-consistent reconciliation
 is implemented.
+
+## Full source candidate (not executable)
+
+`createReviewerSourceCandidate` prepares a bounded copy of Git tracked and
+visible untracked source files in a private directory, under a lease held by
+its caller. It rejects symlinks, case-fold path collisions, obvious sensitive
+paths, files above 1 MiB and projects above 32 MiB / 2000 files. It compares
+file inventories and the external revision check before and after capture.
+It is not wired to workflow execution, and its read-only permission bits do
+not provide OS-level isolation, protection from the same UID, or provenance
+recovery. This preparation layer does **not** permit Reviewer execution.
