@@ -759,7 +759,10 @@ export class TaskManager {
     try {
       await this.workspaces.validate(repository, workspace);
       const currentRevision = await this.workspaces.revision(repository, workspace);
-      const destinationRoot = join(await this.workspaces.authorize(repository), 'workflow-evidence');
+      const destinationRoot = join(
+        await this.workspaces.authorize(repository),
+        'workflow-evidence',
+      );
       if (
         currentRevision !== bundle.revision ||
         bundle.directory !== join(destinationRoot, bundle.id)

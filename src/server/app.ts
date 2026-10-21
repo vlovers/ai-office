@@ -348,7 +348,10 @@ export async function createApp(manager: TaskManager) {
   });
   app.post('/api/workflows/:id/verify-bundle', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
-    const input = z.object({ version: z.number().int().nonnegative() }).strict().parse(request.body);
+    const input = z
+      .object({ version: z.number().int().nonnegative() })
+      .strict()
+      .parse(request.body);
     return manager.inspectWorkflowBundle(workflowId, input.version);
   });
   app.post('/api/workflows/:id/inspect-handoff', async (request) => {
