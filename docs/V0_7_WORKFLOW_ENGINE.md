@@ -182,3 +182,15 @@ stage using `GET /api/workflows/:id/timeline`. The panel is explicitly
 read-only: it has no approval, write, queue or model launch button. An operator
 may refresh status and inspect the next checkpoint without accidentally
 converting a UI suggestion into execution authority. Reviewer/QA remain fenced.
+
+## Experimental changed-file evidence bundle
+
+`materializeEvidenceBundle` creates a bounded, private evidence directory with
+file hashes, deletion markers and a JSON manifest. It validates paths and
+symlinks, checks evidence fingerprints before and after reading, and removes
+partial bundles on failure. **It is not yet wired to HTTP or workflow storage.**
+The caller must hold repository and workspace leases across both verification
+calls and materialization. A chmod read-only directory is not a true immutable
+filesystem or a Codex security boundary. It must not be passed to Reviewer as
+an execution workspace. Durable provenance, restart cleanup and native read-only
+execution are still required.
