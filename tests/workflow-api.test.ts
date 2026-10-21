@@ -407,6 +407,8 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(handoff.json().snapshotCreated).toBe(false);
     expect(handoff.json().downstreamExecutable).toBe(false);
     expect(handoff.json().fileCount).toBe(3);
+    expect(handoff.json().eligible).toBe(true);
+    expect(handoff.json().reasons).toEqual([]);
     expect(
       (
         await send('POST', handoffUrl, {

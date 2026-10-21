@@ -8,6 +8,7 @@ import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
 import { WorkflowStore } from './workflows.js';
 import { workflowTimeline } from './workflow-timeline.js';
+import { assessHandoff } from './handoff-assessment.js';
 import { git, revalidateRepository, validateRepository } from './repositories.js';
 import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
 
@@ -367,19 +368,15 @@ export async function createApp(manager: TaskManager) {
       review.files.length !== coder.evidence.fileCount
     )
       throw new AppError(409, 'Handoff evidence changed. Reapprove Coder output.');
-    const excluded = review.files.filter(
-      (file) => file.availability && file.availability !== 'text',
-    );
+    const assessment = assessHandoff(review.files);
     return {
       workflowId,
       version: workflow.version,
       revision: input.revision,
-      fileCount: review.files.length,
-      inspectableFileCount: review.files.length - excluded.length,
-      excludedFileCount: excluded.length,
+      ...assessment,
       snapshotCreated: false,
       downstreamExecutable: false,
-      result: excluded.length ? 'manual-inspection-required' : 'snapshot-runner-required',
+      result: assessment.eligible ? 'snapshot-runner-required' : 'manual-inspection-required',
     };
   });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());

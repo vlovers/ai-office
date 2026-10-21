@@ -164,3 +164,13 @@ inspection. The response always declares `snapshotCreated:false` and
 `downstreamExecutable:false`: inspection creates no immutable snapshot, no
 model session and no task queue entry. This endpoint is a diagnostic, not a
 security grant or a replacement for lease-held snapshot construction.
+
+## Handoff manifest validation (fail-closed preflight)
+
+Before any snapshot may be considered, `assessHandoff` rejects empty or
+oversized change manifests, traversal, absolute and ambiguous paths, Unicode
+case-fold collisions, unsupported Git change statuses and unavailable content.
+The inspector returns `eligible` and machine-readable `reasons`, but always
+returns `snapshotCreated:false` and `downstreamExecutable:false`. A clean
+manifest is **necessary but not sufficient**: only a future lease-held native
+snapshot operation can authenticate file bytes and prove immutable isolation.
