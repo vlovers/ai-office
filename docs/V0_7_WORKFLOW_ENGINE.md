@@ -227,3 +227,14 @@ then checks persisted bundle provenance against the complete on-disk manifest.
 It returns `runnable:false` even when verification passes. It cannot create
 Reviewer tasks and does not elevate permissions. This is a diagnostic safety
 check, not an immutable sandbox or resumable execution authorization.
+
+## Recovery inventory (read-only)
+
+`GET /api/workflows/bundles/audit` inspects persisted Reviewer bundle
+checkpoints after a restart. Each capture is revalidated against the current
+workflow version and Coder workspace through the existing lease-held verifier.
+The endpoint returns verified/invalid counts but never starts agents, repairs
+permissions or deletes unknown filesystem data. A failed verification is
+reported as invalid and requires operator inspection. Orphan bundle garbage
+collection remains intentionally disabled until crash-consistent reconciliation
+is implemented.

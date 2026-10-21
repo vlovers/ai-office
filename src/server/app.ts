@@ -346,6 +346,7 @@ export async function createApp(manager: TaskManager) {
       .parse(request.body);
     return manager.captureWorkflowBundle(workflowId, input.version, input.revision);
   });
+  app.get('/api/workflows/bundles/audit', async () => manager.auditWorkflowBundles());
   app.post('/api/workflows/:id/verify-bundle', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
     const input = z

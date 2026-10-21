@@ -797,6 +797,44 @@ export class TaskManager {
     }
   }
 
+  /**
+   * Read-only recovery inventory. Never deletes unknown bundles or replays work.
+   * A per-workflow verification failure is recorded, not treated as approval.
+   */
+  async auditWorkflowBundles() {
+    const workflows = new WorkflowStore(this.store.db).list();
+    const results: {
+      workflowId: string;
+      version: number;
+      bundleId: string;
+      status: 'verified' | 'invalid';
+    }[] = [];
+    for (const workflow of workflows) {
+      const bundle = workflow.stages[1]?.bundle;
+      if (!bundle) continue;
+      let status: 'verified' | 'invalid' = 'invalid';
+      try {
+        const result = await this.inspectWorkflowBundle(workflow.id, workflow.version);
+        if (result.verified) status = 'verified';
+      } catch {
+        // Fail closed on unavailable workspace, stale revision or corrupt bytes.
+      }
+      results.push({
+        workflowId: workflow.id,
+        version: workflow.version,
+        bundleId: bundle.id,
+        status,
+      });
+    }
+    return {
+      scanned: results.length,
+      valid: results.filter((item) => item.status === 'verified').length,
+      invalid: results.filter((item) => item.status === 'invalid').length,
+      results,
+      executionAuthorized: false,
+    };
+  }
+
   reviewOperation(
     taskId: string,
     action: 'review' | 'keep' | 'reject' | 'verify' | 'feedback' | 'request-changes',
