@@ -144,7 +144,16 @@ export async function removeEvidenceBundle(root: string, directory: string): Pro
   if (!info) return;
   if (!info.isDirectory() || info.isSymbolicLink())
     throw new AppError(403, 'Bundle identity is unsafe; inspect manually.');
-  await chmod(directory, 0o700);
+  const unseal = async (path: string): Promise<void> => {
+    const current = await lstat(path);
+    if (!current.isDirectory() || current.isSymbolicLink())
+      throw new AppError(403, 'Unsafe nested bundle directory.');
+    await chmod(path, 0o700);
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      if (entry.isDirectory()) await unseal(join(path, entry.name));
+    }
+  };
+  await unseal(directory);
   await rm(directory, { recursive: true, force: true });
 }
 

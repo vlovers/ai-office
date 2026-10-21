@@ -157,3 +157,26 @@ it('rejects unmanifested empty directories and tampered file metadata', async ()
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('cleans nested sealed directories after a failed or completed capture', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ai-office-evidence-nested-'));
+  try {
+    const workspace = join(root, 'workspace');
+    const destinationRoot = join(root, 'bundles');
+    await mkdir(join(workspace, 'nested'), { recursive: true });
+    await mkdir(destinationRoot);
+    await writeFile(join(workspace, 'nested', 'file.txt'), 'approved');
+    const bundle = await materializeEvidenceBundle({
+      workspacePath: workspace,
+      destinationRoot,
+      files: [{ path: 'nested/file.txt', status: 'M' }],
+      evidenceRevision: 'a'.repeat(64),
+      verifyRevision: async () => 'a'.repeat(64),
+    });
+    await chmod(join(bundle.path, 'nested'), 0o500);
+    await removeEvidenceBundle(destinationRoot, bundle.path);
+    await removeEvidenceBundle(destinationRoot, bundle.path);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
