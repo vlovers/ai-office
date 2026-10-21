@@ -2,6 +2,7 @@ import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { tmpdir } from 'node:os';
 import { readFile, mkdir } from 'node:fs/promises';
 import { workflowFixture } from './workflow-fixture.js';
 const { createApp } = await import(pathToFileURL(resolve('dist/server/app.js')).href);
@@ -72,7 +73,24 @@ try {
     undefined,
   );
   await expect(board.getByRole('button', { name: 'Start QA', exact: true })).toHaveCount(0);
-  await gate('Approve Reviewer result');
+  // Another tab advancing a checkpoint must invalidate an already checked dialog.
+  await board.getByRole('button', { name: 'Approve Reviewer result', exact: true }).click();
+  await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+  const reviewed = await env.get();
+  const concurrentApproval = await page.request.post(
+    address + env.url + '/approve-reviewer-result',
+    {
+      data: {
+        version: reviewed.version,
+        confirmed: true,
+        digest: reviewed.stages[1]!.report!.digest,
+      },
+    },
+  );
+  assert.equal(concurrentApproval.status(), 200);
+  await expect(dialog.getByRole('alert')).toContainText('The workflow changed', { timeout: 10000 });
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await gate('Approve QA command', async () => {
     await dialog.getByLabel('Approved QA command').selectOption('source');
   });
@@ -86,7 +104,8 @@ try {
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
   await expect(integrated).toContainText('QA assertions passed');
-  const artifacts = process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? '/private/tmp/ai-office-v07-browser';
+  const artifacts =
+    process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(tmpdir(), 'ai-office-v07-browser');
   await mkdir(artifacts, { recursive: true });
   await integrated.screenshot({ path: join(artifacts, 'workflow-desktop.png') });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -96,11 +115,52 @@ try {
     true,
   );
   await integrated.screenshot({ path: join(artifacts, 'workflow-mobile.png') });
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  // Resolve a delayed response for another selection after the current one has rendered.
+  const alternate = await env.send('POST', '/api/workflows', {
+    repositoryId: env.repositoryRecord.id,
+    coderAgentId: 'codex-1',
+    reviewerAgentId: 'codex-2',
+  });
+  assert.equal(alternate.statusCode, 201);
+  const otherId = alternate.json().id;
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByLabel('Workflow', { exact: true }).locator('option')).toHaveCount(2);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const routePattern = `**/api/workflows/${otherId}/timeline`;
+  await page.route(routePattern, async (route) => {
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  try {
+    const requested = page.waitForRequest((request) =>
+      request.url().endsWith(`/workflows/${otherId}/timeline`),
+    );
+    await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
+    await requested;
+    await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
+    await expect(board.getByRole('status')).toContainText('State: completed');
+    const delayed = page.waitForResponse((response) =>
+      response.url().endsWith(`/workflows/${otherId}/timeline`),
+    );
+    release();
+    await (await delayed).finished();
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
+    await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
+    await expect(board.getByRole('status')).toContainText('State: completed');
+  } finally {
+    release();
+    await page.unroute(routePattern);
+  }
   assert.equal((await env.get()).state, 'completed');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);
   console.log(
-    `Workflow browser E2E passed: all approval gates, cancellation, stale request rejection, SDK snapshot, sandboxed QA, persisted reports, Review Center, XSS escaping and mobile layout. Screenshots: ${artifacts}`,
+    `Workflow browser E2E passed: approval gates, cancellation, stale request/dialog and delayed-selection rejection, SDK snapshot, sandboxed QA, persisted reports, Review Center, XSS escaping and mobile layout. Screenshots: ${artifacts}`,
   );
 } finally {
   await browser?.close();

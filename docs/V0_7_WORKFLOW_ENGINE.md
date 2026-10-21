@@ -1,6 +1,6 @@
 # v0.7 — Coder, Reviewer and QA workflow
 
-This implementation lives in Draft PR #22. It has not been released, merged or deployed.
+This implementation lives in Draft PR #22. It has not been released, merged or deployed. See [validation and live trial evidence](V0_7_VALIDATION.md).
 
 ## Working behavior
 

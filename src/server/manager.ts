@@ -916,36 +916,42 @@ export class TaskManager {
           failure = 'Snapshot integrity changed during execution. Result was not approved.';
         }
       }
-      try {
-        if (!requeue && !active.preserveQueue) {
-          if (active.stopRequested && state === 'completed') state = 'stopped';
-          this.store.removeQueued(active.taskId);
-          this.waiting.delete(active.taskId);
-          if (downstream && state === 'completed') {
-            workflows.recordReadOnlyResult(this.store, workflow!.id, active.taskId, result, {
-              taskId: active.taskId,
-              revision: workflowStage!.execution!.revision,
-              sourceDigest: workflowStage!.execution!.sourceDigest,
-              digest: resultDigest(workflowStage!, result),
-              completedAt: new Date().toISOString(),
-            });
-          } else this.store.updateTask(active.taskId, { state, result, error: failure });
-          // Completion never authorizes the next stage by itself.
-          workflows.reconcileTerminals();
-        }
-      } catch {
-        cleanupConfirmed = false;
-        active.quarantined = true;
-        state = 'interrupted';
-        failure =
-          'Could not persist the terminal checkpoint. Workspace leases retained for manual inspection.';
+      const persistTerminal = () => {
         try {
-          this.store.updateTask(active.taskId, { state, result, error: failure });
-          workflows.reconcileTerminals();
+          if (!requeue && !active.preserveQueue) {
+            if (active.stopRequested && state === 'completed') state = 'stopped';
+            this.store.removeQueued(active.taskId);
+            this.waiting.delete(active.taskId);
+            if (downstream && state === 'completed') {
+              workflows.recordReadOnlyResult(this.store, workflow!.id, active.taskId, result, {
+                taskId: active.taskId,
+                revision: workflowStage!.execution!.revision,
+                sourceDigest: workflowStage!.execution!.sourceDigest,
+                digest: resultDigest(workflowStage!, result),
+                completedAt: new Date().toISOString(),
+              });
+            } else this.store.updateTask(active.taskId, { state, result, error: failure });
+            // Completion never authorizes the next stage by itself.
+            workflows.reconcileTerminals();
+          }
         } catch {
-          /* Storage may be unavailable. Recovery must interrupt the saved intent. */
+          cleanupConfirmed = false;
+          active.quarantined = true;
+          state = 'interrupted';
+          failure = workflow
+            ? 'Could not persist the terminal checkpoint. Workspace leases retained for manual inspection.'
+            : 'Could not persist terminal task state. Agent quarantined for manual inspection.';
+          try {
+            this.store.updateTask(active.taskId, { state, result, error: failure });
+            workflows.reconcileTerminals();
+          } catch {
+            /* Storage may be unavailable. Recovery must interrupt the saved intent. */
+          }
         }
-      }
+      };
+      // Workflow provenance commits under its lease. Ordinary tasks retain
+      // their existing contract: terminal state means the agent is released.
+      if (workflow) persistTerminal();
       try {
         if (cleanupConfirmed) {
           await workspaceRelease?.();
@@ -960,6 +966,7 @@ export class TaskManager {
         this.store.updateTask(active.taskId, { state, error: failure });
         workflows.reconcileTerminals();
       }
+      if (!workflow) persistTerminal();
       if (cleanupConfirmed) this.active.delete(active.agentId);
       if (!requeue && !active.preserveQueue)
         this.emit(active.taskId, 'state', failure ?? `Task ${state}.`);

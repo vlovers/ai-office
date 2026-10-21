@@ -74,3 +74,13 @@ jobs:
         run: npx playwright install chromium
       - name: Coder to Reviewer to QA browser approval journey (native sandbox, no inference)
         run: npm run test:browser:workflow
+        env:
+          AI_OFFICE_BROWSER_ARTIFACTS: ${{ runner.temp }}/workflow-browser
+      - name: Upload workflow browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-browser
+          path: ${{ runner.temp }}/workflow-browser
+          if-no-files-found: ignore
+          retention-days: 7

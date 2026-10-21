@@ -76,13 +76,16 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
   } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  const refreshEpoch = useRef(0);
   const refresh = useCallback(async () => {
+    const epoch = ++refreshEpoch.current;
     try {
       const [all, current, choices] = await Promise.all([
         request<Summary[]>('/workflows'),
         request<Dashboard>('/dashboard'),
         request<{ commands: { commandId: string; argv: string[] }[] }>('/workflows/qa-commands'),
       ]);
+      if (epoch !== refreshEpoch.current) return;
       const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
       setItems(workflows);
       setDashboard(current);
@@ -97,17 +100,22 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
             request<Report[]>(`/workflows/${next}/results`),
           ])
         : [null, []];
+      if (epoch !== refreshEpoch.current) return;
       setTimeline(view);
       setReports(output);
       setError('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (epoch === refreshEpoch.current)
+        setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, [selected, taskId]);
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => void refresh(), 3000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      refreshEpoch.current++;
+    };
   }, [refresh]);
   async function mutate(operation: () => Promise<unknown>) {
     setLoading(true);
@@ -122,6 +130,9 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     }
   }
   const chosen = items.find((item) => item.id === selected);
+  const staleAction = Boolean(
+    action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
+  );
   const unsubmitted =
     dashboard?.tasks.filter(
       (task) =>
@@ -135,7 +146,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
       (profile) => !profile.archived && profile.maximumMode === 'read-only',
     ) ?? [];
   async function perform() {
-    if (!action || !confirmed) return;
+    if (!action || !confirmed || staleAction) return;
     const body: Record<string, unknown> = { version: action.version, confirmed: true };
     let endpoint = action.name;
     if (action.name === 'bind-coder-task') {
@@ -229,7 +240,16 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
         <>
           <label>
             Workflow
-            <select value={selected} onChange={(event) => setSelected(event.target.value)}>
+            <select
+              aria-label="Workflow"
+              value={selected}
+              onChange={(event) => {
+                refreshEpoch.current++;
+                setTimeline(null);
+                setReports([]);
+                setSelected(event.target.value);
+              }}
+            >
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id.slice(0, 8)} · {item.state} · v{item.version}
@@ -237,7 +257,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
               ))}
             </select>
           </label>
-          {timeline && (
+          {timeline && timeline.id === selected && (
             <>
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
@@ -400,10 +420,16 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
               I approve this exact checkpoint
             </label>
             {error && <p role="alert">{error}</p>}
+            {staleAction && (
+              <p role="alert">
+                The workflow changed. Close this dialog and inspect the current checkpoint.
+              </p>
+            )}
             <div className="button-row">
               <button
                 disabled={
                   loading ||
+                  staleAction ||
                   !confirmed ||
                   (action.name === 'approve-qa' && !commandId) ||
                   (action.name === 'bind-coder-task' && !coderTask)
