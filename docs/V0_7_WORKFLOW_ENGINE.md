@@ -269,3 +269,15 @@ approved evidence bundle and both on-disk manifests. The check holds a Git
 lease, rejects stale workflow versions and reports `runnable:false`. This
 survives metadata reopening, but is not an independent OS sandbox and does
 not provide restart-safe Reviewer execution.
+
+## Remote-free Git staging (experimental, not an agent runner)
+
+`stageReviewerGitContext` validates the approved source candidate, builds
+an independent local Git repository with no remote, disabled hooks and a
+restricted Git environment, and checks its inventory and clean commit.
+It revalidates the source and revision before returning. Failures remove
+partial runtime directories. `removeReviewerGitContext` refuses arbitrary
+filesystem paths. A Git staging directory does **not** constitute a sandbox,
+does **not** permit model execution, and is not connected to TaskManager
+yet. In particular, no Reviewer agent is started and there is no auto-resume
+or automatic approval.
