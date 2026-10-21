@@ -7,6 +7,7 @@ import type { AgentProvider, ProviderEvent, ProviderSession } from './types.js';
 import type { SessionBinding } from './types.js';
 import type { CodexAuth, CodexExecution } from './codex-auth.js';
 import { codexDiagnostic } from './codex-diagnostics.js';
+import { verifyNativeIsolation } from './native-isolation.js';
 
 class EventQueue implements AsyncIterable<ProviderEvent> {
   private values: ProviderEvent[] = [];
@@ -48,7 +49,12 @@ export class CodexProvider implements AgentProvider {
   private runs = new Map<string, Run>();
   private cleanupFailures = new Map<string, Error>();
   private prepared = new Map<string, CodexExecution>();
+  private cancelled = new WeakSet<ProviderSession>();
   constructor(private options: CodexProviderOptions) {}
+  async verifyIsolation() {
+    const execution = await this.options.auth.prepare();
+    await verifyNativeIsolation(execution.sandboxExecutable);
+  }
   async startSession(repositoryPath: string, model?: string | null): Promise<ProviderSession> {
     const execution = await this.options.auth.prepare(undefined, model);
     const session = {
@@ -80,6 +86,11 @@ export class CodexProvider implements AgentProvider {
     const execution = this.prepared.get(session.id);
     if (!execution) throw new Error('Session has no prepared connection.');
     this.prepared.delete(session.id);
+    if (session.verifiedReadOnly) {
+      if (session.executionMode !== 'read-only') throw new Error('Read-only execution required.');
+      await verifyNativeIsolation(execution.sandboxExecutable);
+    }
+    if (this.cancelled.has(session)) throw new Error('Session stopped before execution.');
     const worker = new URL(
       import.meta.url.endsWith('.ts') ? './codex-worker.ts' : './codex-worker.js',
       import.meta.url,
@@ -204,6 +215,7 @@ export class CodexProvider implements AgentProvider {
     return run.queue;
   }
   async stopSession(session: ProviderSession) {
+    this.cancelled.add(session);
     this.prepared.delete(session.id);
     const run = this.runs.get(session.id);
     if (!run) {

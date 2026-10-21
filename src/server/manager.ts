@@ -4,7 +4,7 @@ import { diffLines } from '../shared/diff.js';
 import type { ReviewComment, ReviewRecord } from '../shared/types.js';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, lstat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
@@ -27,6 +27,15 @@ import {
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
 import { WorkflowStore } from './workflows.js';
+import type { WorkflowStage } from './workflows.js';
+import {
+  acquireWorkflowLease,
+  validateWorkflowSnapshot,
+  workflowSource,
+  resultDigest,
+} from './workflow-execution.js';
+import { qaPlan, runSandboxedQA } from './qa-runner.js';
+import { verifyNativeIsolation } from './providers/native-isolation.js';
 import { AppError } from './errors.js';
 import { acquireLocks, acquireLock, ResourceLockedError } from './lock.js';
 import { changedFiles, revalidateRepository, repositoryLeaseDirectories } from './repositories.js';
@@ -47,6 +56,7 @@ export interface FeedbackInput {
   comments: ReviewComment[];
 }
 interface Active {
+  qaAbort?: AbortController;
   taskId: string;
   agentId: AgentId;
   gitDir: string;
@@ -281,9 +291,275 @@ export class TaskManager {
     this.pump();
     return this.store.task(taskId)!;
   }
+
+  private tracked<T>(operation: Promise<T>): Promise<T> {
+    this.reviews.add(operation);
+    void operation.finally(() => this.reviews.delete(operation)).catch(() => {});
+    return operation;
+  }
+  private async settleCompletedRuns(repositoryId: string) {
+    const repository = this.store.repository(repositoryId);
+    if (!repository) return;
+    await Promise.all(
+      [...this.active.values()]
+        .filter(
+          (run) =>
+            run.gitDir === repository.gitDir &&
+            !run.quarantined &&
+            ['completed', 'failed', 'stopped', 'interrupted'].includes(
+              this.store.task(run.taskId)?.state ?? '',
+            ),
+        )
+        .map((run) => run.done),
+    );
+  }
+
+  submitWorkflowStage(id: string, version: number, kind: 'reviewer' | 'qa') {
+    return this.tracked(this.submitSnapshotStage(id, version, kind));
+  }
+  prepareWorkflowReviewer(id: string, version: number) {
+    return this.tracked(
+      (async () => {
+        if (this.closing) throw new AppError(503, 'Server is shutting down.');
+        let workflow = new WorkflowStore(this.store.db).get(id);
+        if (
+          !workflow ||
+          workflow.version !== version ||
+          workflow.state !== 'active' ||
+          workflow.stages[1]?.state !== 'ready'
+        )
+          throw new AppError(409, 'Reviewer approval is missing or stale.');
+        const revision = workflow.stages[1].approvedRevision!;
+        if (!workflow.stages[1].bundle)
+          workflow = (await this.captureWorkflowBundle(id, workflow.version, revision)).workflow;
+        if (!workflow.stages[1]!.sourceCandidate)
+          workflow = (await this.prepareReviewerSource(id, workflow.version)).workflow;
+        if (!workflow.stages[1]!.runtimeCandidate)
+          workflow = (await this.prepareReviewerRuntime(id, workflow.version)).workflow;
+        await this.verifyPreparedReviewerRuntime(id, workflow.version);
+        return workflow;
+      })(),
+    );
+  }
+  cleanupWorkflowArtifacts(id: string, version: number) {
+    return this.tracked(
+      (async () => {
+        if (this.closing || !this.workspaces)
+          throw new AppError(503, 'Workflow runner unavailable.');
+        const workflows = new WorkflowStore(this.store.db);
+        const workflow = workflows.get(id);
+        if (
+          !workflow ||
+          workflow.version !== version ||
+          !['completed', 'cancelled'].includes(workflow.state) ||
+          workflow.artifactCleanup
+        )
+          throw new AppError(409, 'Inspect the terminal workflow before artifact cleanup.');
+        const repository = this.store.repository(workflow.repositoryId);
+        if (!repository) throw new AppError(409, 'Workflow repository missing.');
+        const root = await this.workspaces.authorize(repository);
+        const reviewer = workflow.stages[1]!;
+        const entries = [
+          [reviewer.bundle?.directory, 'workflow-evidence'],
+          [reviewer.sourceCandidate?.directory, 'workflow-reviewer-source'],
+          [reviewer.runtimeCandidate?.directory, 'workflow-reviewer-runtime'],
+        ] as const;
+        for (const [directory, category] of entries) {
+          if (!directory) continue;
+          if (
+            directory !== join(root, category, basename(directory)) ||
+            !/^[a-f0-9-]{36}$/.test(basename(directory)) ||
+            (await realpath(directory)) !== directory
+          )
+            throw new AppError(409, 'Unsafe artifact location; inspect manually.');
+          const info = await lstat(directory);
+          if (!info.isDirectory() || info.isSymbolicLink())
+            throw new AppError(409, 'Artifact identity changed.');
+        }
+        const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+        await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+        const sourceTask = workflow.stages[0]?.taskId
+          ? this.store.task(workflow.stages[0].taskId)
+          : undefined;
+        const workspace = sourceTask?.workspaceId
+          ? this.store.workspace(sourceTask.workspaceId)
+          : undefined;
+        const directories = await repositoryLeaseDirectories(repository, workspace?.gitDir);
+        if (reviewer.runtimeCandidate)
+          directories.push(join(reviewer.runtimeCandidate.directory, '.git'));
+        const release = await acquireLocks(
+          directories.map((path) =>
+            join(lockRoot, createHash('sha256').update(path).digest('hex')),
+          ),
+          repository.path,
+        );
+        let intent;
+        try {
+          intent = workflows.recordCleanup(id, version, 'running');
+          for (const [directory, category] of entries) {
+            if (!directory) continue;
+            if (category === 'workflow-reviewer-runtime')
+              await removeReviewerGitContext(join(root, category), directory);
+            else await removeEvidenceBundle(join(root, category), directory);
+          }
+          return workflows.recordCleanup(id, intent.version, 'completed');
+        } catch (error) {
+          if (intent) workflows.recordCleanup(id, intent.version, 'failed');
+          throw error;
+        } finally {
+          await release();
+        }
+      })(),
+    );
+  }
+  private async submitSnapshotStage(id: string, version: number, kind: 'reviewer' | 'qa') {
+    if (this.closing || !this.workspaces || !this.dashboard().ready)
+      throw new AppError(503, 'Workflow runner is unavailable.');
+    const workflows = new WorkflowStore(this.store.db);
+    const workflow = workflows.get(id);
+    const stage = workflow?.stages.find((item) => item.kind === kind);
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      stage?.state !== 'ready' ||
+      stage.taskId
+    )
+      throw new AppError(409, 'Workflow stage is stale or not approved.');
+    if (this.store.queue().length >= 100)
+      throw new AppError(409, 'Queue limit is 100 submitted tasks.');
+    await this.settleCompletedRuns(workflow.repositoryId);
+    const profile = this.store.requireAgent(stage.agentId);
+    if (
+      profile.archived ||
+      profile.revision !== stage.agentRevision ||
+      profile.maximumMode !== 'read-only'
+    )
+      throw new AppError(409, 'Restore the pinned read-only profile before running this stage.');
+    const provider = this.providerFor(stage.agentId);
+    if (kind === 'reviewer' && (!provider || !provider.verifyIsolation))
+      throw new AppError(409, 'Reviewer provider cannot verify native isolation.');
+    const release = await acquireWorkflowLease(this.store, workflow);
+    try {
+      const snapshot = await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+      if (kind === 'reviewer') await provider!.verifyIsolation!();
+      else {
+        await verifyNativeIsolation();
+        await this.validateQAPlan(stage);
+      }
+      if (this.closing) throw new AppError(503, 'Server is shutting down.');
+      const { repository, workspace } = workflowSource(this.store, workflow);
+      const review = await this.workspaces.review(repository, workspace);
+      await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+      const next = workflows.submitReadOnly(
+        this.store,
+        id,
+        version,
+        kind,
+        {
+          revision: snapshot.revision,
+          sourceDigest: snapshot.sourceDigest,
+          runtimeIdentity: snapshot.runtimeIdentity,
+          submittedAt: new Date().toISOString(),
+        },
+        this.auth.view().mode,
+        JSON.stringify(review.files),
+      );
+      const taskId = next.stages.find((item) => item.kind === kind)!.taskId!;
+      this.emit(taskId, 'queue', `${kind} submitted against the approved read-only snapshot.`);
+      this.wake(0);
+      return { workflow: next, task: this.store.task(taskId) };
+    } finally {
+      await release();
+    }
+  }
+
+  private async validateQAPlan(stage: WorkflowStage) {
+    const plan = stage.qaPlan;
+    if (!plan || !this.workspaces) throw new AppError(409, 'QA command approval missing.');
+    const current = await qaPlan(
+      plan.commandId,
+      this.workspaces.options.commands?.[plan.commandId],
+      this.workspaces.options.verificationTimeoutMs ?? 60000,
+    );
+    if (current.digest !== plan.digest)
+      throw new AppError(409, 'QA command changed after approval.');
+    return plan;
+  }
+
+  approveWorkflowQA(id: string, version: number, revision: string, commandId: string) {
+    return this.tracked(
+      (async () => {
+        if (this.closing || !this.workspaces)
+          throw new AppError(503, 'Workflow runner unavailable.');
+        const workflows = new WorkflowStore(this.store.db);
+        const workflow = workflows.get(id);
+        if (!workflow || workflow.version !== version) throw new AppError(409, 'Stale workflow.');
+        await this.settleCompletedRuns(workflow.repositoryId);
+        const release = await acquireWorkflowLease(this.store, workflow);
+        try {
+          await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+          const plan = await qaPlan(
+            commandId,
+            this.workspaces.options.commands?.[commandId],
+            this.workspaces.options.verificationTimeoutMs ?? 60000,
+          );
+          return workflows.approveQA(id, version, revision, plan);
+        } finally {
+          await release();
+        }
+      })(),
+    );
+  }
+
+  approveWorkflowResult(id: string, version: number, kind: 'reviewer' | 'qa', digest: string) {
+    return this.tracked(
+      (async () => {
+        if (this.closing || !this.workspaces)
+          throw new AppError(503, 'Workflow runner unavailable.');
+        const workflows = new WorkflowStore(this.store.db);
+        const workflow = workflows.get(id);
+        if (!workflow || workflow.version !== version) throw new AppError(409, 'Stale workflow.');
+        await this.settleCompletedRuns(workflow.repositoryId);
+        const release = await acquireWorkflowLease(this.store, workflow);
+        try {
+          await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+          const stage = workflow.stages.find((item) => item.kind === kind);
+          const task = stage?.taskId ? this.store.task(stage.taskId) : undefined;
+          if (
+            !stage?.report ||
+            task?.state !== 'completed' ||
+            resultDigest(stage, task.result) !== digest ||
+            stage.report.digest !== digest
+          )
+            throw new AppError(409, 'Downstream result changed or is not complete.');
+          if (kind === 'qa') await this.validateQAPlan(stage);
+          return workflows.approveReadOnlyResult(id, version, kind, digest);
+        } finally {
+          await release();
+        }
+      })(),
+    );
+  }
   private validateResume(task: NonNullable<ReturnType<Store['task']>>, resumeSessionId?: string) {
     const provider = this.providerFor(task.agentId)!;
     const previous = resumeSessionId ? this.store.session(resumeSessionId) : undefined;
+    if (
+      previous &&
+      new WorkflowStore(this.store.db)
+        .list()
+        .some((workflow) =>
+          workflow.stages
+            .slice(1)
+            .some(
+              (stage) => stage.taskId && this.store.task(stage.taskId)?.sessionId === previous.id,
+            ),
+        )
+    )
+      throw new AppError(
+        409,
+        'Workflow snapshot sessions cannot be resumed. Create a new explicitly approved workflow.',
+      );
     if (
       resumeSessionId &&
       (!previous?.threadId ||
@@ -331,6 +607,12 @@ export class TaskManager {
     let workspaceRelease: (() => Promise<void>) | undefined;
     let cleanupConfirmed = true;
     const provider = this.providers.get(active.agentId)!;
+    const workflows = new WorkflowStore(this.store.db);
+    const workflow = workflows
+      .list()
+      .find((item) => item.stages.some((stage) => stage.taskId === active.taskId));
+    const workflowStage = workflow?.stages.find((stage) => stage.taskId === active.taskId);
+    const downstream = workflowStage && workflowStage.kind !== 'coder';
     try {
       await revalidateRepository(repository);
       if (active.stopRequested || this.closing) {
@@ -340,7 +622,12 @@ export class TaskManager {
       // A fixed OS-local root ensures TMPDIR differences cannot bypass another process's lease.
       const locks = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
       await mkdir(locks, { recursive: true, mode: 0o700 });
-      const directories = await repositoryLeaseDirectories(repository);
+      const directories = await repositoryLeaseDirectories(
+        repository,
+        downstream ? workflowSource(this.store, workflow!).workspace.gitDir : undefined,
+      );
+      if (downstream)
+        directories.push(join(workflow!.stages[1]!.runtimeCandidate!.directory, '.git'));
       const lockPaths = directories.map((directory) =>
         join(locks, createHash('sha256').update(directory).digest('hex')),
       );
@@ -350,6 +637,36 @@ export class TaskManager {
         return;
       }
       this.validateResume(this.store.task(active.taskId)!, entry.resumeSessionId ?? undefined);
+      if (workflow && workflowStage) {
+        const current = workflows.get(workflow.id);
+        const stage = current?.stages.find((item) => item.taskId === active.taskId);
+        const profile = this.store.requireAgent(workflowStage.agentId);
+        if (
+          current?.state !== 'active' ||
+          stage?.state !== 'running' ||
+          profile.archived ||
+          profile.revision !== workflowStage.agentRevision
+        )
+          throw new AppError(409, 'Workflow or pinned agent changed before dispatch.');
+        if (downstream) {
+          if (
+            profile.maximumMode !== 'read-only' ||
+            entry.resumeSessionId ||
+            !this.workspaces ||
+            !stage.execution
+          )
+            throw new AppError(409, 'Downstream dispatch requires a pinned read-only snapshot.');
+          const snapshot = await validateWorkflowSnapshot(this.store, this.workspaces, current);
+          workingPath = snapshot.directory;
+        } else {
+          const { git } = await import('./repositories.js');
+          if (
+            (await git(repository.path, ['rev-parse', 'HEAD'])).trim() !== stage.approvedRevision ||
+            (await git(repository.path, ['status', '--porcelain', '--untracked-files=all'])).trim()
+          )
+            throw new AppError(409, 'Approved Coder baseline changed before dispatch.');
+        }
+      }
       const queuedConfiguration = assertConfiguration(
         this.store.taskConfiguration(active.taskId),
         this.store.task(active.taskId)!,
@@ -362,6 +679,23 @@ export class TaskManager {
       this.store.claimQueued(active.taskId);
       this.waiting.delete(active.taskId);
       const task = this.store.task(active.taskId)!;
+      if (workflowStage?.kind === 'qa') {
+        const plan = await this.validateQAPlan(workflowStage);
+        active.qaAbort = new AbortController();
+        if (active.stopRequested || this.closing) active.qaAbort.abort();
+        active.preparing = false;
+        this.emit(
+          task.id,
+          'state',
+          `Running approved QA command ${plan.commandId} in native read-only sandbox.`,
+        );
+        const verification = await runSandboxedQA(workingPath, plan, active.qaAbort.signal);
+        result = `QA ${plan.commandId}: ${verification.passed ? 'passed' : 'failed'}\n${this.clean(verification.output).slice(-128100)}`;
+        failure = verification.passed ? null : 'QA command did not pass in the read-only sandbox.';
+        state = active.stopRequested ? 'stopped' : verification.passed ? 'completed' : 'failed';
+        this.emit(task.id, 'result', result);
+        return;
+      }
       if (task.executionMode === 'write') {
         if (!this.workspaces) throw new AppError(409, 'Isolated writes are not configured.');
         const previousSession = entry.resumeSessionId
@@ -476,6 +810,7 @@ export class TaskManager {
         );
       }
       active.session.executionMode = currentTask.executionMode ?? 'read-only';
+      if (downstream) active.session.verifiedReadOnly = true;
       await provider.executeTask(
         active.session,
         configuredPrompt(effective, this.store.task(active.taskId)!.prompt),
@@ -521,7 +856,12 @@ export class TaskManager {
       }
       state = failure ? 'failed' : active.stopRequested ? 'stopped' : 'completed';
     } catch (error) {
-      if (
+      if (error instanceof UncertainCleanupError) {
+        cleanupConfirmed = false;
+        active.quarantined = true;
+        state = 'interrupted';
+        failure = error.message;
+      } else if (
         error instanceof ResourceLockedError &&
         !active.stopRequested &&
         this.store.task(active.taskId)?.state === 'queued'
@@ -549,7 +889,7 @@ export class TaskManager {
         }
       }
       try {
-        if (release) {
+        if (release && !downstream) {
           await revalidateRepository(repository);
           const files = await changedFiles(workingPath);
           this.store.updateTask(active.taskId, { changedFiles: files });
@@ -566,25 +906,59 @@ export class TaskManager {
         const workspace = this.store.workspace(this.store.task(active.taskId)!.workspaceId!);
         if (workspace) this.store.saveWorkspace({ ...workspace, reviewEpoch: active.taskId });
       }
+      if (downstream && !requeue && cleanupConfirmed && state === 'completed') {
+        try {
+          if (!this.workspaces || !result.trim())
+            throw new AppError(409, 'Downstream returned no authenticated result.');
+          await validateWorkflowSnapshot(this.store, this.workspaces, workflows.get(workflow!.id)!);
+        } catch {
+          state = 'failed';
+          failure = 'Snapshot integrity changed during execution. Result was not approved.';
+        }
+      }
+      try {
+        if (!requeue && !active.preserveQueue) {
+          if (active.stopRequested && state === 'completed') state = 'stopped';
+          this.store.removeQueued(active.taskId);
+          this.waiting.delete(active.taskId);
+          if (downstream && state === 'completed') {
+            workflows.recordReadOnlyResult(this.store, workflow!.id, active.taskId, result, {
+              taskId: active.taskId,
+              revision: workflowStage!.execution!.revision,
+              sourceDigest: workflowStage!.execution!.sourceDigest,
+              digest: resultDigest(workflowStage!, result),
+              completedAt: new Date().toISOString(),
+            });
+          } else this.store.updateTask(active.taskId, { state, result, error: failure });
+          // Completion never authorizes the next stage by itself.
+          workflows.reconcileTerminals();
+        }
+      } catch {
+        cleanupConfirmed = false;
+        active.quarantined = true;
+        state = 'interrupted';
+        failure =
+          'Could not persist the terminal checkpoint. Workspace leases retained for manual inspection.';
+        try {
+          this.store.updateTask(active.taskId, { state, result, error: failure });
+          workflows.reconcileTerminals();
+        } catch {
+          /* Storage may be unavailable. Recovery must interrupt the saved intent. */
+        }
+      }
       try {
         if (cleanupConfirmed) {
           await workspaceRelease?.();
           await release?.();
         }
       } catch {
-        state = 'failed';
-        failure ??=
+        state = 'interrupted';
+        failure =
           'Could not release the repository lease. Inspect its lock directory before retrying.';
-      }
-      if (!requeue && !active.preserveQueue) {
-        this.store.removeQueued(active.taskId);
-        this.waiting.delete(active.taskId);
-        this.store.updateTask(active.taskId, { state, result, error: failure });
-      }
-      if (!requeue && !active.preserveQueue) {
-        // A task ending does not validate its Git result. Block any workflow
-        // handoff until its output is independently inspected and approved.
-        new WorkflowStore(this.store.db).reconcileTerminals();
+        cleanupConfirmed = false;
+        active.quarantined = true;
+        this.store.updateTask(active.taskId, { state, error: failure });
+        workflows.reconcileTerminals();
       }
       if (cleanupConfirmed) this.active.delete(active.agentId);
       if (!requeue && !active.preserveQueue)
@@ -1230,18 +1604,23 @@ export class TaskManager {
       workflowId: string;
       version: number;
       bundleId: string;
-      status: 'verified' | 'invalid';
+      status: 'verified' | 'invalid' | 'retained' | 'cleaned' | 'cleanup-incomplete';
     }[] = [];
     for (const workflow of workflows) {
       const bundle = workflow.stages[1]?.bundle;
       if (!bundle) continue;
-      let status: 'verified' | 'invalid' = 'invalid';
-      try {
-        const result = await this.inspectWorkflowBundle(workflow.id, workflow.version);
-        if (result.verified) status = 'verified';
-      } catch {
-        // Fail closed on unavailable workspace, stale revision or corrupt bytes.
-      }
+      let status: (typeof results)[number]['status'] = 'invalid';
+      if (workflow.artifactCleanup)
+        status = workflow.artifactCleanup.state === 'completed' ? 'cleaned' : 'cleanup-incomplete';
+      else if (workflow.state !== 'active' || workflow.stages[1]?.state !== 'ready')
+        status = 'retained';
+      else
+        try {
+          const result = await this.inspectWorkflowBundle(workflow.id, workflow.version);
+          if (result.verified) status = 'verified';
+        } catch {
+          // Fail closed on unavailable workspace, stale revision or corrupt bytes.
+        }
       results.push({
         workflowId: workflow.id,
         version: workflow.version,
@@ -1253,6 +1632,9 @@ export class TaskManager {
       scanned: results.length,
       valid: results.filter((item) => item.status === 'verified').length,
       invalid: results.filter((item) => item.status === 'invalid').length,
+      retained: results.filter((item) => item.status === 'retained').length,
+      cleaned: results.filter((item) => item.status === 'cleaned').length,
+      cleanupIncomplete: results.filter((item) => item.status === 'cleanup-incomplete').length,
       results,
       executionAuthorized: false,
     };
@@ -1283,6 +1665,23 @@ export class TaskManager {
     const repository = task && this.store.repository(task.repositoryId);
     if (!task || !workspace || !repository || !this.workspaces)
       throw new AppError(404, 'Isolated workspace not found.');
+    // Terminal state is durably committed while the lease is still held.
+    // Wait for its final release instead of racing a just-completed task.
+    await this.settleCompletedRuns(repository.id);
+    if (
+      ['keep', 'reject', 'verify', 'request-changes'].includes(action) &&
+      new WorkflowStore(this.store.db)
+        .list()
+        .some(
+          (workflow) =>
+            workflow.stages[0]?.taskId === taskId &&
+            !['completed', 'cancelled'].includes(workflow.state),
+        )
+    )
+      throw new AppError(
+        409,
+        'Resolve or cancel the workflow before modifying or verifying its Coder workspace. Use the sandboxed workflow QA gate.',
+      );
     const workspaceId = workspace.id;
     if (action === 'request-changes') {
       const submitted = this.store.reviewRecord(workspaceId, revision ?? '');
@@ -1511,16 +1910,26 @@ export class TaskManager {
         throw error;
       }
       this.waiting.delete(taskId);
+      new WorkflowStore(this.store.db).reconcileTerminals();
       this.emit(taskId, 'state', 'Task stopped before execution.');
       this.wake();
       return;
     }
     if (active.quarantined) throw new UncertainCleanupError();
+    if (
+      ['completed', 'failed', 'stopped', 'interrupted'].includes(
+        this.store.task(taskId)?.state ?? '',
+      )
+    ) {
+      await active.done;
+      return;
+    }
     const provider = this.providers.get(active.agentId)!;
     if (!provider.capabilities.cancellation)
       throw new AppError(409, 'This provider does not support cancellation.');
     if (!active.stopRequested) {
       active.stopRequested = true;
+      active.qaAbort?.abort();
       this.store.removeQueued(taskId);
       this.store.updateTask(taskId, { state: 'stopping' });
       this.emit(taskId, 'state', 'Stopping agent and cleaning up its process group.');

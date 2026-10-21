@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { mkdir, writeFile, realpath, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { MetadataClient, localCli } from './codex-metadata.js';
 import { AppError } from '../errors.js';
@@ -20,19 +20,23 @@ export interface LocalInspection {
   models: { model: string; isDefault: boolean }[];
 }
 export interface CodexExecution {
+  sandboxExecutable: string;
   executable: string;
   env: Record<string, string>;
   binding: SessionBinding;
 }
 export interface AuthOptions {
+  localExecutable?: string;
   dataDir: string;
   apiKey?: string;
   inspectLocal?: () => Promise<LocalInspection>;
   apiExecutable?: string;
 }
 
-export async function inspectLocal(): Promise<LocalInspection> {
-  const local = localCli();
+export async function inspectLocal(executable?: string): Promise<LocalInspection> {
+  if (executable && !isAbsolute(executable))
+    throw new Error('Configured Codex executable must be absolute.');
+  const local = localCli(executable);
   const { stdout } = await execute(local.executable, ['--version'], {
     env: local.env,
     timeout: 5000,
@@ -91,7 +95,9 @@ export class CodexAuth {
     if (this.pending) return this.pending;
     this.pending = (async () => {
       try {
-        const local = await (this.options.inspectLocal ?? inspectLocal)();
+        const local = await (
+          this.options.inspectLocal ?? (() => inspectLocal(this.options.localExecutable))
+        )();
         if (local.version !== supportedVersion) throw new Error('Unsupported CLI version.');
         this.local = local;
         this.localStatus = local.account === 'chatgpt' ? 'available' : 'authentication-required';
@@ -195,6 +201,7 @@ export class CodexAuth {
     );
     await rename(temporary, launcher); // atomic replacement: concurrent preflights never truncate an executable
     return {
+      sandboxExecutable: canonicalExecutable,
       executable: launcher,
       env,
       binding: { mode, contextId, model, runtimeVersion: version },

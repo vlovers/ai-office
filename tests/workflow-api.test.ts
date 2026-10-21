@@ -400,7 +400,7 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     const approvedTimeline = await send('GET', url + '/timeline');
     expect(approvedTimeline.statusCode).toBe(200);
     expect(approvedTimeline.json().stages[1].status).toBe('ready');
-    expect(approvedTimeline.json().stages[1].nextAction).toBeNull();
+    expect(approvedTimeline.json().stages[1].nextAction).toBe('prepare-reviewer');
     expect(approvedTimeline.json().downstreamExecutable).toBe(false);
     const handoffUrl = url + '/inspect-handoff';
     const handoff = await send('POST', handoffUrl, {
@@ -599,4 +599,4 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     await unlock(join(env.root, 'worktrees', 'workflow-reviewer-source'));
     await env.cleanup();
   }
-});
+}, 60000);

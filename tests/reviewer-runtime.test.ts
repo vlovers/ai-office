@@ -3,6 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
+import { removeTestTree } from './helpers.js';
 import {
   createReviewerSourceCandidate,
   verifyReviewerSourceCandidate,
@@ -39,7 +40,12 @@ it('creates a remote-free clean Git context from an approved source candidate', 
       verifyRevision: async () => revision,
     });
     const run = (args: string[]) =>
-      execFileSync('git', args, { cwd: runtime.directory }).toString().trim();
+      execFileSync('git', args, {
+        cwd: runtime.directory,
+        env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+      })
+        .toString()
+        .trim();
     expect(run(['remote'])).toBe('');
     expect(run(['status', '--porcelain'])).toBe('');
     expect(run(['rev-parse', 'HEAD'])).toBe(runtime.commit);
@@ -66,7 +72,7 @@ it('creates a remote-free clean Git context from an approved source candidate', 
     await chmod(snapshot.directory, 0o700);
     await rm(snapshot.directory, { recursive: true, force: true });
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTestTree(root);
   }
 });
 
@@ -106,6 +112,6 @@ it('refuses staging when source integrity, symlinks or revision changes', async 
     await rm(join(snapshot.directory, 'README.md'));
     await rm(snapshot.directory, { recursive: true, force: true });
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTestTree(root);
   }
 });

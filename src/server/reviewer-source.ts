@@ -9,7 +9,7 @@ const MAX_FILES = 2000;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
 const forbidden =
-  /(^|\/)(\.git|\.env[^/]*|\.aws|\.codex|\.agents|node_modules|credentials[^/]*|auth\.json|\.gitattributes|\.gitmodules|\.lfsconfig)(\/|$)|\.pem$/i;
+  /(^|\/)(\.git|\.env[^/]*|\.aws|\.codex|\.agents|\.ssh|\.gnupg|\.npmrc|\.netrc|id_rsa[^/]*|id_ed25519[^/]*|node_modules|credentials[^/]*|auth\.json|\.gitattributes|\.gitmodules|\.lfsconfig)(\/|$)|\.(pem|key)$/i;
 
 export interface ReviewerSourceManifest {
   revision: string;
@@ -48,7 +48,10 @@ export async function createReviewerSourceCandidate(input: {
   const entries = await visibleFiles();
   if (!entries.length || entries.length > MAX_FILES)
     throw new AppError(409, 'Snapshot file count is outside supported limits.');
-  if (new Set(entries.map((path) => path.toLocaleLowerCase('en-US'))).size !== entries.length)
+  if (
+    new Set(entries.map((path) => path.normalize('NFC').toLocaleLowerCase('en-US'))).size !==
+    entries.length
+  )
     throw new AppError(409, 'Case-insensitive source path collision.');
   const root = resolve(input.workspace);
   const directory = join(input.destinationRoot, randomUUID());
@@ -179,7 +182,9 @@ export async function verifyReviewerSourceCandidate(
       expected.add(file.path);
       size += file.size;
     }
-    const paths = manifest.files.map((file) => file.path.toLocaleLowerCase('en-US'));
+    const paths = manifest.files.map((file) =>
+      file.path.normalize('NFC').toLocaleLowerCase('en-US'),
+    );
     if (new Set(paths).size !== paths.length) return false;
     if (
       manifest.files.some((file) => file.path.toLocaleLowerCase('en-US') === 'source-manifest.json')

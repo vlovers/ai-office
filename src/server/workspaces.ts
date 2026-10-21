@@ -24,7 +24,9 @@ const fingerprint = async (path: string) => {
 };
 const inside = (root: string, path: string) => path.startsWith(root + sep);
 const secretPath = (path: string) =>
-  /(^|\/)(\.env[^/]*|\.aws|\.codex|\.agents|credentials[^/]*|auth\.json)(\/|$)|\.pem$/i.test(path);
+  /(^|\/)(\.env[^/]*|\.aws|\.codex|\.agents|\.ssh|\.gnupg|\.npmrc|\.netrc|id_rsa[^/]*|id_ed25519[^/]*|credentials[^/]*|auth\.json)(\/|$)|\.(pem|key)$/i.test(
+    path,
+  );
 export class Workspaces {
   constructor(readonly options: WorkspaceOptions) {}
   async authorize(repository: Repository) {

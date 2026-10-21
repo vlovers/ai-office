@@ -15,12 +15,29 @@ async function gitMetadataFingerprint(directory: string): Promise<string> {
   const stat = await lstat(metadata);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new AppError(409, 'Unsafe Git metadata.');
   let count = 0;
+  const hash = createHash('sha256');
   const walk = async (path: string): Promise<void> => {
-    for (const entry of await readdir(path, { withFileTypes: true })) {
+    for (const entry of (await readdir(path, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
       if (++count > 10000 || entry.isSymbolicLink())
         throw new AppError(409, 'Unsafe Git metadata entry.');
       if (entry.isDirectory()) await walk(join(path, entry.name));
       else if (!entry.isFile()) throw new AppError(409, 'Unsupported Git metadata entry.');
+      else {
+        const file = join(path, entry.name);
+        const info = await lstat(file, { bigint: true });
+        if (info.size > 32n * 1024n * 1024n) throw new AppError(409, 'Oversized Git metadata.');
+        const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+        try {
+          hash.update(
+            JSON.stringify([file, String(info.dev), String(info.ino), String(info.birthtimeNs)]),
+          );
+          hash.update(await readFile(handle));
+        } finally {
+          await handle.close();
+        }
+      }
     }
   };
   await walk(metadata);
@@ -37,7 +54,7 @@ async function gitMetadataFingerprint(directory: string): Promise<string> {
   try {
     const bytes = await readFile(handle);
     if (bytes.length > 64 * 1024) throw new AppError(409, 'Oversized Git config.');
-    return createHash('sha256').update(bytes).digest('hex');
+    return hash.update(bytes).digest('hex');
   } finally {
     await handle.close();
   }
@@ -101,7 +118,7 @@ export async function stageReviewerGitContext(input: {
       await mkdir(dirname(target), { recursive: true, mode: 0o700 });
       await writeFile(target, bytes, { flag: 'wx', mode: 0o600 });
     }
-    await runGit(['init', '-q', '--initial-branch=reviewer']);
+    await runGit(['init', '-q', '--template=', '--initial-branch=reviewer']);
     await runGit(['-c', 'core.hooksPath=/dev/null', 'add', '-f', '--all']);
     await runGit([
       '-c',

@@ -21,3 +21,5 @@ The [v0.4 audit](docs/V0_4_SECURITY_AUDIT.md) records reproduced issues and fixe
 The Code Review Center adds revision-bound, explicitly confirmed continuation of existing write sessions. See the [v0.5 threat model](docs/V0_5_SECURITY.md) and [workflow limitations](docs/V0_5_REVIEW_CENTER.md). No automatic replacement thread or verification authorization is provided.
 
 Unreleased Agent Studio threat model, migration and fixture evidence: [v0.6 audit](docs/V0_6_VALIDATION.md). Profile instructions never authorize execution privileges.
+
+The draft v0.7 workflow uses a separately verified native read-only snapshot for Reviewer and QA. QA command approval never enables host verification. Uncertain cleanup retains leases, and restart never silently retries a workflow. See the [workflow isolation, recovery and limits](docs/V0_7_WORKFLOW_ENGINE.md).

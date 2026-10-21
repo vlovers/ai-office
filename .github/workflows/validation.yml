@@ -66,3 +66,11 @@ jobs:
         run: npm ci
       - name: Native read-only and isolated-write policy
         run: npm run test:sandbox
+      - name: Reviewer, QA, workflow recovery and security integration (native sandbox, no inference)
+        run: npm run test:workflow:native
+      - name: Build production dashboard
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Coder to Reviewer to QA browser approval journey (native sandbox, no inference)
+        run: npm run test:browser:workflow

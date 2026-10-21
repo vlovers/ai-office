@@ -1,10 +1,19 @@
 import { afterEach, expect, it } from 'vitest';
 import { sandbox, until } from './helpers.js';
-import { CodexAuth } from '../src/server/providers/codex-auth.js';
+import { CodexAuth, inspectLocal } from '../src/server/providers/codex-auth.js';
+import { localCli } from '../src/server/providers/codex-metadata.js';
 import { validateRepository } from '../src/server/repositories.js';
 import { createApp } from '../src/server/app.js';
 
 const cleanups: (() => Promise<void>)[] = [];
+it('allows only a server-selected absolute CLI path and preserves the environment whitelist', async () => {
+  await expect(inspectLocal('./untrusted-cli')).rejects.toThrow('must be absolute');
+  const selected = localCli('/operator/configured/codex');
+  expect(selected.executable).toBe('/operator/configured/codex');
+  expect(
+    Object.keys(selected.env).every((key) => ['PATH', 'HOME', 'CODEX_HOME'].includes(key)),
+  ).toBe(true);
+});
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup();
 });

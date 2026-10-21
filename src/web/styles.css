@@ -1735,3 +1735,21 @@ button.line-anchor {
     flex-wrap: wrap;
   }
 }
+
+/* Workflow evidence stays readable within narrow Review Center panels. */
+#workflows code,
+[aria-label='Workflow review results'] code,
+dialog[aria-label='Confirm workflow checkpoint'] code {
+  overflow-wrap: anywhere;
+}
+#workflows pre,
+[aria-label='Workflow review results'] pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+}
+#workflows li,
+[aria-label='Workflow review results'] li {
+  margin-block: 1rem;
+}

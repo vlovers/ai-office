@@ -7,6 +7,7 @@ import type {
   ReviewHistoryEntry,
 } from '../shared/types.js';
 import { diffLines } from '../shared/diff.js';
+import { WorkflowBoard } from './workflow-board.js';
 
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
 const changeType = (status: string) =>
@@ -234,6 +235,7 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
           Refresh Git review
         </button>
       </div>
+      <WorkflowBoard taskId={task.id} />
       {busy && <p role="status">Loading review…</p>}
       {error && (
         <p role="alert">

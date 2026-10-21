@@ -63,6 +63,91 @@ export async function createApp(manager: TaskManager) {
   });
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/dashboard', async () => manager.dashboard());
+  app.get('/api/workflows/qa-commands', async () => ({
+    commands: Object.entries(manager.workspaces?.options.commands ?? {}).map(
+      ([commandId, argv]) => ({ commandId, argv }),
+    ),
+    sandbox: 'read-only',
+    network: false,
+    hostVerification: false,
+  }));
+  app.post('/api/workflows/:id/cancel', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return new WorkflowStore(manager.store.db).transition(workflowId, input.version, {
+      type: 'cancel',
+    });
+  });
+  app.post('/api/workflows/:id/cleanup-artifacts', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return manager.cleanupWorkflowArtifacts(workflowId, input.version);
+  });
+  for (const kind of ['reviewer', 'qa'] as const) {
+    app.post(`/api/workflows/:id/submit-${kind}`, async (request, reply) => {
+      const workflowId = id.parse((request.params as { id: string }).id);
+      const input = z
+        .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+        .strict()
+        .parse(request.body);
+      return reply
+        .code(202)
+        .send(await manager.submitWorkflowStage(workflowId, input.version, kind));
+    });
+    app.post(`/api/workflows/:id/approve-${kind}-result`, async (request) => {
+      const workflowId = id.parse((request.params as { id: string }).id);
+      const input = z
+        .object({
+          version: z.number().int().nonnegative(),
+          confirmed: z.literal(true),
+          digest: z.string().regex(/^[a-f0-9]{64}$/),
+        })
+        .strict()
+        .parse(request.body);
+      return manager.approveWorkflowResult(workflowId, input.version, kind, input.digest);
+    });
+  }
+  app.post('/api/workflows/:id/approve-qa', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        commandId: z.string().min(1).max(128),
+      })
+      .strict()
+      .parse(request.body);
+    return manager.approveWorkflowQA(workflowId, input.version, input.revision, input.commandId);
+  });
+  app.post('/api/workflows/:id/prepare-reviewer', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return manager.prepareWorkflowReviewer(workflowId, input.version);
+  });
+  app.get('/api/workflows/:id/results', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const workflow = new WorkflowStore(manager.store.db).get(workflowId);
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    return workflow.stages.slice(1).map((stage) => ({
+      kind: stage.kind,
+      state: stage.state,
+      taskId: stage.taskId,
+      report: stage.report ?? null,
+      result: stage.taskId ? (manager.store.task(stage.taskId)?.result ?? '') : '',
+      error: stage.taskId ? (manager.store.task(stage.taskId)?.error ?? null) : null,
+      qaPlan: stage.qaPlan ?? null,
+    }));
+  });
   // Workflow creation persists only inert stage definitions; executable mutation
   // actions remain disabled until TaskManager enforces approvals and leases.
   app.post('/api/workflows', async (request, reply) => {
@@ -327,7 +412,7 @@ export async function createApp(manager: TaskManager) {
       review.files.length !== coder.evidence.fileCount
     )
       throw new AppError(409, 'Coder content changed. Reviewer handoff denied.');
-    // Approval only, not a model run. A verified read-only workspace runner
+    // Approval only. Submission separately verifies the native read-only runner.
     // is required before allowing Reviewer to be submitted.
     return workflows.transition(workflowId, input.version, {
       type: 'approve',

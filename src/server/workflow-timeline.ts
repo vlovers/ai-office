@@ -6,7 +6,13 @@ export type WorkflowNextAction =
   | 'submit-initial'
   | 'capture-coder-evidence'
   | 'approve-coder-evidence'
-  | 'approve-reviewer';
+  | 'approve-reviewer'
+  | 'prepare-reviewer'
+  | 'submit-reviewer'
+  | 'approve-reviewer-result'
+  | 'approve-qa'
+  | 'submit-qa'
+  | 'approve-qa-result';
 
 /** Presentation-only timeline. Never treat this as authorization. */
 export function workflowTimeline(workflow: Workflow) {
@@ -28,6 +34,16 @@ export function workflowTimeline(workflow: Workflow) {
     if (active && reviewer && stage.state === 'awaiting_approval') {
       nextAction = 'approve-reviewer';
     }
+    if (active && reviewer && stage.state === 'ready') {
+      nextAction = stage.runtimeCandidate ? 'submit-reviewer' : 'prepare-reviewer';
+    }
+    if (active && stage.kind === 'qa') {
+      if (stage.state === 'awaiting_approval') nextAction = 'approve-qa';
+      if (stage.state === 'ready') nextAction = 'submit-qa';
+    }
+    if (blocked && stage.kind !== 'coder' && stage.state === 'blocked' && stage.report) {
+      nextAction = stage.kind === 'reviewer' ? 'approve-reviewer-result' : 'approve-qa-result';
+    }
     return {
       kind: stage.kind,
       agentId: stage.agentId,
@@ -38,6 +54,9 @@ export function workflowTimeline(workflow: Workflow) {
       nextAction,
       evidenceRevision: coder ? (stage.evidence?.revision ?? null) : null,
       approvalRevision: stage.approvedRevision,
+      sourceDigest: stage.execution?.sourceDigest ?? stage.sourceCandidate?.digest ?? null,
+      reportDigest: stage.report?.digest ?? null,
+      qaPlan: stage.qaPlan ?? null,
       started: stage.state === 'running',
     };
   });
@@ -47,8 +66,8 @@ export function workflowTimeline(workflow: Workflow) {
     state: workflow.state,
     baselineRevision: workflow.baselineRevision,
     stages,
-    downstreamExecutable: false,
+    downstreamExecutable: active && Boolean(workflow.stages[1]?.runtimeCandidate),
     notice:
-      'Reviewer and QA execution are disabled until a verified read-only snapshot runner exists.',
+      'Each stage requires explicit approval. Reviewer and QA use a verified native read-only sandbox; network and host verification are disabled. Interrupted runs never retry automatically.',
   };
 }
