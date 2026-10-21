@@ -345,6 +345,12 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
       evidence.json().stages[0].evidence,
     ]);
     expect(refreshed.json().state).toBe('blocked');
+    const refreshedTimeline = await send('GET', url + '/timeline');
+    expect(refreshedTimeline.statusCode).toBe(200);
+    expect(refreshedTimeline.json().version).toBe(refreshed.json().version);
+    expect(refreshedTimeline.json().stages[0].nextAction).toBe('approve-coder-evidence');
+    expect(refreshedTimeline.json().stages[0].evidenceRevision).toBe(currentFingerprint);
+    expect(refreshedTimeline.json().downstreamExecutable).toBe(false);
     expect(
       (
         await send('POST', url + '/capture-coder-evidence', {

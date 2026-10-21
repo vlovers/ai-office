@@ -23,9 +23,7 @@ export function workflowTimeline(workflow: Workflow) {
       }
     }
     if (blocked && coder && stage.state === 'blocked') {
-      nextAction = stage.evidence
-        ? 'approve-coder-evidence'
-        : 'capture-coder-evidence';
+      nextAction = stage.evidence ? 'approve-coder-evidence' : 'capture-coder-evidence';
     }
     if (active && reviewer && stage.state === 'awaiting_approval') {
       nextAction = 'approve-reviewer';
