@@ -28,6 +28,13 @@ export interface WorkflowStage {
   approvedAt: string | null;
   evidence?: { revision: string; workspaceId: string; fileCount: number; recordedAt: string };
   supersededEvidence?: NonNullable<WorkflowStage['evidence']>[];
+  runtimeCandidate?: {
+    directory: string;
+    commit: string;
+    sourceDigest: string;
+    revision: string;
+    recordedAt: string;
+  };
   sourceCandidate?: {
     directory: string;
     digest: string;
@@ -576,6 +583,53 @@ export class WorkflowStore {
       const next = structuredClone(current);
       next.stages[1]!.sourceCandidate = {
         ...source,
+        revision,
+        recordedAt: new Date().toISOString(),
+      };
+      next.version++;
+      next.updatedAt = new Date().toISOString();
+      this.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);
+      this.db.exec('COMMIT');
+      return next;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  recordReviewerRuntime(
+    id: string,
+    version: number,
+    revision: string,
+    runtime: { directory: string; commit: string; sourceDigest: string },
+  ): Workflow {
+    if (
+      !/^[0-9a-f]{64}$/i.test(revision) ||
+      !/^[0-9a-f]{40}$/i.test(runtime.commit) ||
+      !/^[0-9a-f]{64}$/i.test(runtime.sourceDigest)
+    )
+      throw new AppError(400, 'Invalid Reviewer runtime provenance.');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.require(id);
+      const coder = current.stages[0];
+      const reviewer = current.stages[1];
+      if (
+        current.version !== version ||
+        current.state !== 'active' ||
+        coder?.state !== 'completed' ||
+        coder.evidence?.revision !== revision ||
+        reviewer?.state !== 'ready' ||
+        reviewer.approvedRevision !== revision ||
+        reviewer.bundle?.revision !== revision ||
+        reviewer.sourceCandidate?.revision !== revision ||
+        reviewer.sourceCandidate.digest !== runtime.sourceDigest ||
+        reviewer.runtimeCandidate
+      )
+        throw new AppError(409, 'Reviewer runtime checkpoint changed.');
+      const next = structuredClone(current);
+      next.stages[1]!.runtimeCandidate = {
+        ...runtime,
         revision,
         recordedAt: new Date().toISOString(),
       };
