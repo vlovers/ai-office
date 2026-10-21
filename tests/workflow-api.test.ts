@@ -55,6 +55,20 @@ it('creates pinned inert workflows from server Git HEAD and exposes inspection o
     expect(env.store.queue()).toEqual([]);
     expect((await send('GET', '/api/workflows')).json()).toHaveLength(1);
     expect((await send('GET', '/api/workflows/' + workflow.id)).json().id).toBe(workflow.id);
+    const timeline = await send('GET', '/api/workflows/' + workflow.id + '/timeline');
+    expect(timeline.statusCode).toBe(200);
+    expect(timeline.json().version).toBe(0);
+    expect(timeline.json().stages.map((stage: { status: string }) => stage.status)).toEqual([
+      'awaiting_approval',
+      'pending',
+    ]);
+    expect(timeline.json().stages[0].nextAction).toBe('approve-initial');
+    expect(timeline.json().stages[1].nextAction).toBeNull();
+    expect(timeline.json().downstreamExecutable).toBe(false);
+    expect(
+      (await send('GET', '/api/workflows/00000000-0000-4000-8000-000000000000/timeline'))
+        .statusCode,
+    ).toBe(404);
     expect(
       (await send('GET', '/api/workflows/00000000-0000-4000-8000-000000000000')).statusCode,
     ).toBe(404);

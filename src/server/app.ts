@@ -7,6 +7,7 @@ import type { TaskManager } from './manager.js';
 import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
 import { WorkflowStore } from './workflows.js';
+import { workflowTimeline } from './workflow-timeline.js';
 import { git, revalidateRepository, validateRepository } from './repositories.js';
 import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
 
@@ -333,6 +334,13 @@ export async function createApp(manager: TaskManager) {
     });
   });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
+  app.get('/api/workflows/:id/timeline', async (request) => {
+    const workflow = new WorkflowStore(manager.store.db).get(
+      id.parse((request.params as { id: string }).id),
+    );
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    return workflowTimeline(workflow);
+  });
   app.get('/api/workflows/:id', async (request) => {
     const workflow = new WorkflowStore(manager.store.db).get(
       id.parse((request.params as { id: string }).id),

@@ -144,3 +144,13 @@ whole batch passes on the exact head SHA. Separately require a supervised live
 model test with explicit authorization; fixture tests alone do not prove the SDK
 provides native OS-level read-only isolation. Squash the feature history at merge
 only after review and approval; do not create a PR per endpoint or test.
+
+## Read-only workflow timeline API
+
+`GET /api/workflows/:id/timeline` returns a presentation projection of the durable
+workflow: stage state, pinned agent revision, task binding, captured revision,
+and the next available **operator checkpoint**. The response explicitly reports
+`downstreamExecutable: false` for all workflows in this release. A suggested
+`nextAction` is never an authorization grant: every actual mutation endpoint
+rechecks versions, repository identity, Git leases, evidence and permissions.
+The endpoint does not run a model, construct a snapshot or enqueue work.
