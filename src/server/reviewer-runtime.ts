@@ -153,13 +153,11 @@ export async function verifyReviewerGitContext(input: {
       runtimeInfo.isSymbolicLink()
     )
       return false;
-    const provenance = JSON.parse(
-      await readFile(join(root, id + '.provenance.json'), 'utf8'),
-    ) as { commit?: string; sourceDigest?: string };
-    if (
-      provenance.commit !== input.commit ||
-      provenance.sourceDigest !== input.manifest.digest
-    )
+    const provenance = JSON.parse(await readFile(join(root, id + '.provenance.json'), 'utf8')) as {
+      commit?: string;
+      sourceDigest?: string;
+    };
+    if (provenance.commit !== input.commit || provenance.sourceDigest !== input.manifest.digest)
       return false;
     const run = async (args: string[]) =>
       (
@@ -210,7 +208,11 @@ export async function verifyReviewerGitContext(input: {
       if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== file.size) return false;
       const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
       try {
-        if (createHash('sha256').update(await readFile(handle)).digest('hex') !== file.sha256)
+        if (
+          createHash('sha256')
+            .update(await readFile(handle))
+            .digest('hex') !== file.sha256
+        )
           return false;
       } finally {
         await handle.close();
