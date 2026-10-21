@@ -243,12 +243,17 @@ export async function createApp(manager: TaskManager) {
     const review = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
     if (!review.revision || review.workspace.id !== task.workspaceId)
       throw new AppError(409, 'Review Center did not return a verified revision.');
-    return workflows.captureCoderEvidence(workflowId, input.version, {
-      taskId: task.id,
-      workspaceId: review.workspace.id,
-      revision: review.revision,
-      fileCount: review.files.length,
-    }, input.replace === true);
+    return workflows.captureCoderEvidence(
+      workflowId,
+      input.version,
+      {
+        taskId: task.id,
+        workspaceId: review.workspace.id,
+        revision: review.revision,
+        fileCount: review.files.length,
+      },
+      input.replace === true,
+    );
   });
   app.post('/api/workflows/:id/approve-coder-evidence', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
