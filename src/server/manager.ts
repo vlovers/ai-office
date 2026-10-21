@@ -768,16 +768,21 @@ export class TaskManager {
         bundle.directory !== join(destinationRoot, bundle.id)
       )
         throw new AppError(409, 'Coder revision or evidence location changed.');
-      const content = await readFile(join(bundle.directory, 'manifest.json'), 'utf8');
-      const manifest = JSON.parse(content) as SnapshotManifest;
-      if (
-        manifest.id !== bundle.id ||
-        manifest.digest !== bundle.digest ||
-        manifest.evidenceRevision !== bundle.revision ||
-        manifest.entries.length !== bundle.fileCount ||
-        !(await verifyEvidenceBundle(bundle.directory, manifest))
-      )
-        throw new AppError(409, 'Evidence bundle integrity verification failed.');
+      let valid = false;
+      try {
+        const content = await readFile(join(bundle.directory, 'manifest.json'), 'utf8');
+        const manifest = JSON.parse(content) as SnapshotManifest;
+        valid =
+          manifest.id === bundle.id &&
+          manifest.digest === bundle.digest &&
+          manifest.evidenceRevision === bundle.revision &&
+          Array.isArray(manifest.entries) &&
+          manifest.entries.length === bundle.fileCount &&
+          (await verifyEvidenceBundle(bundle.directory, manifest));
+      } catch {
+        // Missing, malformed and inaccessible bundle evidence must fail closed.
+      }
+      if (!valid) throw new AppError(409, 'Evidence bundle integrity verification failed.');
       if (new WorkflowStore(this.store.db).get(workflowId)?.version !== version)
         throw new AppError(409, 'Workflow changed during bundle verification.');
       return {

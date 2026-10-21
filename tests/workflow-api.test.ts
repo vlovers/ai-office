@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { sandbox, until } from './helpers.js';
-import { readFile, writeFile } from 'node:fs/promises';
+import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { validateRepository } from '../src/server/repositories.js';
 import { createApp } from '../src/server/app.js';
 import { Workspaces } from '../src/server/workspaces.js';
@@ -481,6 +481,13 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     });
     expect(invalidatedBundle.statusCode).toBe(409);
     expect((await send('GET', url)).json().version).toBe(recorded.workflow.version);
+    expect(env.store.queue()).toEqual([]);
+    await chmod(join(bundle.directory, 'manifest.json'), 0o600);
+    await writeFile(join(bundle.directory, 'manifest.json'), '{invalid json');
+    const corrupted = await send('POST', url + '/verify-bundle', {
+      version: recorded.workflow.version,
+    });
+    expect(corrupted.statusCode).toBe(409);
     expect(env.store.queue()).toEqual([]);
     await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);
   } finally {
