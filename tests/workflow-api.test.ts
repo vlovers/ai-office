@@ -417,7 +417,35 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
         })
       ).statusCode,
     ).toBe(409);
+    // Inspection is not authority. An external lease blocks even read-only
+    // handoff inspection, and neither request may mutate the checkpoint.
+    const releaseHandoffLease = await acquireLock(leasePath, 'handoff contention fixture');
+    try {
+      const conflicts = await Promise.all([
+        send('POST', handoffUrl, {
+          version: reviewer.json().version,
+          revision: currentFingerprint,
+        }),
+        send('POST', handoffUrl, {
+          version: reviewer.json().version,
+          revision: currentFingerprint,
+        }),
+      ]);
+      expect(conflicts.map((response) => response.statusCode)).toEqual([409, 409]);
+    } finally {
+      await releaseHandoffLease();
+    }
+    expect((await send('GET', url)).json().version).toBe(reviewer.json().version);
     expect(env.store.queue()).toEqual([]);
+    // A post-approval mutation must invalidate the previously inspected
+    // fingerprint, without spawning a session or advancing any stage.
+    await writeFile(join(workspace!.path, 'README.md'), 'changed after reviewer approval\n');
+    const mutated = await send('POST', handoffUrl, {
+      version: reviewer.json().version,
+      revision: currentFingerprint,
+    });
+    expect(mutated.statusCode).toBe(409);
+    expect((await send('GET', url)).json().version).toBe(reviewer.json().version);
     expect(env.store.queue()).toEqual([]);
   } finally {
     if (app) await app.close();
