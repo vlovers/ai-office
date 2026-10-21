@@ -5,7 +5,7 @@ import type { ReviewComment, ReviewRecord } from '../shared/types.js';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
 import {
@@ -888,9 +888,11 @@ export class TaskManager {
       const authorizedRoot = await this.workspaces.authorize(repository);
       const sourceRoot = join(authorizedRoot, 'workflow-reviewer-source');
       const evidenceRoot = join(authorizedRoot, 'workflow-evidence');
+      const sourceId = basename(source.directory);
       if (
         revision !== source.revision ||
-        source.directory !== join(sourceRoot, source.directory.split('/').at(-1) ?? '') ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(sourceId) ||
+        source.directory !== join(sourceRoot, sourceId) ||
         reviewer.bundle.directory !== join(evidenceRoot, reviewer.bundle.id)
       )
         throw new AppError(409, 'Reviewer source location or revision changed.');
