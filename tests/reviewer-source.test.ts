@@ -3,7 +3,10 @@ import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { createReviewerSourceCandidate } from '../src/server/reviewer-source.js';
+import {
+  createReviewerSourceCandidate,
+  verifyReviewerSourceCandidate,
+} from '../src/server/reviewer-source.js';
 
 it('captures a bounded full source candidate without authorizing Reviewer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ai-office-reviewer-source-'));
@@ -28,6 +31,13 @@ it('captures a bounded full source candidate without authorizing Reviewer', asyn
     expect(await readFile(join(result.directory, 'new.txt'), 'utf8')).toBe('untracked');
     expect(result.manifest.files).toHaveLength(2);
     expect(result.manifest.digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(await verifyReviewerSourceCandidate(result.directory, result.manifest)).toBe(true);
+    expect(
+      await verifyReviewerSourceCandidate(result.directory, {
+        ...result.manifest,
+        digest: 'f'.repeat(64),
+      }),
+    ).toBe(false);
     await chmod(result.directory, 0o700);
     await rm(result.directory, { recursive: true, force: true });
   } finally {
