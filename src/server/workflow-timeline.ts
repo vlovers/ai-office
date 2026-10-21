@@ -20,11 +20,7 @@ export function workflowTimeline(workflow: Workflow) {
     if (index === 0 && workflow.state === 'blocked' && stage.state === 'blocked') {
       nextAction = stage.evidence ? 'approve-coder-evidence' : 'capture-coder-evidence';
     }
-    if (
-      index === 1 &&
-      workflow.state === 'active' &&
-      stage.state === 'awaiting_approval'
-    ) {
+    if (index === 1 && workflow.state === 'active' && stage.state === 'awaiting_approval') {
       nextAction = 'approve-reviewer';
     }
     return {

@@ -121,19 +121,17 @@ deleted files, and must be reproducible independently of subsequent Coder edits.
 
 ### Disposable end-to-end acceptance matrix
 
-| Scenario | Required outcome |
-| --- | --- |
-| Coder changes tracked file and adds/deletes files | Reviewer sees all three exact approved changes |
-| Coder worktree changes after evidence approval | Old revision denied; no downstream dispatch |
-| Worktree replaced or symlink escapes root | Handoff fails closed; original checkout intact |
-| External Git lease held during snapshot creation | HTTP conflict; no snapshot or queue entry |
-| Two simultaneous Reviewer approvals/submissions | One winner; no duplicate task or session |
-| Archived or changed agent profile after approval | Pinned authorization rechecked; no escalation |
-| Snapshot modified before Reviewer launch | Fingerprint mismatch; task blocked |
-| Crash after snapshot persist but before queue claim | Interrupt and require explicit reapproval |
-| Native SDK read-only policy unavailable | No Reviewer model run; safe diagnostic |
-| QA verification requests host command | Separate authorization gate; never inherited |
-| Snapshot cleanup fails | Preserve evidence and record recoverable error; never delete user checkout |
+- **Tracked additions, modifications, deletions:** Reviewer sees the approved bytes.
+- **Coder worktree changed:** Deny stale handoff and dispatch.
+- **Replaced worktree or escaping symlink:** Fail closed; preserve source.
+- **Git lease held:** Reject snapshot creation and queue entry.
+- **Simultaneous approvals:** Exactly one succeeds.
+- **Pinned profile changed:** Deny unauthorized elevation.
+- **Snapshot tampered:** Block launch.
+- **Crash before queue claim:** Interrupt; require reapproval.
+- **SDK read-only policy unavailable:** No model run.
+- **QA requests host command:** Separate authorization required.
+- **Cleanup fails:** Preserve source and record error.
 
 ### Release gates and batching
 

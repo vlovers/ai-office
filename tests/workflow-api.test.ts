@@ -273,6 +273,10 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     const blocked = await send('GET', url);
     expect(blocked.json().state).toBe('blocked');
     expect(blocked.json().stages[1].state).toBe('pending');
+    const blockedTimeline = await send('GET', url + '/timeline');
+    expect(blockedTimeline.statusCode).toBe(200);
+    expect(blockedTimeline.json().stages[0].nextAction).toBe('capture-coder-evidence');
+    expect(blockedTimeline.json().downstreamExecutable).toBe(false);
     expect(await readFile(join(env.repository, 'README.md'), 'utf8')).toBe(
       '# Disposable example\n',
     );
@@ -383,6 +387,11 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     const reviewer = attempts.find((response) => response.statusCode === 200)!;
     expect(reviewer.json().stages[1].state).toBe('ready');
     expect(reviewer.json().stages[1].taskId).toBeNull();
+    const approvedTimeline = await send('GET', url + '/timeline');
+    expect(approvedTimeline.statusCode).toBe(200);
+    expect(approvedTimeline.json().stages[1].status).toBe('ready');
+    expect(approvedTimeline.json().stages[1].nextAction).toBeNull();
+    expect(approvedTimeline.json().downstreamExecutable).toBe(false);
     expect(env.store.queue()).toEqual([]);
   } finally {
     if (app) await app.close();
