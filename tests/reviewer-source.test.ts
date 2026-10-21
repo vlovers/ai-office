@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -28,6 +28,7 @@ it('captures a bounded full source candidate without authorizing Reviewer', asyn
     expect(await readFile(join(result.directory, 'new.txt'), 'utf8')).toBe('untracked');
     expect(result.manifest.files).toHaveLength(2);
     expect(result.manifest.digest).toMatch(/^[a-f0-9]{64}$/);
+    await chmod(result.directory, 0o700);
     await rm(result.directory, { recursive: true, force: true });
   } finally {
     await rm(root, { recursive: true, force: true });
