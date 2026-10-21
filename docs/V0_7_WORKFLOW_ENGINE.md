@@ -249,3 +249,14 @@ file inventories and the external revision check before and after capture.
 It is not wired to workflow execution, and its read-only permission bits do
 not provide OS-level isolation, protection from the same UID, or provenance
 recovery. This preparation layer does **not** permit Reviewer execution.
+
+## Source provenance attached to approved Reviewer checkpoint
+
+`POST /api/workflows/:id/prepare-reviewer-source` requires `confirmed:true`,
+an existing approved evidence bundle and a matching workflow version. It uses
+the shared worktree Git lease, verifies evidence hashes and the live Coder
+revision, creates a full Git-visible source candidate, verifies its digest and
+atomically records its provenance in the Reviewer stage. Duplicate preparation
+fails closed, and partial copies are cleaned up on ordinary errors. Restart
+and abandoned-directory reconciliation remain unfinished. It does **not**
+launch Reviewer and always returns `runnable:false`.

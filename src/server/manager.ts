@@ -8,6 +8,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
+import { createReviewerSourceCandidate, verifyReviewerSourceCandidate } from './reviewer-source.js';
 import {
   materializeEvidenceBundle,
   removeEvidenceBundle,
@@ -727,6 +728,107 @@ export class TaskManager {
    * Revalidates a recorded bundle without permitting downstream execution.
    * Untrusted bundles never become permission grants.
    */
+  /**
+   * Creates a full source candidate only after the evidence checkpoint.
+   * Neither the checkpoint nor a source candidate grants execution authority.
+   */
+  async prepareReviewerSource(workflowId: string, version: number) {
+    if (this.closing || !this.workspaces)
+      throw new AppError(503, 'Reviewer source preparation is unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !reviewer.bundle ||
+      reviewer.sourceCandidate ||
+      reviewer.approvedRevision !== reviewer.bundle.revision ||
+      coder.evidence?.revision !== reviewer.bundle.revision
+    )
+      throw new AppError(409, 'Approved Reviewer source checkpoint is unavailable.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const repository = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !task ||
+      task.state !== 'completed' ||
+      !repository ||
+      !workspace ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Coder workspace no longer matches the approved evidence.');
+    const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    const paths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(root, createHash('sha256').update(directory).digest('hex')),
+    );
+    const release = await acquireLocks(paths, repository.path);
+    try {
+      await this.workspaces.validate(repository, workspace);
+      if ([...this.active.values()].some((run) => run.gitDir === repository.gitDir))
+        throw new AppError(409, 'Agent still active in repository.');
+      const revision = await this.workspaces.revision(repository, workspace);
+      if (revision !== reviewer.bundle.revision)
+        throw new AppError(409, 'Coder revision changed after evidence approval.');
+      const evidenceRoot = join(await this.workspaces.authorize(repository), 'workflow-evidence');
+      if (reviewer.bundle.directory !== join(evidenceRoot, reviewer.bundle.id))
+        throw new AppError(409, 'Evidence provenance path changed.');
+      let validEvidence = false;
+      try {
+        const raw = await readFile(join(reviewer.bundle.directory, 'manifest.json'), 'utf8');
+        const manifest = JSON.parse(raw) as SnapshotManifest;
+        validEvidence =
+          manifest.id === reviewer.bundle.id &&
+          manifest.digest === reviewer.bundle.digest &&
+          manifest.evidenceRevision === revision &&
+          Array.isArray(manifest.entries) &&
+          manifest.entries.length === reviewer.bundle.fileCount &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, manifest));
+      } catch {
+        // Fail closed on corrupted, missing or inaccessible evidence.
+      }
+      if (!validEvidence) throw new AppError(409, 'Evidence bundle failed integrity validation.');
+      const snapshotRoot = join(await this.workspaces.authorize(repository), 'workflow-reviewer-source');
+      await mkdir(snapshotRoot, { recursive: true, mode: 0o700 });
+      const candidate = await createReviewerSourceCandidate({
+        workspace: workspace.path,
+        destinationRoot: snapshotRoot,
+        revision,
+        verifyRevision: () => this.workspaces!.revision(repository, workspace),
+      });
+      try {
+        if (!(await verifyReviewerSourceCandidate(candidate.directory, candidate.manifest)))
+          throw new AppError(409, 'Reviewer source candidate failed verification.');
+        const saved = new WorkflowStore(this.store.db).recordReviewerSource(
+          workflowId,
+          version,
+          revision,
+          {
+            directory: candidate.directory,
+            digest: candidate.manifest.digest,
+            fileCount: candidate.manifest.files.length,
+          },
+        );
+        return {
+          workflow: saved,
+          sourceManifest: candidate.manifest,
+          verified: true,
+          runnable: false,
+        };
+      } catch (error) {
+        await removeEvidenceBundle(snapshotRoot, candidate.directory);
+        throw error;
+      }
+    } finally {
+      await release();
+    }
+  }
+
   async inspectWorkflowBundle(workflowId: string, version: number) {
     const workflow = new WorkflowStore(this.store.db).get(workflowId);
     const coder = workflow?.stages[0];

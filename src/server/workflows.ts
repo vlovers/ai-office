@@ -28,6 +28,13 @@ export interface WorkflowStage {
   approvedAt: string | null;
   evidence?: { revision: string; workspaceId: string; fileCount: number; recordedAt: string };
   supersededEvidence?: NonNullable<WorkflowStage['evidence']>[];
+  sourceCandidate?: {
+    directory: string;
+    digest: string;
+    fileCount: number;
+    revision: string;
+    recordedAt: string;
+  };
   bundle?: {
     id: string;
     directory: string;
@@ -523,6 +530,52 @@ export class WorkflowStore {
       const next = structuredClone(current);
       next.stages[1]!.bundle = {
         ...bundle,
+        revision,
+        recordedAt: new Date().toISOString(),
+      };
+      next.version++;
+      next.updatedAt = new Date().toISOString();
+      this.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);
+      this.db.exec('COMMIT');
+      return next;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  recordReviewerSource(
+    id: string,
+    version: number,
+    revision: string,
+    source: { directory: string; digest: string; fileCount: number },
+  ): Workflow {
+    if (
+      !/^[0-9a-f]{64}$/i.test(revision) ||
+      !/^[0-9a-f]{64}$/i.test(source.digest) ||
+      !Number.isSafeInteger(source.fileCount) ||
+      source.fileCount < 1
+    )
+      throw new AppError(400, 'Invalid reviewer source provenance.');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.require(id);
+      const coder = current.stages[0];
+      const reviewer = current.stages[1];
+      if (
+        current.version !== version ||
+        current.state !== 'active' ||
+        coder?.state !== 'completed' ||
+        coder.evidence?.revision !== revision ||
+        reviewer?.state !== 'ready' ||
+        reviewer.approvedRevision !== revision ||
+        reviewer.bundle?.revision !== revision ||
+        reviewer.sourceCandidate
+      )
+        throw new AppError(409, 'Reviewer source checkpoint changed.');
+      const next = structuredClone(current);
+      next.stages[1]!.sourceCandidate = {
+        ...source,
         revision,
         recordedAt: new Date().toISOString(),
       };

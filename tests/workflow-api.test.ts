@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { acquireLock } from '../src/server/lock.js';
 import { removeEvidenceBundle, verifyEvidenceBundle } from '../src/server/evidence-bundle.js';
+import { verifyReviewerSourceCandidate } from '../src/server/reviewer-source.js';
 import { repositoryLeaseDirectories } from '../src/server/repositories.js';
 
 it('creates pinned inert workflows from server Git HEAD and exposes inspection only', async () => {
@@ -480,8 +481,25 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(env.store.queue()).toEqual([]);
     await writeFile(join(bundle.directory, 'manifest.json'), JSON.stringify(recorded.manifest));
     await chmod(join(bundle.directory, 'manifest.json'), 0o400);
-    const repeated = await send('POST', url + '/capture-bundle', {
+    const prepared = await send('POST', url + '/prepare-reviewer-source', {
       version: recorded.workflow.version,
+      confirmed: true,
+    });
+    expect(prepared.statusCode).toBe(200);
+    const candidate = prepared.json().workflow.stages[1].sourceCandidate;
+    expect(candidate.revision).toBe(currentFingerprint);
+    expect(prepared.json().runnable).toBe(false);
+    expect(
+      await verifyReviewerSourceCandidate(candidate.directory, prepared.json().sourceManifest),
+    ).toBe(true);
+    const duplicated = await send('POST', url + '/prepare-reviewer-source', {
+      version: prepared.json().workflow.version,
+      confirmed: true,
+    });
+    expect(duplicated.statusCode).toBe(409);
+    expect(env.store.queue()).toEqual([]);
+    const repeated = await send('POST', url + '/capture-bundle', {
+      version: prepared.json().workflow.version,
       revision: currentFingerprint,
       confirmed: true,
     });
@@ -501,6 +519,7 @@ it('submits an approved Coder exactly once through the TaskManager with isolated
     expect(invalidatedBundle.statusCode).toBe(409);
     expect((await send('GET', url)).json().version).toBe(recorded.workflow.version);
     expect(env.store.queue()).toEqual([]);
+    await removeEvidenceBundle(dirname(candidate.directory), candidate.directory);
     await removeEvidenceBundle(dirname(bundle.directory), bundle.directory);
   } finally {
     if (app) await app.close();
