@@ -28,8 +28,7 @@ export async function createReviewerSourceCandidate(input: {
   revision: string;
   verifyRevision: () => Promise<string>;
 }): Promise<{ directory: string; manifest: ReviewerSourceManifest }> {
-  if (!/^[a-f0-9]{64}$/i.test(input.revision))
-    throw new AppError(400, 'Invalid source revision.');
+  if (!/^[a-f0-9]{64}$/i.test(input.revision)) throw new AppError(400, 'Invalid source revision.');
   if ((await input.verifyRevision()) !== input.revision)
     throw new AppError(409, 'Workspace revision changed before snapshot.');
   const rootStat = await lstat(input.destinationRoot);
@@ -39,13 +38,9 @@ export async function createReviewerSourceCandidate(input: {
     const deleted = new Set(
       (await git(input.workspace, ['ls-files', '--deleted', '-z'])).split('\0').filter(Boolean),
     );
-    return (await git(input.workspace, [
-      'ls-files',
-      '--cached',
-      '--others',
-      '--exclude-standard',
-      '-z',
-    ]))
+    return (
+      await git(input.workspace, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'])
+    )
       .split('\0')
       .filter((name) => name && !deleted.has(name))
       .sort();
@@ -187,9 +182,7 @@ export async function verifyReviewerSourceCandidate(
     const paths = manifest.files.map((file) => file.path.toLocaleLowerCase('en-US'));
     if (new Set(paths).size !== paths.length) return false;
     if (
-      manifest.files.some(
-        (file) => file.path.toLocaleLowerCase('en-US') === 'source-manifest.json',
-      )
+      manifest.files.some((file) => file.path.toLocaleLowerCase('en-US') === 'source-manifest.json')
     )
       return false;
     if (size > MAX_TOTAL_BYTES) return false;
@@ -211,8 +204,7 @@ export async function verifyReviewerSourceCandidate(
     };
     if (!(await check(directory, '')) || seen.size !== expected.size) return false;
     if (
-      (await readFile(join(directory, 'source-manifest.json'), 'utf8')) !==
-      JSON.stringify(manifest)
+      (await readFile(join(directory, 'source-manifest.json'), 'utf8')) !== JSON.stringify(manifest)
     )
       return false;
     for (const file of manifest.files) {
@@ -221,7 +213,11 @@ export async function verifyReviewerSourceCandidate(
       if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== file.size) return false;
       const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
       try {
-        if (createHash('sha256').update(await readFile(handle)).digest('hex') !== file.sha256)
+        if (
+          createHash('sha256')
+            .update(await readFile(handle))
+            .digest('hex') !== file.sha256
+        )
           return false;
       } finally {
         await handle.close();

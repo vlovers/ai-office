@@ -99,10 +99,7 @@ it('rejects duplicate case-folded names in a forged source manifest', async () =
     });
     const forged = {
       ...snapshot.manifest,
-      files: [
-        ...snapshot.manifest.files,
-        { path: 'readme.md', size: 8, sha256: 'b'.repeat(64) },
-      ],
+      files: [...snapshot.manifest.files, { path: 'readme.md', size: 8, sha256: 'b'.repeat(64) }],
     };
     const digest = createHash('sha256').update(JSON.stringify(forged.files)).digest('hex');
     const forgedManifest = { ...forged, digest };

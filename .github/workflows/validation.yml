@@ -38,12 +38,7 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Formatting
-        run: |
-          npm run format:check || {
-            npx prettier --write src/server/reviewer-source.ts tests/reviewer-source.test.ts
-            git diff -- src/server/reviewer-source.ts tests/reviewer-source.test.ts
-            exit 1
-          }
+        run: npm run format:check
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
