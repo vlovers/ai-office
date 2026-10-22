@@ -57,6 +57,8 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 
 export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [items, setItems] = useState<Summary[]>([]);
+  const [stateFilter, setStateFilter] = useState('all');
+  const [workflowQuery, setWorkflowQuery] = useState('');
   const [selected, setSelected] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
@@ -130,6 +132,18 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     }
   }
   const chosen = items.find((item) => item.id === selected);
+  const counts = {
+    active: items.filter((item) => item.state === 'active').length,
+    blocked: items.filter((item) => item.state === 'blocked').length,
+    completed: items.filter((item) => item.state === 'completed').length,
+    cancelled: items.filter((item) => item.state === 'cancelled').length,
+  };
+  const visibleWorkflows = items.filter(
+    (item) =>
+      (stateFilter === 'all' || item.state === stateFilter) &&
+      (item.id.toLowerCase().includes(workflowQuery.trim().toLowerCase()) ||
+        item.repositoryId.toLowerCase().includes(workflowQuery.trim().toLowerCase())),
+  );
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
@@ -235,6 +249,36 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
         </details>
       )}
       {error && <p role="alert">{error} Refresh workflow before trying another action.</p>}
+      {!taskId && items.length > 0 && (
+        <div aria-label="Workflow operations overview">
+          <p role="status">
+            {items.length} workflows · {counts.active} active · {counts.blocked} blocked ·{' '}
+            {counts.completed} completed · {counts.cancelled} cancelled
+          </p>
+          <label>
+            Find workflow by ID or repository
+            <input
+              type="search"
+              value={workflowQuery}
+              onChange={(event) => setWorkflowQuery(event.target.value)}
+              placeholder="Workflow or repository ID"
+            />
+          </label>
+          <label>
+            Workflow state
+            <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}>
+              <option value="all">All states</option>
+              <option value="active">Active</option>
+              <option value="blocked">Blocked</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          {visibleWorkflows.length === 0 && (
+            <p role="status">No workflows match the current filters.</p>
+          )}
+        </div>
+      )}
       {!items.length && <p>No workflows created yet.</p>}
       {items.length > 0 && (
         <>
@@ -250,7 +294,12 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                 setSelected(event.target.value);
               }}
             >
-              {items.map((item) => (
+              {visibleWorkflows.some((item) => item.id === selected) ? null : (
+                <option value={selected} disabled>
+                  Selected workflow (outside current filters)
+                </option>
+              )}
+              {visibleWorkflows.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id.slice(0, 8)} · {item.state} · v{item.version}
                 </option>
