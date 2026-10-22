@@ -132,8 +132,10 @@ export function PixelOffice({
       </svg>
       <div className="office-operations" aria-label="Live office operations">
         <div className="office-operations-heading"><strong>Office activity</strong><span aria-live="polite">{activeCount} active · {errorCount} errors</span></div>
+        <p className="office-operations-help">Select a desk or an agent below to inspect their actual task and session. Status comes from the local server, not the animation.</p>
+        {agents.length === 0 && <p className="office-operations-empty">No agent profiles available. Create a profile in Agent Studio to populate the office.</p>}
         <div className="office-operations-agents">{agents.map((agent) => (
-          <button type="button" key={agent.id} className={`office-operations-agent state-${agent.status.state}`} aria-pressed={selectedAgent === agent.id} onClick={() => onSelect(agent.id)}>
+          <button type="button" key={agent.id} className={`office-operations-agent state-${agent.status.state}`} aria-pressed={selectedAgent === agent.id} onClick={() => onSelect(agent.id)} title={`Inspect ${agent.name}: ${agent.status.label}`}>
             <span className="office-operations-indicator" aria-hidden="true" /><span className="office-operations-identity"><strong>{agent.name}</strong><small>{agent.status.label}</small></span><span className="office-operations-access">{agent.access ?? 'Read only'}</span>
           </button>
         ))}</div>
