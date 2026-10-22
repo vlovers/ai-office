@@ -1865,3 +1865,22 @@ button.line-anchor {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Profile-aware workflow overview. This is observation, not orchestration. */
+.office-workflow { padding: 16px; background: #0b1d19; border-top: 1px solid #315d4b; }
+.office-workflow-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.office-workflow-header strong { color: #b7edc9; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.office-workflow-header span { font-size: 10px; color: #91b7a5; }
+.office-workflow-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.office-workflow-lane { display: flex; flex-direction: column; gap: 6px; min-width: 0; border: 1px solid #365b4b; background: #142922; padding: 12px; }
+.office-workflow-step { color: #83af9a; font-size: 10px; }
+.office-workflow-lane > strong { color: #e0f9e8; font-size: 14px; }
+.office-workflow-count { color: #a4c9b5; font-size: 10px; }
+.office-workflow-members { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.office-workflow-members button { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; padding: 6px; color: #cce9d8; background: #0c201a; border: 1px solid #345b47; text-align: left; overflow-wrap: anywhere; font-size: 11px; }
+.office-workflow-members button[aria-pressed='true'] { border-color: #9bffb8; background: #244934; }
+.office-workflow-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #728c7c; }
+.office-workflow-dot.state-working, .office-workflow-dot.state-thinking { background: #85ffb2; }
+.office-workflow-dot.state-stopping { background: #e4b36e; }
+.office-workflow-dot.state-error { background: #e77b79; }
+@media (max-width: 600px) { .office-workflow-lanes { grid-template-columns: 1fr; } }
