@@ -63,6 +63,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [workflowQuery, setWorkflowQuery] = useState('');
   const [triageOnly, setTriageOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
+  const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
@@ -116,13 +117,13 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     }
   }, [selected, taskId]);
   useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), 3000);
+    if (!paused) void refresh();
+    const timer = paused ? undefined : setInterval(() => void refresh(), 3000);
     return () => {
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
       refreshEpoch.current++;
     };
-  }, [refresh]);
+  }, [refresh, paused]);
   async function mutate(operation: () => Promise<unknown>) {
     setLoading(true);
     setError('');
@@ -202,6 +203,16 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     >
       <div className="panel-heading">
         <h2>{taskId ? 'Workflow review & QA' : 'Workflow Timeline'}</h2>
+        {!taskId && (
+          <button
+            className="secondary"
+            type="button"
+            aria-pressed={paused}
+            onClick={() => setPaused((current) => !current)}
+          >
+            {paused ? 'Resume live updates' : 'Pause live updates'}
+          </button>
+        )}
         <button className="secondary" disabled={loading} onClick={() => void mutate(refresh)}>
           Refresh workflow
         </button>
@@ -269,6 +280,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
       {!taskId && items.length > 0 && (
         <div aria-label="Workflow operations overview">
           <p role="status">
+            {paused ? 'Live updates paused · ' : 'Live updates every 3 seconds · '}
             {items.length} workflows · {counts.active} active · {counts.blocked} blocked ·{' '}
             {counts.completed} completed · {counts.cancelled} cancelled
           </p>
