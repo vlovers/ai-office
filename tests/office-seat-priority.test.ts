@@ -16,14 +16,14 @@ describe('office seat priority', () => {
     agent('profile-4', 'thinking', true),
   ];
 
-  it('keeps selected profile and an active worker visible', () => {
+  it('keeps selected profile visible without reordering existing seats', () => {
     expect(selectOfficeSeats(agents, 'profile-3' as AgentId).map((a) => a.id)).toEqual([
       'profile-3',
       'codex-2',
     ]);
   });
 
-  it('prioritizes active workers when selected profile is unavailable', () => {
+  it('preserves default seat order when selected profile is unavailable', () => {
     expect(selectOfficeSeats(agents, 'missing' as AgentId).map((a) => a.id)).toEqual([
       'codex-2',
       'profile-4',
@@ -61,7 +61,7 @@ describe('office responsive geometry', () => {
     expect(officeGeometry(false)).toEqual({ width: 840, height: 440, wall: 191 });
   });
 
-  it('keeps running profiles in the room even if idle profiles come first', () => {
+  it('does not reshuffle occupied seats when workers change status', () => {
     const profiles = [
       agent('idle-1'),
       agent('idle-2'),
