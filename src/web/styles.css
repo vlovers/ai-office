@@ -1855,3 +1855,13 @@ button.line-anchor {
   border: 1px dashed var(--line);
   text-align: center;
 }
+
+.office-operations-task {
+  display: block;
+  margin-top: 4px;
+  max-width: 100%;
+  color: var(--phosphor);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
