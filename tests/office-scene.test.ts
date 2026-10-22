@@ -69,3 +69,29 @@ it('uses two desks for active and selected dynamic profiles without inventing ID
   expect(selectedActive).toContain('&lt;script&gt;');
   expect(selectedActive).not.toContain('<script>');
 });
+
+it('shows only real queued tasks, waiting reasons, and their assigned agents', () => {
+  const markup = renderToStaticMarkup(
+    createElement(PixelOffice, {
+      agents,
+      selectedAgent: 'codex-1',
+      onSelect: () => {},
+      queue: [
+        { taskId: 'task-b', agentId: 'codex-2', title: 'Review changes', order: 2 },
+        {
+          taskId: 'task-a',
+          agentId: 'codex-1',
+          title: 'Implement API',
+          order: 1,
+          waitingReason: 'Workspace busy',
+        },
+      ],
+    }),
+  );
+  expect(markup).toContain('aria-label="Live task queue"');
+  expect(markup).toContain('2 waiting');
+  expect(markup.indexOf('Implement API')).toBeLessThan(markup.indexOf('Review changes'));
+  expect(markup).toContain('Workspace busy');
+  expect(markup).toContain('Inspect agent assigned to Review changes');
+  expect(render()).toContain('No queued tasks.');
+});
