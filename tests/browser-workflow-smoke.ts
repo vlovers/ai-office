@@ -97,12 +97,12 @@ try {
   await gate('Start QA');
   await expect(board).toContainText('QA assertions passed', { timeout: 45000 });
   await gate('Approve QA result');
-  await expect(board.getByRole('status')).toContainText('State: completed');
+  await expect(board.getByRole('status').filter({ hasText: 'State:' })).toContainText('State: completed');
   const diagnostics = board.getByLabel('Workflow diagnostics');
   await expect(diagnostics).toContainText('Persisted checkpoint diagnostics');
   await expect(diagnostics).toContainText('no automatic restart');
   await page.reload();
-  await expect(board.getByRole('status')).toContainText('State: completed');
+  await expect(board.getByRole('status').filter({ hasText: 'State:' })).toContainText('State: completed');
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
@@ -174,7 +174,7 @@ try {
     await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
     await requested;
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
-    await expect(board.getByRole('status')).toContainText('State: completed');
+    await expect(board.getByRole('status').filter({ hasText: 'State:' })).toContainText('State: completed');
     const delayed = page.waitForResponse((response) =>
       response.url().endsWith(`/workflows/${otherId}/timeline`),
     );
@@ -182,7 +182,7 @@ try {
     await (await delayed).finished();
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
-    await expect(board.getByRole('status')).toContainText('State: completed');
+    await expect(board.getByRole('status').filter({ hasText: 'State:' })).toContainText('State: completed');
   } finally {
     release();
     await page.unroute(routePattern);
