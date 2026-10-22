@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { AgentId } from '../shared/types.js';
-import { OFFICE_LAYOUT, officeGeometry } from './office-layout.js';
+import { OFFICE_LAYOUT, officeGeometry, selectOfficeSeats } from './office-layout.js';
 import type { SceneStatus } from './scene-state.js';
 import type { SceneState } from './scene-state.js';
 
@@ -124,16 +124,7 @@ export function PixelOffice({
   const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
   // Keep the selected profile visible, then fill remaining seats with running agents.
   // The roster below remains the complete, untruncated list.
-  const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
-  const seatCandidates = [
-    ...(selectedProfile ? [selectedProfile] : []),
-    ...agents.filter((agent) =>
-      agent.id !== selectedAgent &&
-      (agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state)),
-    ),
-    ...agents.filter((agent) => agent.id !== selectedAgent),
-  ];
-  const seatedAgents = seatCandidates.slice(0, OFFICE_LAYOUT.length);
+  const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
   return (
     <div ref={container} className="shared-office" data-layout={narrow ? 'portrait' : 'landscape'}>
       <svg
