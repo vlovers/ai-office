@@ -2111,3 +2111,54 @@ button.line-anchor {
   background: #1c4933;
   color: var(--phosphor);
 }
+
+/* Real persisted task activity; statuses and timestamps are never synthesized. */
+.office-history {
+  border-top: 1px solid var(--line);
+  background: #0c211b;
+  padding: 12px;
+}
+.office-history-items {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.office-history-items button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid #28533c;
+  background: #091b15;
+  color: var(--text);
+  padding: 9px;
+  text-align: left;
+  cursor: pointer;
+}
+.office-history-items button[aria-pressed='true'] {
+  border-color: var(--phosphor);
+}
+.office-history-items button:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}
+.office-history-state {
+  flex: 0 0 82px;
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.office-history-state.state-completed { color: var(--phosphor); }
+.office-history-state.state-failed { color: var(--red); }
+.office-history-state.state-running { color: var(--amber); }
+.office-history-items time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .office-history-items time { display: none; }
+}
