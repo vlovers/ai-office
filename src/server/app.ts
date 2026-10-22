@@ -8,6 +8,7 @@ import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
 import { WorkflowStore } from './workflows.js';
 import { workflowTimeline } from './workflow-timeline.js';
+import { diagnoseWorkflow } from './workflow-diagnostics.js';
 import { assessHandoff } from './handoff-assessment.js';
 import { git, revalidateRepository, validateRepository } from './repositories.js';
 import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
@@ -518,6 +519,16 @@ export async function createApp(manager: TaskManager) {
     };
   });
   app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
+  app.get('/api/workflows/diagnostics', async () =>
+    new WorkflowStore(manager.store.db).list().map(diagnoseWorkflow),
+  );
+  app.get('/api/workflows/:id/diagnostics', async (request) => {
+    const workflow = new WorkflowStore(manager.store.db).get(
+      id.parse((request.params as { id: string }).id),
+    );
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    return diagnoseWorkflow(workflow);
+  });
   app.get('/api/workflows/:id/timeline', async (request) => {
     const workflow = new WorkflowStore(manager.store.db).get(
       id.parse((request.params as { id: string }).id),
