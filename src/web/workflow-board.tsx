@@ -25,6 +25,19 @@ type Summary = {
   stages: { kind?: string; state?: string; taskId: string | null; agentId: string }[];
 };
 type Report = { kind: string; taskId: string | null; result: string; error: string | null };
+type Diagnostics = {
+  id: string;
+  version: number;
+  state: string;
+  findings: {
+    code: string;
+    severity: 'info' | 'attention' | 'blocked';
+    stage: string | null;
+    message: string;
+    suggestedAction: string | null;
+  }[];
+  warning: string;
+};
 const labels: Record<string, string> = {
   'approve-initial': 'Approve Coder baseline',
   'bind-coder-task': 'Bind Coder task',
@@ -67,6 +80,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [selected, setSelected] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [commands, setCommands] = useState<{ commandId: string; argv: string[] }[]>([]);
   const [commandId, setCommandId] = useState('');
@@ -101,15 +115,17 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
         ? selected
         : (workflows[0]?.id ?? '');
       setSelected(next);
-      const [view, output] = next
+      const [view, output, diagnosis] = next
         ? await Promise.all([
             request<Timeline>(`/workflows/${next}/timeline`),
             request<Report[]>(`/workflows/${next}/results`),
+            request<Diagnostics>(`/workflows/${next}/diagnostics`),
           ])
-        : [null, []];
+        : [null, [], null];
       if (epoch !== refreshEpoch.current) return;
       setTimeline(view);
       setReports(output);
+      setDiagnostics(diagnosis);
       setError('');
     } catch (cause) {
       if (epoch === refreshEpoch.current)
@@ -342,6 +358,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                       refreshEpoch.current++;
                       setTimeline(null);
                       setReports([]);
+                      setDiagnostics(null);
                       setSelected(item.id);
                     }}
                   >
@@ -381,6 +398,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                 refreshEpoch.current++;
                 setTimeline(null);
                 setReports([]);
+                setDiagnostics(null);
                 setSelected(event.target.value);
               }}
             >
@@ -401,6 +419,32 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
               </p>
+              {diagnostics &&
+                diagnostics.id === timeline.id &&
+                diagnostics.version === timeline.version && (
+                  <section aria-label="Workflow diagnostics">
+                    <h3>Persisted checkpoint diagnostics</h3>
+                    {diagnostics.findings.length === 0 ? (
+                      <p>No persisted checkpoint findings.</p>
+                    ) : (
+                      <ul>
+                        {diagnostics.findings.map((finding, index) => (
+                          <li key={`${finding.code}-${finding.stage ?? 'workflow'}-${index}`}>
+                            <strong>{finding.severity.toUpperCase()}</strong> ·{' '}
+                            {finding.stage ?? 'workflow'} — {finding.message}
+                            {finding.suggestedAction && (
+                              <p>
+                                Suggested checkpoint: {labels[finding.suggestedAction] ?? finding.suggestedAction}.
+                                Review the stage and confirm explicitly below.
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p role="note">{diagnostics.warning}</p>
+                  </section>
+                )}
               <ol>
                 {timeline.stages.map((stage) => (
                   <li key={stage.kind}>
