@@ -24,8 +24,8 @@ describe('workflow operations projection', () => {
     expect(ids(selectWorkflowOperations(items, { ...options, sort: 'oldest' }))).toEqual(['b', 'a', 'c', 'd']);
   });
   it('does not classify normal running or completed stages as attention', () => {
-    expect(workflowNeedsAttention(items[0])).toBe(false);
-    expect(workflowNeedsAttention(items[2])).toBe(false);
+    expect(workflowNeedsAttention(items[0]!)).toBe(false);
+    expect(workflowNeedsAttention(items[2]!)).toBe(false);
   });
   it('returns empty results for missing matches and does not mutate input', () => {
     expect(selectWorkflowOperations(items, { ...options, query: 'nonexistent' })).toEqual([]);
