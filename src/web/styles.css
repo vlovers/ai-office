@@ -1803,3 +1803,42 @@ button.line-anchor {
   .office-operations { padding: 8px; }
   .office-operations-access { display: none; }
 }
+
+/* Isometric Office V2 — SVG geometry is decorative, never a simulated runtime. */
+.isometric-office .pixel-office {
+  display: block;
+  width: 100%;
+  background: radial-gradient(ellipse at 50% 45%, #224139, #081714 75%);
+  image-rendering: auto;
+}
+.isometric-office .iso-station { cursor: pointer; outline: none; }
+.isometric-office .iso-station .station-name {
+  fill: #d3f6e1;
+  paint-order: stroke;
+  stroke: #061a14;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.isometric-office .iso-station:focus-visible .iso-selection,
+.isometric-office .iso-station:hover .iso-selection { opacity: 1; }
+.isometric-office .iso-station:focus-visible .iso-selection { stroke: #f0cd78; }
+.isometric-office .state-error .iso-monitor-glow { fill: #72352d; }
+.isometric-office .state-offline .iso-monitor-glow { fill: #26302d; }
+.isometric-office .state-completed .iso-monitor-glow { fill: #215840; }
+.scene-motion .isometric-office .state-working .typing-hands {
+  animation: type-hands 0.8s steps(2, end) infinite;
+}
+.scene-motion .isometric-office .state-thinking .iso-monitor-glow {
+  animation: iso-screen-pulse 2.4s ease-in-out infinite;
+}
+.scene-motion .isometric-office .state-idle .character-body {
+  animation: idle-breathe 5s steps(2, end) infinite;
+}
+@keyframes iso-screen-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-motion .isometric-office .iso-monitor-glow,
+  .scene-motion .isometric-office .typing-hands { animation: none; }
+}
