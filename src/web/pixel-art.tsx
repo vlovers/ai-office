@@ -195,8 +195,8 @@ export function PixelOffice({
     return () => observer.disconnect();
   }, []);
   const geometry = officeGeometry(narrow);
-  const activeCount = agents.filter((agent) =>
-    ['thinking', 'working', 'stopping'].includes(agent.status.state),
+  const activeCount = agents.filter(
+    (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
   ).length;
   const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
   const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
@@ -225,9 +225,9 @@ export function PixelOffice({
     recentTasks, selectedAgent, historyFilter, recentTasks.length,
   );
   const visibleHistory = filteredHistory.slice(0, showAllTasks ? 24 : 8);
-  const workstationSummary = seatedAgents.map(
-    (agent) => `${agent.name}: ${agent.status.label}`,
-  ).join('; ');
+  const workstationSummary = seatedAgents
+    .map((agent) => `${agent.name}: ${agent.status.label}`)
+    .join('; ');
   return (
     <div
       ref={container}
