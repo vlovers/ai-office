@@ -2,10 +2,34 @@ import { describe, expect, it } from 'vitest';
 import { selectWorkflowOperations, workflowNeedsAttention } from '../src/web/workflow-operations.js';
 
 const items = [
-  { id: 'a', repositoryId: 'one', state: 'active', updatedAt: '2026-10-21', stages: [{ state: 'running' }] },
-  { id: 'b', repositoryId: 'two', state: 'blocked', updatedAt: '2026-10-20', stages: [{ state: 'awaiting_approval' }] },
-  { id: 'c', repositoryId: 'one', state: 'completed', updatedAt: '2026-10-22', stages: [{ state: 'completed' }] },
-  { id: 'd', repositoryId: 'three', state: 'active', updatedAt: '2026-10-22', stages: [{ state: 'interrupted' }] },
+  {
+    id: 'a',
+    repositoryId: 'one',
+    state: 'active',
+    updatedAt: '2026-10-21',
+    stages: [{ state: 'running' }],
+  },
+  {
+    id: 'b',
+    repositoryId: 'two',
+    state: 'blocked',
+    updatedAt: '2026-10-20',
+    stages: [{ state: 'awaiting_approval' }],
+  },
+  {
+    id: 'c',
+    repositoryId: 'one',
+    state: 'completed',
+    updatedAt: '2026-10-22',
+    stages: [{ state: 'completed' }],
+  },
+  {
+    id: 'd',
+    repositoryId: 'three',
+    state: 'active',
+    updatedAt: '2026-10-22',
+    stages: [{ state: 'interrupted' }],
+  },
 ] as const;
 
 const options = {
