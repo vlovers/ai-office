@@ -20,7 +20,8 @@ type Summary = {
   version: number;
   state: string;
   repositoryId: string;
-  stages: { taskId: string | null; agentId: string }[];
+  updatedAt?: string;
+  stages: { kind?: string; state?: string; taskId: string | null; agentId: string }[];
 };
 type Report = { kind: string; taskId: string | null; result: string; error: string | null };
 const labels: Record<string, string> = {
@@ -59,6 +60,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [items, setItems] = useState<Summary[]>([]);
   const [stateFilter, setStateFilter] = useState('all');
   const [workflowQuery, setWorkflowQuery] = useState('');
+  const [triageOnly, setTriageOnly] = useState(false);
   const [selected, setSelected] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
@@ -138,8 +140,14 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     completed: items.filter((item) => item.state === 'completed').length,
     cancelled: items.filter((item) => item.state === 'cancelled').length,
   };
+  const needsAttention = (item: Summary) =>
+    item.state === 'blocked' ||
+    item.stages.some((stage) =>
+      ['failed', 'interrupted', 'blocked', 'awaiting_approval'].includes(stage.state ?? ''),
+    );
   const visibleWorkflows = items.filter(
     (item) =>
+      (!triageOnly || needsAttention(item)) &&
       (stateFilter === 'all' || item.state === stateFilter) &&
       (item.id.toLowerCase().includes(workflowQuery.trim().toLowerCase()) ||
         item.repositoryId.toLowerCase().includes(workflowQuery.trim().toLowerCase())),
@@ -274,6 +282,43 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
               <option value="cancelled">Cancelled</option>
             </select>
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={triageOnly}
+              onChange={(event) => setTriageOnly(event.target.checked)}
+            />{' '}
+            Needs attention (blocked, interrupted, failed or awaiting approval)
+          </label>
+          <p>{visibleWorkflows.length} matching workflows</p>
+          {visibleWorkflows.length > 0 && (
+            <ul aria-label="Workflow operations queue">
+              {visibleWorkflows.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-current={item.id === selected ? 'true' : undefined}
+                    onClick={() => {
+                      refreshEpoch.current++;
+                      setTimeline(null);
+                      setReports([]);
+                      setSelected(item.id);
+                    }}
+                  >
+                    {item.id.slice(0, 8)} · {item.state} · v{item.version}
+                  </button>{' '}
+                  {item.stages
+                    .filter((stage) => stage.state && stage.state !== 'pending')
+                    .map((stage, index) => (
+                      <span key={`${item.id}-${stage.kind ?? index}`}>
+                        {stage.kind ?? 'stage'}: {stage.state}{' '}
+                      </span>
+                    ))}
+                </li>
+              ))}
+            </ul>
+          )}
           {visibleWorkflows.length === 0 && (
             <p role="status">No workflows match the current filters.</p>
           )}
@@ -294,7 +339,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                 setSelected(event.target.value);
               }}
             >
-              {visibleWorkflows.some((item) => item.id === selected) ? null : (
+              {selected && !visibleWorkflows.some((item) => item.id === selected) && (
                 <option value={selected} disabled>
                   Selected workflow (outside current filters)
                 </option>
