@@ -100,7 +100,13 @@ it('inspects selected live agent without inventing assignments or access', () =>
   const markup = renderToStaticMarkup(
     createElement(PixelOffice, {
       agents: [
-        { ...agents[0]!, taskTitle: 'Build service', taskState: 'running', role: 'Coder', access: 'read-only' },
+        {
+          ...agents[0]!,
+          taskTitle: 'Build service',
+          taskState: 'running',
+          role: 'Coder',
+          access: 'read-only',
+        },
         agents[1]!,
       ],
       selectedAgent: 'codex-1',
@@ -125,8 +131,20 @@ it('renders latest persisted task activity without fabricating tasks', () => {
       selectedAgent: 'codex-1',
       onSelect: () => {},
       recentTasks: [
-        { id: 'older', agentId: 'codex-1', title: 'Earlier review', state: 'completed', updatedAt: '2026-10-20T10:00:00Z' },
-        { id: 'newer', agentId: 'codex-2', title: 'Latest QA', state: 'failed', updatedAt: '2026-10-21T11:00:00Z' },
+        {
+          id: 'older',
+          agentId: 'codex-1',
+          title: 'Earlier review',
+          state: 'completed',
+          updatedAt: '2026-10-20T10:00:00Z',
+        },
+        {
+          id: 'newer',
+          agentId: 'codex-2',
+          title: 'Latest QA',
+          state: 'failed',
+          updatedAt: '2026-10-21T11:00:00Z',
+        },
       ],
     }),
   );

@@ -2150,9 +2150,15 @@ button.line-anchor {
   text-transform: uppercase;
   color: var(--muted);
 }
-.office-history-state.state-completed { color: var(--phosphor); }
-.office-history-state.state-failed { color: var(--red); }
-.office-history-state.state-running { color: var(--amber); }
+.office-history-state.state-completed {
+  color: var(--phosphor);
+}
+.office-history-state.state-failed {
+  color: var(--red);
+}
+.office-history-state.state-running {
+  color: var(--amber);
+}
 .office-history-items time {
   margin-left: auto;
   color: var(--muted);
@@ -2160,5 +2166,7 @@ button.line-anchor {
   white-space: nowrap;
 }
 @media (max-width: 560px) {
-  .office-history-items time { display: none; }
+  .office-history-items time {
+    display: none;
+  }
 }

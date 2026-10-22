@@ -439,7 +439,9 @@ function App() {
                   queue={(dashboard?.queue ?? []).map((entry) => ({
                     taskId: entry.taskId,
                     agentId: entry.agentId,
-                    title: dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ?? 'Untitled task',
+                    title:
+                      dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
+                      'Untitled task',
                     order: entry.order,
                     waitingReason: entry.waitingReason,
                   }))}

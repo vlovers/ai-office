@@ -43,7 +43,6 @@ export interface OfficeQueueItem {
   waitingReason?: string;
 }
 
-
 /** Isometric desk furniture; animation is driven by actual agent status classes. */
 function IsometricDesk({ state }: { state: SceneState }) {
   const message =
@@ -159,8 +158,18 @@ export function PixelOffice({
   ).length;
   const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
   const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
-  const selectedQueue = queue.filter((entry) => entry.agentId === selectedAgent).sort((a, b) => a.order - b.order);
-  const lifecycle = ['queued', 'running', 'stopping', 'completed', 'failed', 'stopped', 'interrupted'] as const;
+  const selectedQueue = queue
+    .filter((entry) => entry.agentId === selectedAgent)
+    .sort((a, b) => a.order - b.order);
+  const lifecycle = [
+    'queued',
+    'running',
+    'stopping',
+    'completed',
+    'failed',
+    'stopped',
+    'interrupted',
+  ] as const;
   // Keep the selected profile visible, then fill remaining seats with running agents.
   // The roster below remains the complete, untruncated list.
   const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
@@ -381,7 +390,9 @@ export function PixelOffice({
           <div className="office-inspector-content">
             <div>
               <strong>{selectedProfile.name}</strong>
-              <p>{selectedProfile.role || 'Agent'} · {selectedProfile.status.label}</p>
+              <p>
+                {selectedProfile.role || 'Agent'} · {selectedProfile.status.label}
+              </p>
               <p>Execution access: {selectedProfile.access ?? 'Read only'}</p>
             </div>
             <div>
@@ -391,7 +402,10 @@ export function PixelOffice({
               {selectedProfile.taskState && (
                 <ol className="office-lifecycle" aria-label="Selected task lifecycle">
                   {lifecycle.map((state) => (
-                    <li key={state} aria-current={selectedProfile.taskState === state ? 'step' : undefined}>
+                    <li
+                      key={state}
+                      aria-current={selectedProfile.taskState === state ? 'step' : undefined}
+                    >
                       {state}
                     </li>
                   ))}
@@ -401,7 +415,9 @@ export function PixelOffice({
             </div>
           </div>
         ) : (
-          <p className="office-operations-help">Select an available agent to inspect its workstation.</p>
+          <p className="office-operations-help">
+            Select an available agent to inspect its workstation.
+          </p>
         )}
       </section>
       <section className="office-history" aria-label="Recent agent tasks">
@@ -427,9 +443,13 @@ export function PixelOffice({
                     <span className={`office-history-state state-${task.state}`}>{task.state}</span>
                     <span className="office-queue-details">
                       <strong>{task.title}</strong>
-                      <small>{agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}</small>
+                      <small>
+                        {agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}
+                      </small>
                     </span>
-                    <time dateTime={task.updatedAt}>{task.updatedAt.slice(0, 16).replace('T', ' ')}</time>
+                    <time dateTime={task.updatedAt}>
+                      {task.updatedAt.slice(0, 16).replace('T', ' ')}
+                    </time>
                   </button>
                 </li>
               ))}
@@ -445,25 +465,27 @@ export function PixelOffice({
           <p className="office-operations-help">No queued tasks.</p>
         ) : (
           <ol className="office-queue-items">
-            {[...queue].sort((a, b) => a.order - b.order).map((item) => (
-              <li key={item.taskId}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(item.agentId)}
-                  aria-pressed={selectedAgent === item.agentId}
-                  title={`Inspect agent assigned to ${item.title}`}
-                >
-                  <span className="office-queue-position">#{item.order}</span>
-                  <span className="office-queue-details">
-                    <strong>{item.title}</strong>
-                    <small>
-                      {agents.find((agent) => agent.id === item.agentId)?.name ?? 'Unknown agent'}
-                      {item.waitingReason ? ` · ${item.waitingReason}` : ' · Waiting'}
-                    </small>
-                  </span>
-                </button>
-              </li>
-            ))}
+            {[...queue]
+              .sort((a, b) => a.order - b.order)
+              .map((item) => (
+                <li key={item.taskId}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(item.agentId)}
+                    aria-pressed={selectedAgent === item.agentId}
+                    title={`Inspect agent assigned to ${item.title}`}
+                  >
+                    <span className="office-queue-position">#{item.order}</span>
+                    <span className="office-queue-details">
+                      <strong>{item.title}</strong>
+                      <small>
+                        {agents.find((agent) => agent.id === item.agentId)?.name ?? 'Unknown agent'}
+                        {item.waitingReason ? ` · ${item.waitingReason}` : ' · Waiting'}
+                      </small>
+                    </span>
+                  </button>
+                </li>
+              ))}
           </ol>
         )}
       </section>
