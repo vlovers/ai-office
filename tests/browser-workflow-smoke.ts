@@ -100,7 +100,7 @@ try {
   await expect(board.getByRole('status')).toContainText('State: completed');
   await page.reload();
   await expect(board.getByRole('status')).toContainText('State: completed');
-  await page.getByRole('button', { name: /Browser workflow fixture/ }).click();
+  await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
   await expect(integrated).toContainText('QA assertions passed');
