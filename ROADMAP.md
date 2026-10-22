@@ -57,9 +57,9 @@ validation do not establish arbitrary-content secrecy or Linux runtime safety.
 - Typecheck, unit/integration, HTTP/SSE, browser, native macOS sandbox and build/format CI pass. No claim of Linux sandbox compatibility without real evidence.
 - New functionality is opt-in or backward-compatible; README, architecture, security, changelog, migration notes and release evidence reflect real behavior.
 
-## v0.7.0 — workflow orchestration (Draft PR #22)
+## v0.7.0 — workflow orchestration (merged into main; not tagged)
 
-Implemented on the draft branch: Coder → SDK Reviewer → sandboxed QA, pinned source/runtime provenance, manual stage/result gates, durable reports, fail-closed recovery, Review Center actions and native/browser verification. See [implementation and limitations](docs/V0_7_WORKFLOW_ENGINE.md). Release review, broader repository support and Linux native success-path validation remain separate gates. No merge, release or deployment is authorized.
+Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder → SDK Reviewer → sandboxed QA, pinned source/runtime provenance, manual stage/result gates, durable reports, fail-closed recovery, Review Center actions, and the isometric Office Experience V2 with live agent/queue/history data. The superseded draft PRs #22 and #23 were closed without separate merges. Validation CI #266 passed both the TypeScript/unit/integration/browser/build/format job and native Codex filesystem-policy, recovery/security and browser approval journey job. See [implementation and limitations](docs/V0_7_WORKFLOW_ENGINE.md). This is **merged implementation, not a tagged release or deployment**. Release review, broader repository support and Linux native success-path validation remain separate gates.
 
 ## v0.8.0 — delivery integration (proposal)
 
