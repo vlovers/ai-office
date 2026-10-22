@@ -76,6 +76,11 @@ try {
   await expect(page.locator('.office-scene')).toHaveCount(1);
   await expect(page.locator('svg.pixel-office')).toHaveCount(1);
   await expect(page.locator('.office-workstation')).toHaveCount(2);
+  await expect(page.locator('.isometric-office')).toHaveCount(1);
+  await expect(page.locator('.iso-station')).toHaveCount(2);
+  await expect(page.locator('.office-operations-agent')).toHaveCount(2);
+  await expect(page.locator('.office-operations-heading')).toContainText('0 active');
+  await expect(page.locator('.office-operations-help')).toContainText('local server');
   const firstDesk = page.getByRole('button', { name: 'Select Codex 01 workstation' });
   const secondDesk = page.getByRole('button', { name: 'Select Codex 02 workstation' });
   await firstDesk.focus();
@@ -84,6 +89,12 @@ try {
   await page.keyboard.press(' ');
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#agent')).toContainText('Codex 02');
+  await expect(page.locator('.office-operations-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('.office-operations-agent').first().click();
+  await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
+  await secondDesk.focus();
+  await page.keyboard.press('Enter');
+  await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await firstDesk.focus();
   await page.keyboard.press('Home');
   await expect(firstDesk).toBeFocused();
