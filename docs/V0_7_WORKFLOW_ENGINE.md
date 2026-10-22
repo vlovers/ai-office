@@ -1,6 +1,6 @@
 # v0.7 — Coder, Reviewer and QA workflow
 
-This implementation lives in Draft PR #22. It has not been released, merged or deployed. See [validation and live trial evidence](V0_7_VALIDATION.md).
+The implementation was merged into `main` via [PR #24](https://github.com/vlovers/ai-office/pull/24). It is **not a tagged release or deployment**. The earlier Draft PR #22 was superseded and closed. See [validation and live trial evidence](V0_7_VALIDATION.md).
 
 ## Working behavior
 
