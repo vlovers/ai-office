@@ -2273,3 +2273,29 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
   outline: 2px solid #b7ffca;
   outline-offset: 3px;
 }
+
+.office-history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 12px;
+}
+.office-history-filters button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #3e6652;
+  background: #10291f;
+  color: #bdd8c5;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.office-history-filters button[aria-pressed='true'] {
+  border-color: #9fe9b4;
+  background: #25553b;
+  color: #e6ffed;
+}
+.office-history-filters button:focus-visible {
+  outline: 2px solid #b7ffca;
+  outline-offset: 2px;
+}
