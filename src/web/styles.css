@@ -2061,3 +2061,31 @@ button.line-anchor {
   margin-top: 5px;
   color: var(--muted);
 }
+
+/* Inspector is a live, read-only view of the selected workstation. */
+.office-inspector {
+  border-top: 1px solid var(--line);
+  padding: 12px;
+  background: #10271f;
+}
+.office-inspector-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 10px;
+}
+.office-inspector-content > div {
+  min-width: 0;
+  border: 1px solid #28533c;
+  background: #091b15;
+  padding: 12px;
+}
+.office-inspector-content strong {
+  color: var(--phosphor);
+  overflow-wrap: anywhere;
+}
+.office-inspector-content p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
