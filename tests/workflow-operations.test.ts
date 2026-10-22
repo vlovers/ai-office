@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { selectWorkflowOperations, workflowNeedsAttention } from '../src/web/workflow-operations.js';
+import {
+  selectWorkflowOperations,
+  workflowNeedsAttention,
+  type WorkflowOperationsSort,
+} from '../src/web/workflow-operations.js';
 
 const items = [
   {
@@ -36,7 +40,7 @@ const options = {
   query: '',
   state: 'all',
   triageOnly: false,
-  sort: 'attention' as const,
+  sort: 'attention' as WorkflowOperationsSort,
 };
 
 function select(overrides: Partial<typeof options> = {}) {
