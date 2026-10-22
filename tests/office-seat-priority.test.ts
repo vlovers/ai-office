@@ -26,6 +26,18 @@ describe('office seat priority', () => {
       .toEqual(['codex-2', 'profile-4']);
   });
 
+  it('never renders duplicate workstations for a duplicated runtime profile', () => {
+    const duplicate = [agent('codex-1'), agent('codex-1'), agent('codex-2', 'working')];
+    expect(selectOfficeSeats(duplicate, 'codex-1' as AgentId).map((a) => a.id))
+      .toEqual(['codex-1', 'codex-2']);
+  });
+
+  it('treats invalid capacities as empty rather than throwing', () => {
+    expect(selectOfficeSeats(agents, 'codex-1' as AgentId, Number.NaN)).toEqual([]);
+    expect(selectOfficeSeats(agents, 'codex-1' as AgentId, Number.POSITIVE_INFINITY)).toEqual([]);
+    expect(selectOfficeSeats(agents, 'codex-1' as AgentId, -2)).toEqual([]);
+  });
+
   it('does not invent seats or agents', () => {
     expect(selectOfficeSeats(agents, 'profile-3' as AgentId, 0)).toEqual([]);
     expect(selectOfficeSeats([], 'profile-3' as AgentId)).toEqual([]);
