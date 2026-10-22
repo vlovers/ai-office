@@ -27,8 +27,8 @@ export function officeGeometry(portrait: boolean) {
   return portrait ? { width: 420, height: 580, wall: 159 } : { width: 840, height: 440, wall: 191 };
 }
 
-/** Always display the inspected agent before filling spare seats with active workers.
- * Does not invent agents or alter execution/queue priority. */
+/** Preserve stable workstation order, replacing the last visible slot for inspection.
+ * This is a read-only viewport: it never schedules or fabricates execution. */
 export function selectOfficeSeats<
   T extends {
     id: AgentId;
