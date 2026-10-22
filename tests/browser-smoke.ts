@@ -79,7 +79,9 @@ try {
   await expect(page.locator('.isometric-office')).toHaveCount(1);
   await expect(page.locator('.iso-station')).toHaveCount(2);
   await expect(page.locator('.office-operations-agent')).toHaveCount(2);
-  await expect(page.locator('.office-operations').locator('.office-operations-heading')).toContainText('0 active');
+  await expect(page.locator('.office-operations .office-operations-heading')).toContainText(
+    '0 active',
+  );
   await expect(page.locator('.office-operations-help')).toContainText('local server');
   await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Live task queue' })).toContainText(
