@@ -82,8 +82,12 @@ try {
   await expect(page.locator('.office-operations-heading')).toContainText('0 active');
   await expect(page.locator('.office-operations-help')).toContainText('local server');
   await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Live task queue' })).toContainText('No queued tasks.');
-  await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText('No recorded tasks.');
+  await expect(page.getByRole('region', { name: 'Live task queue' })).toContainText(
+    'No queued tasks.',
+  );
+  await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText(
+    'No recorded tasks.',
+  );
   await expect(page.getByRole('region', { name: 'Agent workflow overview' })).toBeVisible();
   await expect(page.locator('.office-workflow-lane')).toHaveCount(3);
   await expect(page.locator('.office-workflow-lane[data-role="reviewer"]')).toBeVisible();
