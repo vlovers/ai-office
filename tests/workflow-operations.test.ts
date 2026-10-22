@@ -27,6 +27,14 @@ describe('workflow operations projection', () => {
     expect(workflowNeedsAttention(items[0])).toBe(false);
     expect(workflowNeedsAttention(items[2])).toBe(false);
   });
+  it('returns empty results for missing matches and does not mutate input', () => {
+    expect(selectWorkflowOperations(items, { ...options, query: 'nonexistent' })).toEqual([]);
+    expect(selectWorkflowOperations(items, { ...options, state: 'cancelled' })).toEqual([]);
+    expect(ids(items)).toEqual(['a', 'b', 'c', 'd']);
+  });
+  it('recognizes failed stages even when workflow state is active', () => {
+    expect(workflowNeedsAttention({ id: 'x', repositoryId: 'r', state: 'active', stages: [{ state: 'failed' }] })).toBe(true);
+  });
   it('uses workflow ID as deterministic timestamp tie breaker', () => {
     expect(ids(selectWorkflowOperations(items, { ...options, sort: 'recent' }))).toEqual(['c', 'd', 'a', 'b']);
   });
