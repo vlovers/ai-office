@@ -23,7 +23,7 @@ const render = (slots = agents) =>
 
 it('renders one room with separately identified, keyboard-accessible real workstations', () => {
   const markup = render();
-  expect(markup.match(/class="office-room"/g)).toHaveLength(1);
+  expect(markup.match(/class="shared-office isometric-office"/g)).toHaveLength(1);
   expect(markup.match(/role="button"/g)).toHaveLength(2);
   expect(markup.match(/tabindex="0"/g)).toHaveLength(2);
   expect(markup).toContain('data-agent-id="codex-1" data-state="thinking"');
@@ -31,6 +31,7 @@ it('renders one room with separately identified, keyboard-accessible real workst
   expect(markup).toContain('aria-label="Select Codex 01 workstation" aria-pressed="true"');
   expect(markup).toContain('aria-label="Select Codex 02 workstation" aria-pressed="false"');
   expect(markup).toContain('Thinking · SDK reasoning item. Read only.');
+  expect(markup).toContain('aria-label="Agent workflow overview"');
 });
 
 it('never creates characters or interactive agents missing from the runtime', () => {
