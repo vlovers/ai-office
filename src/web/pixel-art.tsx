@@ -128,6 +128,44 @@ function IsometricDesk({ state }: { state: SceneState }) {
   );
 }
 
+/** Static room dressing. Decorative only: no invented agent activity or telemetry. */
+function RoomDetails({ portrait }: { portrait: boolean }) {
+  return (
+    <g aria-hidden="true" className="office-room-details" pointerEvents="none">
+      <g transform={portrait ? 'translate(76 183) scale(.64)' : 'translate(102 224) scale(.9)'}>
+        <path d="M-24 1L0 -12L24 1L0 15Z" fill="#79523b" stroke="#a67b50" strokeWidth="2" />
+        <path d="M-24 1V17L0 31V15Z" fill="#4a332a" />
+        <path d="M0 15L24 1V17L0 31Z" fill="#654633" />
+        <path d="M-16 -3V-51M-16 -43L-29 -54M-16 -35L0 -49" stroke="#618b60" strokeWidth="6" strokeLinecap="round" />
+        <path d="M-16 -49L-39 -62L-35 -33Z" fill="#438064" />
+        <path d="M-15 -39L9 -64L9 -33Z" fill="#68a47b" />
+        <path d="M-20 -29L-43 -37L-27 -15Z" fill="#397557" />
+      </g>
+      <g transform={portrait ? 'translate(345 260) scale(.68)' : 'translate(730 233) scale(.9)'}>
+        <path d="M-42 8L0 -14L42 8L0 30Z" fill="#7b5944" stroke="#b28a60" strokeWidth="3" />
+        <path d="M-42 8V48L0 70V30Z" fill="#4c372d" />
+        <path d="M0 30L42 8V48L0 70Z" fill="#664735" />
+        <path d="M-27 4L0 -10L27 4L0 18Z" fill="#253e39" />
+        <path d="M-21 2L0 -8L21 2L0 12Z" fill="#c7e6c9" />
+        <path d="M-14 2L0 -5L14 2L0 9Z" fill="#416d63" />
+        <path d="M-22 26L-5 34M-22 36L-5 44M7 38L25 28" stroke="#a28b67" strokeWidth="3" />
+      </g>
+      <g transform={portrait ? 'translate(210 110) scale(.75)' : 'translate(420 89)'}>
+        <path d="M-45 -25H45V25H-45Z" fill="#0b2524" stroke="#6da58c" strokeWidth="3" />
+        <path d="M-31 8L-12 -3L3 7L28 -10" fill="none" stroke="#b5e2bd" strokeWidth="3" />
+        <circle cx="-31" cy="8" r="4" fill="#9addae" />
+        <circle cx="28" cy="-10" r="4" fill="#9addae" />
+        <path d="M-32 16H29" stroke="#3b6658" strokeWidth="2" />
+      </g>
+      <g transform={portrait ? 'translate(206 485)' : 'translate(422 332)'}>
+        <path d="M-34 0L0 -17L34 0L0 17Z" fill="#466a56" opacity=".8" />
+        <path d="M-17 -2L0 -11L17 -2L0 7Z" fill="#8ba57c" />
+        <path d="M-13 -3L0 -9L13 -3L0 4Z" fill="#2e4c41" />
+      </g>
+    </g>
+  );
+}
+
 /** One room; scene placement and visual identity are independent of runtime state. */
 export function PixelOffice({
   agents,
@@ -275,6 +313,7 @@ export function PixelOffice({
             AI OFFICE
           </text>
         </g>
+        <RoomDetails portrait={narrow} />
         {OFFICE_LAYOUT.map((placement, index) => {
           const agent = seatedAgents[index];
           if (!agent) return null;
