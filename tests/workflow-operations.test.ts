@@ -47,7 +47,12 @@ describe('workflow operations projection', () => {
   });
   it('supports triage-only and chronological sorts', () => {
     expect(ids(selectWorkflowOperations(items, { ...options, triageOnly: true }))).toEqual(['d', 'b']);
-    expect(ids(selectWorkflowOperations(items, { ...options, sort: 'oldest' }))).toEqual(['b', 'a', 'c', 'd']);
+    expect(ids(selectWorkflowOperations(items, { ...options, sort: 'oldest' }))).toEqual([
+      'b',
+      'a',
+      'c',
+      'd',
+    ]);
   });
   it('does not classify normal running or completed stages as attention', () => {
     expect(workflowNeedsAttention(items[0]!)).toBe(false);
@@ -69,6 +74,11 @@ describe('workflow operations projection', () => {
     ).toBe(true);
   });
   it('uses workflow ID as deterministic timestamp tie breaker', () => {
-    expect(ids(selectWorkflowOperations(items, { ...options, sort: 'recent' }))).toEqual(['c', 'd', 'a', 'b']);
+    expect(ids(selectWorkflowOperations(items, { ...options, sort: 'recent' }))).toEqual([
+      'c',
+      'd',
+      'a',
+      'b',
+    ]);
   });
 });
