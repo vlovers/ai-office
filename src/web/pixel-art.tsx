@@ -25,6 +25,15 @@ export interface OfficeAgent {
   active?: boolean;
 }
 
+export interface OfficeQueueItem {
+  taskId: string;
+  agentId: AgentId;
+  title: string;
+  order: number;
+  waitingReason?: string;
+}
+
+
 /** Isometric desk furniture; animation is driven by actual agent status classes. */
 function IsometricDesk({ state }: { state: SceneState }) {
   const message =
@@ -115,10 +124,12 @@ export function PixelOffice({
   agents,
   selectedAgent,
   onSelect,
+  queue = [],
 }: {
   agents: OfficeAgent[];
   selectedAgent: AgentId;
   onSelect: (id: AgentId) => void;
+  queue?: OfficeQueueItem[];
 }) {
   const prefix = useId();
   const container = useRef<HTMLDivElement>(null);
@@ -345,6 +356,37 @@ export function PixelOffice({
             );
           })}
         </div>
+      </section>
+      <section className="office-queue" aria-label="Live task queue">
+        <div className="office-operations-heading">
+          <strong>Task queue</strong>
+          <span>{queue.length} waiting</span>
+        </div>
+        {queue.length === 0 ? (
+          <p className="office-operations-help">No queued tasks.</p>
+        ) : (
+          <ol className="office-queue-items">
+            {[...queue].sort((a, b) => a.order - b.order).map((item) => (
+              <li key={item.taskId}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(item.agentId)}
+                  aria-pressed={selectedAgent === item.agentId}
+                  title={`Inspect agent assigned to ${item.title}`}
+                >
+                  <span className="office-queue-position">#{item.order}</span>
+                  <span className="office-queue-details">
+                    <strong>{item.title}</strong>
+                    <small>
+                      {agents.find((agent) => agent.id === item.agentId)?.name ?? 'Unknown agent'}
+                      {item.waitingReason ? ` · ${item.waitingReason}` : ' · Waiting'}
+                    </small>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
       <div className="office-operations" aria-label="Live office operations">
         <div className="office-operations-heading">
