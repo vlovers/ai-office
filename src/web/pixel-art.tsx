@@ -212,7 +212,7 @@ export function PixelOffice({
     'stopped',
     'interrupted',
   ] as const;
-  // Keep the selected profile visible, then fill remaining seats with running agents.
+  // Keep stable physical seats; reveal the selected profile if it was offscreen.
   // The roster below remains the complete, untruncated list.
   const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
   const seatedIds = new Set(seatedAgents.map((agent) => agent.id));
@@ -225,7 +225,6 @@ export function PixelOffice({
     recentTasks, selectedAgent, historyFilter, recentTasks.length,
   );
   const visibleHistory = filteredHistory.slice(0, showAllTasks ? 24 : 8);
-  const selectedSeat = seatedAgents.findIndex((agent) => agent.id === selectedAgent);
   const workstationSummary = seatedAgents.map(
     (agent) => `${agent.name}: ${agent.status.label}`,
   ).join('; ');
@@ -337,8 +336,8 @@ export function PixelOffice({
               data-agent-id={agent.id}
               data-state={agent.status.state}
               role="button"
-              tabIndex={selectedSeat === -1 ? (index === 0 ? 0 : -1) : selected ? 0 : -1}
-              aria-label={`Select ${agent.name} workstation · ${agent.status.label}`}
+              tabIndex={0}
+              aria-label={`Select ${agent.name} workstation`}
               aria-pressed={selected}
               aria-describedby={`${prefix}-${agent.id}-status`}
               transform={`translate(${point.x} ${point.y})`}
@@ -365,9 +364,6 @@ export function PixelOffice({
                         : undefined;
                 if (next !== undefined) {
                   event.preventDefault();
-                  buttons.forEach((button, buttonIndex) => {
-                    button.setAttribute('tabindex', buttonIndex === next ? '0' : '-1');
-                  });
                   buttons[next]?.focus();
                 }
               }}
