@@ -1735,3 +1735,456 @@ button.line-anchor {
     flex-wrap: wrap;
   }
 }
+
+/* Workflow evidence stays readable within narrow Review Center panels. */
+#workflows code,
+[aria-label='Workflow review results'] code,
+dialog[aria-label='Confirm workflow checkpoint'] code {
+  overflow-wrap: anywhere;
+}
+#workflows pre,
+[aria-label='Workflow review results'] pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+}
+#workflows li,
+[aria-label='Workflow review results'] li {
+  margin-block: 1rem;
+}
+
+/* Office Experience V2: operational roster stays accessible even when the SVG
+   viewport can only display two workstations. These are real scene statuses. */
+.office-operations {
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, #10271d, #081711);
+  padding: 12px;
+}
+.office-operations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  margin-bottom: 10px;
+}
+.office-operations-heading strong {
+  color: var(--phosphor);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.office-operations-agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+}
+.office-operations-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+  border: 1px solid #28533c;
+  background: #0a1c15;
+  color: var(--text);
+}
+.office-operations-agent[aria-pressed='true'] {
+  border-color: var(--phosphor);
+  background: #153625;
+}
+.office-operations-indicator {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  background: #819c8a;
+  border-radius: 50%;
+}
+.office-operations-agent.state-working .office-operations-indicator,
+.office-operations-agent.state-thinking .office-operations-indicator {
+  background: var(--phosphor);
+  box-shadow: 0 0 8px #79f5a577;
+}
+.office-operations-agent.state-stopping .office-operations-indicator {
+  background: var(--amber);
+}
+.office-operations-agent.state-error .office-operations-indicator {
+  background: var(--red);
+}
+.office-operations-agent.state-offline .office-operations-indicator {
+  background: #5b6d63;
+}
+.office-operations-identity {
+  min-width: 0;
+  flex: 1;
+}
+.office-operations-identity strong,
+.office-operations-identity small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.office-operations-identity strong {
+  font-size: 11px;
+}
+.office-operations-identity small {
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.office-operations-access {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: right;
+  max-width: 90px;
+}
+@media (max-width: 680px) {
+  .office-operations {
+    padding: 8px;
+  }
+  .office-operations-access {
+    display: none;
+  }
+}
+
+/* Isometric Office V2 — SVG geometry is decorative, never a simulated runtime. */
+.isometric-office .pixel-office {
+  display: block;
+  width: 100%;
+  background: radial-gradient(ellipse at 50% 45%, #224139, #081714 75%);
+  image-rendering: auto;
+}
+.isometric-office .iso-station {
+  cursor: pointer;
+  outline: none;
+}
+.isometric-office .iso-station .station-name {
+  fill: #d3f6e1;
+  paint-order: stroke;
+  stroke: #061a14;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.isometric-office .iso-station:focus-visible .iso-selection,
+.isometric-office .iso-station:hover .iso-selection {
+  opacity: 1;
+}
+.isometric-office .iso-station:focus-visible .iso-selection {
+  stroke: #f0cd78;
+}
+.isometric-office .state-error .iso-monitor-glow {
+  fill: #72352d;
+}
+.isometric-office .state-offline .iso-monitor-glow {
+  fill: #26302d;
+}
+.isometric-office .state-completed .iso-monitor-glow {
+  fill: #215840;
+}
+.scene-motion .isometric-office .state-working .typing-hands {
+  animation: type-hands 0.8s steps(2, end) infinite;
+}
+.scene-motion .isometric-office .state-thinking .iso-monitor-glow {
+  animation: iso-screen-pulse 2.4s ease-in-out infinite;
+}
+.scene-motion .isometric-office .state-idle .character-body {
+  animation: idle-breathe 5s steps(2, end) infinite;
+}
+@keyframes iso-screen-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-motion .isometric-office .iso-monitor-glow,
+  .scene-motion .isometric-office .typing-hands {
+    animation: none;
+  }
+}
+
+.office-operations-help,
+.office-operations-empty {
+  margin: 0 0 12px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.office-operations-empty {
+  padding: 20px;
+  border: 1px dashed var(--line);
+  text-align: center;
+}
+
+.office-operations-task {
+  display: block;
+  margin-top: 4px;
+  max-width: 100%;
+  color: var(--phosphor);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Profile-aware workflow overview. This is observation, not orchestration. */
+.office-workflow {
+  padding: 16px;
+  background: #0b1d19;
+  border-top: 1px solid #315d4b;
+}
+.office-workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.office-workflow-header strong {
+  color: #b7edc9;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.office-workflow-header span {
+  font-size: 10px;
+  color: #91b7a5;
+}
+.office-workflow-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.office-workflow-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid #365b4b;
+  background: #142922;
+  padding: 12px;
+}
+.office-workflow-step {
+  color: #83af9a;
+  font-size: 10px;
+}
+.office-workflow-lane > strong {
+  color: #e0f9e8;
+  font-size: 14px;
+}
+.office-workflow-count {
+  color: #a4c9b5;
+  font-size: 10px;
+}
+.office-workflow-members {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+}
+.office-workflow-members button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+  color: #cce9d8;
+  background: #0c201a;
+  border: 1px solid #345b47;
+  text-align: left;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.office-workflow-members button[aria-pressed='true'] {
+  border-color: #9bffb8;
+  background: #244934;
+}
+.office-workflow-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #728c7c;
+}
+.office-workflow-dot.state-working,
+.office-workflow-dot.state-thinking {
+  background: #85ffb2;
+}
+.office-workflow-dot.state-stopping {
+  background: #e4b36e;
+}
+.office-workflow-dot.state-error {
+  background: #e77b79;
+}
+@media (max-width: 600px) {
+  .office-workflow-lanes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Queue cards expose actual persisted FIFO entries; they never schedule work. */
+.office-queue {
+  border-top: 1px solid var(--line);
+  padding: 12px;
+  background: #0b2019;
+}
+.office-queue-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.office-queue-items button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px;
+  border: 1px solid #28533c;
+  background: #102d22;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.office-queue-items button[aria-pressed='true'] {
+  border-color: var(--phosphor);
+}
+.office-queue-items button:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}
+.office-queue-position {
+  flex-shrink: 0;
+  color: var(--phosphor);
+  font-size: 11px;
+}
+.office-queue-details {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.office-queue-details strong,
+.office-queue-details small {
+  display: block;
+}
+.office-queue-details small {
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+/* Inspector is a live, read-only view of the selected workstation. */
+.office-inspector {
+  border-top: 1px solid var(--line);
+  padding: 12px;
+  background: #10271f;
+}
+.office-inspector-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 10px;
+}
+.office-inspector-content > div {
+  min-width: 0;
+  border: 1px solid #28533c;
+  background: #091b15;
+  padding: 12px;
+}
+.office-inspector-content strong {
+  color: var(--phosphor);
+  overflow-wrap: anywhere;
+}
+.office-inspector-content p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* State legend is categorical: terminal states are alternatives, not fabricated transitions. */
+.office-lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+.office-lifecycle li {
+  border: 1px solid #28533c;
+  padding: 4px 6px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.office-lifecycle li[aria-current='step'] {
+  border-color: var(--phosphor);
+  background: #1c4933;
+  color: var(--phosphor);
+}
+
+/* Real persisted task activity; statuses and timestamps are never synthesized. */
+.office-history {
+  border-top: 1px solid var(--line);
+  background: #0c211b;
+  padding: 12px;
+}
+.office-history-items {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.office-history-items button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid #28533c;
+  background: #091b15;
+  color: var(--text);
+  padding: 9px;
+  text-align: left;
+  cursor: pointer;
+}
+.office-history-items button[aria-pressed='true'] {
+  border-color: var(--phosphor);
+}
+.office-history-items button:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}
+.office-history-state {
+  flex: 0 0 82px;
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.office-history-state.state-completed {
+  color: var(--phosphor);
+}
+.office-history-state.state-failed {
+  color: var(--red);
+}
+.office-history-state.state-running {
+  color: var(--amber);
+}
+.office-history-items time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .office-history-items time {
+    display: none;
+  }
+}

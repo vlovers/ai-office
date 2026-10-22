@@ -3,12 +3,14 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { dirname } from 'node:path';
 
-export function localCli() {
-  const executable = execFileSync('/usr/bin/which', ['codex'], {
-    encoding: 'utf8',
-    timeout: 5000,
-    env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
-  }).trim();
+export function localCli(executableOverride?: string) {
+  const executable =
+    executableOverride ??
+    execFileSync('/usr/bin/which', ['codex'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
+    }).trim();
   const env: Record<string, string> = {
     PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
   };

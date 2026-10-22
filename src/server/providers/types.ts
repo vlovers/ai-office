@@ -8,6 +8,7 @@ export interface SessionBinding {
   runtimeVersion: string;
 }
 export interface ProviderSession {
+  verifiedReadOnly?: boolean;
   executionMode?: import('../../shared/types.js').ExecutionMode;
   id: string;
   repositoryPath: string;
@@ -23,6 +24,7 @@ export type ProviderEvent =
 // Provider-specific thread objects and SDK event formats never enter the scheduler.
 // A future ClaudeCodeProvider implements this contract and declares its capabilities.
 export interface AgentProvider {
+  verifyIsolation?(): Promise<void>;
   readonly id: string;
   readonly capabilities: { cancellation: boolean; interactiveApprovals: boolean; writes: boolean };
   startSession(repositoryPath: string, model?: string | null): Promise<ProviderSession>;

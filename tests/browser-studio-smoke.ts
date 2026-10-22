@@ -145,7 +145,7 @@ try {
   assert.equal(store.requireAgent(profile.id).revision, 4);
   assert.equal(store.taskConfiguration(first.id)?.profileRevision, 1);
   assert.equal(store.sessions().length, 1);
-  await page.getByRole('button', { name: /Studio review/ }).click();
+  await page.locator('.task-row').filter({ hasText: 'Studio review' }).click();
   await expect(page.locator('.configuration-record')).toContainText('v1');
   assert.deepEqual(errors, []);
   console.log(

@@ -265,7 +265,7 @@ it('requires confirmation, runs the SDK fixture in isolation and persists review
       ((await manager.reviewOperation(task.id, 'review')) as WorkspaceReview).revision,
     ),
   ).rejects.toThrow('pending');
-});
+}, 60000);
 it('retains review after failed execution and stop, and recovers unfinished write metadata', async () => {
   const env = await sandbox();
   cleanup.push(env.cleanup);

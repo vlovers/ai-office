@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile, rm, chmod } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, chmod, realpath, lstat, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -9,9 +9,10 @@ import { TaskManager } from '../src/server/manager.js';
 import { CodexAuth, type LocalInspection } from '../src/server/providers/codex-auth.js';
 import { AGENT_IDS } from '../src/shared/types.js';
 import { dirname } from 'node:path';
+import { nativeCodex } from '../src/server/providers/native-isolation.js';
 
 export async function sandbox(existingRepository?: string) {
-  const root = await mkdtemp(join(tmpdir(), 'ai-office-test-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-test-')));
   const repository = existingRepository ?? join(root, 'example');
   if (!existingRepository) {
     execFileSync('/bin/mkdir', [repository]);
@@ -28,7 +29,7 @@ export async function sandbox(existingRepository?: string) {
   const executable = join(root, 'fixture.mjs');
   await writeFile(
     executable,
-    `#!${process.execPath}\n${await readFile(new URL('./fixtures/codex-fixture.mjs', import.meta.url), 'utf8')}`,
+    `#!${process.execPath}\n${(await readFile(new URL('./fixtures/codex-fixture.mjs', import.meta.url), 'utf8')).replace('__NATIVE_CODEX_PATH__', JSON.stringify(nativeCodex))}`,
   );
   await chmod(executable, 0o700);
   const store = new Store(join(root, 'metadata.sqlite'));
@@ -70,9 +71,20 @@ export async function sandbox(existingRepository?: string) {
     async cleanup() {
       await manager.shutdown();
       store.close();
-      await rm(root, { recursive: true, force: true });
+      await removeTestTree(root);
     },
   };
+}
+export async function removeTestTree(root: string) {
+  const unlock = async (path: string): Promise<void> => {
+    const info = await lstat(path);
+    if (!info.isDirectory() || info.isSymbolicLink()) return;
+    await chmod(path, 0o700);
+    for (const entry of await readdir(path, { withFileTypes: true }))
+      if (entry.isDirectory() && !entry.isSymbolicLink()) await unlock(join(path, entry.name));
+  };
+  await unlock(root);
+  await rm(root, { recursive: true, force: true });
 }
 export async function until<T>(
   read: () => T,

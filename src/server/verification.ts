@@ -11,6 +11,7 @@ export async function runVerification(
   cwd: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  environment?: { HOME: string; CODEX_HOME: string },
 ): Promise<VerificationResult> {
   if (!['darwin', 'linux'].includes(process.platform))
     throw new AppError(409, 'Verification requires macOS or Linux process groups.');
@@ -85,7 +86,7 @@ export async function runVerification(
         },
       );
     });
-    child.send({ argv, cwd, timeoutMs }, (error) => {
+    child.send({ argv, cwd, timeoutMs, environment }, (error) => {
       if (error) {
         startupError = true;
         try {

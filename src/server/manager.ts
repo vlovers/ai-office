@@ -4,12 +4,38 @@ import { diffLines } from '../shared/diff.js';
 import type { ReviewComment, ReviewRecord } from '../shared/types.js';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, realpath, lstat } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { UncertainCleanupError } from './process-group.js';
 import { Workspaces } from './workspaces.js';
+import {
+  stageReviewerGitContext,
+  removeReviewerGitContext,
+  verifyReviewerGitContext,
+} from './reviewer-runtime.js';
+import {
+  createReviewerSourceCandidate,
+  verifyReviewerSourceCandidate,
+  type ReviewerSourceManifest,
+} from './reviewer-source.js';
+import {
+  materializeEvidenceBundle,
+  removeEvidenceBundle,
+  verifyEvidenceBundle,
+  type SnapshotManifest,
+} from './evidence-bundle.js';
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
+import { WorkflowStore } from './workflows.js';
+import type { WorkflowStage } from './workflows.js';
+import {
+  acquireWorkflowLease,
+  validateWorkflowSnapshot,
+  workflowSource,
+  resultDigest,
+} from './workflow-execution.js';
+import { qaPlan, runSandboxedQA } from './qa-runner.js';
+import { verifyNativeIsolation } from './providers/native-isolation.js';
 import { AppError } from './errors.js';
 import { acquireLocks, acquireLock, ResourceLockedError } from './lock.js';
 import { changedFiles, revalidateRepository, repositoryLeaseDirectories } from './repositories.js';
@@ -30,6 +56,7 @@ export interface FeedbackInput {
   comments: ReviewComment[];
 }
 interface Active {
+  qaAbort?: AbortController;
   taskId: string;
   agentId: AgentId;
   gitDir: string;
@@ -206,7 +233,12 @@ export class TaskManager {
     );
     this.events.emit('event', event);
   }
-  start(taskId: string, resumeSessionId?: string, confirmedWrite = false) {
+  start(
+    taskId: string,
+    resumeSessionId?: string,
+    confirmedWrite = false,
+    workflow?: { id: string; version: number; revision: string },
+  ) {
     if (this.closing) throw new AppError(503, 'Server is shutting down.');
     if (this.connectionBusy) throw new AppError(409, 'Wait for the connection check to finish.');
     if (!this.dashboard().ready) throw new AppError(503, this.dashboard().readinessMessage);
@@ -232,14 +264,302 @@ export class TaskManager {
     if (this.store.requireAgent(task.agentId).archived && !task.reviewRequest)
       throw new AppError(409, 'Restore the archived agent before submitting new work.');
     const previous = this.validateResume(task, resumeSessionId);
-    this.store.enqueue(taskId, this.auth.view().mode, previous?.id);
+    const workflows = new WorkflowStore(this.store.db);
+    const bound = workflows.list().find((w) => w.stages.some((s) => s.taskId === taskId));
+    if (bound && (!workflow || workflow.id !== bound.id))
+      throw new AppError(409, 'Workflow-bound tasks must use the approved workflow submission.');
+    if (workflow) {
+      if (resumeSessionId || !bound || workflow.id !== bound.id)
+        throw new AppError(409, 'Invalid workflow submission.');
+      // Reviewer/QA must never silently run against the repository HEAD.
+      // Their input is a reviewed worktree content fingerprint, not a commit.
+      // A dedicated leased, read-only snapshot runner is required first.
+      if (bound.stages[0]?.taskId !== taskId || bound.stages[0]?.kind !== 'coder')
+        throw new AppError(409, 'Reviewer/QA execution requires verified read-only handoff.');
+      workflows.enqueueApprovedTask(
+        this.store,
+        workflow.id,
+        workflow.version,
+        taskId,
+        this.auth.view().mode,
+        workflow.revision,
+      );
+    } else {
+      this.store.enqueue(taskId, this.auth.view().mode, previous?.id);
+    }
     this.emit(taskId, 'queue', 'Submitted to the assigned agent queue.');
     this.pump();
     return this.store.task(taskId)!;
   }
+
+  private tracked<T>(operation: Promise<T>): Promise<T> {
+    this.reviews.add(operation);
+    void operation.finally(() => this.reviews.delete(operation)).catch(() => {});
+    return operation;
+  }
+  private async settleCompletedRuns(repositoryId: string) {
+    const repository = this.store.repository(repositoryId);
+    if (!repository) return;
+    await Promise.all(
+      [...this.active.values()]
+        .filter(
+          (run) =>
+            run.gitDir === repository.gitDir &&
+            !run.quarantined &&
+            ['completed', 'failed', 'stopped', 'interrupted'].includes(
+              this.store.task(run.taskId)?.state ?? '',
+            ),
+        )
+        .map((run) => run.done),
+    );
+  }
+
+  submitWorkflowStage(id: string, version: number, kind: 'reviewer' | 'qa') {
+    return this.tracked(this.submitSnapshotStage(id, version, kind));
+  }
+  prepareWorkflowReviewer(id: string, version: number) {
+    return this.tracked(
+      (async () => {
+        if (this.closing) throw new AppError(503, 'Server is shutting down.');
+        let workflow = new WorkflowStore(this.store.db).get(id);
+        if (
+          !workflow ||
+          workflow.version !== version ||
+          workflow.state !== 'active' ||
+          workflow.stages[1]?.state !== 'ready'
+        )
+          throw new AppError(409, 'Reviewer approval is missing or stale.');
+        const revision = workflow.stages[1].approvedRevision!;
+        if (!workflow.stages[1].bundle)
+          workflow = (await this.captureWorkflowBundle(id, workflow.version, revision)).workflow;
+        if (!workflow.stages[1]!.sourceCandidate)
+          workflow = (await this.prepareReviewerSource(id, workflow.version)).workflow;
+        if (!workflow.stages[1]!.runtimeCandidate)
+          workflow = (await this.prepareReviewerRuntime(id, workflow.version)).workflow;
+        await this.verifyPreparedReviewerRuntime(id, workflow.version);
+        return workflow;
+      })(),
+    );
+  }
+  cleanupWorkflowArtifacts(id: string, version: number) {
+    return this.tracked(
+      (async () => {
+        if (this.closing || !this.workspaces)
+          throw new AppError(503, 'Workflow runner unavailable.');
+        const workflows = new WorkflowStore(this.store.db);
+        const workflow = workflows.get(id);
+        if (
+          !workflow ||
+          workflow.version !== version ||
+          !['completed', 'cancelled'].includes(workflow.state) ||
+          workflow.artifactCleanup
+        )
+          throw new AppError(409, 'Inspect the terminal workflow before artifact cleanup.');
+        const repository = this.store.repository(workflow.repositoryId);
+        if (!repository) throw new AppError(409, 'Workflow repository missing.');
+        const root = await this.workspaces.authorize(repository);
+        const reviewer = workflow.stages[1]!;
+        const entries = [
+          [reviewer.bundle?.directory, 'workflow-evidence'],
+          [reviewer.sourceCandidate?.directory, 'workflow-reviewer-source'],
+          [reviewer.runtimeCandidate?.directory, 'workflow-reviewer-runtime'],
+        ] as const;
+        for (const [directory, category] of entries) {
+          if (!directory) continue;
+          if (
+            directory !== join(root, category, basename(directory)) ||
+            !/^[a-f0-9-]{36}$/.test(basename(directory)) ||
+            (await realpath(directory)) !== directory
+          )
+            throw new AppError(409, 'Unsafe artifact location; inspect manually.');
+          const info = await lstat(directory);
+          if (!info.isDirectory() || info.isSymbolicLink())
+            throw new AppError(409, 'Artifact identity changed.');
+        }
+        const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+        await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+        const sourceTask = workflow.stages[0]?.taskId
+          ? this.store.task(workflow.stages[0].taskId)
+          : undefined;
+        const workspace = sourceTask?.workspaceId
+          ? this.store.workspace(sourceTask.workspaceId)
+          : undefined;
+        const directories = await repositoryLeaseDirectories(repository, workspace?.gitDir);
+        if (reviewer.runtimeCandidate)
+          directories.push(join(reviewer.runtimeCandidate.directory, '.git'));
+        const release = await acquireLocks(
+          directories.map((path) =>
+            join(lockRoot, createHash('sha256').update(path).digest('hex')),
+          ),
+          repository.path,
+        );
+        let intent;
+        try {
+          intent = workflows.recordCleanup(id, version, 'running');
+          for (const [directory, category] of entries) {
+            if (!directory) continue;
+            if (category === 'workflow-reviewer-runtime')
+              await removeReviewerGitContext(join(root, category), directory);
+            else await removeEvidenceBundle(join(root, category), directory);
+          }
+          return workflows.recordCleanup(id, intent.version, 'completed');
+        } catch (error) {
+          if (intent) workflows.recordCleanup(id, intent.version, 'failed');
+          throw error;
+        } finally {
+          await release();
+        }
+      })(),
+    );
+  }
+  private async submitSnapshotStage(id: string, version: number, kind: 'reviewer' | 'qa') {
+    if (this.closing || !this.workspaces || !this.dashboard().ready)
+      throw new AppError(503, 'Workflow runner is unavailable.');
+    const workflows = new WorkflowStore(this.store.db);
+    const workflow = workflows.get(id);
+    const stage = workflow?.stages.find((item) => item.kind === kind);
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      stage?.state !== 'ready' ||
+      stage.taskId
+    )
+      throw new AppError(409, 'Workflow stage is stale or not approved.');
+    if (this.store.queue().length >= 100)
+      throw new AppError(409, 'Queue limit is 100 submitted tasks.');
+    await this.settleCompletedRuns(workflow.repositoryId);
+    const profile = this.store.requireAgent(stage.agentId);
+    if (
+      profile.archived ||
+      profile.revision !== stage.agentRevision ||
+      profile.maximumMode !== 'read-only'
+    )
+      throw new AppError(409, 'Restore the pinned read-only profile before running this stage.');
+    const provider = this.providerFor(stage.agentId);
+    if (kind === 'reviewer' && (!provider || !provider.verifyIsolation))
+      throw new AppError(409, 'Reviewer provider cannot verify native isolation.');
+    const release = await acquireWorkflowLease(this.store, workflow);
+    try {
+      const snapshot = await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+      if (kind === 'reviewer') await provider!.verifyIsolation!();
+      else {
+        await verifyNativeIsolation();
+        await this.validateQAPlan(stage);
+      }
+      if (this.closing) throw new AppError(503, 'Server is shutting down.');
+      const { repository, workspace } = workflowSource(this.store, workflow);
+      const review = await this.workspaces.review(repository, workspace);
+      await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+      const next = workflows.submitReadOnly(
+        this.store,
+        id,
+        version,
+        kind,
+        {
+          revision: snapshot.revision,
+          sourceDigest: snapshot.sourceDigest,
+          runtimeIdentity: snapshot.runtimeIdentity,
+          submittedAt: new Date().toISOString(),
+        },
+        this.auth.view().mode,
+        JSON.stringify(review.files),
+      );
+      const taskId = next.stages.find((item) => item.kind === kind)!.taskId!;
+      this.emit(taskId, 'queue', `${kind} submitted against the approved read-only snapshot.`);
+      this.wake(0);
+      return { workflow: next, task: this.store.task(taskId) };
+    } finally {
+      await release();
+    }
+  }
+
+  private async validateQAPlan(stage: WorkflowStage) {
+    const plan = stage.qaPlan;
+    if (!plan || !this.workspaces) throw new AppError(409, 'QA command approval missing.');
+    const current = await qaPlan(
+      plan.commandId,
+      this.workspaces.options.commands?.[plan.commandId],
+      this.workspaces.options.verificationTimeoutMs ?? 60000,
+    );
+    if (current.digest !== plan.digest)
+      throw new AppError(409, 'QA command changed after approval.');
+    return plan;
+  }
+
+  approveWorkflowQA(id: string, version: number, revision: string, commandId: string) {
+    return this.tracked(
+      (async () => {
+        if (this.closing || !this.workspaces)
+          throw new AppError(503, 'Workflow runner unavailable.');
+        const workflows = new WorkflowStore(this.store.db);
+        const workflow = workflows.get(id);
+        if (!workflow || workflow.version !== version) throw new AppError(409, 'Stale workflow.');
+        await this.settleCompletedRuns(workflow.repositoryId);
+        const release = await acquireWorkflowLease(this.store, workflow);
+        try {
+          await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+          const plan = await qaPlan(
+            commandId,
+            this.workspaces.options.commands?.[commandId],
+            this.workspaces.options.verificationTimeoutMs ?? 60000,
+          );
+          return workflows.approveQA(id, version, revision, plan);
+        } finally {
+          await release();
+        }
+      })(),
+    );
+  }
+
+  approveWorkflowResult(id: string, version: number, kind: 'reviewer' | 'qa', digest: string) {
+    return this.tracked(
+      (async () => {
+        if (this.closing || !this.workspaces)
+          throw new AppError(503, 'Workflow runner unavailable.');
+        const workflows = new WorkflowStore(this.store.db);
+        const workflow = workflows.get(id);
+        if (!workflow || workflow.version !== version) throw new AppError(409, 'Stale workflow.');
+        await this.settleCompletedRuns(workflow.repositoryId);
+        const release = await acquireWorkflowLease(this.store, workflow);
+        try {
+          await validateWorkflowSnapshot(this.store, this.workspaces, workflow);
+          const stage = workflow.stages.find((item) => item.kind === kind);
+          const task = stage?.taskId ? this.store.task(stage.taskId) : undefined;
+          if (
+            !stage?.report ||
+            task?.state !== 'completed' ||
+            resultDigest(stage, task.result) !== digest ||
+            stage.report.digest !== digest
+          )
+            throw new AppError(409, 'Downstream result changed or is not complete.');
+          if (kind === 'qa') await this.validateQAPlan(stage);
+          return workflows.approveReadOnlyResult(id, version, kind, digest);
+        } finally {
+          await release();
+        }
+      })(),
+    );
+  }
   private validateResume(task: NonNullable<ReturnType<Store['task']>>, resumeSessionId?: string) {
     const provider = this.providerFor(task.agentId)!;
     const previous = resumeSessionId ? this.store.session(resumeSessionId) : undefined;
+    if (
+      previous &&
+      new WorkflowStore(this.store.db)
+        .list()
+        .some((workflow) =>
+          workflow.stages
+            .slice(1)
+            .some(
+              (stage) => stage.taskId && this.store.task(stage.taskId)?.sessionId === previous.id,
+            ),
+        )
+    )
+      throw new AppError(
+        409,
+        'Workflow snapshot sessions cannot be resumed. Create a new explicitly approved workflow.',
+      );
     if (
       resumeSessionId &&
       (!previous?.threadId ||
@@ -287,6 +607,12 @@ export class TaskManager {
     let workspaceRelease: (() => Promise<void>) | undefined;
     let cleanupConfirmed = true;
     const provider = this.providers.get(active.agentId)!;
+    const workflows = new WorkflowStore(this.store.db);
+    const workflow = workflows
+      .list()
+      .find((item) => item.stages.some((stage) => stage.taskId === active.taskId));
+    const workflowStage = workflow?.stages.find((stage) => stage.taskId === active.taskId);
+    const downstream = workflowStage && workflowStage.kind !== 'coder';
     try {
       await revalidateRepository(repository);
       if (active.stopRequested || this.closing) {
@@ -296,7 +622,12 @@ export class TaskManager {
       // A fixed OS-local root ensures TMPDIR differences cannot bypass another process's lease.
       const locks = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
       await mkdir(locks, { recursive: true, mode: 0o700 });
-      const directories = await repositoryLeaseDirectories(repository);
+      const directories = await repositoryLeaseDirectories(
+        repository,
+        downstream ? workflowSource(this.store, workflow!).workspace.gitDir : undefined,
+      );
+      if (downstream)
+        directories.push(join(workflow!.stages[1]!.runtimeCandidate!.directory, '.git'));
       const lockPaths = directories.map((directory) =>
         join(locks, createHash('sha256').update(directory).digest('hex')),
       );
@@ -306,6 +637,36 @@ export class TaskManager {
         return;
       }
       this.validateResume(this.store.task(active.taskId)!, entry.resumeSessionId ?? undefined);
+      if (workflow && workflowStage) {
+        const current = workflows.get(workflow.id);
+        const stage = current?.stages.find((item) => item.taskId === active.taskId);
+        const profile = this.store.requireAgent(workflowStage.agentId);
+        if (
+          current?.state !== 'active' ||
+          stage?.state !== 'running' ||
+          profile.archived ||
+          profile.revision !== workflowStage.agentRevision
+        )
+          throw new AppError(409, 'Workflow or pinned agent changed before dispatch.');
+        if (downstream) {
+          if (
+            profile.maximumMode !== 'read-only' ||
+            entry.resumeSessionId ||
+            !this.workspaces ||
+            !stage.execution
+          )
+            throw new AppError(409, 'Downstream dispatch requires a pinned read-only snapshot.');
+          const snapshot = await validateWorkflowSnapshot(this.store, this.workspaces, current);
+          workingPath = snapshot.directory;
+        } else {
+          const { git } = await import('./repositories.js');
+          if (
+            (await git(repository.path, ['rev-parse', 'HEAD'])).trim() !== stage.approvedRevision ||
+            (await git(repository.path, ['status', '--porcelain', '--untracked-files=all'])).trim()
+          )
+            throw new AppError(409, 'Approved Coder baseline changed before dispatch.');
+        }
+      }
       const queuedConfiguration = assertConfiguration(
         this.store.taskConfiguration(active.taskId),
         this.store.task(active.taskId)!,
@@ -318,6 +679,23 @@ export class TaskManager {
       this.store.claimQueued(active.taskId);
       this.waiting.delete(active.taskId);
       const task = this.store.task(active.taskId)!;
+      if (workflowStage?.kind === 'qa') {
+        const plan = await this.validateQAPlan(workflowStage);
+        active.qaAbort = new AbortController();
+        if (active.stopRequested || this.closing) active.qaAbort.abort();
+        active.preparing = false;
+        this.emit(
+          task.id,
+          'state',
+          `Running approved QA command ${plan.commandId} in native read-only sandbox.`,
+        );
+        const verification = await runSandboxedQA(workingPath, plan, active.qaAbort.signal);
+        result = `QA ${plan.commandId}: ${verification.passed ? 'passed' : 'failed'}\n${this.clean(verification.output).slice(-128100)}`;
+        failure = verification.passed ? null : 'QA command did not pass in the read-only sandbox.';
+        state = active.stopRequested ? 'stopped' : verification.passed ? 'completed' : 'failed';
+        this.emit(task.id, 'result', result);
+        return;
+      }
       if (task.executionMode === 'write') {
         if (!this.workspaces) throw new AppError(409, 'Isolated writes are not configured.');
         const previousSession = entry.resumeSessionId
@@ -432,6 +810,7 @@ export class TaskManager {
         );
       }
       active.session.executionMode = currentTask.executionMode ?? 'read-only';
+      if (downstream) active.session.verifiedReadOnly = true;
       await provider.executeTask(
         active.session,
         configuredPrompt(effective, this.store.task(active.taskId)!.prompt),
@@ -477,7 +856,12 @@ export class TaskManager {
       }
       state = failure ? 'failed' : active.stopRequested ? 'stopped' : 'completed';
     } catch (error) {
-      if (
+      if (error instanceof UncertainCleanupError) {
+        cleanupConfirmed = false;
+        active.quarantined = true;
+        state = 'interrupted';
+        failure = error.message;
+      } else if (
         error instanceof ResourceLockedError &&
         !active.stopRequested &&
         this.store.task(active.taskId)?.state === 'queued'
@@ -505,7 +889,7 @@ export class TaskManager {
         }
       }
       try {
-        if (release) {
+        if (release && !downstream) {
           await revalidateRepository(repository);
           const files = await changedFiles(workingPath);
           this.store.updateTask(active.taskId, { changedFiles: files });
@@ -522,21 +906,67 @@ export class TaskManager {
         const workspace = this.store.workspace(this.store.task(active.taskId)!.workspaceId!);
         if (workspace) this.store.saveWorkspace({ ...workspace, reviewEpoch: active.taskId });
       }
+      if (downstream && !requeue && cleanupConfirmed && state === 'completed') {
+        try {
+          if (!this.workspaces || !result.trim())
+            throw new AppError(409, 'Downstream returned no authenticated result.');
+          await validateWorkflowSnapshot(this.store, this.workspaces, workflows.get(workflow!.id)!);
+        } catch {
+          state = 'failed';
+          failure = 'Snapshot integrity changed during execution. Result was not approved.';
+        }
+      }
+      const persistTerminal = () => {
+        try {
+          if (!requeue && !active.preserveQueue) {
+            if (active.stopRequested && state === 'completed') state = 'stopped';
+            this.store.removeQueued(active.taskId);
+            this.waiting.delete(active.taskId);
+            if (downstream && state === 'completed') {
+              workflows.recordReadOnlyResult(this.store, workflow!.id, active.taskId, result, {
+                taskId: active.taskId,
+                revision: workflowStage!.execution!.revision,
+                sourceDigest: workflowStage!.execution!.sourceDigest,
+                digest: resultDigest(workflowStage!, result),
+                completedAt: new Date().toISOString(),
+              });
+            } else this.store.updateTask(active.taskId, { state, result, error: failure });
+            // Completion never authorizes the next stage by itself.
+            workflows.reconcileTerminals();
+          }
+        } catch {
+          cleanupConfirmed = false;
+          active.quarantined = true;
+          state = 'interrupted';
+          failure = workflow
+            ? 'Could not persist the terminal checkpoint. Workspace leases retained for manual inspection.'
+            : 'Could not persist terminal task state. Agent quarantined for manual inspection.';
+          try {
+            this.store.updateTask(active.taskId, { state, result, error: failure });
+            workflows.reconcileTerminals();
+          } catch {
+            /* Storage may be unavailable. Recovery must interrupt the saved intent. */
+          }
+        }
+      };
+      // Workflow provenance commits under its lease. Ordinary tasks retain
+      // their existing contract: terminal state means the agent is released.
+      if (workflow) persistTerminal();
       try {
         if (cleanupConfirmed) {
           await workspaceRelease?.();
           await release?.();
         }
       } catch {
-        state = 'failed';
-        failure ??=
+        state = 'interrupted';
+        failure =
           'Could not release the repository lease. Inspect its lock directory before retrying.';
+        cleanupConfirmed = false;
+        active.quarantined = true;
+        this.store.updateTask(active.taskId, { state, error: failure });
+        workflows.reconcileTerminals();
       }
-      if (!requeue && !active.preserveQueue) {
-        this.store.removeQueued(active.taskId);
-        this.waiting.delete(active.taskId);
-        this.store.updateTask(active.taskId, { state, result, error: failure });
-      }
+      if (!workflow) persistTerminal();
       if (cleanupConfirmed) this.active.delete(active.agentId);
       if (!requeue && !active.preserveQueue)
         this.emit(active.taskId, 'state', failure ?? `Task ${state}.`);
@@ -600,6 +1030,623 @@ export class TaskManager {
     });
     return this.store.saveComments(record, this.clean(comments));
   }
+  /**
+   * This creates an evidence bundle, NOT a runnable immutable worktree.
+   * The lease covers the entire review + capture + provenance transaction.
+   */
+  async captureWorkflowBundle(workflowId: string, version: number, revision: string) {
+    if (this.closing || !this.workspaces)
+      throw new AppError(503, 'Snapshot capture is unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      !coder.taskId ||
+      coder.evidence?.revision !== revision ||
+      reviewer?.state !== 'ready' ||
+      reviewer.approvedRevision !== revision ||
+      reviewer.bundle
+    )
+      throw new AppError(409, 'Reviewer handoff is not approved or is stale.');
+    const task = this.store.task(coder.taskId);
+    const repository = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !task ||
+      task.state !== 'completed' ||
+      !repository ||
+      !workspace ||
+      workspace.id !== coder.evidence.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Coder task and workspace binding changed.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockPaths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(lockPaths, repository.path);
+    } catch {
+      throw new AppError(409, 'Repository is busy or has an unresolved lease.');
+    }
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const review = await this.workspaces.review(repository, workspace);
+      if (review.revision !== revision || review.files.length !== coder.evidence.fileCount)
+        throw new AppError(409, 'Coder evidence changed before bundle capture.');
+      if ([...this.active.values()].some((run) => run.gitDir === repository.gitDir))
+        throw new AppError(409, 'Active agent is using the repository.');
+      const authorizedRoot = await this.workspaces.authorize(repository);
+      const destinationRoot = join(authorizedRoot, 'workflow-evidence');
+      await mkdir(destinationRoot, { recursive: true, mode: 0o700 });
+      const bundle = await materializeEvidenceBundle({
+        workspacePath: workspace.path,
+        destinationRoot,
+        files: review.files,
+        evidenceRevision: revision,
+        verifyRevision: () => this.workspaces!.revision(repository, workspace),
+      });
+      try {
+        const saved = new WorkflowStore(this.store.db).recordReviewerBundle(
+          workflowId,
+          version,
+          revision,
+          {
+            directory: bundle.path,
+            digest: bundle.manifest.digest,
+            id: bundle.manifest.id,
+            fileCount: bundle.manifest.entries.length,
+          },
+        );
+        return { workflow: saved, manifest: bundle.manifest, runnable: false };
+      } catch (error) {
+        await removeEvidenceBundle(destinationRoot, bundle.path);
+        throw error;
+      }
+    } finally {
+      await release();
+    }
+  }
+
+  /**
+   * Revalidates a recorded bundle without permitting downstream execution.
+   * Untrusted bundles never become permission grants.
+   */
+  /**
+   * Creates a full source candidate only after the evidence checkpoint.
+   * Neither the checkpoint nor a source candidate grants execution authority.
+   */
+  async prepareReviewerSource(workflowId: string, version: number) {
+    if (this.closing || !this.workspaces)
+      throw new AppError(503, 'Reviewer source preparation is unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !reviewer.bundle ||
+      reviewer.sourceCandidate ||
+      reviewer.approvedRevision !== reviewer.bundle.revision ||
+      coder.evidence?.revision !== reviewer.bundle.revision
+    )
+      throw new AppError(409, 'Approved Reviewer source checkpoint is unavailable.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const repository = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !task ||
+      task.state !== 'completed' ||
+      !repository ||
+      !workspace ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Coder workspace no longer matches the approved evidence.');
+    const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    const paths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(root, createHash('sha256').update(directory).digest('hex')),
+    );
+    const release = await acquireLocks(paths, repository.path);
+    try {
+      await this.workspaces.validate(repository, workspace);
+      if ([...this.active.values()].some((run) => run.gitDir === repository.gitDir))
+        throw new AppError(409, 'Agent still active in repository.');
+      const revision = await this.workspaces.revision(repository, workspace);
+      if (revision !== reviewer.bundle.revision)
+        throw new AppError(409, 'Coder revision changed after evidence approval.');
+      const evidenceRoot = join(await this.workspaces.authorize(repository), 'workflow-evidence');
+      if (reviewer.bundle.directory !== join(evidenceRoot, reviewer.bundle.id))
+        throw new AppError(409, 'Evidence provenance path changed.');
+      let validEvidence = false;
+      try {
+        const raw = await readFile(join(reviewer.bundle.directory, 'manifest.json'), 'utf8');
+        const manifest = JSON.parse(raw) as SnapshotManifest;
+        validEvidence =
+          manifest.id === reviewer.bundle.id &&
+          manifest.digest === reviewer.bundle.digest &&
+          manifest.evidenceRevision === revision &&
+          Array.isArray(manifest.entries) &&
+          manifest.entries.length === reviewer.bundle.fileCount &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, manifest));
+      } catch {
+        // Fail closed on corrupted, missing or inaccessible evidence.
+      }
+      if (!validEvidence) throw new AppError(409, 'Evidence bundle failed integrity validation.');
+      const snapshotRoot = join(
+        await this.workspaces.authorize(repository),
+        'workflow-reviewer-source',
+      );
+      await mkdir(snapshotRoot, { recursive: true, mode: 0o700 });
+      const candidate = await createReviewerSourceCandidate({
+        workspace: workspace.path,
+        destinationRoot: snapshotRoot,
+        revision,
+        verifyRevision: () => this.workspaces!.revision(repository, workspace),
+      });
+      try {
+        if (!(await verifyReviewerSourceCandidate(candidate.directory, candidate.manifest)))
+          throw new AppError(409, 'Reviewer source candidate failed verification.');
+        const saved = new WorkflowStore(this.store.db).recordReviewerSource(
+          workflowId,
+          version,
+          revision,
+          {
+            directory: candidate.directory,
+            digest: candidate.manifest.digest,
+            fileCount: candidate.manifest.files.length,
+          },
+        );
+        return {
+          workflow: saved,
+          sourceManifest: candidate.manifest,
+          verified: true,
+          runnable: false,
+        };
+      } catch (error) {
+        await removeEvidenceBundle(snapshotRoot, candidate.directory);
+        throw error;
+      }
+    } finally {
+      await release();
+    }
+  }
+
+  /**
+   * Recheck durable full-source provenance. Never returns execution approval.
+   * This is deliberately a separate check from evidence-bundle integrity.
+   */
+  /** Stages a separate Git repository; does not start Codex or grant execution. */
+  /** Verify an already persisted runtime before any future Reviewer dispatch. */
+  async verifyPreparedReviewerRuntime(workflowId: string, version: number) {
+    if (this.closing || !this.workspaces)
+      throw new AppError(503, 'Reviewer runtime verification unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const source = reviewer?.sourceCandidate;
+    const runtime = reviewer?.runtimeCandidate;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !source ||
+      !runtime ||
+      !reviewer.bundle ||
+      runtime.revision !== reviewer.approvedRevision ||
+      runtime.sourceDigest !== source.digest
+    )
+      throw new AppError(409, 'Reviewer runtime checkpoint is missing or stale.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const repository = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !repository ||
+      !task ||
+      task.state !== 'completed' ||
+      !workspace ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Coder workspace binding changed.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const paths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(paths, repository.path);
+    } catch {
+      throw new AppError(409, 'Repository lease unavailable.');
+    }
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const revision = await this.workspaces.revision(repository, workspace);
+      const authorized = await this.workspaces.authorize(repository);
+      const sourceId = basename(source.directory);
+      const runtimeId = basename(runtime.directory);
+      if (
+        revision !== runtime.revision ||
+        revision !== source.revision ||
+        reviewer.bundle.revision !== revision ||
+        source.directory !== join(authorized, 'workflow-reviewer-source', sourceId) ||
+        runtime.directory !== join(authorized, 'workflow-reviewer-runtime', runtimeId) ||
+        reviewer.bundle.directory !== join(authorized, 'workflow-evidence', reviewer.bundle.id)
+      )
+        throw new AppError(409, 'Reviewer runtime location or revision changed.');
+      let valid = false;
+      try {
+        const manifest = JSON.parse(
+          await readFile(join(source.directory, 'source-manifest.json'), 'utf8'),
+        ) as ReviewerSourceManifest;
+        const evidence = JSON.parse(
+          await readFile(join(reviewer.bundle.directory, 'manifest.json'), 'utf8'),
+        ) as SnapshotManifest;
+        valid =
+          manifest.revision === revision &&
+          manifest.digest === source.digest &&
+          Array.isArray(manifest.files) &&
+          manifest.files.length === source.fileCount &&
+          evidence.id === reviewer.bundle.id &&
+          evidence.digest === reviewer.bundle.digest &&
+          evidence.evidenceRevision === revision &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, evidence)) &&
+          (await verifyReviewerSourceCandidate(source.directory, manifest)) &&
+          (await verifyReviewerGitContext({
+            destinationRoot: join(authorized, 'workflow-reviewer-runtime'),
+            directory: runtime.directory,
+            commit: runtime.commit,
+            manifest,
+          }));
+      } catch {
+        // Fail closed when any durable source or Git metadata is corrupted.
+      }
+      if (!valid) throw new AppError(409, 'Reviewer runtime integrity validation failed.');
+      if (new WorkflowStore(this.store.db).get(workflowId)?.version !== version)
+        throw new AppError(409, 'Workflow changed during runtime verification.');
+      return { workflowId, version, commit: runtime.commit, verified: true, runnable: false };
+    } finally {
+      await release();
+    }
+  }
+
+  async prepareReviewerRuntime(workflowId: string, version: number) {
+    if (this.closing || !this.workspaces) throw new AppError(503, 'Reviewer staging unavailable.');
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const source = reviewer?.sourceCandidate;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !source ||
+      !reviewer.bundle ||
+      reviewer.runtimeCandidate ||
+      reviewer.approvedRevision !== source.revision ||
+      reviewer.bundle.revision !== source.revision
+    )
+      throw new AppError(409, 'Reviewer staging checkpoint is stale.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const repo = this.store.repository(workflow.repositoryId);
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !task ||
+      task.state !== 'completed' ||
+      !repo ||
+      !workspace ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repo.id
+    )
+      throw new AppError(409, 'Coder source workspace changed.');
+    const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    const paths = (await repositoryLeaseDirectories(repo, workspace.gitDir)).map((directory) =>
+      join(root, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(paths, repo.path);
+    } catch {
+      throw new AppError(409, 'Repository is busy or has an unresolved lease.');
+    }
+    try {
+      await this.workspaces.validate(repo, workspace);
+      if ([...this.active.values()].some((run) => run.gitDir === repo.gitDir))
+        throw new AppError(409, 'Agent is currently using the repository.');
+      const revision = await this.workspaces.revision(repo, workspace);
+      const authorized = await this.workspaces.authorize(repo);
+      const sourceId = basename(source.directory);
+      if (
+        revision !== source.revision ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(sourceId) ||
+        source.directory !== join(authorized, 'workflow-reviewer-source', sourceId) ||
+        reviewer.bundle.directory !== join(authorized, 'workflow-evidence', reviewer.bundle.id)
+      )
+        throw new AppError(409, 'Reviewer snapshot identity changed.');
+      let manifest: ReviewerSourceManifest | undefined;
+      let evidenceValid = false;
+      try {
+        manifest = JSON.parse(
+          await readFile(join(source.directory, 'source-manifest.json'), 'utf8'),
+        ) as ReviewerSourceManifest;
+        const evidence = JSON.parse(
+          await readFile(join(reviewer.bundle.directory, 'manifest.json'), 'utf8'),
+        ) as SnapshotManifest;
+        evidenceValid =
+          evidence.id === reviewer.bundle.id &&
+          evidence.digest === reviewer.bundle.digest &&
+          evidence.evidenceRevision === revision &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, evidence));
+      } catch {
+        // Malformed, missing and inaccessible evidence must fail closed.
+      }
+      if (
+        !evidenceValid ||
+        !manifest ||
+        manifest.revision !== revision ||
+        manifest.digest !== source.digest ||
+        !Array.isArray(manifest.files) ||
+        manifest.files.length !== source.fileCount ||
+        !(await verifyReviewerSourceCandidate(source.directory, manifest))
+      )
+        throw new AppError(409, 'Reviewer source integrity check failed.');
+      const destinationRoot = join(authorized, 'workflow-reviewer-runtime');
+      await mkdir(destinationRoot, { recursive: true, mode: 0o700 });
+      const staged = await stageReviewerGitContext({
+        sourceDirectory: source.directory,
+        manifest,
+        destinationRoot,
+        verifyRevision: () => this.workspaces!.revision(repo, workspace),
+      });
+      try {
+        const saved = new WorkflowStore(this.store.db).recordReviewerRuntime(
+          workflowId,
+          version,
+          revision,
+          {
+            directory: staged.directory,
+            commit: staged.commit,
+            sourceDigest: staged.sourceDigest,
+          },
+        );
+        return { workflow: saved, runtimeCommit: staged.commit, staged: true, runnable: false };
+      } catch (error) {
+        await removeReviewerGitContext(destinationRoot, staged.directory);
+        throw error;
+      }
+    } finally {
+      await release();
+    }
+  }
+
+  async verifyPreparedReviewerSource(workflowId: string, version: number) {
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const source = reviewer?.sourceCandidate;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !reviewer.bundle ||
+      !source ||
+      source.revision !== reviewer.approvedRevision ||
+      source.revision !== coder.evidence?.revision ||
+      source.revision !== reviewer.bundle.revision
+    )
+      throw new AppError(409, 'Reviewer source checkpoint is stale or missing.');
+    const repository = this.store.repository(workflow.repositoryId);
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (
+      !this.workspaces ||
+      !repository ||
+      !workspace ||
+      !task ||
+      task.state !== 'completed' ||
+      workspace.id !== coder.evidence?.workspaceId ||
+      task.repositoryId !== repository.id
+    )
+      throw new AppError(409, 'Source worktree binding is invalid.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockPaths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    let release: () => Promise<void>;
+    try {
+      release = await acquireLocks(lockPaths, repository.path);
+    } catch {
+      throw new AppError(409, 'Repository is busy or has an unresolved lease.');
+    }
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const revision = await this.workspaces.revision(repository, workspace);
+      const authorizedRoot = await this.workspaces.authorize(repository);
+      const sourceRoot = join(authorizedRoot, 'workflow-reviewer-source');
+      const evidenceRoot = join(authorizedRoot, 'workflow-evidence');
+      const sourceId = basename(source.directory);
+      if (
+        revision !== source.revision ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(sourceId) ||
+        source.directory !== join(sourceRoot, sourceId) ||
+        reviewer.bundle.directory !== join(evidenceRoot, reviewer.bundle.id)
+      )
+        throw new AppError(409, 'Reviewer source location or revision changed.');
+      let verified = false;
+      try {
+        const evidenceJson = await readFile(
+          join(reviewer.bundle.directory, 'manifest.json'),
+          'utf8',
+        );
+        const evidenceManifest = JSON.parse(evidenceJson) as SnapshotManifest;
+        const sourceJson = await readFile(join(source.directory, 'source-manifest.json'), 'utf8');
+        const sourceManifest = JSON.parse(sourceJson) as ReviewerSourceManifest;
+        verified =
+          evidenceManifest.id === reviewer.bundle.id &&
+          evidenceManifest.digest === reviewer.bundle.digest &&
+          evidenceManifest.evidenceRevision === source.revision &&
+          Array.isArray(evidenceManifest.entries) &&
+          evidenceManifest.entries.length === reviewer.bundle.fileCount &&
+          (await verifyEvidenceBundle(reviewer.bundle.directory, evidenceManifest)) &&
+          sourceManifest.revision === source.revision &&
+          sourceManifest.digest === source.digest &&
+          Array.isArray(sourceManifest.files) &&
+          sourceManifest.files.length === source.fileCount &&
+          (await verifyReviewerSourceCandidate(source.directory, sourceManifest));
+      } catch {
+        // Reject missing, malformed or inaccessible manifests without execution.
+      }
+      if (!verified) throw new AppError(409, 'Reviewer source verification failed.');
+      if (new WorkflowStore(this.store.db).get(workflowId)?.version !== version)
+        throw new AppError(409, 'Reviewer workflow changed during verification.');
+      return {
+        workflowId,
+        version,
+        sourceDigest: source.digest,
+        evidenceDigest: reviewer.bundle.digest,
+        verified: true,
+        runnable: false,
+      };
+    } finally {
+      await release();
+    }
+  }
+
+  async inspectWorkflowBundle(workflowId: string, version: number) {
+    const workflow = new WorkflowStore(this.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    const bundle = reviewer?.bundle;
+    if (
+      !workflow ||
+      workflow.version !== version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      reviewer?.state !== 'ready' ||
+      !bundle ||
+      bundle.revision !== coder.evidence?.revision ||
+      bundle.revision !== reviewer.approvedRevision
+    )
+      throw new AppError(409, 'Reviewer evidence checkpoint is stale or unavailable.');
+    const repository = this.store.repository(workflow.repositoryId);
+    if (!repository || !this.workspaces)
+      throw new AppError(409, 'Repository verification is unavailable.');
+    const task = coder.taskId ? this.store.task(coder.taskId) : undefined;
+    const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
+    if (!workspace || workspace.id !== coder.evidence?.workspaceId)
+      throw new AppError(409, 'Coder worktree identity changed.');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const locks = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
+      (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    );
+    const release = await acquireLocks(locks, repository.path);
+    try {
+      await this.workspaces.validate(repository, workspace);
+      const currentRevision = await this.workspaces.revision(repository, workspace);
+      const destinationRoot = join(
+        await this.workspaces.authorize(repository),
+        'workflow-evidence',
+      );
+      if (
+        currentRevision !== bundle.revision ||
+        bundle.directory !== join(destinationRoot, bundle.id)
+      )
+        throw new AppError(409, 'Coder revision or evidence location changed.');
+      let valid = false;
+      try {
+        const content = await readFile(join(bundle.directory, 'manifest.json'), 'utf8');
+        const manifest = JSON.parse(content) as SnapshotManifest;
+        valid =
+          manifest.id === bundle.id &&
+          manifest.digest === bundle.digest &&
+          manifest.evidenceRevision === bundle.revision &&
+          Array.isArray(manifest.entries) &&
+          manifest.entries.length === bundle.fileCount &&
+          (await verifyEvidenceBundle(bundle.directory, manifest));
+      } catch {
+        // Missing, malformed and inaccessible bundle evidence must fail closed.
+      }
+      if (!valid) throw new AppError(409, 'Evidence bundle integrity verification failed.');
+      if (new WorkflowStore(this.store.db).get(workflowId)?.version !== version)
+        throw new AppError(409, 'Workflow changed during bundle verification.');
+      return {
+        workflowId,
+        version,
+        digest: bundle.digest,
+        verified: true,
+        runnable: false,
+      };
+    } finally {
+      await release();
+    }
+  }
+
+  /**
+   * Read-only recovery inventory. Never deletes unknown bundles or replays work.
+   * A per-workflow verification failure is recorded, not treated as approval.
+   */
+  async auditWorkflowBundles() {
+    const workflows = new WorkflowStore(this.store.db).list();
+    const results: {
+      workflowId: string;
+      version: number;
+      bundleId: string;
+      status: 'verified' | 'invalid' | 'retained' | 'cleaned' | 'cleanup-incomplete';
+    }[] = [];
+    for (const workflow of workflows) {
+      const bundle = workflow.stages[1]?.bundle;
+      if (!bundle) continue;
+      let status: (typeof results)[number]['status'] = 'invalid';
+      if (workflow.artifactCleanup)
+        status = workflow.artifactCleanup.state === 'completed' ? 'cleaned' : 'cleanup-incomplete';
+      else if (workflow.state !== 'active' || workflow.stages[1]?.state !== 'ready')
+        status = 'retained';
+      else
+        try {
+          const result = await this.inspectWorkflowBundle(workflow.id, workflow.version);
+          if (result.verified) status = 'verified';
+        } catch {
+          // Fail closed on unavailable workspace, stale revision or corrupt bytes.
+        }
+      results.push({
+        workflowId: workflow.id,
+        version: workflow.version,
+        bundleId: bundle.id,
+        status,
+      });
+    }
+    return {
+      scanned: results.length,
+      valid: results.filter((item) => item.status === 'verified').length,
+      invalid: results.filter((item) => item.status === 'invalid').length,
+      retained: results.filter((item) => item.status === 'retained').length,
+      cleaned: results.filter((item) => item.status === 'cleaned').length,
+      cleanupIncomplete: results.filter((item) => item.status === 'cleanup-incomplete').length,
+      results,
+      executionAuthorized: false,
+    };
+  }
+
   reviewOperation(
     taskId: string,
     action: 'review' | 'keep' | 'reject' | 'verify' | 'feedback' | 'request-changes',
@@ -625,6 +1672,23 @@ export class TaskManager {
     const repository = task && this.store.repository(task.repositoryId);
     if (!task || !workspace || !repository || !this.workspaces)
       throw new AppError(404, 'Isolated workspace not found.');
+    // Terminal state is durably committed while the lease is still held.
+    // Wait for its final release instead of racing a just-completed task.
+    await this.settleCompletedRuns(repository.id);
+    if (
+      ['keep', 'reject', 'verify', 'request-changes'].includes(action) &&
+      new WorkflowStore(this.store.db)
+        .list()
+        .some(
+          (workflow) =>
+            workflow.stages[0]?.taskId === taskId &&
+            !['completed', 'cancelled'].includes(workflow.state),
+        )
+    )
+      throw new AppError(
+        409,
+        'Resolve or cancel the workflow before modifying or verifying its Coder workspace. Use the sandboxed workflow QA gate.',
+      );
     const workspaceId = workspace.id;
     if (action === 'request-changes') {
       const submitted = this.store.reviewRecord(workspaceId, revision ?? '');
@@ -853,16 +1917,26 @@ export class TaskManager {
         throw error;
       }
       this.waiting.delete(taskId);
+      new WorkflowStore(this.store.db).reconcileTerminals();
       this.emit(taskId, 'state', 'Task stopped before execution.');
       this.wake();
       return;
     }
     if (active.quarantined) throw new UncertainCleanupError();
+    if (
+      ['completed', 'failed', 'stopped', 'interrupted'].includes(
+        this.store.task(taskId)?.state ?? '',
+      )
+    ) {
+      await active.done;
+      return;
+    }
     const provider = this.providers.get(active.agentId)!;
     if (!provider.capabilities.cancellation)
       throw new AppError(409, 'This provider does not support cancellation.');
     if (!active.stopRequested) {
       active.stopRequested = true;
+      active.qaAbort?.abort();
       this.store.removeQueued(taskId);
       this.store.updateTask(taskId, { state: 'stopping' });
       this.emit(taskId, 'state', 'Stopping agent and cleaning up its process group.');

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — v0.7 workflow implementation (Draft PR #22)
+
+- Real Codex SDK Reviewer on a verified isolated source snapshot; changed-file context and persistent revision-bound reports.
+- Native sandbox capability probes and read-only QA commands with explicit stage/result approvals, process cleanup, crash recovery and artifact lifecycle.
+- Review Center workflow controls, mobile-safe output, security/migration/integration tests and native browser E2E.
+- Explicit server-side selection of the supported Codex executable; no permission or billing fallback.
+
 ## [0.6.0] — Release candidate (unreleased)
 
 - Agent Studio supports persistent, user-managed Codex profiles with create, edit, duplicate, archive, restore and accessible dashboard controls.

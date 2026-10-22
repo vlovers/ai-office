@@ -10,6 +10,8 @@ The v0.6.0 Agent Studio implementation is integrated into main, with [validation
 
 **Unreleased v0.6 implementation:** [Agent Studio workflow and migration](docs/V0_6_AGENT_STUDIO.md) · [audit/validation and PR stack](docs/V0_6_VALIDATION.md) · [roadmap](ROADMAP.md). Create/edit/duplicate/archive persisted profiles; submitted tasks and corrections keep their original configuration. Saved profiles share two workers. This branch has not been released.
 
+**Draft v0.7 implementation (PR #22):** [Coder → Reviewer → QA workflow](docs/V0_7_WORKFLOW_ENGINE.md) with native sandbox checks, explicit stage/result gates, persistent reports and Review Center controls. Not released. QA remains read-only and never uses host verification.
+
 ## Quick start
 
 ```sh

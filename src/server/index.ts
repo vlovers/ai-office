@@ -18,7 +18,11 @@ const release = await acquireLock(join(data, 'server.lock'), 'AI Office metadata
 let store: Store | undefined;
 try {
   store = new Store(join(data, 'office.sqlite'));
-  const auth = new CodexAuth({ dataDir: data, apiKey: process.env.CODEX_API_KEY });
+  const auth = new CodexAuth({
+    dataDir: data,
+    apiKey: process.env.CODEX_API_KEY,
+    localExecutable: process.env.AI_OFFICE_CODEX_EXECUTABLE,
+  });
   await auth.refresh();
   const providers = AGENT_IDS.map(
     (id) => new CodexProvider({ home: join(data, 'workers', id), auth }),

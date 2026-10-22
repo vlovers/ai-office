@@ -1,8 +1,21 @@
 // Test double for the CLI transport, consumed through the REAL installed Codex SDK.
 // Never invokes a model, accesses auth, or executes model-generated commands.
-import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { writeFileSync, unlinkSync, existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 const args = process.argv.slice(2);
+if (args.includes('sandbox')) {
+  // Only the inference transport is a fixture. Native policy probes use the installed binary.
+  const result = spawnSync(process.execPath, [__NATIVE_CODEX_PATH__, ...args], {
+    env: process.env,
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    timeout: 15000,
+  });
+  process.stdout.write(result.stdout ?? '');
+  process.stderr.write(result.stderr ?? '');
+  process.exit(result.status ?? 1);
+}
 const config = args.filter((_, index) => args[index - 1] === '--config');
 const filesystem = config.find((arg) => arg.startsWith('permissions.ai-office-review.filesystem='));
 if (
@@ -33,6 +46,20 @@ if (
   throw new Error('Host environment leaked');
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
+let reviewerResult;
+if (input.includes('Review the exact approved source snapshot')) {
+  if (!filesystem.includes('"."="read"')) throw new Error('Reviewer must be read-only');
+  if (
+    readFileSync(repo + '/README.md', 'utf8') !== 'Modified by fixture\n' ||
+    readFileSync(repo + '/added.txt', 'utf8') !== 'Created by fixture\n' ||
+    existsSync(repo + '/deleted.txt')
+  )
+    throw new Error('Reviewer received the wrong source snapshot');
+  if (!input.includes('deleted.txt') || !input.includes('added.txt'))
+    throw new Error('Approved changes missing from Reviewer context');
+  reviewerResult =
+    'Verified approved snapshot: README modified, added.txt added, deleted.txt deleted. <script>window.workflowInjected=true</script>';
+}
 if (input.includes('WRITE_FIXTURE')) {
   if (!filesystem.includes('"."="write"')) throw new Error('Write profile missing');
   writeFileSync(repo + '/README.md', 'Modified by fixture\n');
@@ -91,7 +118,8 @@ if (input.includes('WAIT_FIXTURE')) {
       type: 'agent_message',
       text: resumed
         ? 'Resumed the saved review thread.'
-        : 'Reviewed the disposable repository. README.md is present. No files were modified.',
+        : (reviewerResult ??
+          'Reviewed the disposable repository. README.md is present. No files were modified.'),
     },
   });
   send({

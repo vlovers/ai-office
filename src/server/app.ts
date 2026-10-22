@@ -6,8 +6,11 @@ import { fileURLToPath } from 'node:url';
 import type { TaskManager } from './manager.js';
 import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
-import { validateRepository } from './repositories.js';
-import type { AgentEvent } from '../shared/types.js';
+import { WorkflowStore } from './workflows.js';
+import { workflowTimeline } from './workflow-timeline.js';
+import { assessHandoff } from './handoff-assessment.js';
+import { git, revalidateRepository, validateRepository } from './repositories.js';
+import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
 
 const id = z.string().uuid();
 export async function createApp(manager: TaskManager) {
@@ -60,6 +63,475 @@ export async function createApp(manager: TaskManager) {
   });
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/dashboard', async () => manager.dashboard());
+  app.get('/api/workflows/qa-commands', async () => ({
+    commands: Object.entries(manager.workspaces?.options.commands ?? {}).map(
+      ([commandId, argv]) => ({ commandId, argv }),
+    ),
+    sandbox: 'read-only',
+    network: false,
+    hostVerification: false,
+  }));
+  app.post('/api/workflows/:id/cancel', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return new WorkflowStore(manager.store.db).transition(workflowId, input.version, {
+      type: 'cancel',
+    });
+  });
+  app.post('/api/workflows/:id/cleanup-artifacts', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return manager.cleanupWorkflowArtifacts(workflowId, input.version);
+  });
+  for (const kind of ['reviewer', 'qa'] as const) {
+    app.post(`/api/workflows/:id/submit-${kind}`, async (request, reply) => {
+      const workflowId = id.parse((request.params as { id: string }).id);
+      const input = z
+        .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+        .strict()
+        .parse(request.body);
+      return reply
+        .code(202)
+        .send(await manager.submitWorkflowStage(workflowId, input.version, kind));
+    });
+    app.post(`/api/workflows/:id/approve-${kind}-result`, async (request) => {
+      const workflowId = id.parse((request.params as { id: string }).id);
+      const input = z
+        .object({
+          version: z.number().int().nonnegative(),
+          confirmed: z.literal(true),
+          digest: z.string().regex(/^[a-f0-9]{64}$/),
+        })
+        .strict()
+        .parse(request.body);
+      return manager.approveWorkflowResult(workflowId, input.version, kind, input.digest);
+    });
+  }
+  app.post('/api/workflows/:id/approve-qa', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        commandId: z.string().min(1).max(128),
+      })
+      .strict()
+      .parse(request.body);
+    return manager.approveWorkflowQA(workflowId, input.version, input.revision, input.commandId);
+  });
+  app.post('/api/workflows/:id/prepare-reviewer', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return manager.prepareWorkflowReviewer(workflowId, input.version);
+  });
+  app.get('/api/workflows/:id/results', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const workflow = new WorkflowStore(manager.store.db).get(workflowId);
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    return workflow.stages.slice(1).map((stage) => ({
+      kind: stage.kind,
+      state: stage.state,
+      taskId: stage.taskId,
+      report: stage.report ?? null,
+      result: stage.taskId ? (manager.store.task(stage.taskId)?.result ?? '') : '',
+      error: stage.taskId ? (manager.store.task(stage.taskId)?.error ?? null) : null,
+      qaPlan: stage.qaPlan ?? null,
+    }));
+  });
+  // Workflow creation persists only inert stage definitions; executable mutation
+  // actions remain disabled until TaskManager enforces approvals and leases.
+  app.post('/api/workflows', async (request, reply) => {
+    const input = z
+      .object({
+        repositoryId: id,
+        coderAgentId: agentIdSchema,
+        reviewerAgentId: agentIdSchema,
+        qaAgentId: agentIdSchema.optional(),
+      })
+      .strict()
+      .parse(request.body);
+    const repository = manager.store.repository(input.repositoryId);
+    if (!repository) throw new AppError(404, 'Repository not found.');
+    await revalidateRepository(repository);
+    // Use the server-observed HEAD, not a browser-supplied revision.
+    const revision = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
+    if (!/^[0-9a-f]{40,64}$/i.test(revision))
+      throw new AppError(409, 'Repository has no verifiable Git HEAD.');
+    const profiles = [
+      { kind: 'coder' as const, id: input.coderAgentId, mode: 'write' as const },
+      { kind: 'reviewer' as const, id: input.reviewerAgentId, mode: 'read-only' as const },
+      ...(input.qaAgentId
+        ? [{ kind: 'qa' as const, id: input.qaAgentId, mode: 'read-only' as const }]
+        : []),
+    ];
+    const stages = profiles.map((profile) => {
+      const agent = manager.store.requireAgent(profile.id);
+      if (agent.archived)
+        throw new AppError(409, 'Restore archived agent before creating workflow.');
+      return {
+        kind: profile.kind,
+        agentId: agent.id,
+        agentRevision: agent.revision,
+        mode: profile.mode,
+      };
+    });
+    return reply.code(201).send(
+      new WorkflowStore(manager.store.db).create({
+        repositoryId: repository.id,
+        baselineRevision: revision,
+        stages,
+      }),
+    );
+  });
+  app.post('/api/workflows/:id/approve-initial', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    const workflows = new WorkflowStore(manager.store.db);
+    const workflow = workflows.get(workflowId);
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    if (workflow.state !== 'active' || workflow.stages[0]?.state !== 'awaiting_approval')
+      throw new AppError(409, 'Initial stage is not awaiting approval.');
+    const repository = manager.store.repository(workflow.repositoryId);
+    if (!repository) throw new AppError(409, 'Workflow repository no longer exists.');
+    await revalidateRepository(repository);
+    const head = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
+    if (head !== workflow.baselineRevision)
+      throw new AppError(409, 'Repository revision changed. Approval denied.');
+    const changes = await git(repository.path, [
+      'status',
+      '--porcelain=v1',
+      '--untracked-files=all',
+    ]);
+    if (changes.trim())
+      throw new AppError(409, 'Repository has uncommitted changes. Approval denied.');
+    // This only changes durable state. It never submits a task or grants write authority.
+    return workflows.transition(workflowId, input.version, {
+      type: 'approve',
+      revision: head,
+    });
+  });
+  app.post('/api/workflows/:id/bind-task', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        taskId: id,
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    const workflows = new WorkflowStore(manager.store.db);
+    const workflow = workflows.get(workflowId);
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    if (
+      workflow.state !== 'active' ||
+      workflow.stages[0]?.state !== 'ready' ||
+      workflow.stages[0]?.taskId !== null
+    )
+      throw new AppError(409, 'Initial stage is not available for task binding.');
+    const repository = manager.store.repository(workflow.repositoryId);
+    if (!repository) throw new AppError(409, 'Repository no longer exists.');
+    await revalidateRepository(repository);
+    const head = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
+    if (head !== workflow.stages[0].approvedRevision)
+      throw new AppError(409, 'Approved Git revision is stale.');
+    const changes = await git(repository.path, [
+      'status',
+      '--porcelain=v1',
+      '--untracked-files=all',
+    ]);
+    if (changes.trim()) throw new AppError(409, 'Repository has uncommitted changes.');
+    // Task binding is inert: TaskManager alone owns queue submission and writes.
+    return workflows.bindApprovedTask(workflowId, input.version, input.taskId);
+  });
+  app.post('/api/workflows/:id/submit-initial', async (request, reply) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+        confirmedWrite: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    const workflow = new WorkflowStore(manager.store.db).get(workflowId);
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    const stage = workflow.stages[0];
+    if (
+      workflow.state !== 'active' ||
+      stage?.state !== 'ready' ||
+      !stage.taskId ||
+      !stage.approvedRevision ||
+      workflow.version !== input.version
+    )
+      throw new AppError(409, 'Initial workflow stage is not ready.');
+    const repository = manager.store.repository(workflow.repositoryId);
+    if (!repository) throw new AppError(409, 'Workflow repository missing.');
+    await revalidateRepository(repository);
+    const head = (await git(repository.path, ['rev-parse', '--verify', 'HEAD'])).trim();
+    if (head !== stage.approvedRevision) throw new AppError(409, 'Approved Git revision is stale.');
+    const changes = await git(repository.path, [
+      'status',
+      '--porcelain=v1',
+      '--untracked-files=all',
+    ]);
+    if (changes.trim()) throw new AppError(409, 'Repository has uncommitted changes.');
+    const submitted = manager.start(stage.taskId, undefined, true, {
+      id: workflowId,
+      version: input.version,
+      revision: head,
+    });
+    return reply
+      .code(202)
+      .send({ task: submitted, workflow: new WorkflowStore(manager.store.db).get(workflowId) });
+  });
+  app.post('/api/workflows/:id/capture-coder-evidence', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+        replace: z.literal(true).optional(),
+      })
+      .strict()
+      .parse(request.body);
+    const workflows = new WorkflowStore(manager.store.db);
+    const workflow = workflows.get(workflowId);
+    const coder = workflow?.stages[0];
+    if (
+      !workflow ||
+      !coder?.taskId ||
+      workflow.version !== input.version ||
+      workflow.state !== 'blocked' ||
+      coder.state !== 'blocked' ||
+      (input.replace ? !coder.evidence : Boolean(coder.evidence))
+    )
+      throw new AppError(409, 'Coder is not awaiting evidence capture.');
+    const task = manager.store.task(coder.taskId);
+    if (!task || task.state !== 'completed' || !task.workspaceId)
+      throw new AppError(409, 'Completed Coder workspace missing.');
+    // Reuse Review Center's worktree identity, lease and revision validation.
+    const review = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
+    if (!review.revision || review.workspace.id !== task.workspaceId)
+      throw new AppError(409, 'Review Center did not return a verified revision.');
+    return workflows.captureCoderEvidence(
+      workflowId,
+      input.version,
+      {
+        taskId: task.id,
+        workspaceId: review.workspace.id,
+        revision: review.revision,
+        fileCount: review.files.length,
+      },
+      input.replace === true,
+    );
+  });
+  app.post('/api/workflows/:id/approve-coder-evidence', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        confirmed: z.literal(true),
+        revision: z.string().regex(/^[0-9a-f]{64}$/i),
+      })
+      .strict()
+      .parse(request.body);
+    const workflows = new WorkflowStore(manager.store.db);
+    const workflow = workflows.get(workflowId);
+    const coder = workflow?.stages[0];
+    if (
+      !workflow ||
+      !coder?.taskId ||
+      !coder.evidence ||
+      coder.evidence.revision !== input.revision
+    )
+      throw new AppError(409, 'No matching Coder evidence exists.');
+    const task = manager.store.task(coder.taskId);
+    if (!task || task.workspaceId !== coder.evidence.workspaceId)
+      throw new AppError(409, 'Coder workspace ownership changed.');
+    // Acquire the same repository lease and re-hash the exact worktree
+    // through Review Center; never trust the revision sent by the client.
+    const fresh = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
+    if (
+      fresh.revision !== coder.evidence.revision ||
+      fresh.workspace.id !== coder.evidence.workspaceId ||
+      fresh.files.length !== coder.evidence.fileCount
+    )
+      throw new AppError(409, 'Coder output changed. Capture fresh evidence before approval.');
+    return workflows.approveCoderEvidence(workflowId, input.version, task.id, fresh.revision);
+  });
+  app.post('/api/workflows/:id/approve-reviewer', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        revision: z.string().regex(/^[0-9a-f]{64}$/i),
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    const workflows = new WorkflowStore(manager.store.db);
+    const workflow = workflows.get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (
+      !workflow ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      !coder.taskId ||
+      !coder.evidence ||
+      reviewer?.state !== 'awaiting_approval' ||
+      workflow.version !== input.version ||
+      input.revision !== coder.evidence.revision
+    )
+      throw new AppError(409, 'Reviewer handoff is stale or not available.');
+    const task = manager.store.task(coder.taskId);
+    if (!task || task.workspaceId !== coder.evidence.workspaceId)
+      throw new AppError(409, 'Coder workspace is no longer bound.');
+    // Revalidate Review Center's content fingerprint while holding its lease.
+    const review = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
+    if (
+      review.revision !== coder.evidence.revision ||
+      review.workspace.id !== coder.evidence.workspaceId ||
+      review.files.length !== coder.evidence.fileCount
+    )
+      throw new AppError(409, 'Coder content changed. Reviewer handoff denied.');
+    // Approval only. Submission separately verifies the native read-only runner.
+    // is required before allowing Reviewer to be submitted.
+    return workflows.transition(workflowId, input.version, {
+      type: 'approve',
+      revision: review.revision,
+    });
+  });
+  app.post('/api/workflows/:id/capture-bundle', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        revision: z.string().regex(/^[0-9a-f]{64}$/i),
+        confirmed: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    return manager.captureWorkflowBundle(workflowId, input.version, input.revision);
+  });
+  app.get('/api/workflows/bundles/audit', async () => manager.auditWorkflowBundles());
+  app.post('/api/workflows/:id/verify-reviewer-runtime', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative() })
+      .strict()
+      .parse(request.body);
+    return manager.verifyPreparedReviewerRuntime(workflowId, input.version);
+  });
+  app.post('/api/workflows/:id/prepare-reviewer-runtime', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return manager.prepareReviewerRuntime(workflowId, input.version);
+  });
+  app.post('/api/workflows/:id/verify-reviewer-source', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative() })
+      .strict()
+      .parse(request.body);
+    return manager.verifyPreparedReviewerSource(workflowId, input.version);
+  });
+  app.post('/api/workflows/:id/prepare-reviewer-source', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative(), confirmed: z.literal(true) })
+      .strict()
+      .parse(request.body);
+    return manager.prepareReviewerSource(workflowId, input.version);
+  });
+  app.post('/api/workflows/:id/verify-bundle', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({ version: z.number().int().nonnegative() })
+      .strict()
+      .parse(request.body);
+    return manager.inspectWorkflowBundle(workflowId, input.version);
+  });
+  app.post('/api/workflows/:id/inspect-handoff', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        version: z.number().int().nonnegative(),
+        revision: z.string().regex(/^[0-9a-f]{64}$/i),
+      })
+      .strict()
+      .parse(request.body);
+    const workflow = new WorkflowStore(manager.store.db).get(workflowId);
+    const coder = workflow?.stages[0];
+    const reviewer = workflow?.stages[1];
+    if (
+      !workflow ||
+      workflow.version !== input.version ||
+      workflow.state !== 'active' ||
+      coder?.state !== 'completed' ||
+      !coder.taskId ||
+      !coder.evidence ||
+      coder.evidence.revision !== input.revision ||
+      reviewer?.state !== 'ready' ||
+      reviewer.approvedRevision !== input.revision
+    )
+      throw new AppError(409, 'Reviewer handoff checkpoint is stale or unapproved.');
+    const task = manager.store.task(coder.taskId);
+    if (!task || task.workspaceId !== coder.evidence.workspaceId)
+      throw new AppError(409, 'Coder workspace binding changed.');
+    const review = (await manager.reviewOperation(task.id, 'review')) as WorkspaceReview;
+    if (
+      review.revision !== input.revision ||
+      review.workspace.id !== coder.evidence.workspaceId ||
+      review.files.length !== coder.evidence.fileCount
+    )
+      throw new AppError(409, 'Handoff evidence changed. Reapprove Coder output.');
+    const assessment = assessHandoff(review.files);
+    return {
+      workflowId,
+      version: workflow.version,
+      revision: input.revision,
+      ...assessment,
+      snapshotCreated: false,
+      downstreamExecutable: false,
+      result: assessment.eligible ? 'snapshot-runner-required' : 'manual-inspection-required',
+    };
+  });
+  app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
+  app.get('/api/workflows/:id/timeline', async (request) => {
+    const workflow = new WorkflowStore(manager.store.db).get(
+      id.parse((request.params as { id: string }).id),
+    );
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    return workflowTimeline(workflow);
+  });
+  app.get('/api/workflows/:id', async (request) => {
+    const workflow = new WorkflowStore(manager.store.db).get(
+      id.parse((request.params as { id: string }).id),
+    );
+    if (!workflow) throw new AppError(404, 'Workflow not found.');
+    return workflow;
+  });
   app.post('/api/connection', async (request) => {
     const input = z
       .object({ mode: z.enum(['local-cli-chatgpt', 'api-key']) })

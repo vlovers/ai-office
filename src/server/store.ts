@@ -5,6 +5,7 @@ import {
 } from './execution-config.js';
 import type { ExecutionConfiguration } from '../shared/types.js';
 import { DatabaseSync } from 'node:sqlite';
+import { WorkflowStore } from './workflows.js';
 import { AppError } from './errors.js';
 import type { AgentSettings } from './agents.js';
 import type { AgentProfile } from '../shared/types.js';
@@ -30,7 +31,7 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
-    if (version > 8) {
+    if (version > 9) {
       this.db.close();
       throw new Error('Metadata schema is newer than this AI Office version.');
     }
@@ -145,7 +146,13 @@ export class Store {
           this.pinConfiguration(task, config);
         }
       }
-      this.db.exec(`PRAGMA user_version=8; COMMIT;`);
+      this.db.exec(`CREATE TABLE IF NOT EXISTS workflows (
+        id TEXT PRIMARY KEY,
+        repository_id TEXT NOT NULL REFERENCES repositories(id),
+        created_at TEXT NOT NULL,
+        json TEXT NOT NULL
+      ); CREATE INDEX IF NOT EXISTS workflows_repository ON workflows(repository_id, created_at);
+      PRAGMA user_version=9; COMMIT;`);
     } catch (error) {
       try {
         this.db.exec('ROLLBACK');
@@ -155,6 +162,8 @@ export class Store {
       this.db.close();
       throw error;
     }
+    // Fail closed after schema migration and task recovery, before queue dispatch.
+    new WorkflowStore(this.db).recoverInterrupted();
   }
   taskConfiguration(id: string): ExecutionConfiguration | undefined {
     const row = this.db

@@ -1,10 +1,44 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import * as locks from '../src/server/lock.js';
 import { sandbox, until } from './helpers.js';
 import { validateRepository } from '../src/server/repositories.js';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const cleanup of cleanups.splice(0)) await cleanup();
+});
+it('publishes ordinary terminal state only after asynchronous lease release', async () => {
+  const env = await setup('FAIL_FIXTURE');
+  const acquire = locks.acquireLocks;
+  let releaseStarted = false;
+  let allowRelease!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    allowRelease = resolve;
+  });
+  const delayed = vi.spyOn(locks, 'acquireLocks').mockImplementation(async (...args) => {
+    const release = await acquire(...args);
+    return async () => {
+      releaseStarted = true;
+      await barrier;
+      await release();
+    };
+  });
+  try {
+    env.manager.start(env.task.id);
+    await until(() => releaseStarted, Boolean);
+    expect(env.store.task(env.task.id)?.state).toBe('running');
+    expect(env.manager.dashboard().agent.state).toBe('running');
+    allowRelease();
+    await until(
+      () => env.store.task(env.task.id)!,
+      (task) => task.state === 'failed',
+    );
+    expect(env.manager.dashboard().agent.state).toBe('idle');
+  } finally {
+    allowRelease();
+    delayed.mockRestore();
+  }
 });
 async function setup(prompt: string) {
   const env = await sandbox();

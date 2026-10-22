@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
+import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
@@ -416,6 +417,9 @@ function App() {
                     .map((slot) => ({
                       id: slot.id,
                       name: slot.name,
+                      role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                      taskTitle: dashboard?.tasks.find((task) => task.id === slot.taskId)?.title,
+                      taskState: dashboard?.tasks.find((task) => task.id === slot.taskId)?.state,
                       access: slot.mode,
                       active: Boolean(slot.taskId),
                       status: sceneStatus(
@@ -426,6 +430,22 @@ function App() {
                         slot.id,
                       ),
                     }))}
+                  recentTasks={(dashboard?.tasks ?? []).map((task) => ({
+                    id: task.id,
+                    agentId: task.agentId,
+                    title: task.title,
+                    state: task.state,
+                    updatedAt: task.updatedAt,
+                  }))}
+                  queue={(dashboard?.queue ?? []).map((entry) => ({
+                    taskId: entry.taskId,
+                    agentId: entry.agentId,
+                    title:
+                      dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
+                      'Untitled task',
+                    order: entry.order,
+                    waitingReason: entry.waitingReason,
+                  }))}
                   selectedAgent={selectedAgent}
                   onSelect={selectStation}
                 />
@@ -501,6 +521,7 @@ function App() {
                   }}
                 />
               )}
+              <WorkflowBoard />
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
