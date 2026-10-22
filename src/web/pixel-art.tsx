@@ -18,6 +18,8 @@ export function PixelBot() {
 export interface OfficeAgent {
   id: AgentId;
   name: string;
+  role?: string;
+  taskTitle?: string;
   status: SceneStatus;
   access?: string;
   active?: boolean;
@@ -136,7 +138,7 @@ export function PixelOffice({
         {agents.length === 0 && <p className="office-operations-empty">No agent profiles available. Create a profile in Agent Studio to populate the office.</p>}
         <div className="office-operations-agents">{agents.map((agent) => (
           <button type="button" key={agent.id} className={`office-operations-agent state-${agent.status.state}`} aria-pressed={selectedAgent === agent.id} onClick={() => onSelect(agent.id)} title={`Inspect ${agent.name}: ${agent.status.label}`}>
-            <span className="office-operations-indicator" aria-hidden="true" /><span className="office-operations-identity"><strong>{agent.name}</strong><small>{agent.status.label}</small></span><span className="office-operations-access">{agent.access ?? 'Read only'}</span>
+            <span className="office-operations-indicator" aria-hidden="true" /><span className="office-operations-identity"><strong>{agent.name}</strong><small>{agent.role ? `${agent.role} · ` : ''}{agent.status.label}</small>{agent.taskTitle && <small className="office-operations-task" title={agent.taskTitle}>Task: {agent.taskTitle}</small>}</span><span className="office-operations-access">{agent.access ?? 'Read only'}</span>
           </button>
         ))}</div>
       </div>
