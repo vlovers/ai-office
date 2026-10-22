@@ -416,6 +416,8 @@ function App() {
                     .map((slot) => ({
                       id: slot.id,
                       name: slot.name,
+                      role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                      taskTitle: dashboard?.tasks.find((task) => task.id === slot.taskId)?.title,
                       access: slot.mode,
                       active: Boolean(slot.taskId),
                       status: sceneStatus(
@@ -430,7 +432,7 @@ function App() {
                   onSelect={selectStation}
                 />
                 <div className="scene-caption">
-                  Two worker desks · select other profiles in Agent Studio · Tab / arrows to
+                  Two visible desks · all profiles in the activity roster · Tab / arrows to
                   navigate
                 </div>
               </section>
