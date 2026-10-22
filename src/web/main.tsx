@@ -417,6 +417,9 @@ function App() {
                     .map((slot) => ({
                       id: slot.id,
                       name: slot.name,
+                      role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                      taskTitle: dashboard?.tasks.find((task) => task.id === slot.taskId)?.title,
+                      taskState: dashboard?.tasks.find((task) => task.id === slot.taskId)?.state,
                       access: slot.mode,
                       active: Boolean(slot.taskId),
                       status: sceneStatus(
@@ -427,6 +430,22 @@ function App() {
                         slot.id,
                       ),
                     }))}
+                  recentTasks={(dashboard?.tasks ?? []).map((task) => ({
+                    id: task.id,
+                    agentId: task.agentId,
+                    title: task.title,
+                    state: task.state,
+                    updatedAt: task.updatedAt,
+                  }))}
+                  queue={(dashboard?.queue ?? []).map((entry) => ({
+                    taskId: entry.taskId,
+                    agentId: entry.agentId,
+                    title:
+                      dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
+                      'Untitled task',
+                    order: entry.order,
+                    waitingReason: entry.waitingReason,
+                  }))}
                   selectedAgent={selectedAgent}
                   onSelect={selectStation}
                 />
