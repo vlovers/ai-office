@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectOfficeSeats } from '../src/web/office-layout.js';
+import { officeGeometry, selectOfficeSeats } from '../src/web/office-layout.js';
 import type { AgentId } from '../src/shared/types.js';
 
 const agent = (id: string, state = 'idle', active = false) => ({
@@ -31,5 +31,26 @@ describe('office seat priority', () => {
     expect(selectOfficeSeats([], 'profile-3' as AgentId)).toEqual([]);
     expect(selectOfficeSeats(agents, 'profile-3' as AgentId, 1).map((a) => a.id))
       .toEqual(['profile-3']);
+  });
+});
+
+describe('office responsive geometry', () => {
+  it('provides a consistent portrait viewport for narrow containers', () => {
+    expect(officeGeometry(true)).toEqual({ width: 420, height: 580, wall: 159 });
+  });
+
+  it('provides a consistent landscape viewport for wider containers', () => {
+    expect(officeGeometry(false)).toEqual({ width: 840, height: 440, wall: 191 });
+  });
+
+  it('keeps running profiles in the room even if idle profiles come first', () => {
+    const profiles = [
+      agent('idle-1'),
+      agent('idle-2'),
+      agent('running-1', 'working'),
+      agent('running-2', 'stopping'),
+    ];
+    expect(selectOfficeSeats(profiles, 'unknown' as AgentId).map((a) => a.id))
+      .toEqual(['running-1', 'running-2']);
   });
 });
