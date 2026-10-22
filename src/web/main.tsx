@@ -428,6 +428,13 @@ function App() {
                         slot.id,
                       ),
                     }))}
+                  queue={(dashboard?.queue ?? []).map((entry) => ({
+                    taskId: entry.taskId,
+                    agentId: entry.agentId,
+                    title: dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ?? 'Untitled task',
+                    order: entry.order,
+                    waitingReason: entry.waitingReason,
+                  }))}
                   selectedAgent={selectedAgent}
                   onSelect={selectStation}
                 />
