@@ -145,6 +145,21 @@ try {
     otherId.slice(0, 8),
   );
   await board.getByLabel('Workflow operations overview').getByRole('checkbox').uncheck();
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Resume live updates' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(board.getByLabel('Workflow operations overview')).toContainText(
+    'Live updates paused',
+  );
+  await board.getByRole('button', { name: 'Refresh workflow' }).click();
+  await board.getByRole('button', { name: 'Resume live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Pause live updates' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+
 
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
