@@ -27,6 +27,14 @@ export interface OfficeAgent {
   active?: boolean;
 }
 
+export interface OfficeRecentTask {
+  id: string;
+  agentId: AgentId;
+  title: string;
+  state: string;
+  updatedAt: string;
+}
+
 export interface OfficeQueueItem {
   taskId: string;
   agentId: AgentId;
@@ -127,11 +135,13 @@ export function PixelOffice({
   selectedAgent,
   onSelect,
   queue = [],
+  recentTasks = [],
 }: {
   agents: OfficeAgent[];
   selectedAgent: AgentId;
   onSelect: (id: AgentId) => void;
   queue?: OfficeQueueItem[];
+  recentTasks?: OfficeRecentTask[];
 }) {
   const prefix = useId();
   const container = useRef<HTMLDivElement>(null);
@@ -392,6 +402,38 @@ export function PixelOffice({
           </div>
         ) : (
           <p className="office-operations-help">Select an available agent to inspect its workstation.</p>
+        )}
+      </section>
+      <section className="office-history" aria-label="Recent agent tasks">
+        <div className="office-operations-heading">
+          <strong>Recent task activity</strong>
+          <span>Persisted task snapshots · latest first</span>
+        </div>
+        {recentTasks.length === 0 ? (
+          <p className="office-operations-help">No recorded tasks.</p>
+        ) : (
+          <ol className="office-history-items">
+            {[...recentTasks]
+              .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+              .slice(0, 8)
+              .map((task) => (
+                <li key={task.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(task.agentId)}
+                    aria-pressed={selectedAgent === task.agentId}
+                    title={`Inspect agent for ${task.title}`}
+                  >
+                    <span className={`office-history-state state-${task.state}`}>{task.state}</span>
+                    <span className="office-queue-details">
+                      <strong>{task.title}</strong>
+                      <small>{agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}</small>
+                    </span>
+                    <time dateTime={task.updatedAt}>{task.updatedAt.slice(0, 16).replace('T', ' ')}</time>
+                  </button>
+                </li>
+              ))}
+          </ol>
         )}
       </section>
       <section className="office-queue" aria-label="Live task queue">
