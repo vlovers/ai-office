@@ -148,20 +148,22 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     item.stages.some((stage) =>
       ['failed', 'interrupted', 'blocked', 'awaiting_approval'].includes(stage.state ?? ''),
     );
-  const visibleWorkflows = items.filter(
-    (item) =>
-      (!triageOnly || needsAttention(item)) &&
-      (stateFilter === 'all' || item.state === stateFilter) &&
-      (item.id.toLowerCase().includes(workflowQuery.trim().toLowerCase()) ||
-        item.repositoryId.toLowerCase().includes(workflowQuery.trim().toLowerCase())),
-  ).sort((a, b) => {
-    if (sortBy === 'attention') {
-      const priority = Number(needsAttention(b)) - Number(needsAttention(a));
-      if (priority) return priority;
-    }
-    const dateOrder = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
-    return sortBy === 'oldest' ? -dateOrder : dateOrder;
-  });
+  const visibleWorkflows = items
+    .filter(
+      (item) =>
+        (!triageOnly || needsAttention(item)) &&
+        (stateFilter === 'all' || item.state === stateFilter) &&
+        (item.id.toLowerCase().includes(workflowQuery.trim().toLowerCase()) ||
+          item.repositoryId.toLowerCase().includes(workflowQuery.trim().toLowerCase())),
+    )
+    .sort((a, b) => {
+      if (sortBy === 'attention') {
+        const priority = Number(needsAttention(b)) - Number(needsAttention(a));
+        if (priority) return priority;
+      }
+      const dateOrder = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+      return sortBy === 'oldest' ? -dateOrder : dateOrder;
+    });
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
