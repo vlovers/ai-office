@@ -434,8 +434,9 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                             {finding.stage ?? 'workflow'} — {finding.message}
                             {finding.suggestedAction && (
                               <p>
-                                Suggested checkpoint: {labels[finding.suggestedAction] ?? finding.suggestedAction}.
-                                Review the stage and confirm explicitly below.
+                                Suggested checkpoint:{' '}
+                                {labels[finding.suggestedAction] ?? finding.suggestedAction}. Review
+                                the stage and confirm explicitly below.
                               </p>
                             )}
                           </li>
