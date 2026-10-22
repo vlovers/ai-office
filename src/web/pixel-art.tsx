@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { AgentId } from '../shared/types.js';
-import { OFFICE_LAYOUT, officeGeometry } from './office-layout.js';
+import { OFFICE_LAYOUT, officeGeometry, selectOfficeSeats } from './office-layout.js';
 import type { SceneStatus } from './scene-state.js';
 import type { SceneState } from './scene-state.js';
 
@@ -18,84 +18,113 @@ export function PixelBot() {
 export interface OfficeAgent {
   id: AgentId;
   name: string;
+  role?: string;
+  taskTitle?: string;
+  taskId?: string;
+  taskState?: string;
   status: SceneStatus;
   access?: string;
   active?: boolean;
 }
 
-function WorkstationArt({ state }: { state: SceneState }) {
+export interface OfficeRecentTask {
+  id: string;
+  agentId: AgentId;
+  title: string;
+  state: string;
+  updatedAt: string;
+}
+
+export interface OfficeQueueItem {
+  taskId: string;
+  agentId: AgentId;
+  title: string;
+  order: number;
+  waitingReason?: string;
+}
+
+/** Isometric desk furniture; animation is driven by actual agent status classes. */
+function IsometricDesk({ state }: { state: SceneState }) {
+  const message =
+    state === 'thinking'
+      ? 'THINK'
+      : state === 'working'
+        ? 'RUN'
+        : state === 'stopping'
+          ? 'STOP'
+          : state === 'error'
+            ? 'ERROR'
+            : state === 'offline'
+              ? 'OFFLINE'
+              : state === 'completed'
+                ? 'DONE'
+                : 'READY';
   return (
-    <>
-      <path fill="#6c5136" d="M111 131h351v8H111z" />
-      <path fill="#3d3627" d="M117 139h7v34h-7zm331 0h7v34h-7z" />
-      <path fill="#112f23" stroke="#43805d" strokeWidth="2" d="M251 83h83v47h-83z" />
-      <path className="screen-glow" fill="#164b2a" opacity=".22" d="M241 73h103v66H241z" />
-      <path fill="#081b15" d="M257 89h71v34h-71z" />
-      <g className="screen-activity" stroke="#41895d" strokeWidth="2">
-        <path d="M300 96h19m-17 5h14m-16 5h21" />
-      </g>
-      <path className="screen-cursor" fill="#a4ffc1" d="M305 113h6v3h-6z" />
-      <path stroke="#72db8e" strokeWidth="2" d="m265 100 5 4-5 4m13 0h12m-25 7h38" />
-      <path fill="#3c6550" d="M286 130h12v5h-12zm-32 8h73v4h-73z" />
-      <path fill="#142c24" stroke="#336749" strokeWidth="2" d="M149 101h57v31h-57z" />
-      <path stroke="#74ab7c" strokeWidth="2" d="M156 109h19m-19 6h33m-33 6h23" />
-      <path fill="#956b36" d="M352 117h10v14h-10z" />
-      <path stroke="#d0b46a" strokeWidth="2" d="M362 119h5v7h-5" />
-      <path fill="#344e39" d="M399 114h12v17h-12z" />
-      <path fill="#6bb071" d="M401 114v-13h4v-8h4v15h5v5h-9v1z" />
-      <g className="codex-character">
-        <path fill="#10221d" stroke="#4a745b" strokeWidth="2" d="M210 135h31v31h-31z" />
-        <path fill="#294b34" d="M213 166h7v10h-7zm11-6h24v5h-24zm12 5h7v11h-7z" />
-        <g className="character-body">
-          <path fill="#263e4a" d="M213 126h25v27h-25z" />
-          <path fill="var(--jacket, #4d8e75)" d="M215 126h8v26h-8zm14 0h7v26h-7z" />
-          <path fill="#87c697" d="M222 129h7v12h-7z" />
-          <path fill="#61df92" d="M225 143h4v5h-4z" />
-          <path fill="#171f22" d="M210 93h7v-6h21v5h7v28h-8v6h-20v-7h-7z" />
-          <path fill="var(--hair, #47392c)" d="M213 94h6v-4h16v4h6v10h-28z" />
-          <path fill="#d6a77c" d="M218 101h20v5h5v8h-5v8h-17v-6h-6v-10h3z" />
-          <path fill="#efc49a" d="M224 103h14v12h-14z" />
-          <path fill="#282b2d" d="M218 100h6v5h-6z" />
-          <path className="character-eyes" fill="#183029" d="M225 107h3v4h-3zm10 0h3v4h-3z" />
-          <path fill="#9b6552" d="M230 117h6v2h-6z" />
-          <path fill="#608f7b" d="M212 105h4v13h-4zm25-5h8v3h-8zm6 3h4v13h-4z" />
-          <path fill="#8ae7ab" d="M243 116h5v2h-5zm-5 2h7v2h-7z" />
-        </g>
-        <g className="typing-hands">
-          <path fill="#d6a77c" d="M236 129h14v4h-14zm-15 5h26v4h-26z" />
-          <path fill="#4c9277" d="M233 126h6v7h-6zm-15 3h6v8h-6z" />
-        </g>
-      </g>
-      <g className="state-bubble">
+    <g aria-hidden="true">
+      <ellipse cx="0" cy="66" rx="112" ry="35" fill="#020b0a" opacity=".55" />
+      <path d="M-95 18L-12 -28L100 25L16 73Z" fill="#a27650" stroke="#d7b287" strokeWidth="3" />
+      <path d="M-95 18L16 73V87L-95 32Z" fill="#593e32" />
+      <path d="M16 73L100 25V39L16 87Z" fill="#80533c" />
+      <path d="M-70 36V90M74 45V95" stroke="#4e3a30" strokeWidth="9" />
+      <path d="M-28 5L16 -18L61 4L17 29Z" fill="#152d34" stroke="#4f8f85" strokeWidth="3" />
+      <path
+        d="M-28 5V-47L16 -70L61 -46V4L17 29V-23Z"
+        fill="#203d40"
+        stroke="#80b5a0"
+        strokeWidth="3"
+      />
+      <path
+        className="iso-monitor-glow"
+        d="M-20 -42L16 -60L53 -41V-2L17 18L-20 -2Z"
+        fill="#103a31"
+      />
+      <path d="M-10 -26L13 -38M-10 -15L27 -34M-10 -4L17 -18" stroke="#77eab0" strokeWidth="3" />
+      <path d="M16 29V40M-8 52L16 40L39 51" stroke="#4f6f64" strokeWidth="5" />
+      <path d="M-60 11L-35 -2L-13 9L-37 22Z" fill="#304b47" />
+      <path d="M-52 10L-40 4M-44 14L-32 8" stroke="#80c2a1" strokeWidth="2" />
+      <g className="iso-character" transform="translate(-43 -34)">
+        <path d="M-23 24L0 11L24 24L0 38Z" fill="#29463e" />
         <path
-          fill="#07170f"
-          stroke={state === 'error' ? '#ffa99b' : '#6fc68e'}
-          d="M196 64h57v17h-24v5h-5v-5h-28z"
+          className="character-body"
+          d="M-20 -7L0 -20L20 -7V22L0 35L-20 22Z"
+          fill="#4d8e75"
+          stroke="#18382d"
+          strokeWidth="3"
+        />
+        <path d="M-16 -37L0 -47L17 -37V-12L0 -2L-16 -12Z" fill="#e6ad82" />
+        <path d="M-18 -39L0 -50L18 -40L0 -29Z" fill="#3b2928" />
+        <path d="M-8 -23L-4 -25M5 -30L9 -32" stroke="#1e302b" strokeWidth="3" />
+        <path
+          className="typing-hands"
+          d="M8 10L29 21M-8 14L11 26"
+          stroke="#e6ad82"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+      </g>
+      <g transform="translate(67 -23)">
+        <path d="M-18 0L0 -10L19 0L0 11Z" fill="#1a382c" stroke="#72ad81" strokeWidth="2" />
+        <path d="M0 0V-29M0 -15L-13 -25M0 -20L14 -31" stroke="#79b78d" strokeWidth="4" />
+      </g>
+      <g transform="translate(0 -91)">
+        <path
+          d="M-39 -15H39V9H7L0 17L-7 9H-39Z"
+          fill="#0b201b"
+          stroke={state === 'error' ? '#ffa99b' : '#8acda6'}
+          strokeWidth="2"
         />
         <text
-          x="224"
-          y="76"
+          x="0"
+          y="1"
           textAnchor="middle"
-          fill={state === 'error' ? '#ffa99b' : '#a9edbf'}
+          fill={state === 'error' ? '#ffa99b' : '#a5edc2'}
           fontFamily="monospace"
-          fontSize="8"
+          fontSize="11"
         >
-          {state === 'thinking'
-            ? '…'
-            : state === 'working'
-              ? '>_ RUN'
-              : state === 'error'
-                ? '! ERROR'
-                : state === 'stopping'
-                  ? 'STOP…'
-                  : state === 'offline'
-                    ? 'OFFLINE'
-                    : state === 'completed'
-                      ? 'DONE'
-                      : 'READY'}
+          {message}
         </text>
       </g>
-    </>
+    </g>
   );
 }
 
@@ -104,10 +133,14 @@ export function PixelOffice({
   agents,
   selectedAgent,
   onSelect,
+  queue = [],
+  recentTasks = [],
 }: {
   agents: OfficeAgent[];
   selectedAgent: AgentId;
   onSelect: (id: AgentId) => void;
+  queue?: OfficeQueueItem[];
+  recentTasks?: OfficeRecentTask[];
 }) {
   const prefix = useId();
   const container = useRef<HTMLDivElement>(null);
@@ -120,123 +153,124 @@ export function PixelOffice({
     return () => observer.disconnect();
   }, []);
   const geometry = officeGeometry(narrow);
+  const activeCount = agents.filter((agent) =>
+    ['thinking', 'working', 'stopping'].includes(agent.status.state),
+  ).length;
+  const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
+  const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
+  const selectedQueue = queue
+    .filter((entry) => entry.agentId === selectedAgent)
+    .sort((a, b) => a.order - b.order);
+  const lifecycle = [
+    'queued',
+    'running',
+    'stopping',
+    'completed',
+    'failed',
+    'stopped',
+    'interrupted',
+  ] as const;
+  // Keep the selected profile visible, then fill remaining seats with running agents.
+  // The roster below remains the complete, untruncated list.
+  const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
   return (
-    <div ref={container} className="shared-office" data-layout={narrow ? 'portrait' : 'landscape'}>
+    <div
+      ref={container}
+      className="shared-office isometric-office"
+      data-layout={narrow ? 'portrait' : 'landscape'}
+    >
       <svg
         className="pixel-office"
         viewBox={`0 0 ${geometry.width} ${geometry.height}`}
-        fill="none"
-        shapeRendering="crispEdges"
         role="group"
-        aria-label="Shared pixel-art office"
+        aria-label="Interactive isometric office, showing real agent status"
       >
         <defs>
-          <pattern id={`${prefix}-wall`} width="40" height="18" patternUnits="userSpaceOnUse">
-            <path d="M0 0h40v18H0z" fill="#0c211c" />
-            <path d="M0 17h40M39 0v17M19 0v8" stroke="#17352b" />
-          </pattern>
-          <pattern id={`${prefix}-floor`} width="48" height="20" patternUnits="userSpaceOnUse">
-            <path d="M0 0h48v20H0z" fill="#0a1918" />
-            <path d="M0 19h48M47 0v19" stroke="#17332b" />
+          <linearGradient id={`${prefix}-wall`} x2="0" y2="1">
+            <stop stopColor="#183a39" />
+            <stop offset="1" stopColor="#0c1f20" />
+          </linearGradient>
+          <pattern id={`${prefix}-tiles`} width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M0 0H40V40H0Z" fill="#203b37" stroke="#34544c" strokeWidth="1" />
           </pattern>
         </defs>
-        <g aria-hidden="true" className="office-room">
-          <path fill={`url(#${prefix}-wall)`} d={`M0 0h${geometry.width}v${geometry.wall}H0z`} />
+        <g aria-hidden="true">
+          <path d={`M0 0H${geometry.width}V${geometry.height}H0Z`} fill="#081714" />
           <path
-            fill={`url(#${prefix}-floor)`}
-            d={`M0 ${geometry.wall}h${geometry.width}v${geometry.height - geometry.wall}H0z`}
+            d={
+              narrow
+                ? 'M12 80L210 10L408 80V280L210 360L12 280Z'
+                : 'M40 118L420 8L800 118V270L420 390L40 270Z'
+            }
+            fill={`url(#${prefix}-wall)`}
+            stroke="#477468"
+            strokeWidth="3"
           />
-          <path stroke="#3c6b51" strokeWidth="3" d={`M0 ${geometry.wall}h${geometry.width}`} />
-          {[28, geometry.width - 156].map((x) => (
-            <g key={x}>
-              <path fill="#041211" stroke="#315747" strokeWidth="3" d={`M${x} 14h128v65H${x}z`} />
-              <path
-                fill="#1c3430"
-                d={`M${x + 4} 60h14V42h18v12h17V30h21v30h15V45h20v15h15v15H${x + 4}z`}
-              />
-              <path fill="#71ab85" d={`M${x + 19} 22h2v2h-2zm68 8h2v2h-2z`} />
-              <path stroke="#a77d39" strokeWidth="2" d={`M${x + 25} 48v5m38-12v5m36 9v5`} />
-              <path stroke="#315747" strokeWidth="3" d={`M${x + 64} 15v63`} />
-            </g>
-          ))}
           <path
-            fill="#04110d"
-            stroke="#3d8060"
-            strokeWidth="2"
-            d={`M${geometry.width / 2 - 65} 17h130v35h-130z`}
+            d={narrow ? 'M12 280L210 360L408 280L210 204Z' : 'M40 270L420 390L800 270L420 150Z'}
+            fill={`url(#${prefix}-tiles)`}
+            stroke="#6c9a83"
+            strokeWidth="3"
+          />
+          <path
+            d={narrow ? 'M12 80L210 10L210 204L12 280Z' : 'M40 118L420 8V150L40 270Z'}
+            fill="#14312d"
+            opacity=".65"
+          />
+          <path
+            d={narrow ? 'M210 10L408 80V280L210 204Z' : 'M420 8L800 118V270L420 150Z'}
+            fill="#20433c"
+            opacity=".65"
+          />
+          <path
+            d={narrow ? 'M54 115L150 78V161L54 198Z' : 'M124 108L277 62V155L124 201Z'}
+            fill="#0b2628"
+            stroke="#6bafaa"
+            strokeWidth="5"
+          />
+          <path
+            d={narrow ? 'M65 120L139 92V155L65 183Z' : 'M137 116L264 78V149L137 186Z'}
+            fill="#23505b"
+          />
+          <path
+            d={narrow ? 'M256 82L354 116V199L256 165Z' : 'M570 61L716 105V198L570 154Z'}
+            fill="#0b2628"
+            stroke="#6bafaa"
+            strokeWidth="5"
+          />
+          <path
+            d={narrow ? 'M266 98L344 125V182L266 155Z' : 'M582 78L704 115V181L582 144Z'}
+            fill="#28545d"
           />
           <text
             x={geometry.width / 2}
-            y="40"
+            y={narrow ? 62 : 43}
             textAnchor="middle"
-            fill="#7cf5a7"
+            fontSize="19"
             fontFamily="monospace"
             fontWeight="bold"
-            fontSize="14"
+            fill="#b3ffca"
           >
             AI OFFICE
           </text>
-          <path fill="#6d4d32" d={`M16 ${geometry.wall - 15}h17v30H16z`} />
-          <path
-            fill="#367953"
-            d={`M22 ${geometry.wall - 15}v-30h5v30zm-9-27h9v12h-9zm14-13h7v18h-7zm0 23h11v6H27z`}
-          />
-          <path
-            fill="#19372c"
-            stroke="#38624a"
-            strokeWidth="2"
-            d={`M${geometry.width - 33} ${geometry.wall - 64}h22v65h-22z`}
-          />
-          <path
-            stroke="#38624a"
-            strokeWidth="2"
-            d={`M${geometry.width - 33} ${geometry.wall - 42}h22m-22 20h22`}
-          />
-          <path fill="#93733e" d={`M${geometry.width - 29} ${geometry.wall - 57}h4v12h-4z`} />
-          <path fill="#4b926d" d={`M${geometry.width - 23} ${geometry.wall - 55}h7v10h-7z`} />
-          <path
-            fill="#20392b"
-            d={`M${geometry.width / 2 - 22} ${geometry.height - 25}h44v7h-44z`}
-          />
-          <path
-            fill="#b58c57"
-            d={`M${geometry.width / 2 - 13} ${geometry.height - 33}h22v10h-22zm0-7h6v10h-6zm16 0h6v10h-6zm6 14h13v4h-13z`}
-          />
-          <path
-            fill="#162a20"
-            d={`M${geometry.width / 2 - 8} ${geometry.height - 31}h2v2h-2zm10 0h2v2h-2z`}
-          />
         </g>
         {OFFICE_LAYOUT.map((placement, index) => {
-          const busy = agents.filter(
-            (agent) =>
-              agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
-          );
-          const visible = new Set(
-            [
-              ...new Set([
-                ...busy.map((agent) => agent.id),
-                ...agents.filter((agent) => agent.id === selectedAgent).map((agent) => agent.id),
-                ...agents.map((agent) => agent.id),
-              ]),
-            ].slice(0, 2),
-          );
-          const agent = agents.filter((agent) => visible.has(agent.id))[index];
+          const agent = seatedAgents[index];
           if (!agent) return null;
           const point = narrow ? placement.portrait : placement.landscape;
           const selected = selectedAgent === agent.id;
           return (
             <g
               key={agent.id}
-              role="button"
-              tabIndex={0}
-              className={`office-workstation state-${agent.status.state} identity-${placement.identity}`}
+              className={`office-workstation iso-station state-${agent.status.state} identity-${placement.identity}`}
               data-agent-id={agent.id}
               data-state={agent.status.state}
+              role="button"
+              tabIndex={0}
               aria-label={`Select ${agent.name} workstation`}
               aria-pressed={selected}
               aria-describedby={`${prefix}-${agent.id}-status`}
-              transform={`translate(${point.x - 111} ${point.y - 64})`}
+              transform={`translate(${point.x} ${point.y})`}
               onClick={() => onSelect(agent.id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -244,15 +278,15 @@ export function PixelOffice({
                   if (!event.repeat) onSelect(agent.id);
                 }
                 const buttons = Array.from(
-                  event.currentTarget.ownerSVGElement!.querySelectorAll<SVGGElement>(
+                  event.currentTarget.ownerSVGElement?.querySelectorAll<SVGGElement>(
                     '.office-workstation',
-                  ),
+                  ) ?? [],
                 );
-                const index = buttons.indexOf(event.currentTarget);
+                const position = buttons.indexOf(event.currentTarget);
                 const next = ['ArrowRight', 'ArrowDown'].includes(event.key)
-                  ? (index + 1) % buttons.length
+                  ? (position + 1) % buttons.length
                   : ['ArrowLeft', 'ArrowUp'].includes(event.key)
-                    ? (index + buttons.length - 1) % buttons.length
+                    ? (position + buttons.length - 1) % buttons.length
                     : event.key === 'Home'
                       ? 0
                       : event.key === 'End'
@@ -264,48 +298,242 @@ export function PixelOffice({
                 }
               }}
             >
-              <rect
-                className="station-hit-area"
-                x="104"
-                y="52"
-                width="360"
-                height="157"
-                fill="transparent"
+              <ellipse
+                className="iso-selection"
+                cx="0"
+                cy="50"
+                rx="115"
+                ry="51"
+                fill="none"
+                stroke="#a5ffbb"
+                strokeWidth="3"
+                strokeDasharray="9 6"
+                opacity={selected ? 1 : 0}
               />
-              <g aria-hidden="true">
-                <path
-                  className="station-selection"
-                  d="M109 64v-8h18m317 0h15v8m0 126v8h-18m-314 0h-18v-8"
-                />
-                <text
-                  className="station-name"
-                  x="126"
-                  y="65"
-                  fontFamily="monospace"
-                  fontSize="11"
-                  fontWeight="bold"
-                >
-                  {(agent.name.length > 28
-                    ? `${agent.name.slice(0, 27)}…`
-                    : agent.name
-                  ).toUpperCase()}
-                </text>
-                <WorkstationArt state={agent.status.state} />
-                <text
-                  className="station-status"
-                  x="126"
-                  y="193"
-                  fontFamily="monospace"
-                  fontSize="10"
-                >
-                  {selected ? '▶ ' : '○ '}
-                  {agent.status.label}
-                </text>
-              </g>
+              <IsometricDesk state={agent.status.state} />
+              <text
+                className="station-name"
+                x="0"
+                y="108"
+                textAnchor="middle"
+                fontSize="12"
+                fontFamily="monospace"
+                fontWeight="bold"
+              >
+                {agent.name.length > 22 ? `${agent.name.slice(0, 21)}…` : agent.name}
+              </text>
+              <rect
+                x="-115"
+                y="-118"
+                width="230"
+                height="233"
+                fill="transparent"
+                className="station-hit-area"
+              />
             </g>
           );
         })}
       </svg>
+      <section className="office-workflow" aria-label="Agent workflow overview">
+        <div className="office-workflow-header">
+          <strong>Agent workflow</strong>
+          <span>Live profile activity · not an automatic pipeline</span>
+        </div>
+        <div className="office-workflow-lanes">
+          {(['coder', 'reviewer', 'qa'] as const).map((role) => {
+            const matching = agents.filter((agent) => agent.role?.toLowerCase().includes(role));
+            const active = matching.filter(
+              (agent) =>
+                agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
+            );
+            return (
+              <div className="office-workflow-lane" key={role} data-role={role}>
+                <span className="office-workflow-step">
+                  {role === 'coder' ? '01' : role === 'reviewer' ? '02' : '03'}
+                </span>
+                <strong>{role === 'qa' ? 'QA' : role === 'coder' ? 'Coder' : 'Reviewer'}</strong>
+                <span className="office-workflow-count">
+                  {matching.length === 0
+                    ? 'No profile'
+                    : `${active.length} active / ${matching.length} profiles`}
+                </span>
+                {matching.length > 0 && (
+                  <div className="office-workflow-members">
+                    {matching.map((agent) => (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        onClick={() => onSelect(agent.id)}
+                        aria-pressed={selectedAgent === agent.id}
+                        title={agent.status.label}
+                      >
+                        <span
+                          className={`office-workflow-dot state-${agent.status.state}`}
+                          aria-hidden="true"
+                        />
+                        {agent.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section className="office-inspector" aria-label="Selected agent inspector">
+        <div className="office-operations-heading">
+          <strong>Selected workstation</strong>
+          <span>Read-only live snapshot</span>
+        </div>
+        {selectedProfile ? (
+          <div className="office-inspector-content">
+            <div>
+              <strong>{selectedProfile.name}</strong>
+              <p>
+                {selectedProfile.role || 'Agent'} · {selectedProfile.status.label}
+              </p>
+              <p>Execution access: {selectedProfile.access ?? 'Read only'}</p>
+            </div>
+            <div>
+              <strong>Current assignment</strong>
+              <p>{selectedProfile.taskTitle ?? 'No running assignment'}</p>
+              {selectedProfile.taskState && <p>Task lifecycle: {selectedProfile.taskState}</p>}
+              {selectedProfile.taskState && (
+                <ol className="office-lifecycle" aria-label="Selected task lifecycle">
+                  {lifecycle.map((state) => (
+                    <li
+                      key={state}
+                      aria-current={selectedProfile.taskState === state ? 'step' : undefined}
+                    >
+                      {state}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <p>{selectedQueue.length} queued for this agent</p>
+            </div>
+          </div>
+        ) : (
+          <p className="office-operations-help">
+            Select an available agent to inspect its workstation.
+          </p>
+        )}
+      </section>
+      <section className="office-history" aria-label="Recent agent tasks">
+        <div className="office-operations-heading">
+          <strong>Recent task activity</strong>
+          <span>Persisted task snapshots · latest first</span>
+        </div>
+        {recentTasks.length === 0 ? (
+          <p className="office-operations-help">No recorded tasks.</p>
+        ) : (
+          <ol className="office-history-items">
+            {[...recentTasks]
+              .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+              .slice(0, 8)
+              .map((task) => (
+                <li key={task.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(task.agentId)}
+                    aria-pressed={selectedAgent === task.agentId}
+                    title={`Inspect agent for ${task.title}`}
+                  >
+                    <span className={`office-history-state state-${task.state}`}>{task.state}</span>
+                    <span className="office-queue-details">
+                      <strong>{task.title}</strong>
+                      <small>
+                        {agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}
+                      </small>
+                    </span>
+                    <time dateTime={task.updatedAt}>
+                      {task.updatedAt.slice(0, 16).replace('T', ' ')}
+                    </time>
+                  </button>
+                </li>
+              ))}
+          </ol>
+        )}
+      </section>
+      <section className="office-queue" aria-label="Live task queue">
+        <div className="office-operations-heading">
+          <strong>Task queue</strong>
+          <span>{queue.length} waiting</span>
+        </div>
+        {queue.length === 0 ? (
+          <p className="office-operations-help">No queued tasks.</p>
+        ) : (
+          <ol className="office-queue-items">
+            {[...queue]
+              .sort((a, b) => a.order - b.order)
+              .map((item) => (
+                <li key={item.taskId}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(item.agentId)}
+                    aria-pressed={selectedAgent === item.agentId}
+                    title={`Inspect agent assigned to ${item.title}`}
+                  >
+                    <span className="office-queue-position">#{item.order}</span>
+                    <span className="office-queue-details">
+                      <strong>{item.title}</strong>
+                      <small>
+                        {agents.find((agent) => agent.id === item.agentId)?.name ?? 'Unknown agent'}
+                        {item.waitingReason ? ` · ${item.waitingReason}` : ' · Waiting'}
+                      </small>
+                    </span>
+                  </button>
+                </li>
+              ))}
+          </ol>
+        )}
+      </section>
+      <div className="office-operations" aria-label="Live office operations">
+        <div className="office-operations-heading">
+          <strong>Office activity</strong>
+          <span aria-live="polite">
+            {activeCount} active · {errorCount} errors
+          </span>
+        </div>
+        <p className="office-operations-help">
+          Select a desk or an agent below to inspect their actual task and session. Status comes
+          from the local server, not the animation.
+        </p>
+        {agents.length === 0 && (
+          <p className="office-operations-empty">
+            No agent profiles available. Create a profile in Agent Studio to populate the office.
+          </p>
+        )}
+        <div className="office-operations-agents">
+          {agents.map((agent) => (
+            <button
+              type="button"
+              key={agent.id}
+              className={`office-operations-agent state-${agent.status.state}`}
+              aria-pressed={selectedAgent === agent.id}
+              onClick={() => onSelect(agent.id)}
+              title={`Inspect ${agent.name}: ${agent.status.label}`}
+            >
+              <span className="office-operations-indicator" aria-hidden="true" />
+              <span className="office-operations-identity">
+                <strong>{agent.name}</strong>
+                <small>
+                  {agent.role ? `${agent.role} · ` : ''}
+                  {agent.status.label}
+                </small>
+                {agent.taskTitle && (
+                  <small className="office-operations-task" title={agent.taskTitle}>
+                    Task: {agent.taskTitle}
+                    {agent.taskState ? ` · ${agent.taskState}` : ''}
+                  </small>
+                )}
+              </span>
+              <span className="office-operations-access">{agent.access ?? 'Read only'}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       {agents.map((agent) => (
         <span key={agent.id} id={`${prefix}-${agent.id}-status`} className="sr-only">
           {agent.status.label}. {agent.access ?? 'Read only'}.
