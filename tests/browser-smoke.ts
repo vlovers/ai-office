@@ -254,9 +254,15 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
-  await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText('Agent A concurrent');
-  await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText('Agent B concurrent');
-  await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toContainText('Agent B concurrent');
+  await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText(
+    'Agent A concurrent',
+  );
+  await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText(
+    'Agent B concurrent',
+  );
+  await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toContainText(
+    'Agent B concurrent',
+  );
   await expect(page.locator('.office-workstation').nth(0)).toHaveAttribute(
     'data-state',
     'thinking',
