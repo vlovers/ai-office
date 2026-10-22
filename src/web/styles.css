@@ -1842,3 +1842,16 @@ button.line-anchor {
   .scene-motion .isometric-office .iso-monitor-glow,
   .scene-motion .isometric-office .typing-hands { animation: none; }
 }
+
+.office-operations-help,
+.office-operations-empty {
+  margin: 0 0 12px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.office-operations-empty {
+  padding: 20px;
+  border: 1px dashed var(--line);
+  text-align: center;
+}
