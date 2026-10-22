@@ -432,8 +432,7 @@ function App() {
                   onSelect={selectStation}
                 />
                 <div className="scene-caption">
-                  Two visible desks · all profiles in the activity roster · Tab / arrows to
-                  navigate
+                  Two visible desks · all profiles in the activity roster · Tab / arrows to navigate
                 </div>
               </section>
               <div className="stats" aria-label="Workspace statistics">

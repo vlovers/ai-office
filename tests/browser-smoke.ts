@@ -92,7 +92,10 @@ try {
   await page.keyboard.press(' ');
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#agent')).toContainText('Codex 02');
-  await expect(page.locator('.office-operations-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.office-operations-agent').nth(1)).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await page.locator('.office-operations-agent').first().click();
   await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
   await secondDesk.focus();
