@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { AgentId } from '../shared/types.js';
 import { OFFICE_LAYOUT, officeGeometry, selectOfficeSeats } from './office-layout.js';
+import { selectOfficeHistory } from './office-history.js';
+import type { OfficeHistoryFilter } from './office-history.js';
 import type { SceneStatus } from './scene-state.js';
 import type { SceneState } from './scene-state.js';
 
@@ -184,7 +186,7 @@ export function PixelOffice({
   const container = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState<'all' | 'selected' | 'failures'>('all');
+  const [historyFilter, setHistoryFilter] = useState<OfficeHistoryFilter>('all');
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setNarrow(entry.contentRect.width < 560);
@@ -219,14 +221,10 @@ export function PixelOffice({
     (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
   );
   const nextQueued = selectedQueue[0];
-  const filteredHistory = recentTasks.filter((task) => {
-    if (historyFilter === 'selected') return task.agentId === selectedAgent;
-    if (historyFilter === 'failures') return ['failed', 'interrupted'].includes(task.state);
-    return true;
-  });
-  const visibleHistory = [...filteredHistory]
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, showAllTasks ? 24 : 8);
+  const filteredHistory = selectOfficeHistory(
+    recentTasks, selectedAgent, historyFilter, recentTasks.length,
+  );
+  const visibleHistory = filteredHistory.slice(0, showAllTasks ? 24 : 8);
   const selectedSeat = seatedAgents.findIndex((agent) => agent.id === selectedAgent);
   const workstationSummary = seatedAgents.map(
     (agent) => `${agent.name}: ${agent.status.label}`,
