@@ -9,17 +9,17 @@ export interface WorkstationPlacement {
 
 /** Placement only: rendering never creates an agent absent from the runtime. */
 export const OFFICE_LAYOUT: readonly WorkstationPlacement[] = [
-  { agentId: 'codex-1', identity: 'fern', landscape: { x: 46, y: 80 }, portrait: { x: 34, y: 98 } },
+  { agentId: 'codex-1', identity: 'fern', landscape: { x: 235, y: 245 }, portrait: { x: 135, y: 260 } },
   {
     agentId: 'codex-2',
     identity: 'sage',
-    landscape: { x: 441, y: 80 },
-    portrait: { x: 34, y: 278 },
+    landscape: { x: 605, y: 245 },
+    portrait: { x: 280, y: 405 },
   },
 ];
 
 export function officeGeometry(portrait: boolean) {
-  return portrait ? { width: 420, height: 465, wall: 159 } : { width: 840, height: 280, wall: 191 };
+  return portrait ? { width: 420, height: 580, wall: 159 } : { width: 840, height: 440, wall: 191 };
 }
 
 /** Always display the inspected agent before filling spare seats with active workers.
