@@ -132,6 +132,31 @@ export function PixelOffice({
           );
         })}
       </svg>
+      <section className="office-workflow" aria-label="Agent workflow overview">
+        <div className="office-workflow-header">
+          <strong>Agent workflow</strong>
+          <span>Live profile activity · not an automatic pipeline</span>
+        </div>
+        <div className="office-workflow-lanes">
+          {(['coder', 'reviewer', 'qa'] as const).map((role) => {
+            const matching = agents.filter((agent) => agent.role?.toLowerCase().includes(role));
+            const active = matching.filter((agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state));
+            return (
+              <div className="office-workflow-lane" key={role} data-role={role}>
+                <span className="office-workflow-step">{role === 'coder' ? '01' : role === 'reviewer' ? '02' : '03'}</span>
+                <strong>{role === 'qa' ? 'QA' : role === 'coder' ? 'Coder' : 'Reviewer'}</strong>
+                <span className="office-workflow-count">{matching.length === 0 ? 'No profile' : `${active.length} active / ${matching.length} profiles`}</span>
+                {matching.length > 0 && <div className="office-workflow-members">{matching.map((agent) => (
+                  <button key={agent.id} type="button" onClick={() => onSelect(agent.id)} aria-pressed={selectedAgent === agent.id} title={agent.status.label}>
+                    <span className={`office-workflow-dot state-${agent.status.state}`} aria-hidden="true" />
+                    {agent.name}
+                  </button>
+                ))}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </section>
       <div className="office-operations" aria-label="Live office operations">
         <div className="office-operations-heading"><strong>Office activity</strong><span aria-live="polite">{activeCount} active · {errorCount} errors</span></div>
         <p className="office-operations-help">Select a desk or an agent below to inspect their actual task and session. Status comes from the local server, not the animation.</p>
