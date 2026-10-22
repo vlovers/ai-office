@@ -2089,3 +2089,25 @@ button.line-anchor {
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+
+/* State legend is categorical: terminal states are alternatives, not fabricated transitions. */
+.office-lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+.office-lifecycle li {
+  border: 1px solid #28533c;
+  padding: 4px 6px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.office-lifecycle li[aria-current='step'] {
+  border-color: var(--phosphor);
+  background: #1c4933;
+  color: var(--phosphor);
+}
