@@ -77,7 +77,7 @@ try {
   await page.getByRole('button', { name: 'Verify: fixture' }).click();
   await expect(review).toContainText('fixture: Passed');
   await page.reload();
-  await page.getByRole('button', { name: /Implement isolated change/ }).click();
+  await page.locator('.task-row').filter({ hasText: 'Implement isolated change' }).click();
   await page.getByRole('button', { name: 'Refresh Git review' }).click();
   await expect(review).toContainText('verification passed');
   // Real production UI over HTTP and SDK transport; no model calls.
@@ -134,7 +134,7 @@ try {
   await page.getByRole('button', { name: 'Save draft feedback' }).click();
   await expect(review).toHaveAttribute('aria-busy', 'false');
   await page.reload();
-  await page.getByRole('button', { name: /Implement isolated change/ }).click();
+  await page.locator('.task-row').filter({ hasText: 'Implement isolated change' }).click();
   await expect(review).toContainText('CORRECT_FIXTURE: clarify README and retain context');
   await review.screenshot({
     path: join(process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir(), 'ai-office-v05-feedback.png'),
@@ -195,7 +195,7 @@ try {
   app = await createApp(manager);
   const restartedAddress = await app.listen({ host: '127.0.0.1', port: 0 });
   await page.goto(restartedAddress);
-  await page.getByRole('button', { name: /^Implement isolated change/ }).click();
+  await page.locator('.task-row').filter({ hasText: 'Implement isolated change' }).click();
   await expect(review).toContainText('Review revision 3');
   await page.getByLabel('Review history').selectOption(oldRevision);
   await expect(review).toContainText('CORRECT_FIXTURE: clarify README and retain context');
