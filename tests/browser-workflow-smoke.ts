@@ -97,9 +97,12 @@ try {
   await gate('Start QA');
   await expect(board).toContainText('QA assertions passed', { timeout: 45000 });
   await gate('Approve QA result');
-  await expect(board.getByRole('status')).toContainText('State: completed');
+  await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  const diagnostics = board.getByLabel('Workflow diagnostics');
+  await expect(diagnostics).toContainText('Persisted checkpoint diagnostics');
+  await expect(diagnostics).toContainText('no automatic restart');
   await page.reload();
-  await expect(board.getByRole('status')).toContainText('State: completed');
+  await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
@@ -126,6 +129,34 @@ try {
   const otherId = alternate.json().id;
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true }).locator('option')).toHaveCount(2);
+  const operationsQueue = board.getByLabel('Workflow operations queue');
+  await expect(operationsQueue).toContainText(reviewed.id.slice(0, 8));
+  await expect(operationsQueue).toContainText(otherId.slice(0, 8));
+  await board.getByLabel('Find workflow by ID or repository').fill(otherId);
+  await expect(operationsQueue.getByRole('button')).toHaveCount(1);
+  await board.getByLabel('Workflow state').selectOption('completed');
+  await expect(board.getByText('No workflows match the current filters.')).toBeVisible();
+  await board.getByLabel('Workflow state').selectOption('all');
+  await board.getByLabel('Find workflow by ID or repository').fill('');
+  await board.getByLabel('Sort workflows').selectOption('oldest');
+  await board.getByLabel('Sort workflows').selectOption('attention');
+  await board.getByLabel('Workflow operations overview').getByRole('checkbox').check();
+  await expect(operationsQueue).toContainText(otherId.slice(0, 8));
+  await board.getByLabel('Workflow operations overview').getByRole('checkbox').uncheck();
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Resume live updates' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(board.getByLabel('Workflow operations overview')).toContainText(
+    'Live updates paused',
+  );
+  await board.getByRole('button', { name: 'Refresh workflow' }).click();
+  await board.getByRole('button', { name: 'Resume live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Pause live updates' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
@@ -143,7 +174,7 @@ try {
     await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
     await requested;
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
-    await expect(board.getByRole('status')).toContainText('State: completed');
+    await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
     const delayed = page.waitForResponse((response) =>
       response.url().endsWith(`/workflows/${otherId}/timeline`),
     );
@@ -151,7 +182,7 @@ try {
     await (await delayed).finished();
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
-    await expect(board.getByRole('status')).toContainText('State: completed');
+    await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
   } finally {
     release();
     await page.unroute(routePattern);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
+import { selectWorkflowOperations, workflowNeedsAttention } from './workflow-operations.js';
 
 type Stage = {
   kind: 'coder' | 'reviewer' | 'qa';
@@ -20,9 +21,24 @@ type Summary = {
   version: number;
   state: string;
   repositoryId: string;
-  stages: { taskId: string | null; agentId: string }[];
+  createdAt?: string;
+  updatedAt?: string;
+  stages: { kind?: string; state?: string; taskId: string | null; agentId: string }[];
 };
 type Report = { kind: string; taskId: string | null; result: string; error: string | null };
+type Diagnostics = {
+  id: string;
+  version: number;
+  state: string;
+  findings: {
+    code: string;
+    severity: 'info' | 'attention' | 'blocked';
+    stage: string | null;
+    message: string;
+    suggestedAction: string | null;
+  }[];
+  warning: string;
+};
 const labels: Record<string, string> = {
   'approve-initial': 'Approve Coder baseline',
   'bind-coder-task': 'Bind Coder task',
@@ -57,9 +73,15 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 
 export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [items, setItems] = useState<Summary[]>([]);
+  const [stateFilter, setStateFilter] = useState('all');
+  const [workflowQuery, setWorkflowQuery] = useState('');
+  const [triageOnly, setTriageOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
+  const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [commands, setCommands] = useState<{ commandId: string; argv: string[] }[]>([]);
   const [commandId, setCommandId] = useState('');
@@ -94,15 +116,17 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
         ? selected
         : (workflows[0]?.id ?? '');
       setSelected(next);
-      const [view, output] = next
+      const [view, output, diagnosis] = next
         ? await Promise.all([
             request<Timeline>(`/workflows/${next}/timeline`),
             request<Report[]>(`/workflows/${next}/results`),
+            request<Diagnostics>(`/workflows/${next}/diagnostics`),
           ])
-        : [null, []];
+        : [null, [], null];
       if (epoch !== refreshEpoch.current) return;
       setTimeline(view);
       setReports(output);
+      setDiagnostics(diagnosis);
       setError('');
     } catch (cause) {
       if (epoch === refreshEpoch.current)
@@ -110,13 +134,13 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     }
   }, [selected, taskId]);
   useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), 3000);
+    if (!paused) void refresh();
+    const timer = paused ? undefined : setInterval(() => void refresh(), 3000);
     return () => {
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
       refreshEpoch.current++;
     };
-  }, [refresh]);
+  }, [refresh, paused]);
   async function mutate(operation: () => Promise<unknown>) {
     setLoading(true);
     setError('');
@@ -130,6 +154,19 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     }
   }
   const chosen = items.find((item) => item.id === selected);
+  const counts = {
+    active: items.filter((item) => item.state === 'active').length,
+    blocked: items.filter((item) => item.state === 'blocked').length,
+    completed: items.filter((item) => item.state === 'completed').length,
+    cancelled: items.filter((item) => item.state === 'cancelled').length,
+  };
+  const needsAttention = workflowNeedsAttention;
+  const visibleWorkflows = selectWorkflowOperations(items, {
+    query: workflowQuery,
+    state: stateFilter,
+    triageOnly,
+    sort: sortBy,
+  });
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
@@ -171,6 +208,16 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     >
       <div className="panel-heading">
         <h2>{taskId ? 'Workflow review & QA' : 'Workflow Timeline'}</h2>
+        {!taskId && (
+          <button
+            className="secondary"
+            type="button"
+            aria-pressed={paused}
+            onClick={() => setPaused((current) => !current)}
+          >
+            {paused ? 'Resume live updates' : 'Pause live updates'}
+          </button>
+        )}
         <button className="secondary" disabled={loading} onClick={() => void mutate(refresh)}>
           Refresh workflow
         </button>
@@ -235,6 +282,97 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
         </details>
       )}
       {error && <p role="alert">{error} Refresh workflow before trying another action.</p>}
+      {!taskId && items.length > 0 && (
+        <div aria-label="Workflow operations overview">
+          <p role="status">
+            {paused ? 'Live updates paused · ' : 'Live updates every 3 seconds · '}
+            {items.length} workflows · {counts.active} active · {counts.blocked} blocked ·{' '}
+            {counts.completed} completed · {counts.cancelled} cancelled
+          </p>
+          <label>
+            Find workflow by ID or repository
+            <input
+              type="search"
+              value={workflowQuery}
+              onChange={(event) => setWorkflowQuery(event.target.value)}
+              placeholder="Workflow or repository ID"
+            />
+          </label>
+          <label>
+            Workflow state
+            <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}>
+              <option value="all">All states</option>
+              <option value="active">Active</option>
+              <option value="blocked">Blocked</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label>
+            Sort workflows
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+            >
+              <option value="attention">Attention first</option>
+              <option value="recent">Recently updated</option>
+              <option value="oldest">Oldest updates</option>
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={triageOnly}
+              onChange={(event) => setTriageOnly(event.target.checked)}
+            />{' '}
+            Needs attention (blocked, interrupted, failed or awaiting approval)
+          </label>
+          <p>{visibleWorkflows.length} matching workflows</p>
+          <p role="note">
+            Attention is derived from persisted stage states, not from a live process health probe.
+            An old update does not prove that a workflow is stuck. Inspect its timeline and
+            execution events before stopping or cancelling anything.
+          </p>
+          {visibleWorkflows.length > 0 && (
+            <ul aria-label="Workflow operations queue">
+              {visibleWorkflows.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-current={item.id === selected ? 'true' : undefined}
+                    onClick={() => {
+                      refreshEpoch.current++;
+                      setTimeline(null);
+                      setReports([]);
+                      setDiagnostics(null);
+                      setSelected(item.id);
+                    }}
+                  >
+                    {item.id.slice(0, 8)} · {item.state} · v{item.version}
+                  </button>{' '}
+                  {needsAttention(item) && <strong>Needs attention · </strong>}
+                  {item.updatedAt && (
+                    <time dateTime={item.updatedAt} title={item.updatedAt}>
+                      Updated {new Date(item.updatedAt).toLocaleString()}
+                    </time>
+                  )}{' '}
+                  {item.stages
+                    .filter((stage) => stage.state && stage.state !== 'pending')
+                    .map((stage, index) => (
+                      <span key={`${item.id}-${stage.kind ?? index}`}>
+                        {stage.kind ?? 'stage'}: {stage.state}{' '}
+                      </span>
+                    ))}
+                </li>
+              ))}
+            </ul>
+          )}
+          {visibleWorkflows.length === 0 && (
+            <p role="status">No workflows match the current filters.</p>
+          )}
+        </div>
+      )}
       {!items.length && <p>No workflows created yet.</p>}
       {items.length > 0 && (
         <>
@@ -247,10 +385,16 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                 refreshEpoch.current++;
                 setTimeline(null);
                 setReports([]);
+                setDiagnostics(null);
                 setSelected(event.target.value);
               }}
             >
-              {items.map((item) => (
+              {selected && !visibleWorkflows.some((item) => item.id === selected) && (
+                <option value={selected} disabled>
+                  Selected workflow (outside current filters)
+                </option>
+              )}
+              {visibleWorkflows.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id.slice(0, 8)} · {item.state} · v{item.version}
                 </option>
@@ -262,6 +406,33 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
               </p>
+              {diagnostics &&
+                diagnostics.id === timeline.id &&
+                diagnostics.version === timeline.version && (
+                  <section aria-label="Workflow diagnostics">
+                    <h3>Persisted checkpoint diagnostics</h3>
+                    {diagnostics.findings.length === 0 ? (
+                      <p>No persisted checkpoint findings.</p>
+                    ) : (
+                      <ul>
+                        {diagnostics.findings.map((finding, index) => (
+                          <li key={`${finding.code}-${finding.stage ?? 'workflow'}-${index}`}>
+                            <strong>{finding.severity.toUpperCase()}</strong> ·{' '}
+                            {finding.stage ?? 'workflow'} — {finding.message}
+                            {finding.suggestedAction && (
+                              <p>
+                                Suggested checkpoint:{' '}
+                                {labels[finding.suggestedAction] ?? finding.suggestedAction}. Review
+                                the stage and confirm explicitly below.
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p role="note">{diagnostics.warning}</p>
+                  </section>
+                )}
               <ol>
                 {timeline.stages.map((stage) => (
                   <li key={stage.kind}>
