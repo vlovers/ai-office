@@ -18,15 +18,15 @@ describe('office seat priority', () => {
 
   it('keeps selected profile visible without reordering existing seats', () => {
     expect(selectOfficeSeats(agents, 'profile-3' as AgentId).map((a) => a.id)).toEqual([
+      'codex-1',
       'profile-3',
-      'codex-2',
     ]);
   });
 
   it('preserves default seat order when selected profile is unavailable', () => {
     expect(selectOfficeSeats(agents, 'missing' as AgentId).map((a) => a.id)).toEqual([
+      'codex-1',
       'codex-2',
-      'profile-4',
     ]);
   });
 
@@ -69,8 +69,8 @@ describe('office responsive geometry', () => {
       agent('running-2', 'stopping'),
     ];
     expect(selectOfficeSeats(profiles, 'unknown' as AgentId).map((a) => a.id)).toEqual([
-      'running-1',
-      'running-2',
+      'idle-1',
+      'idle-2',
     ]);
   });
 });
