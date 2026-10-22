@@ -111,6 +111,8 @@ it('inspects selected live agent without inventing assignments or access', () =>
   expect(markup).toContain('aria-label="Selected agent inspector"');
   expect(markup).toContain('Build service');
   expect(markup).toContain('Task lifecycle: running');
+  expect(markup).toContain('aria-label="Selected task lifecycle"');
+  expect(markup).toContain('aria-current="step">running</li>');
   expect(markup).toContain('1 queued for this agent');
   expect(markup).toContain('Execution access: read-only');
   expect(render()).toContain('No running assignment');
