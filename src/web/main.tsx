@@ -418,6 +418,7 @@ function App() {
                       name: slot.name,
                       role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
                       taskTitle: dashboard?.tasks.find((task) => task.id === slot.taskId)?.title,
+                      taskState: dashboard?.tasks.find((task) => task.id === slot.taskId)?.state,
                       access: slot.mode,
                       active: Boolean(slot.taskId),
                       status: sceneStatus(
