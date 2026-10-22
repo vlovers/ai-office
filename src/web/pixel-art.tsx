@@ -150,6 +150,7 @@ export function PixelOffice({
   const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
   const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
   const selectedQueue = queue.filter((entry) => entry.agentId === selectedAgent).sort((a, b) => a.order - b.order);
+  const lifecycle = ['queued', 'running', 'stopping', 'completed', 'failed', 'stopped', 'interrupted'] as const;
   // Keep the selected profile visible, then fill remaining seats with running agents.
   // The roster below remains the complete, untruncated list.
   const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
@@ -377,6 +378,15 @@ export function PixelOffice({
               <strong>Current assignment</strong>
               <p>{selectedProfile.taskTitle ?? 'No running assignment'}</p>
               {selectedProfile.taskState && <p>Task lifecycle: {selectedProfile.taskState}</p>}
+              {selectedProfile.taskState && (
+                <ol className="office-lifecycle" aria-label="Selected task lifecycle">
+                  {lifecycle.map((state) => (
+                    <li key={state} aria-current={selectedProfile.taskState === state ? 'step' : undefined}>
+                      {state}
+                    </li>
+                  ))}
+                </ol>
+              )}
               <p>{selectedQueue.length} queued for this agent</p>
             </div>
           </div>
