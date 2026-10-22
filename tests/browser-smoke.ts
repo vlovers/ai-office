@@ -81,6 +81,9 @@ try {
   await expect(page.locator('.office-operations-agent')).toHaveCount(2);
   await expect(page.locator('.office-operations-heading')).toContainText('0 active');
   await expect(page.locator('.office-operations-help')).toContainText('local server');
+  await expect(page.getByRole('region', { name: 'Agent workflow overview' })).toBeVisible();
+  await expect(page.locator('.office-workflow-lane')).toHaveCount(3);
+  await expect(page.locator('.office-workflow-lane[data-role="reviewer"]')).toContainText('No profile');
   const firstDesk = page.getByRole('button', { name: 'Select Codex 01 workstation' });
   const secondDesk = page.getByRole('button', { name: 'Select Codex 02 workstation' });
   await firstDesk.focus();
