@@ -137,9 +137,7 @@ try {
   await board.getByLabel('Sort workflows').selectOption('oldest');
   await board.getByLabel('Sort workflows').selectOption('attention');
   await board.getByLabel('Workflow operations overview').getByRole('checkbox').check();
-  await expect(board.getByLabel('Workflow operations queue')).toContainText(
-    otherId.slice(0, 8),
-  );
+  await expect(board.getByLabel('Workflow operations queue')).toContainText(otherId.slice(0, 8));
   await board.getByLabel('Workflow operations overview').getByRole('checkbox').uncheck();
   await board.getByRole('button', { name: 'Pause live updates' }).click();
   await expect(board.getByRole('button', { name: 'Resume live updates' })).toHaveAttribute(
