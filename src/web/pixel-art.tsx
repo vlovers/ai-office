@@ -179,6 +179,7 @@ export function PixelOffice({
     (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
   );
   const nextQueued = selectedQueue[0];
+  const selectedSeat = seatedAgents.findIndex((agent) => agent.id === selectedAgent);
   return (
     <div
       ref={container}
@@ -200,6 +201,7 @@ export function PixelOffice({
       )}
       <svg
         className="pixel-office"
+        data-visible-seats={seatedAgents.length}
         viewBox={`0 0 ${geometry.width} ${geometry.height}`}
         role="group"
         aria-label="Interactive isometric office, showing real agent status"
@@ -285,8 +287,8 @@ export function PixelOffice({
               data-agent-id={agent.id}
               data-state={agent.status.state}
               role="button"
-              tabIndex={0}
-              aria-label={`Select ${agent.name} workstation`}
+              tabIndex={selectedSeat === -1 ? (index === 0 ? 0 : -1) : selected ? 0 : -1}
+              aria-label={`Select ${agent.name} workstation · ${agent.status.label}`}
               aria-pressed={selected}
               aria-describedby={`${prefix}-${agent.id}-status`}
               transform={`translate(${point.x} ${point.y})`}
@@ -313,6 +315,9 @@ export function PixelOffice({
                         : undefined;
                 if (next !== undefined) {
                   event.preventDefault();
+                  buttons.forEach((button, buttonIndex) => {
+                    button.setAttribute('tabindex', buttonIndex === next ? '0' : '-1');
+                  });
                   buttons[next]?.focus();
                 }
               }}
