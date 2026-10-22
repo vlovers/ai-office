@@ -36,7 +36,7 @@ export function selectOfficeSeats<
     status: { state: string };
   },
 >(agents: readonly T[], selectedAgent: AgentId, capacity = OFFICE_LAYOUT.length): T[] {
-  const limit = Math.max(0, Math.floor(capacity));
+  const limit = Number.isFinite(capacity) ? Math.max(0, Math.floor(capacity)) : 0;
   if (limit === 0) return [];
   // Preserve the selected profile, then prioritize actually running workers.
   // The office is a viewport, not a scheduler: never infer execution from seats.
@@ -45,8 +45,16 @@ export function selectOfficeSeats<
     (agent) => agent.id !== selectedAgent &&
       (agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state)),
   );
+  const activeIds = new Set(active.map((agent) => agent.id));
   const remaining = agents.filter(
-    (agent) => agent.id !== selectedAgent && !active.includes(agent),
+    (agent) => agent.id !== selectedAgent && !activeIds.has(agent.id),
   );
-  return [...(selected ? [selected] : []), ...active, ...remaining].slice(0, limit);
+  const seen = new Set<AgentId>();
+  return [...(selected ? [selected] : []), ...active, ...remaining]
+    .filter((agent) => {
+      if (seen.has(agent.id)) return false;
+      seen.add(agent.id);
+      return true;
+    })
+    .slice(0, limit);
 }
