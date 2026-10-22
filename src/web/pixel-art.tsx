@@ -184,6 +184,7 @@ export function PixelOffice({
   const container = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'selected' | 'failures'>('all');
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setNarrow(entry.contentRect.width < 560);
@@ -218,7 +219,12 @@ export function PixelOffice({
     (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
   );
   const nextQueued = selectedQueue[0];
-  const visibleHistory = [...recentTasks]
+  const filteredHistory = recentTasks.filter((task) => {
+    if (historyFilter === 'selected') return task.agentId === selectedAgent;
+    if (historyFilter === 'failures') return ['failed', 'interrupted'].includes(task.state);
+    return true;
+  });
+  const visibleHistory = [...filteredHistory]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, showAllTasks ? 24 : 8);
   const selectedSeat = seatedAgents.findIndex((agent) => agent.id === selectedAgent);
@@ -501,18 +507,32 @@ export function PixelOffice({
           <strong>Recent task activity</strong>
           <span>Persisted task snapshots · latest first</span>
         </div>
-        {recentTasks.length > 8 && (
+        <div className="office-history-filters" role="group" aria-label="Filter task history">
+          {(['all', 'selected', 'failures'] as const).map((filter) => (
+            <button
+              type="button"
+              key={filter}
+              aria-pressed={historyFilter === filter}
+              onClick={() => setHistoryFilter(filter)}
+            >
+              {filter === 'all' ? 'All tasks' : filter === 'selected' ? 'Selected agent' : 'Failures'}
+            </button>
+          ))}
+        </div>
+        {filteredHistory.length > 8 && (
           <button
             type="button"
             className="office-history-toggle"
             aria-expanded={showAllTasks}
             onClick={() => setShowAllTasks((value) => !value)}
           >
-            {showAllTasks ? 'Show recent 8' : `Show up to 24 · ${recentTasks.length} available`}
+            {showAllTasks ? 'Show recent 8' : `Show up to 24 · ${filteredHistory.length} available`}
           </button>
         )}
-        {recentTasks.length === 0 ? (
-          <p className="office-operations-help">No recorded tasks.</p>
+        {filteredHistory.length === 0 ? (
+          <p className="office-operations-help">
+            {recentTasks.length === 0 ? 'No recorded tasks.' : 'No tasks match this filter.'}
+          </p>
         ) : (
           <ol className="office-history-items">
             {visibleHistory.map((task) => (
