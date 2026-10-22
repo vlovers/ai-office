@@ -50,6 +50,17 @@ export function selectOfficeSeats<
   const selectedIndex = unique.findIndex((agent) => agent.id === selectedAgent);
   const visible = unique.slice(0, limit);
   if (selectedIndex < 0 || selectedIndex < limit) return visible;
+  const displaced = visible[visible.length - 1]!;
   visible[visible.length - 1] = unique[selectedIndex]!;
+  // If selection evicts an active worker, retain them instead of an idle
+  // occupant, without changing the order of the surviving workstations.
+  const isActive = (agent: T) =>
+    agent.active === true || ['thinking', 'working', 'stopping'].includes(agent.status.state);
+  if (isActive(displaced)) {
+    const idleIndex = visible.findIndex(
+      (agent) => agent.id !== selectedAgent && !isActive(agent),
+    );
+    if (idleIndex >= 0) visible[idleIndex] = displaced;
+  }
   return visible;
 }
