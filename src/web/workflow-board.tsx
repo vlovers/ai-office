@@ -311,6 +311,11 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
             Needs attention (blocked, interrupted, failed or awaiting approval)
           </label>
           <p>{visibleWorkflows.length} matching workflows</p>
+          <p role="note">
+            Attention is derived from persisted stage states, not from a live process health probe.
+            An old update does not prove that a workflow is stuck. Inspect its timeline and
+            execution events before stopping or cancelling anything.
+          </p>
           {visibleWorkflows.length > 0 && (
             <ul aria-label="Workflow operations queue">
               {visibleWorkflows.map((item) => (
@@ -328,6 +333,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                   >
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
                   </button>{' '}
+                  {needsAttention(item) && <strong>Needs attention · </strong>}
                   {item.updatedAt && (
                     <time dateTime={item.updatedAt} title={item.updatedAt}>
                       Updated {new Date(item.updatedAt).toLocaleString()}
