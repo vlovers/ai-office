@@ -100,7 +100,7 @@ it('inspects selected live agent without inventing assignments or access', () =>
   const markup = renderToStaticMarkup(
     createElement(PixelOffice, {
       agents: [
-        { ...agents[0]!, taskTitle: 'Build service', role: 'Coder', access: 'read-only' },
+        { ...agents[0]!, taskTitle: 'Build service', taskState: 'running', role: 'Coder', access: 'read-only' },
         agents[1]!,
       ],
       selectedAgent: 'codex-1',
@@ -110,6 +110,7 @@ it('inspects selected live agent without inventing assignments or access', () =>
   );
   expect(markup).toContain('aria-label="Selected agent inspector"');
   expect(markup).toContain('Build service');
+  expect(markup).toContain('Task lifecycle: running');
   expect(markup).toContain('1 queued for this agent');
   expect(markup).toContain('Execution access: read-only');
   expect(render()).toContain('No running assignment');
