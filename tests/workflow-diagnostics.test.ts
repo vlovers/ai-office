@@ -2,7 +2,10 @@ import { expect, it } from 'vitest';
 import { diagnoseWorkflow } from '../src/server/workflow-diagnostics.js';
 import type { Workflow } from '../src/server/workflows.js';
 
-const fixture = (state: Workflow['state'], stageState: Workflow['stages'][number]['state']): Workflow => ({
+const fixture = (
+  state: Workflow['state'],
+  stageState: Workflow['stages'][number]['state'],
+): Workflow => ({
   id: 'workflow',
   repositoryId: 'repository',
   workspaceId: null,
@@ -11,27 +14,31 @@ const fixture = (state: Workflow['state'], stageState: Workflow['stages'][number
   state,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
-  stages: [{
-    kind: 'coder',
-    agentId: 'codex-1',
-    agentRevision: 1,
-    mode: 'write',
-    state: stageState,
-    taskId: null,
-    approvedRevision: null,
-    outputRevision: null,
-    approvedAt: null,
-  }],
+  stages: [
+    {
+      kind: 'coder',
+      agentId: 'codex-1',
+      agentRevision: 1,
+      mode: 'write',
+      state: stageState,
+      taskId: null,
+      approvedRevision: null,
+      outputRevision: null,
+      approvedAt: null,
+    },
+  ],
 });
 
 it('reports approval checkpoints without authorizing execution', () => {
   const result = diagnoseWorkflow(fixture('active', 'awaiting_approval'));
-  expect(result.findings).toMatchObject([{
-    code: 'approval-required',
-    severity: 'attention',
-    stage: 'coder',
-    suggestedAction: 'approve-initial',
-  }]);
+  expect(result.findings).toMatchObject([
+    {
+      code: 'approval-required',
+      severity: 'attention',
+      stage: 'coder',
+      suggestedAction: 'approve-initial',
+    },
+  ]);
   expect(result.warning).toContain('do not prove process liveness');
 });
 
