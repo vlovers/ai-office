@@ -21,6 +21,7 @@ export interface OfficeAgent {
   role?: string;
   taskTitle?: string;
   taskId?: string;
+  taskState?: string;
   status: SceneStatus;
   access?: string;
   active?: boolean;
@@ -375,6 +376,7 @@ export function PixelOffice({
             <div>
               <strong>Current assignment</strong>
               <p>{selectedProfile.taskTitle ?? 'No running assignment'}</p>
+              {selectedProfile.taskState && <p>Task lifecycle: {selectedProfile.taskState}</p>}
               <p>{selectedQueue.length} queued for this agent</p>
             </div>
           </div>
@@ -449,6 +451,7 @@ export function PixelOffice({
                 {agent.taskTitle && (
                   <small className="office-operations-task" title={agent.taskTitle}>
                     Task: {agent.taskTitle}
+                    {agent.taskState ? ` · ${agent.taskState}` : ''}
                   </small>
                 )}
               </span>
