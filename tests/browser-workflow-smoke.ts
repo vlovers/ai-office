@@ -126,12 +126,8 @@ try {
   const otherId = alternate.json().id;
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true }).locator('option')).toHaveCount(2);
-  await expect(board.getByLabel('Workflow operations queue')).toContainText(
-    reviewed.id.slice(0, 8),
-  );
-  await expect(board.getByLabel('Workflow operations queue')).toContainText(
-    otherId.slice(0, 8),
-  );
+  await expect(board.getByLabel('Workflow operations queue')).toContainText(reviewed.id.slice(0, 8));
+  await expect(board.getByLabel('Workflow operations queue')).toContainText(otherId.slice(0, 8));
   await board.getByLabel('Find workflow by ID or repository').fill(otherId);
   await expect(board.getByLabel('Workflow operations queue').getByRole('button')).toHaveCount(1);
   await board.getByLabel('Workflow state').selectOption('completed');
@@ -159,8 +155,6 @@ try {
     'aria-pressed',
     'false',
   );
-
-
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
