@@ -173,12 +173,31 @@ export function PixelOffice({
   // Keep the selected profile visible, then fill remaining seats with running agents.
   // The roster below remains the complete, untruncated list.
   const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
+  const seatedIds = new Set(seatedAgents.map((agent) => agent.id));
+  const offscreenAgents = agents.filter((agent) => !seatedIds.has(agent.id));
+  const offscreenActive = offscreenAgents.filter(
+    (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
+  );
+  const nextQueued = selectedQueue[0];
   return (
     <div
       ref={container}
       className="shared-office isometric-office"
       data-layout={narrow ? 'portrait' : 'landscape'}
     >
+      <div className="office-operations-heading" aria-label="Office presence summary">
+        <strong>Live office · {agents.length} profiles</strong>
+        <span aria-live="polite">
+          {activeCount} running · {queue.length} queued · {errorCount} errors
+        </span>
+      </div>
+      {offscreenAgents.length > 0 && (
+        <div className="office-operations-help" role="status">
+          {offscreenAgents.length} profiles outside the two-desk view
+          {offscreenActive.length > 0 ? ` · ${offscreenActive.length} active` : ''}.
+          Select any profile in the roster below to bring it into view.
+        </div>
+      )}
       <svg
         className="pixel-office"
         viewBox={`0 0 ${geometry.width} ${geometry.height}`}
@@ -412,6 +431,12 @@ export function PixelOffice({
                 </ol>
               )}
               <p>{selectedQueue.length} queued for this agent</p>
+              {nextQueued && (
+                <p>
+                  Next submitted task: {nextQueued.title}
+                  {nextQueued.waitingReason ? ` · ${nextQueued.waitingReason}` : ''}
+                </p>
+              )}
             </div>
           </div>
         ) : (
