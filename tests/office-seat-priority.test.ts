@@ -17,19 +17,25 @@ describe('office seat priority', () => {
   ];
 
   it('keeps selected profile and an active worker visible', () => {
-    expect(selectOfficeSeats(agents, 'profile-3' as AgentId).map((a) => a.id))
-      .toEqual(['profile-3', 'codex-2']);
+    expect(selectOfficeSeats(agents, 'profile-3' as AgentId).map((a) => a.id)).toEqual([
+      'profile-3',
+      'codex-2',
+    ]);
   });
 
   it('prioritizes active workers when selected profile is unavailable', () => {
-    expect(selectOfficeSeats(agents, 'missing' as AgentId).map((a) => a.id))
-      .toEqual(['codex-2', 'profile-4']);
+    expect(selectOfficeSeats(agents, 'missing' as AgentId).map((a) => a.id)).toEqual([
+      'codex-2',
+      'profile-4',
+    ]);
   });
 
   it('never renders duplicate workstations for a duplicated runtime profile', () => {
     const duplicate = [agent('codex-1'), agent('codex-1'), agent('codex-2', 'working')];
-    expect(selectOfficeSeats(duplicate, 'codex-1' as AgentId).map((a) => a.id))
-      .toEqual(['codex-1', 'codex-2']);
+    expect(selectOfficeSeats(duplicate, 'codex-1' as AgentId).map((a) => a.id)).toEqual([
+      'codex-1',
+      'codex-2',
+    ]);
   });
 
   it('treats invalid capacities as empty rather than throwing', () => {
@@ -62,7 +68,9 @@ describe('office responsive geometry', () => {
       agent('running-1', 'working'),
       agent('running-2', 'stopping'),
     ];
-    expect(selectOfficeSeats(profiles, 'unknown' as AgentId).map((a) => a.id))
-      .toEqual(['running-1', 'running-2']);
+    expect(selectOfficeSeats(profiles, 'unknown' as AgentId).map((a) => a.id)).toEqual([
+      'running-1',
+      'running-2',
+    ]);
   });
 });
