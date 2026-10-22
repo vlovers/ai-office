@@ -2251,3 +2251,25 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
     transition: none !important;
   }
 }
+
+/* History expansion remains an explicit user action and uses persisted snapshots only. */
+.office-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  min-height: 36px;
+  color: #d4f4df;
+  background: #183d2e;
+  border: 1px solid #54896a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.office-history-toggle:hover {
+  background: #24513c;
+}
+.office-history-toggle:focus-visible {
+  outline: 2px solid #b7ffca;
+  outline-offset: 3px;
+}
