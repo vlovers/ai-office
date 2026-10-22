@@ -1735,3 +1735,71 @@ button.line-anchor {
     flex-wrap: wrap;
   }
 }
+
+/* Office Experience V2: operational roster stays accessible even when the SVG
+   viewport can only display two workstations. These are real scene statuses. */
+.office-operations {
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, #10271d, #081711);
+  padding: 12px;
+}
+.office-operations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  margin-bottom: 10px;
+}
+.office-operations-heading strong {
+  color: var(--phosphor);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.office-operations-agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+}
+.office-operations-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+  border: 1px solid #28533c;
+  background: #0a1c15;
+  color: var(--text);
+}
+.office-operations-agent[aria-pressed='true'] {
+  border-color: var(--phosphor);
+  background: #153625;
+}
+.office-operations-indicator {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  background: #819c8a;
+  border-radius: 50%;
+}
+.office-operations-agent.state-working .office-operations-indicator,
+.office-operations-agent.state-thinking .office-operations-indicator {
+  background: var(--phosphor);
+  box-shadow: 0 0 8px #79f5a577;
+}
+.office-operations-agent.state-stopping .office-operations-indicator { background: var(--amber); }
+.office-operations-agent.state-error .office-operations-indicator { background: var(--red); }
+.office-operations-agent.state-offline .office-operations-indicator { background: #5b6d63; }
+.office-operations-identity { min-width: 0; flex: 1; }
+.office-operations-identity strong,
+.office-operations-identity small { display: block; overflow-wrap: anywhere; }
+.office-operations-identity strong { font-size: 11px; }
+.office-operations-identity small { font-size: 9px; color: var(--muted); margin-top: 3px; }
+.office-operations-access { font-size: 9px; color: var(--muted); text-align: right; max-width: 90px; }
+@media (max-width: 680px) {
+  .office-operations { padding: 8px; }
+  .office-operations-access { display: none; }
+}
