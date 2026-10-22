@@ -16,9 +16,9 @@ describe('office seat priority', () => {
     agent('profile-4', 'thinking', true),
   ];
 
-  it('keeps selected profile visible without reordering existing seats', () => {
+  it('keeps selected profile and displaced active worker visible', () => {
     expect(selectOfficeSeats(agents, 'profile-3' as AgentId).map((a) => a.id)).toEqual([
-      'codex-1',
+      'codex-2',
       'profile-3',
     ]);
   });
