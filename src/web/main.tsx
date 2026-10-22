@@ -429,6 +429,13 @@ function App() {
                         slot.id,
                       ),
                     }))}
+                  recentTasks={(dashboard?.tasks ?? []).map((task) => ({
+                    id: task.id,
+                    agentId: task.agentId,
+                    title: task.title,
+                    state: task.state,
+                    updatedAt: task.updatedAt,
+                  }))}
                   queue={(dashboard?.queue ?? []).map((entry) => ({
                     taskId: entry.taskId,
                     agentId: entry.agentId,
