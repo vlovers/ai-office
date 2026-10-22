@@ -20,6 +20,7 @@ export interface OfficeAgent {
   name: string;
   role?: string;
   taskTitle?: string;
+  taskId?: string;
   status: SceneStatus;
   access?: string;
   active?: boolean;
@@ -146,6 +147,8 @@ export function PixelOffice({
     ['thinking', 'working', 'stopping'].includes(agent.status.state),
   ).length;
   const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
+  const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
+  const selectedQueue = queue.filter((entry) => entry.agentId === selectedAgent).sort((a, b) => a.order - b.order);
   // Keep the selected profile visible, then fill remaining seats with running agents.
   // The roster below remains the complete, untruncated list.
   const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
@@ -356,6 +359,28 @@ export function PixelOffice({
             );
           })}
         </div>
+      </section>
+      <section className="office-inspector" aria-label="Selected agent inspector">
+        <div className="office-operations-heading">
+          <strong>Selected workstation</strong>
+          <span>Read-only live snapshot</span>
+        </div>
+        {selectedProfile ? (
+          <div className="office-inspector-content">
+            <div>
+              <strong>{selectedProfile.name}</strong>
+              <p>{selectedProfile.role || 'Agent'} · {selectedProfile.status.label}</p>
+              <p>Execution access: {selectedProfile.access ?? 'Read only'}</p>
+            </div>
+            <div>
+              <strong>Current assignment</strong>
+              <p>{selectedProfile.taskTitle ?? 'No running assignment'}</p>
+              <p>{selectedQueue.length} queued for this agent</p>
+            </div>
+          </div>
+        ) : (
+          <p className="office-operations-help">Select an available agent to inspect its workstation.</p>
+        )}
       </section>
       <section className="office-queue" aria-label="Live task queue">
         <div className="office-operations-heading">
