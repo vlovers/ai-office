@@ -122,6 +122,18 @@ export function PixelOffice({
   const geometry = officeGeometry(narrow);
   const activeCount = agents.filter((agent) => ['thinking', 'working', 'stopping'].includes(agent.status.state)).length;
   const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
+  // Keep the selected profile visible, then fill remaining seats with running agents.
+  // The roster below remains the complete, untruncated list.
+  const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
+  const seatCandidates = [
+    ...(selectedProfile ? [selectedProfile] : []),
+    ...agents.filter((agent) =>
+      agent.id !== selectedAgent &&
+      (agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state)),
+    ),
+    ...agents.filter((agent) => agent.id !== selectedAgent),
+  ];
+  const seatedAgents = seatCandidates.slice(0, OFFICE_LAYOUT.length);
   return (
     <div ref={container} className="shared-office" data-layout={narrow ? 'portrait' : 'landscape'}>
       <svg
@@ -210,20 +222,7 @@ export function PixelOffice({
           />
         </g>
         {OFFICE_LAYOUT.map((placement, index) => {
-          const busy = agents.filter(
-            (agent) =>
-              agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
-          );
-          const visible = new Set(
-            [
-              ...new Set([
-                ...busy.map((agent) => agent.id),
-                ...agents.filter((agent) => agent.id === selectedAgent).map((agent) => agent.id),
-                ...agents.map((agent) => agent.id),
-              ]),
-            ].slice(0, 2),
-          );
-          const agent = agents.filter((agent) => visible.has(agent.id))[index];
+          const agent = seatedAgents[index];
           if (!agent) return null;
           const point = narrow ? placement.portrait : placement.landscape;
           const selected = selectedAgent === agent.id;
