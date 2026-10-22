@@ -183,6 +183,7 @@ export function PixelOffice({
   const prefix = useId();
   const container = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setNarrow(entry.contentRect.width < 560);
@@ -217,6 +218,9 @@ export function PixelOffice({
     (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
   );
   const nextQueued = selectedQueue[0];
+  const visibleHistory = [...recentTasks]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, showAllTasks ? 24 : 8);
   const selectedSeat = seatedAgents.findIndex((agent) => agent.id === selectedAgent);
   const workstationSummary = seatedAgents.map(
     (agent) => `${agent.name}: ${agent.status.label}`,
@@ -497,14 +501,21 @@ export function PixelOffice({
           <strong>Recent task activity</strong>
           <span>Persisted task snapshots · latest first</span>
         </div>
+        {recentTasks.length > 8 && (
+          <button
+            type="button"
+            className="office-history-toggle"
+            aria-expanded={showAllTasks}
+            onClick={() => setShowAllTasks((value) => !value)}
+          >
+            {showAllTasks ? 'Show recent 8' : `Show up to 24 · ${recentTasks.length} available`}
+          </button>
+        )}
         {recentTasks.length === 0 ? (
           <p className="office-operations-help">No recorded tasks.</p>
         ) : (
           <ol className="office-history-items">
-            {[...recentTasks]
-              .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-              .slice(0, 8)
-              .map((task) => (
+            {visibleHistory.map((task) => (
                 <li key={task.id}>
                   <button
                     type="button"
