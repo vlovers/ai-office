@@ -218,6 +218,9 @@ export function PixelOffice({
   );
   const nextQueued = selectedQueue[0];
   const selectedSeat = seatedAgents.findIndex((agent) => agent.id === selectedAgent);
+  const workstationSummary = seatedAgents.map(
+    (agent) => `${agent.name}: ${agent.status.label}`,
+  ).join('; ');
   return (
     <div
       ref={container}
@@ -242,7 +245,7 @@ export function PixelOffice({
         data-visible-seats={seatedAgents.length}
         viewBox={`0 0 ${geometry.width} ${geometry.height}`}
         role="group"
-        aria-label="Interactive isometric office, showing real agent status"
+        aria-label={`Interactive isometric office. ${workstationSummary || 'No occupied desks'}`}
       >
         <defs>
           <linearGradient id={`${prefix}-wall`} x2="0" y2="1">
