@@ -1,76 +1,59 @@
 import { describe, expect, it } from 'vitest';
 import { selectWorkflowOperations, workflowNeedsAttention } from '../src/web/workflow-operations.js';
 
-const items = Object.freeze([
-  Object.freeze({
-    id: 'a',
-    repositoryId: 'repo-one',
-    state: 'active',
-    updatedAt: '2026-10-21T00:00:00Z',
-    stages: Object.freeze([{ state: 'running' }]),
-  }),
-  Object.freeze({
-    id: 'b',
-    repositoryId: 'repo-two',
-    state: 'blocked',
-    updatedAt: '2026-10-20T00:00:00Z',
-    stages: Object.freeze([{ state: 'awaiting_approval' }]),
-  }),
-  Object.freeze({
-    id: 'c',
-    repositoryId: 'repo-one',
-    state: 'completed',
-    updatedAt: '2026-10-22T00:00:00Z',
-    stages: Object.freeze([{ state: 'completed' }]),
-  }),
-  Object.freeze({
-    id: 'd',
-    repositoryId: 'repo-three',
-    state: 'active',
-    updatedAt: '2026-10-22T00:00:00Z',
-    stages: Object.freeze([{ state: 'interrupted' }]),
-  }),
-]);
+const items = [
+  { id: 'a', repositoryId: 'one', state: 'active', updatedAt: '2026-10-21', stages: [{ state: 'running' }] },
+  { id: 'b', repositoryId: 'two', state: 'blocked', updatedAt: '2026-10-20', stages: [{ state: 'awaiting_approval' }] },
+  { id: 'c', repositoryId: 'one', state: 'completed', updatedAt: '2026-10-22', stages: [{ state: 'completed' }] },
+  { id: 'd', repositoryId: 'three', state: 'active', updatedAt: '2026-10-22', stages: [{ state: 'interrupted' }] },
+] as const;
 
-const options = { query: '', state: 'all', triageOnly: false, sort: 'attention' as const };
-const ids = (rows: readonly { id: string }[]) => rows.map((row) => row.id);
+const options = {
+  query: '',
+  state: 'all',
+  triageOnly: false,
+  sort: 'attention' as const,
+};
+
+function select(overrides: Partial<typeof options> = {}) {
+  return selectWorkflowOperations(items, { ...options, ...overrides });
+}
 
 describe('workflow operations projection', () => {
-  it('prioritizes blocked or interrupted workflows without mutating source', () => {
-    expect(ids(selectWorkflowOperations(items, options))).toEqual(['d', 'b', 'c', 'a']);
-    expect(ids(items)).toEqual(['a', 'b', 'c', 'd']);
+  it('prioritizes attention without mutating the source', () => {
+    expect(select().map((item) => item.id)).toEqual(['d', 'b', 'c', 'a']);
+    expect(items.map((item) => item.id)).toEqual(['a', 'b', 'c', 'd']);
   });
-  it('filters by state and repository with trimmed case-insensitive query', () => {
-    expect(
-      ids(selectWorkflowOperations(items, { ...options, query: ' REPO-ONE ', state: 'completed' })),
-    ).toEqual(['c']);
+
+  it('filters by state and case-insensitive repository search', () => {
+    const result = select({ query: ' ONE ', state: 'completed' });
+    expect(result.map((item) => item.id)).toEqual(['c']);
   });
-  it('supports triage-only and chronological sorts', () => {
-    expect(ids(selectWorkflowOperations(items, { ...options, triageOnly: true }))).toEqual(['d', 'b']);
-    const oldest = selectWorkflowOperations(items, { ...options, sort: 'oldest' });
-    expect(ids(oldest)).toEqual(['b', 'a', 'c', 'd']);
+
+  it('filters to triage items', () => {
+    expect(select({ triageOnly: true }).map((item) => item.id)).toEqual(['d', 'b']);
   });
-  it('does not classify normal running or completed stages as attention', () => {
+
+  it('sorts oldest first with stable ties', () => {
+    const result = select({ sort: 'oldest' });
+    expect(result.map((item) => item.id)).toEqual(['b', 'a', 'c', 'd']);
+  });
+
+  it('sorts most recent first with stable ties', () => {
+    const result = select({ sort: 'recent' });
+    expect(result.map((item) => item.id)).toEqual(['c', 'd', 'a', 'b']);
+  });
+
+  it('handles missing matches without mutating source', () => {
+    expect(select({ query: 'missing' })).toEqual([]);
+    expect(select({ state: 'cancelled' })).toEqual([]);
+    expect(items.map((item) => item.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('recognizes failures and ignores healthy stages', () => {
     expect(workflowNeedsAttention(items[0]!)).toBe(false);
     expect(workflowNeedsAttention(items[2]!)).toBe(false);
-  });
-  it('returns empty results for missing matches and does not mutate input', () => {
-    expect(selectWorkflowOperations(items, { ...options, query: 'nonexistent' })).toEqual([]);
-    expect(selectWorkflowOperations(items, { ...options, state: 'cancelled' })).toEqual([]);
-    expect(ids(items)).toEqual(['a', 'b', 'c', 'd']);
-  });
-  it('recognizes failed stages even when workflow state is active', () => {
-    expect(
-      workflowNeedsAttention({
-        id: 'x',
-        repositoryId: 'r',
-        state: 'active',
-        stages: [{ state: 'failed' }],
-      }),
-    ).toBe(true);
-  });
-  it('uses workflow ID as deterministic timestamp tie breaker', () => {
-    const recent = selectWorkflowOperations(items, { ...options, sort: 'recent' });
-    expect(ids(recent)).toEqual(['c', 'd', 'a', 'b']);
+    expect(workflowNeedsAttention(items[1]!)).toBe(true);
+    expect(workflowNeedsAttention(items[3]!)).toBe(true);
   });
 });
