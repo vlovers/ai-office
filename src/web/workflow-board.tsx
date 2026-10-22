@@ -20,6 +20,7 @@ type Summary = {
   version: number;
   state: string;
   repositoryId: string;
+  createdAt?: string;
   updatedAt?: string;
   stages: { kind?: string; state?: string; taskId: string | null; agentId: string }[];
 };
@@ -61,6 +62,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [stateFilter, setStateFilter] = useState('all');
   const [workflowQuery, setWorkflowQuery] = useState('');
   const [triageOnly, setTriageOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [selected, setSelected] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
@@ -151,7 +153,14 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
       (stateFilter === 'all' || item.state === stateFilter) &&
       (item.id.toLowerCase().includes(workflowQuery.trim().toLowerCase()) ||
         item.repositoryId.toLowerCase().includes(workflowQuery.trim().toLowerCase())),
-  );
+  ).sort((a, b) => {
+    if (sortBy === 'attention') {
+      const priority = Number(needsAttention(b)) - Number(needsAttention(a));
+      if (priority) return priority;
+    }
+    const dateOrder = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+    return sortBy === 'oldest' ? -dateOrder : dateOrder;
+  });
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
@@ -283,6 +292,17 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
             </select>
           </label>
           <label>
+            Sort workflows
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+            >
+              <option value="attention">Attention first</option>
+              <option value="recent">Recently updated</option>
+              <option value="oldest">Oldest updates</option>
+            </select>
+          </label>
+          <label>
             <input
               type="checkbox"
               checked={triageOnly}
@@ -308,6 +328,11 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                   >
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
                   </button>{' '}
+                  {item.updatedAt && (
+                    <time dateTime={item.updatedAt} title={item.updatedAt}>
+                      Updated {new Date(item.updatedAt).toLocaleString()}
+                    </time>
+                  )}{' '}
                   {item.stages
                     .filter((stage) => stage.state && stage.state !== 'pending')
                     .map((stage, index) => (
