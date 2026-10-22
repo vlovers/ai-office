@@ -180,3 +180,18 @@ it('shows filtered history controls without inventing persisted records', () => 
   expect(markup).toContain('Failures');
   expect(markup).toContain('No recorded tasks.');
 });
+
+it('counts active session flags even when the scene status is idle', () => {
+  const markup = renderToStaticMarkup(
+    createElement(PixelOffice, {
+      agents: [
+        { id: 'active-idle', name: 'Background worker', active: true,
+          status: { state: 'idle', label: 'Idle' } },
+      ],
+      selectedAgent: 'active-idle',
+      onSelect: () => {},
+    }),
+  );
+  expect(markup).toContain('1 running · 0 queued · 0 errors');
+  expect(markup).toContain('1 active · 0 errors');
+});
