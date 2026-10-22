@@ -98,8 +98,9 @@ try {
   await expect(board).toContainText('QA assertions passed', { timeout: 45000 });
   await gate('Approve QA result');
   await expect(board.getByRole('status')).toContainText('State: completed');
-  await expect(board.getByLabel('Workflow diagnostics')).toContainText('Persisted checkpoint diagnostics');
-  await expect(board.getByLabel('Workflow diagnostics')).toContainText('no automatic restart');
+  const diagnostics = board.getByLabel('Workflow diagnostics');
+  await expect(diagnostics).toContainText('Persisted checkpoint diagnostics');
+  await expect(diagnostics).toContainText('no automatic restart');
   await page.reload();
   await expect(board.getByRole('status')).toContainText('State: completed');
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
