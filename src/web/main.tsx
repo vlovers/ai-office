@@ -6,6 +6,7 @@ import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
+import { decodeTaskNavigation, encodeTaskNavigation, taskHasReview, taskNavigationTarget, type TaskDestination } from './task-navigation.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -56,6 +57,12 @@ function App() {
   const [view, setView] = useState<'mission' | 'focus'>('mission');
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [selected, setSelected] = useState<string>();
+  const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
+  useEffect(() => {
+    const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   const [eventHistory, setEventHistory] = useState<Record<string, AgentEvent[]>>({});
   const [selectedAgent, setSelectedAgent] = useState<AgentId>('codex-1');
   const [error, setError] = useState('');
@@ -142,6 +149,33 @@ function App() {
     } finally {
       setPendingStops((previous) => previous.filter((id) => id !== taskId));
     }
+  };
+  useEffect(() => {
+    if (!navigation || !dashboard) return;
+    const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
+    if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
+    if (selected !== target.id) setSelected(target.id);
+    if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
+    if (view !== 'focus') setView('focus');
+    requestAnimationFrame(() => {
+      const id = navigation.destination === 'workflow'
+        ? 'task-workflow'
+        : navigation.destination === 'review'
+          ? 'code-review-center'
+          : 'task-workspace';
+      document.getElementById(id)?.scrollIntoView({ block: 'start' });
+    });
+  }, [navigation, dashboard, selected, selectedAgent, view]);
+  const navigateTask = (item: Task, destination: TaskDestination) => {
+    const target = taskNavigationTarget(item, destination);
+    if (!target) return;
+    setSelected(item.id);
+    setSelectedAgent(item.agentId);
+    setResumeSessionId('');
+    setView('focus');
+    const hash = encodeTaskNavigation(target);
+    if (window.location.hash === hash) setNavigation(target);
+    else window.location.hash = hash;
   };
   const task = dashboard?.tasks.find((item) => item.id === selected);
   const repository = dashboard?.repositories.find((item) => item.id === task?.repositoryId);
@@ -521,6 +555,9 @@ function App() {
                   }}
                 />
               )}
+              <div id="task-workflow" tabIndex={-1}>
+                {task && <WorkflowBoard taskId={task.id} />}
+              </div>
               <WorkflowBoard />
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
@@ -589,6 +626,22 @@ function App() {
                         {repository?.name} ·{' '}
                         {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
                       </span>
+                      <nav className="task-navigation" aria-label="Selected task navigation">
+                        <a href={encodeTaskNavigation({ taskId: task.id, destination: 'session' })}
+                          onClick={(event) => { event.preventDefault(); navigateTask(task, 'session'); }}>
+                          Session
+                        </a>
+                        {taskHasReview(task) && (
+                          <a href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
+                            onClick={(event) => { event.preventDefault(); navigateTask(task, 'review'); }}>
+                            Code review
+                          </a>
+                        )}
+                        <a href={encodeTaskNavigation({ taskId: task.id, destination: 'workflow' })}
+                          onClick={(event) => { event.preventDefault(); navigateTask(task, 'workflow'); }}>
+                          Workflow &amp; QA
+                        </a>
+                      </nav>
                       {view === 'focus' && task.id === agent?.taskId && stopControl}
                       {task.workspaceId &&
                         !['queued', 'running', 'stopping'].includes(task.state) && (
