@@ -38,12 +38,7 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Formatting
-        run: |
-          if ! npm run format:check; then
-            npx prettier --write ROADMAP.md docs/REPOSITORY_AUDIT_2026_10_23.md
-            git diff -- ROADMAP.md docs/REPOSITORY_AUDIT_2026_10_23.md
-            exit 1
-          fi
+        run: npm run format:check
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
