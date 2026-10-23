@@ -79,6 +79,13 @@ try {
   await expect(page.getByRole('region', { name: 'Office floor operations' })).toBeVisible();
   await expect(page.locator('.office-v3-agent-card')).toHaveCount(2);
   await expect(page.locator('.office-v3-agent-card[aria-pressed="true"]')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Active', exact: true }).click();
+  await expect(page.locator('.office-v3-agent-card')).toHaveCount(0);
+  await expect(page.getByText('No agents match this filter.')).toBeVisible();
+  await page.getByRole('button', { name: 'Queued', exact: true }).click();
+  await expect(page.locator('.office-v3-agent-card')).toHaveCount(0);
+  await page.getByRole('button', { name: 'All agents', exact: true }).click();
+  await expect(page.locator('.office-v3-agent-card')).toHaveCount(2);
   await expect(page.locator('.isometric-office')).toHaveCount(1);
   await expect(page.locator('.iso-station')).toHaveCount(2);
   await expect(page.locator('.office-operations-agent')).toHaveCount(2);
