@@ -10,7 +10,7 @@ const columns = ['Task ID', 'Title', 'State', 'Agent ID', 'Repository ID', 'Crea
 
 /** Prefix spreadsheet formula-like values to prevent CSV formula execution on open. */
 function cell(value: string): string {
-  const safe = /^[\s\uFEFF\u200B]*[=+@\-\t\r]/u.test(value) ? "'" + value : value;
+  const safe = /^[\s\uFEFF\u200B]*[=+@\-]/u.test(value) ? "'" + value : value;
   return '"' + safe.replace(/"/g, '""') + '"';
 }
 
