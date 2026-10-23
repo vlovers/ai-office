@@ -1,6 +1,6 @@
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -155,6 +155,21 @@ try {
     timeout: 15000,
   });
   await capture('failure');
+  // CSV export uses the current history filters and contains no prompt or transcript content.
+  const history = page.locator('#task-history');
+  await history.getByLabel('Search tasks').fill('FIXTURE · provider failure');
+  await expect(history.getByRole('button', { name: /Export filtered CSV/ })).toBeEnabled();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    history.getByRole('button', { name: /Export filtered CSV/ }).click(),
+  ]);
+  assert.equal(download.suggestedFilename(), 'ai-office-task-history.csv');
+  const csv = await readFile(await download.path(), 'utf8');
+  assert.match(csv, /FIXTURE · provider failure/);
+  assert.doesNotMatch(csv, /FIXTURE · saved completion/);
+  assert.doesNotMatch(csv, /FAIL_FIXTURE|WAIT_FIXTURE/);
+  await history.getByLabel('Search tasks').fill('');
+
   // Simulate transport failure while retaining genuine persisted application snapshots.
   await page.route('**/api/dashboard', (route) => route.abort());
   await expect(page.locator('.studio-notice').first()).toContainText('Connection interrupted', {
