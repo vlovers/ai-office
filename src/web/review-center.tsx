@@ -235,7 +235,9 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
           Refresh Git review
         </button>
       </div>
-      <WorkflowBoard taskId={task.id} />
+      <div id="task-workflow" tabIndex={-1}>
+        <WorkflowBoard taskId={task.id} />
+      </div>
       {busy && <p role="status">Loading review…</p>}
       {error && (
         <p role="alert">
