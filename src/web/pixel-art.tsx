@@ -616,7 +616,12 @@ export function PixelOffice({
           {showOperations ? 'Hide details' : 'Show details'}
         </button>
       </div>
-      <section className="office-workflow" aria-label="Agent workflow overview" hidden={!showOperations}>
+      <section
+        id={`${prefix}-operations-detail`}
+        className="office-workflow"
+        aria-label="Agent workflow overview"
+        hidden={!showOperations}
+      >
         <div className="office-workflow-header">
           <strong>Agent workflow</strong>
           <span>Live profile activity · not an automatic pipeline</span>
@@ -663,7 +668,11 @@ export function PixelOffice({
           })}
         </div>
       </section>
-      <section className="office-inspector" aria-label="Selected agent inspector" hidden={!showOperations}>
+      <section
+        className="office-inspector"
+        aria-label="Selected agent inspector"
+        hidden={!showOperations}
+      >
         <div className="office-operations-heading">
           <strong>Selected workstation</strong>
           <span>Read-only live snapshot</span>
@@ -708,7 +717,11 @@ export function PixelOffice({
           </p>
         )}
       </section>
-      <section className="office-history" aria-label="Recent agent tasks" hidden={!showOperations}>
+      <section
+        className="office-history"
+        aria-label="Recent agent tasks"
+        hidden={!showOperations}
+      >
         <div className="office-operations-heading">
           <strong>Recent task activity</strong>
           <span>Persisted task snapshots · latest first</span>
@@ -769,7 +782,11 @@ export function PixelOffice({
           </ol>
         )}
       </section>
-      <section className="office-queue" aria-label="Live task queue" hidden={!showOperations}>
+      <section
+        className="office-queue"
+        aria-label="Live task queue"
+        hidden={!showOperations}
+      >
         <div className="office-operations-heading">
           <strong>Task queue</strong>
           <span>{queue.length} waiting</span>
@@ -802,7 +819,11 @@ export function PixelOffice({
           </ol>
         )}
       </section>
-      <div className="office-operations" aria-label="Live office operations" hidden={!showOperations}>
+      <div
+        className="office-operations"
+        aria-label="Live office operations"
+        hidden={!showOperations}
+      >
         <div className="office-operations-heading">
           <strong>Office activity</strong>
           <span aria-live="polite">
