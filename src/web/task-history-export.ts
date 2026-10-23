@@ -6,7 +6,15 @@ export type ExportTask = Pick<
   'id' | 'title' | 'state' | 'agentId' | 'repositoryId' | 'createdAt' | 'updatedAt'
 >;
 
-const columns = ['Task ID', 'Title', 'State', 'Agent ID', 'Repository ID', 'Created at', 'Updated at'];
+const columns = [
+  'Task ID',
+  'Title',
+  'State',
+  'Agent ID',
+  'Repository ID',
+  'Created at',
+  'Updated at',
+];
 
 /** Prefix spreadsheet formula-like values to prevent CSV formula execution on open. */
 export function csvCell(value: string): string {
