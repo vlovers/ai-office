@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exportTaskHistoryCsv } from '../src/web/task-history-export.js';
+import { exportTaskHistoryCsv, type ExportTask } from '../src/web/task-history-export.js';
 
 const sample = {
   id: 'task-1',
@@ -9,7 +9,7 @@ const sample = {
   repositoryId: 'repo-1',
   createdAt: '2026-10-24T00:00:00Z',
   updatedAt: '2026-10-24T01:00:00Z',
-};
+} satisfies ExportTask;
 
 describe('task history CSV export', () => {
   it('exports a deterministic, minimal header and selected rows', () => {
