@@ -63,3 +63,52 @@ export function assessDeliveryReadiness(
     gates,
   };
 }
+
+export type DeliveryDraft = {
+  title: string;
+  body: string;
+  sourceBranch: string;
+  sourceRevision: string | null;
+  changedFiles: number;
+};
+
+/**
+ * Generates copyable, local-only PR metadata. This does not inspect the GitHub
+ * remote, stage changes or establish that a commit exists on the branch.
+ */
+export function buildDeliveryDraft(
+  task: Pick<Task, 'title' | 'state' | 'workspaceId'>,
+  review: WorkspaceReview,
+): DeliveryDraft {
+  const readiness = assessDeliveryReadiness(task, review);
+  const title = task.title.trim().replace(/\s+/g, ' ').slice(0, 120) || 'AI Office change';
+  const safe = (value: string) => value.replace(/\r/g, ' ').replace(/\n/g, ' ');
+  const changedFiles = review.files.length;
+  const lines = [
+    '## Summary',
+    '',
+    safe(title),
+    '',
+    '## Local review evidence',
+    '',
+    '- Changed files: ' + changedFiles,
+    '- Source branch: ' + safe(readiness.branch),
+    '- Base commit: ' + safe(readiness.base),
+    '- Review revision: ' + (readiness.revision ?? 'unavailable'),
+    '',
+    '## Verification',
+    '',
+    '- [ ] Review changed files and tests manually',
+    '- [ ] Verify remote and target branch',
+    '- [ ] Confirm commit and push separately',
+    '',
+    'Prepared locally by AI Office. No GitHub action has been performed.',
+  ];
+  return {
+    title,
+    body: lines.join('\n'),
+    sourceBranch: readiness.branch,
+    sourceRevision: readiness.revision,
+    changedFiles,
+  };
+}
