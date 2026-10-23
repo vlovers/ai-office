@@ -191,7 +191,7 @@ export function WorkflowBoard({
   const visibleWorkflows = selectedOnly
     ? filteredWorkflows.filter((item) => item.id === selected)
     : filteredWorkflows;
-  const workflowChoices = selectedOnly ? filteredWorkflows : visibleWorkflows;
+  const workflowChoices = filteredWorkflows;
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
@@ -398,7 +398,10 @@ export function WorkflowBoard({
           >
             Export workflow CSV ({visibleWorkflows.length})
           </button>
-          <p>{visibleWorkflows.length} matching workflows</p>
+          <p role="status">
+            {visibleWorkflows.length} displayed · {filteredWorkflows.length} matching filters
+            {selectedOnly ? ' · focused on selected workflow' : ''}
+          </p>
           <p role="note">
             Attention is derived from persisted stage states, not from a live process health probe.
             An old update does not prove that a workflow is stuck. Inspect its timeline and
