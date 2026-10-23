@@ -212,6 +212,7 @@ export function PixelOffice({
   const [narrow, setNarrow] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [floorFilter, setFloorFilter] = useState<'all' | 'active' | 'queued'>('all');
+  const [showOperations, setShowOperations] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<OfficeHistoryFilter>('all');
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
@@ -601,6 +602,25 @@ export function PixelOffice({
           </div>
         )}
       </section>
+      <div className="office-v3-detail-control">
+        <div>
+          <strong>Operations detail</strong>
+          <span>Workflow, selected workstation and task history</span>
+        </div>
+        <button
+          type="button"
+          aria-controls={`${prefix}-operations-detail`}
+          aria-expanded={showOperations}
+          onClick={() => setShowOperations((value) => !value)}
+        >
+          {showOperations ? 'Hide details' : 'Show details'}
+        </button>
+      </div>
+      <div
+        id={`${prefix}-operations-detail`}
+        className="office-v3-operations-detail"
+        hidden={!showOperations}
+      >
       <section className="office-workflow" aria-label="Agent workflow overview">
         <div className="office-workflow-header">
           <strong>Agent workflow</strong>
@@ -831,6 +851,7 @@ export function PixelOffice({
             </button>
           ))}
         </div>
+      </div>
       </div>
       {agents.map((agent) => (
         <span key={agent.id} id={`${prefix}-${agent.id}-status`} className="sr-only">
