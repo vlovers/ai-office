@@ -87,6 +87,7 @@ export function WorkflowBoard({
   const [stateFilter, setStateFilter] = useState('all');
   const [workflowQuery, setWorkflowQuery] = useState('');
   const [triageOnly, setTriageOnly] = useState(false);
+  const [selectedOnly, setSelectedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
@@ -180,12 +181,15 @@ export function WorkflowBoard({
   };
   const needsAttention = workflowNeedsAttention;
   const triage = summarizeWorkflowOperations(items);
-  const visibleWorkflows = selectWorkflowOperations(items, {
+  const filteredWorkflows = selectWorkflowOperations(items, {
     query: workflowQuery,
     state: stateFilter,
     triageOnly,
     sort: sortBy,
   });
+  const visibleWorkflows = selectedOnly
+    ? filteredWorkflows.filter((item) => item.id === selected)
+    : filteredWorkflows;
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
@@ -352,6 +356,27 @@ export function WorkflowBoard({
             />{' '}
             Needs attention (blocked, interrupted, failed or awaiting approval)
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={selectedOnly}
+              onChange={(event) => setSelectedOnly(event.target.checked)}
+            />{' '}
+            Show selected workflow only
+          </label>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              setWorkflowQuery('');
+              setStateFilter('all');
+              setTriageOnly(false);
+              setSelectedOnly(false);
+              setSortBy('attention');
+            }}
+          >
+            Reset workflow filters
+          </button>
           <p>{visibleWorkflows.length} matching workflows</p>
           <p role="note">
             Attention is derived from persisted stage states, not from a live process health probe.
