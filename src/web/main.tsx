@@ -7,6 +7,12 @@ import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
+import {
+  selectTaskHistory,
+  summarizeTaskHistory,
+  type TaskHistoryOrder,
+  type TaskHistoryStatus,
+} from './task-history-operations.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -55,6 +61,11 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
+  const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
+  const [historyAgent, setHistoryAgent] = useState('');
+  const [historyRepository, setHistoryRepository] = useState('');
   const [workflowInspection, setWorkflowInspection] = useState<{ id: string; request: number }>();
   const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
@@ -170,6 +181,14 @@ function App() {
       setPendingStops((previous) => previous.filter((id) => id !== taskId));
     }
   };
+  const taskSummary = summarizeTaskHistory(dashboard?.tasks ?? []);
+  const visibleHistory = selectTaskHistory(dashboard?.tasks ?? [], {
+    query: historyQuery,
+    status: historyStatus,
+    order: historyOrder,
+    ...(historyAgent ? { agentId: historyAgent as AgentId } : {}),
+    ...(historyRepository ? { repositoryId: historyRepository } : {}),
+  });
   const task = dashboard?.tasks.find((item) => item.id === selected);
   const repository = dashboard?.repositories.find((item) => item.id === task?.repositoryId);
   const session = dashboard?.sessions.find((item) => item.id === task?.sessionId);
@@ -605,6 +624,101 @@ function App() {
                   <h2>Task history</h2>
                   <span className="subtle">{dashboard?.tasks.length ?? 0} tasks</span>
                 </div>
+                {!!dashboard?.tasks.length && (
+                  <div className="history-controls" aria-label="Task history filters">
+                    <p role="status">
+                      {taskSummary.active} active · {taskSummary.queued} queued ·{' '}
+                      {taskSummary.attention} failed/interrupted · {taskSummary.completed} completed
+                    </p>
+                    <label>
+                      Search tasks
+                      <input
+                        type="search"
+                        value={historyQuery}
+                        onChange={(event) => setHistoryQuery(event.target.value)}
+                        placeholder="Title or task ID"
+                      />
+                    </label>
+                    <label>
+                      Task state
+                      <select
+                        value={historyStatus}
+                        onChange={(event) =>
+                          setHistoryStatus(event.target.value as TaskHistoryStatus)
+                        }
+                      >
+                        <option value="all">All states</option>
+                        <option value="attention">Failed / interrupted</option>
+                        <option value="active">Running / stopping</option>
+                        <option value="queued">Queued</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </label>
+                    <label>
+                      Agent
+                      <select
+                        value={historyAgent}
+                        onChange={(event) => setHistoryAgent(event.target.value)}
+                      >
+                        <option value="">All agents</option>
+                        {dashboard?.agents.map((slot) => (
+                          <option key={slot.id} value={slot.id}>
+                            {slot.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Repository
+                      <select
+                        value={historyRepository}
+                        onChange={(event) => setHistoryRepository(event.target.value)}
+                      >
+                        <option value="">All repositories</option>
+                        {dashboard?.repositories.map((repo) => (
+                          <option key={repo.id} value={repo.id}>
+                            {repo.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Sort
+                      <select
+                        value={historyOrder}
+                        onChange={(event) =>
+                          setHistoryOrder(event.target.value as TaskHistoryOrder)
+                        }
+                      >
+                        <option value="attention">Attention first</option>
+                        <option value="recent">Most recently updated</option>
+                        <option value="oldest">Oldest updates</option>
+                      </select>
+                    </label>
+                    <p role="status">
+                      {visibleHistory.length} of {taskSummary.total} tasks shown
+                    </p>
+                    {(historyQuery ||
+                      historyStatus !== 'all' ||
+                      historyAgent ||
+                      historyRepository ||
+                      historyOrder !== 'attention') && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setHistoryQuery('');
+                          setHistoryStatus('all');
+                          setHistoryOrder('attention');
+                          setHistoryAgent('');
+                          setHistoryRepository('');
+                        }}
+                      >
+                        Reset task filters
+                      </button>
+                    )}
+                  </div>
+                )}
                 {!dashboard?.tasks.length ? (
                   <div className="empty-state">
                     <div>☷</div>
@@ -622,7 +736,7 @@ function App() {
                   </div>
                 ) : (
                   <div className="task-list">
-                    {dashboard.tasks.map((item) => (
+                    {visibleHistory.map((item) => (
                       <button
                         key={item.id}
                         aria-pressed={selected === item.id}
@@ -645,6 +759,11 @@ function App() {
                         <span className={`badge ${item.state}`}>{item.state}</span>
                       </button>
                     ))}
+                    {visibleHistory.length === 0 && (
+                      <p role="status">
+                        No tasks match these filters. Reset filters to see the full history.
+                      </p>
+                    )}
                   </div>
                 )}
               </section>
