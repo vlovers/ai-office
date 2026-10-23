@@ -6,7 +6,13 @@ import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
-import { decodeTaskNavigation, encodeTaskNavigation, taskHasReview, taskNavigationTarget, type TaskDestination } from './task-navigation.js';
+import {
+  decodeTaskNavigation,
+  encodeTaskNavigation,
+  taskHasReview,
+  taskNavigationTarget,
+  type TaskDestination,
+} from './task-navigation.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -664,18 +670,33 @@ function App() {
                         {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
                       </span>
                       <nav className="task-navigation" aria-label="Selected task navigation">
-                        <a href={encodeTaskNavigation({ taskId: task.id, destination: 'session' })}
-                          onClick={(event) => { event.preventDefault(); navigateTask(task, 'session'); }}>
+                        <a
+                          href={encodeTaskNavigation({ taskId: task.id, destination: 'session' })}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigateTask(task, 'session');
+                          }}
+                        >
                           Session
                         </a>
                         {taskHasReview(task) && (
-                          <a href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
-                            onClick={(event) => { event.preventDefault(); navigateTask(task, 'review'); }}>
+                          <a
+                            href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigateTask(task, 'review');
+                            }}
+                          >
                             Code review
                           </a>
                         )}
-                        <a href={encodeTaskNavigation({ taskId: task.id, destination: 'workflow' })}
-                          onClick={(event) => { event.preventDefault(); navigateTask(task, 'workflow'); }}>
+                        <a
+                          href={encodeTaskNavigation({ taskId: task.id, destination: 'workflow' })}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigateTask(task, 'workflow');
+                          }}
+                        >
                           Workflow &amp; QA
                         </a>
                       </nav>
