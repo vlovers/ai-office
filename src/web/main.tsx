@@ -6,7 +6,12 @@ import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
-import { selectTaskHistory, summarizeTaskHistory, type TaskHistoryOrder, type TaskHistoryStatus } from './task-history-operations.js';
+import {
+  selectTaskHistory,
+  summarizeTaskHistory,
+  type TaskHistoryOrder,
+  type TaskHistoryStatus,
+} from './task-history-operations.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -560,7 +565,9 @@ function App() {
                       Task state
                       <select
                         value={historyStatus}
-                        onChange={(event) => setHistoryStatus(event.target.value as TaskHistoryStatus)}
+                        onChange={(event) =>
+                          setHistoryStatus(event.target.value as TaskHistoryStatus)
+                        }
                       >
                         <option value="all">All states</option>
                         <option value="attention">Failed / interrupted</option>
@@ -571,19 +578,29 @@ function App() {
                     </label>
                     <label>
                       Agent
-                      <select value={historyAgent} onChange={(event) => setHistoryAgent(event.target.value)}>
+                      <select
+                        value={historyAgent}
+                        onChange={(event) => setHistoryAgent(event.target.value)}
+                      >
                         <option value="">All agents</option>
                         {dashboard?.agents.map((slot) => (
-                          <option key={slot.id} value={slot.id}>{slot.name}</option>
+                          <option key={slot.id} value={slot.id}>
+                            {slot.name}
+                          </option>
                         ))}
                       </select>
                     </label>
                     <label>
                       Repository
-                      <select value={historyRepository} onChange={(event) => setHistoryRepository(event.target.value)}>
+                      <select
+                        value={historyRepository}
+                        onChange={(event) => setHistoryRepository(event.target.value)}
+                      >
                         <option value="">All repositories</option>
                         {dashboard?.repositories.map((repo) => (
-                          <option key={repo.id} value={repo.id}>{repo.name}</option>
+                          <option key={repo.id} value={repo.id}>
+                            {repo.name}
+                          </option>
                         ))}
                       </select>
                     </label>
@@ -591,15 +608,23 @@ function App() {
                       Sort
                       <select
                         value={historyOrder}
-                        onChange={(event) => setHistoryOrder(event.target.value as TaskHistoryOrder)}
+                        onChange={(event) =>
+                          setHistoryOrder(event.target.value as TaskHistoryOrder)
+                        }
                       >
                         <option value="attention">Attention first</option>
                         <option value="recent">Most recently updated</option>
                         <option value="oldest">Oldest updates</option>
                       </select>
                     </label>
-                    <p role="status">{visibleHistory.length} of {taskSummary.total} tasks shown</p>
-                    {(historyQuery || historyStatus !== 'all' || historyAgent || historyRepository || historyOrder !== 'attention') && (
+                    <p role="status">
+                      {visibleHistory.length} of {taskSummary.total} tasks shown
+                    </p>
+                    {(historyQuery ||
+                      historyStatus !== 'all' ||
+                      historyAgent ||
+                      historyRepository ||
+                      historyOrder !== 'attention') && (
                       <button
                         type="button"
                         className="secondary"
