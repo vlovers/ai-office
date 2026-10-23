@@ -11,6 +11,10 @@ This is an **unreleased read-only readiness slice**, not GitHub publishing.
 - Manual gates are **always** displayed: commit, remote/permissions, and separate
   publication approval. Passing local gates is not permission to push.
 - Pure assessment tests for stale, pending, recovering, rejected and unsafe states.
+- Copyable local PR title/description draft, including review revision and source branch.
+- Local-only GitHub remote URL/SSH classifier; rejects credential-bearing URLs,
+  non-GitHub hosts, unsafe schemes, extra paths and control characters.
+  The operator enters a remote manually; the app does not fetch repository remotes.
 
 ## Required for an actual publishing implementation
 
