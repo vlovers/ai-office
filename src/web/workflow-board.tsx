@@ -190,6 +190,7 @@ export function WorkflowBoard({
   const visibleWorkflows = selectedOnly
     ? filteredWorkflows.filter((item) => item.id === selected)
     : filteredWorkflows;
+  const workflowChoices = selectedOnly ? filteredWorkflows : visibleWorkflows;
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
@@ -448,12 +449,12 @@ export function WorkflowBoard({
                 setSelected(event.target.value);
               }}
             >
-              {selected && !visibleWorkflows.some((item) => item.id === selected) && (
+              {selected && !workflowChoices.some((item) => item.id === selected) && (
                 <option value={selected} disabled>
                   Selected workflow (outside current filters)
                 </option>
               )}
-              {visibleWorkflows.map((item) => (
+              {workflowChoices.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id.slice(0, 8)} · {item.state} · v{item.version}
                 </option>
