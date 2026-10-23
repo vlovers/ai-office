@@ -30,6 +30,10 @@ describe('GitHub remote classification', () => {
       'https://github.com/owner/repo\\n',
       'https://github.com/owner/..',
       'https://github.com/owner/.git',
+      'git@github.com:owner/.',
+      'git@github.com:owner/..',
+      'git@github.com:./repo',
+      'git@github.com:../repo',
       '',
     ]) {
       expect(parseGitHubRemote(remote), remote).toBeNull();
