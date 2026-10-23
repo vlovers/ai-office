@@ -2668,3 +2668,43 @@ select {
   background: #335147;
   color: #f1f8f3;
 }
+
+/* The office scene stays primary; operational diagnostics are available on demand. */
+.office-v3-detail-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #1d2b34;
+  border-top: 1px solid #3b4b55;
+}
+.office-v3-detail-control > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.office-v3-detail-control strong {
+  color: #f1f6f3;
+}
+.office-v3-detail-control span {
+  color: #b4c6cb;
+  font-size: 12px;
+}
+.office-v3-detail-control button {
+  flex-shrink: 0;
+  border-radius: 9px;
+  border: 1px solid #779e91;
+  background: #30473f;
+  color: #eef7f0;
+}
+.office-v3-operations-detail[hidden] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .office-v3-detail-control {
+    padding: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
