@@ -155,11 +155,11 @@ function App() {
     if (!navigation || !dashboard) return;
     const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
     if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
+    const key = encodeTaskNavigation(navigation);
+    if (lastNavigation.current === key) return;
     if (selected !== target.id) setSelected(target.id);
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
     if (view !== 'focus') setView('focus');
-    const key = encodeTaskNavigation(navigation);
-    if (lastNavigation.current === key) return;
     lastNavigation.current = key;
     requestAnimationFrame(() => {
       const id = navigation.destination === 'workflow'
@@ -594,6 +594,11 @@ function App() {
                           setSelectedAgent(item.agentId);
                           setSelected(item.id);
                           setResumeSessionId('');
+                          setNavigation(null);
+                          lastNavigation.current = '';
+                          if (window.location.hash.startsWith('#task/')) {
+                            window.history.replaceState(null, '', '#task-history');
+                          }
                         }}
                       >
                         <span className={`task-indicator ${item.state}`} />
