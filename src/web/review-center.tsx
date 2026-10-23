@@ -8,7 +8,7 @@ import type {
 } from '../shared/types.js';
 import { diffLines } from '../shared/diff.js';
 import { WorkflowBoard } from './workflow-board.js';
-import { assessDeliveryReadiness } from './delivery-readiness.js';
+import { assessDeliveryReadiness, buildDeliveryDraft } from './delivery-readiness.js';
 
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
 const changeType = (status: string) =>
@@ -316,6 +316,20 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
                       Branch <code>{readiness.branch}</code> · Base commit <code>{readiness.base}</code>
                       {' '}· Revision <code>{readiness.revision ?? 'unavailable'}</code>
                     </p>
+                    <p>Draft PR text (copy only; no remote operations):</p>
+                    <label htmlFor="delivery-draft-title">Suggested PR title</label>
+                    <input
+                      id="delivery-draft-title"
+                      readOnly
+                      value={buildDeliveryDraft(task, review).title}
+                    />
+                    <label htmlFor="delivery-draft-body">Suggested PR description</label>
+                    <textarea
+                      id="delivery-draft-body"
+                      readOnly
+                      rows={12}
+                      value={buildDeliveryDraft(task, review).body}
+                    />
                     <ul>
                       {readiness.gates.map((gate) => (
                         <li key={gate.code}>
