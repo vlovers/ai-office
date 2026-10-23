@@ -191,6 +191,14 @@ function App() {
     }
     else window.location.hash = hash;
   };
+  const linkedTask = navigation && dashboard?.tasks.find((item) => item.id === navigation.taskId);
+  const linkError = navigation && dashboard
+    ? !linkedTask
+      ? 'This task is no longer available in the local workspace.'
+      : navigation.destination === 'review' && !taskHasReview(linkedTask)
+        ? 'Code review is not available for this task. Open its session instead.'
+        : ''
+    : '';
   const task = dashboard?.tasks.find((item) => item.id === selected);
   const repository = dashboard?.repositories.find((item) => item.id === task?.repositoryId);
   const session = dashboard?.sessions.find((item) => item.id === task?.sessionId);
@@ -330,6 +338,14 @@ function App() {
         </div>
       </aside>
       <main id="overview" tabIndex={-1}>
+        {linkError && (
+          <div className="task-link-warning" role="alert">
+            <p>{linkError}</p>
+            <button className="secondary" type="button" onClick={clearTaskNavigation}>
+              Dismiss task link
+            </button>
+          </div>
+        )}
         <header className="topbar">
           <div className="workspace-chip">
             <span className="eyebrow">REGISTERED WORKTREE</span>
