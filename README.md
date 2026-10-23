@@ -170,7 +170,7 @@ keyboard access, saved outcomes and disconnected snapshots stay explicit.
 
 See [implementation, truthful state mapping and limitations](docs/OFFICE_V4.md) and
 [desktop/mobile fixture screenshots](docs/design/screenshots/office-v4/README.md).
-V4 is an unreleased experience update in PR #31. The existing revision-bound
+V4 is integrated in `main` via [PR #36](https://github.com/vlovers/ai-office/pull/36), but is not a separately tagged release. Workflow triage, searchable task history and task-scoped navigation are included. Integration CI passed; real-model acceptance and release review remain pending. The existing revision-bound
 confirmation dialogs, isolated worktrees and Codex SDK execution remain in use.
 
 ## Queue, restart and allowance
