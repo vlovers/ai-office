@@ -173,11 +173,12 @@ function App() {
     if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
     const key = encodeTaskNavigation(navigation);
     if (lastNavigation.current === key) return;
-    const id = navigation.destination === 'workflow'
-      ? 'task-workflow'
-      : navigation.destination === 'review'
-        ? 'code-review-center'
-        : 'task-workspace';
+    const id =
+      navigation.destination === 'workflow'
+        ? 'task-workflow'
+        : navigation.destination === 'review'
+          ? 'code-review-center'
+          : 'task-workspace';
     const section = document.getElementById(id);
     if (!section) return;
     lastNavigation.current = key;
@@ -202,17 +203,17 @@ function App() {
     if (window.location.hash === hash) {
       lastNavigation.current = '';
       setNavigation({ ...target });
-    }
-    else window.location.hash = hash;
+    } else window.location.hash = hash;
   };
   const linkedTask = navigation && dashboard?.tasks.find((item) => item.id === navigation.taskId);
-  const linkError = navigation && dashboard
-    ? !linkedTask
-      ? 'This task is no longer available in the local workspace.'
-      : navigation.destination === 'review' && !taskHasReview(linkedTask)
-        ? 'Code review is not available for this task. Open its session instead.'
-        : ''
-    : '';
+  const linkError =
+    navigation && dashboard
+      ? !linkedTask
+        ? 'This task is no longer available in the local workspace.'
+        : navigation.destination === 'review' && !taskHasReview(linkedTask)
+          ? 'Code review is not available for this task. Open its session instead.'
+          : ''
+      : '';
   const task = dashboard?.tasks.find((item) => item.id === selected);
   const repository = dashboard?.repositories.find((item) => item.id === task?.repositoryId);
   const session = dashboard?.sessions.find((item) => item.id === task?.sessionId);
