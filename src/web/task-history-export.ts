@@ -9,7 +9,7 @@ export type ExportTask = Pick<
 const columns = ['Task ID', 'Title', 'State', 'Agent ID', 'Repository ID', 'Created at', 'Updated at'];
 
 /** Prefix spreadsheet formula-like values to prevent CSV formula execution on open. */
-function cell(value: string): string {
+export function csvCell(value: string): string {
   const safe = /^[\s\uFEFF\u200B]*[=+@\-]/u.test(value) ? "'" + value : value;
   return '"' + safe.replace(/"/g, '""') + '"';
 }
@@ -24,7 +24,7 @@ export function exportTaskHistoryCsv(tasks: readonly ExportTask[]): string {
       task.repositoryId,
       task.createdAt,
       task.updatedAt,
-    ].map((value) => cell(value ?? '')).join(','),
+    ].map((value) => csvCell(value ?? '')).join(','),
   );
-  return [columns.map(cell).join(','), ...rows].join('\r\n') + '\r\n';
+  return [columns.map(csvCell).join(','), ...rows].join('\r\n') + '\r\n';
 }
