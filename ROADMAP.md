@@ -63,7 +63,7 @@ Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder →
 ## Operations follow-up (unreleased)
 
 - Read-only filtered task history CSV export with spreadsheet-formula neutralization, deterministic column order and no prompts, logs or local paths.
-- Workflow Operations focus mode (selected workflow only) and one-click reset of triage/search/state/sort filters; this changes only the UI projection, never workflow authorization or execution. Export is performed in the browser; it never triggers workflow actions or server writes.
+- Workflow Operations focus mode (selected workflow only), one-click reset of triage/search/state/sort filters, and browser-local CSV export of the filtered workflow triage view (ID, repository, state, derived triage, version, updated time). No reports, prompts, commands or filesystem paths are exported. These features change only UI projections, never workflow authorization or execution. Export is performed in the browser; it never triggers workflow actions or server writes.
 
 ## v0.8.0 — delivery integration (proposal)
 
