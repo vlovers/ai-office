@@ -9,6 +9,7 @@ import { AppError } from './errors.js';
 import { WorkflowStore } from './workflows.js';
 import { workflowTimeline } from './workflow-timeline.js';
 import { diagnoseWorkflow } from './workflow-diagnostics.js';
+import { deliveryPreflight } from './delivery-preflight.js';
 import { assessHandoff } from './handoff-assessment.js';
 import { git, revalidateRepository, validateRepository } from './repositories.js';
 import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
@@ -636,6 +637,14 @@ export async function createApp(manager: TaskManager) {
   app.get('/api/tasks/:id/review', async (request) =>
     manager.reviewOperation(id.parse((request.params as { id: string }).id), 'review'),
   );
+  app.post('/api/tasks/:id/delivery/preflight', async (request) => {
+    const taskId = id.parse((request.params as { id: string }).id);
+    const input = z.object({ remote: z.string().min(1).max(2048) }).strict().parse(request.body);
+    const task = manager.store.task(taskId);
+    if (!task) throw new AppError(404, 'Task not found.');
+    const review = (await manager.reviewOperation(taskId, 'review')) as WorkspaceReview;
+    return deliveryPreflight(task, review, input.remote);
+  });
   app.get('/api/tasks/:id/review/history', async (request) => {
     const query = z
       .object({
