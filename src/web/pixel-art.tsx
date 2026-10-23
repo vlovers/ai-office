@@ -46,7 +46,7 @@ export interface OfficeQueueItem {
 }
 
 /** Isometric desk furniture; animation is driven by actual agent status classes. */
-function IsometricDesk({ state }: { state: SceneState }) {
+function IsometricDesk({ state, identity }: { state: SceneState; identity: 'fern' | 'sage' }) {
   const message =
     state === 'thinking'
       ? 'THINK'
@@ -89,12 +89,12 @@ function IsometricDesk({ state }: { state: SceneState }) {
         <path
           className="character-body"
           d="M-20 -7L0 -20L20 -7V22L0 35L-20 22Z"
-          fill="#4d8e75"
-          stroke="#18382d"
+          fill={identity === 'fern' ? '#c47e59' : '#668db5'}
+          stroke={identity === 'fern' ? '#6b4637' : '#354e70'}
           strokeWidth="3"
         />
         <path d="M-16 -37L0 -47L17 -37V-12L0 -2L-16 -12Z" fill="#e6ad82" />
-        <path d="M-18 -39L0 -50L18 -40L0 -29Z" fill="#3b2928" />
+        <path d="M-18 -39L0 -50L18 -40L0 -29Z" fill={identity === 'fern' ? '#513c30' : '#c5a36e'} />
         <path d="M-8 -23L-4 -25M5 -30L9 -32" stroke="#1e302b" strokeWidth="3" />
         <path
           className="typing-hands"
@@ -163,6 +163,22 @@ function RoomDetails({ portrait }: { portrait: boolean }) {
         <circle cx="-31" cy="8" r="4" fill="#9addae" />
         <circle cx="28" cy="-10" r="4" fill="#9addae" />
         <path d="M-32 16H29" stroke="#3b6658" strokeWidth="2" />
+      </g>
+      <g transform={portrait ? 'translate(42 240) scale(.55)' : 'translate(145 75) scale(.85)'}>
+        <path d="M0 0L48 -16L96 0L48 16Z" fill="#bd916a" />
+        <path d="M0 0V45L48 61V16Z" fill="#725a4a" />
+        <path d="M48 16L96 0V45L48 61Z" fill="#8e6a50" />
+        <path d="M15 14L34 20M15 27L34 33M60 19L81 12M60 33L81 26" stroke="#e2bb89" strokeWidth="4" />
+        <circle cx="48" cy="-33" r="18" fill="#eac28e" opacity=".8" />
+        <path d="M48 -16V-5" stroke="#eac28e" strokeWidth="5" />
+      </g>
+      <g transform={portrait ? 'translate(359 203) scale(.6)' : 'translate(686 80) scale(.85)'}>
+        <path d="M-37 0L0 -18L37 0L0 19Z" fill="#d5b38a" />
+        <path d="M-37 0V36L0 55V19Z" fill="#876c5d" />
+        <path d="M0 19L37 0V36L0 55Z" fill="#a68168" />
+        <path d="M-22 -5L0 -16L22 -5L0 7Z" fill="#3b6267" />
+        <path d="M-22 -5V-36L0 -48L22 -36V-5L0 7V-25Z" fill="#2a424a" />
+        <path d="M-16 -31L0 -39L16 -31V-10L0 -2L-16 -10Z" fill="#e0b977" />
       </g>
       <g transform={portrait ? 'translate(206 485)' : 'translate(422 332)'}>
         <path d="M-34 0L0 -17L34 0L0 17Z" fill="#466a56" opacity=".8" />
@@ -264,15 +280,15 @@ export function PixelOffice({
       >
         <defs>
           <linearGradient id={`${prefix}-wall`} x2="0" y2="1">
-            <stop stopColor="#183a39" />
-            <stop offset="1" stopColor="#0c1f20" />
+            <stop stopColor="#54716c" />
+            <stop offset="1" stopColor="#243a40" />
           </linearGradient>
           <pattern id={`${prefix}-tiles`} width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M0 0H40V40H0Z" fill="#203b37" stroke="#34544c" strokeWidth="1" />
+            <path d="M0 0H40V40H0Z" fill="#374a4b" stroke="#526966" strokeWidth="1" />
           </pattern>
         </defs>
         <g aria-hidden="true">
-          <path d={`M0 0H${geometry.width}V${geometry.height}H0Z`} fill="#081714" />
+          <path d={`M0 0H${geometry.width}V${geometry.height}H0Z`} fill="#17252d" />
           <path
             d={
               narrow
@@ -291,12 +307,12 @@ export function PixelOffice({
           />
           <path
             d={narrow ? 'M12 80L210 10L210 204L12 280Z' : 'M40 118L420 8V150L40 270Z'}
-            fill="#14312d"
+            fill="#374c4c"
             opacity=".65"
           />
           <path
             d={narrow ? 'M210 10L408 80V280L210 204Z' : 'M420 8L800 118V270L420 150Z'}
-            fill="#20433c"
+            fill="#46635e"
             opacity=".65"
           />
           <path
@@ -307,7 +323,7 @@ export function PixelOffice({
           />
           <path
             d={narrow ? 'M65 120L139 92V155L65 183Z' : 'M137 116L264 78V149L137 186Z'}
-            fill="#23505b"
+            fill="#4a7c86"
           />
           <path
             d={narrow ? 'M256 82L354 116V199L256 165Z' : 'M570 61L716 105V198L570 154Z'}
@@ -317,7 +333,7 @@ export function PixelOffice({
           />
           <path
             d={narrow ? 'M266 98L344 125V182L266 155Z' : 'M582 78L704 115V181L582 144Z'}
-            fill="#28545d"
+            fill="#5a8791"
           />
           <text
             x={geometry.width / 2}
@@ -326,7 +342,7 @@ export function PixelOffice({
             fontSize="19"
             fontFamily="monospace"
             fontWeight="bold"
-            fill="#b3ffca"
+            fill="#f4dfb9"
           >
             AI OFFICE
           </text>
@@ -388,7 +404,7 @@ export function PixelOffice({
                 strokeDasharray="9 6"
                 opacity={selected ? 1 : 0}
               />
-              <IsometricDesk state={agent.status.state} />
+              <IsometricDesk state={agent.status.state} identity={placement.identity} />
               <text
                 className="station-name"
                 x="0"
