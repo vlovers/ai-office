@@ -9,12 +9,7 @@ export interface WorkflowOperationsItem {
 
 export type WorkflowOperationsSort = 'recent' | 'oldest' | 'attention';
 export type WorkflowTriageKind =
-  | 'failed'
-  | 'approval'
-  | 'blocked'
-  | 'running'
-  | 'finished'
-  | 'other';
+  'failed' | 'approval' | 'blocked' | 'running' | 'finished' | 'other';
 
 export interface WorkflowTriageSummary {
   total: number;
@@ -89,7 +84,8 @@ export function selectWorkflowOperations<T extends WorkflowOperationsItem>(
     )
     .sort((a, b) => {
       if (options.sort === 'attention') {
-        const priority = attentionRank[workflowTriageKind(a)] - attentionRank[workflowTriageKind(b)];
+        const priority =
+          attentionRank[workflowTriageKind(a)] - attentionRank[workflowTriageKind(b)];
         if (priority) return priority;
       }
       const chronological = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
