@@ -6,7 +6,7 @@ import {
   taskNavigationTarget,
 } from '../src/web/task-navigation.js';
 
-const task = { id: 'task/with spaces', workspaceId: 'workspace-1', state: 'completed' };
+const task = { id: 'task/with spaces', workspaceId: 'workspace-1', state: 'completed' } as const;
 
 describe('task-scoped navigation', () => {
   it('round-trips task IDs safely through a local fragment', () => {
