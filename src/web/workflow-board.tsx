@@ -363,11 +363,14 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
                   </button>{' '}
                   {needsAttention(item) && (
-                    <strong>{workflowTriageKind(item) === 'failed'
-                      ? 'Failure to inspect'
-                      : workflowTriageKind(item) === 'approval'
-                        ? 'Approval required'
-                        : 'Blocked checkpoint'} · </strong>
+                    <strong>
+                      {workflowTriageKind(item) === 'failed'
+                        ? 'Failure to inspect'
+                        : workflowTriageKind(item) === 'approval'
+                          ? 'Approval required'
+                          : 'Blocked checkpoint'}{' '}
+                      ·{' '}
+                    </strong>
                   )}
                   {item.updatedAt && (
                     <time dateTime={item.updatedAt} title={item.updatedAt}>
