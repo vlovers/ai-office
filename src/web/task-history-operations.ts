@@ -49,10 +49,7 @@ const rank: Record<ReturnType<typeof taskHistoryGroup>, number> = {
 /** Deterministic, read-only projection of persisted tasks. No scheduling, approvals or mutations. */
 export function selectTaskHistory<
   T extends Pick<Task, 'id' | 'title' | 'state' | 'agentId' | 'repositoryId' | 'updatedAt'>,
->(
-  tasks: readonly T[],
-  options: TaskHistoryOptions,
-): T[] {
+>(tasks: readonly T[], options: TaskHistoryOptions): T[] {
   const query = options.query.trim().toLocaleLowerCase();
   return tasks
     .filter(
