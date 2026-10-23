@@ -76,6 +76,9 @@ try {
   await expect(page.locator('.office-scene')).toHaveCount(1);
   await expect(page.locator('svg.pixel-office')).toHaveCount(1);
   await expect(page.locator('.office-workstation')).toHaveCount(2);
+  await expect(page.getByRole('region', { name: 'Office floor operations' })).toBeVisible();
+  await expect(page.locator('.office-v3-agent-card')).toHaveCount(2);
+  await expect(page.locator('.office-v3-agent-card[aria-pressed="true"]')).toHaveCount(1);
   await expect(page.locator('.isometric-office')).toHaveCount(1);
   await expect(page.locator('.iso-station')).toHaveCount(2);
   await expect(page.locator('.office-operations-agent')).toHaveCount(2);
