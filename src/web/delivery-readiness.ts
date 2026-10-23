@@ -51,7 +51,11 @@ export function assessDeliveryReadiness(
     'Every changed file must be reviewable as text; other files need manual inspection.',
   );
   gate('commit', 'manual', 'No commit or push is performed by this screen.');
-  gate('remote', 'manual', 'Verify remote URL, target branch, permissions and branch protection manually.');
+  gate(
+    'remote',
+    'manual',
+    'Verify remote URL, target branch, permissions and branch protection manually.',
+  );
   gate('approval', 'manual', 'A separate explicit confirmation is required for publishing a PR.');
 
   return {

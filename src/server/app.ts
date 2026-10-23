@@ -639,7 +639,10 @@ export async function createApp(manager: TaskManager) {
   );
   app.post('/api/tasks/:id/delivery/preflight', async (request) => {
     const taskId = id.parse((request.params as { id: string }).id);
-    const input = z.object({ remote: z.string().min(1).max(2048) }).strict().parse(request.body);
+    const input = z
+      .object({ remote: z.string().min(1).max(2048) })
+      .strict()
+      .parse(request.body);
     const task = manager.store.task(taskId);
     if (!task) throw new AppError(404, 'Task not found.');
     const review = (await manager.reviewOperation(taskId, 'review')) as WorkspaceReview;

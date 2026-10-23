@@ -38,7 +38,6 @@ AI Office supports read-only reviews and write-enabled tasks in dedicated Git wo
 
 Read-only execution retains its original restrictive profile. Isolated coding grants writes only inside its dedicated worktree; primary checkout and Git metadata remain denied. The SDK has no interactive approval callback: actions requiring escalation stay blocked. Host verification is disabled by default. Enabling it requires AI_OFFICE_ALLOW_HOST_VERIFICATION=1 and separate confirmation of full host permissions; inspect AI-edited scripts before running them. See the [security model](docs/SECURITY.md), [security audit](docs/V0_4_SECURITY_AUDIT.md), and [workspace recovery](docs/WORKSPACE_RECOVERY.md).
 
-
 ### Recovering a stale local server lease
 
 If `npm start` exits with `ResourceLockedError`, do not delete the

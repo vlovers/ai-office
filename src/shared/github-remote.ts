@@ -36,7 +36,8 @@ export function parseGitHubRemote(input: string): GitHubRemote | null {
       url.password ||
       url.search ||
       url.hash
-    ) return null;
+    )
+      return null;
     const parts = url.pathname.split('/');
     if (parts.length !== 3 || parts[0] !== '') return null;
     owner = parts[1] ?? '';

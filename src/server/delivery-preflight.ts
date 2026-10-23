@@ -23,7 +23,9 @@ export function deliveryPreflight(
   const checks = [
     {
       id: 'task',
-      ok: task.state === 'completed' && task.workspaceId === workspace.id &&
+      ok:
+        task.state === 'completed' &&
+        task.workspaceId === workspace.id &&
         task.repositoryId === workspace.repositoryId,
       message: 'Task must be completed and bound to the exact repository/workspace.',
     },
@@ -39,7 +41,9 @@ export function deliveryPreflight(
     },
     {
       id: 'review',
-      ok: Boolean(review.revision) && review.files.length > 0 &&
+      ok:
+        Boolean(review.revision) &&
+        review.files.length > 0 &&
         review.files.every((file) => file.availability === 'text'),
       message: 'A current, non-empty and inspectable review is required.',
     },

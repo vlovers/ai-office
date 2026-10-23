@@ -54,9 +54,9 @@ describe('GitHub delivery read-only readiness', () => {
       { files: [{ availability: 'binary' }] },
       { files: [{ availability: 'oversized' }] },
     ]) {
-      expect(assessDeliveryReadiness(task, { ...review, ...change } as WorkspaceReview).eligible).toBe(
-        false,
-      );
+      expect(
+        assessDeliveryReadiness(task, { ...review, ...change } as WorkspaceReview).eligible,
+      ).toBe(false);
     }
   });
 

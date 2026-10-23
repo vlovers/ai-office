@@ -28,10 +28,28 @@ describe('read-only delivery preflight', () => {
   });
 
   it('fails closed on mismatched task, unsafe remote and uninspectable files', () => {
-    expect(deliveryPreflight({ ...task, repositoryId: 'wrong' }, review, 'https://github.com/a/b').status).toBe('blocked');
+    expect(
+      deliveryPreflight({ ...task, repositoryId: 'wrong' }, review, 'https://github.com/a/b')
+        .status,
+    ).toBe('blocked');
     expect(deliveryPreflight(task, review, 'https://token@github.com/a/b').remote).toBeNull();
     expect(deliveryPreflight(task, review, 'https://token@github.com/a/b').status).toBe('blocked');
-    expect(deliveryPreflight(task, { ...review, files: [{ availability: 'binary' }] } as WorkspaceReview, 'https://github.com/a/b').status).toBe('blocked');
-    expect(deliveryPreflight(task, { ...review, workspace: { ...review.workspace, operation: 'verifying' } } as WorkspaceReview, 'https://github.com/a/b').status).toBe('blocked');
+    expect(
+      deliveryPreflight(
+        task,
+        { ...review, files: [{ availability: 'binary' }] } as WorkspaceReview,
+        'https://github.com/a/b',
+      ).status,
+    ).toBe('blocked');
+    expect(
+      deliveryPreflight(
+        task,
+        {
+          ...review,
+          workspace: { ...review.workspace, operation: 'verifying' },
+        } as WorkspaceReview,
+        'https://github.com/a/b',
+      ).status,
+    ).toBe('blocked');
   });
 });

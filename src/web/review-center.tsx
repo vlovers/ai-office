@@ -318,12 +318,14 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
                 return (
                   <>
                     <p>
-                      Local checks: <strong>{readiness.eligible ? 'ready for manual review' : 'blocked'}</strong>.
+                      Local checks:{' '}
+                      <strong>{readiness.eligible ? 'ready for manual review' : 'blocked'}</strong>.
                       This is not approval to commit, push or create a PR.
                     </p>
                     <p>
-                      Branch <code>{readiness.branch}</code> · Base commit <code>{readiness.base}</code>
-                      {' '}· Revision <code>{readiness.revision ?? 'unavailable'}</code>
+                      Branch <code>{readiness.branch}</code> · Base commit{' '}
+                      <code>{readiness.base}</code> · Revision{' '}
+                      <code>{readiness.revision ?? 'unavailable'}</code>
                     </p>
                     <label htmlFor="delivery-remote">GitHub remote (local validation only)</label>
                     <input
@@ -372,13 +374,17 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
                         })
                           .then((result) => {
                             if (result.revision !== review.revision) {
-                              setDeliveryError('Review changed since the page loaded. Refresh before proceeding.');
+                              setDeliveryError(
+                                'Review changed since the page loaded. Refresh before proceeding.',
+                              );
                             } else {
                               setDeliveryResult(result);
                             }
                           })
                           .catch(() => {
-                            setDeliveryError('Server preflight unavailable. No changes were published.');
+                            setDeliveryError(
+                              'Server preflight unavailable. No changes were published.',
+                            );
                           })
                           .finally(() => setDeliveryChecking(false));
                       }}
@@ -389,8 +395,8 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
                     {deliveryResult && (
                       <div aria-live="polite">
                         <p>
-                          Server preflight: <strong>{deliveryResult.status}</strong>.
-                          No commit, push or PR was created.
+                          Server preflight: <strong>{deliveryResult.status}</strong>. No commit,
+                          push or PR was created.
                         </p>
                         <ul>
                           {deliveryResult.checks.map((check) => (

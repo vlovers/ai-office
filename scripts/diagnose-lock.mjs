@@ -22,7 +22,9 @@ let owner;
 try {
   owner = JSON.parse(await readFile(ownerFile, 'utf8'));
 } catch {
-  console.error('Owner metadata is missing or invalid. Treat this lease as occupied until manually investigated.');
+  console.error(
+    'Owner metadata is missing or invalid. Treat this lease as occupied until manually investigated.',
+  );
   process.exitCode = 2;
 }
 
@@ -36,11 +38,15 @@ if (owner) {
   } else {
     try {
       process.kill(owner.pid, 0);
-      console.warn('A process currently has this PID. It may not be the original owner: inspect it with ps before acting.');
+      console.warn(
+        'A process currently has this PID. It may not be the original owner: inspect it with ps before acting.',
+      );
       process.exitCode = 2;
     } catch (error) {
       if (error?.code === 'ESRCH') {
-        console.log('The recorded PID is not running. Verify no other AI Office instance is active before archiving the lease.');
+        console.log(
+          'The recorded PID is not running. Verify no other AI Office instance is active before archiving the lease.',
+        );
       } else {
         console.warn('Cannot verify the process owner:', error?.code ?? 'unknown error');
         process.exitCode = 2;
