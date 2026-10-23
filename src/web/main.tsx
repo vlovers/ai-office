@@ -562,9 +562,6 @@ function App() {
                   }}
                 />
               )}
-              <div id="task-workflow" tabIndex={-1}>
-                {task && <WorkflowBoard taskId={task.id} />}
-              </div>
               <WorkflowBoard />
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
@@ -800,14 +797,17 @@ function App() {
                         <pre>{task.result}</pre>
                       </div>
                     )}
-                    {task.workspaceId &&
-                      !['queued', 'running', 'stopping'].includes(task.state) && (
+                    <div id="task-workflow" tabIndex={-1}>
+                      {taskHasReview(task) ? (
                         <ReviewCenter
                           key={task.id}
                           task={{ ...task, configuration: taskConfiguration }}
                           api={api}
                         />
+                      ) : (
+                        <WorkflowBoard taskId={task.id} />
                       )}
+                    </div>
                     {task.executionMode !== 'write' &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
                         <div className="file-summary">
