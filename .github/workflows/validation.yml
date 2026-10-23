@@ -38,7 +38,12 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Formatting
-        run: npm run format:check
+        run: |
+          if ! npm run format:check; then
+            npx prettier --write src/web/workflow-board.tsx src/web/workflow-operations.ts tests/workflow-operations.test.ts
+            git diff -- src/web/workflow-board.tsx src/web/workflow-operations.ts tests/workflow-operations.test.ts
+            exit 1
+          fi
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
