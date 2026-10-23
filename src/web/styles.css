@@ -2458,3 +2458,77 @@ select {
     flex-wrap: wrap;
   }
 }
+
+/* Readable live inspector strip, sourced only from the selected runtime agent. */
+.office-v3-activity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 20px;
+  background: linear-gradient(100deg, #23353e, #1a292f);
+  border-bottom: 1px solid #3c5359;
+  min-width: 0;
+}
+.office-v3-presence {
+  flex: 0 0 11px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #8996a3;
+  box-shadow: 0 0 0 4px #ffffff12;
+}
+.office-v3-presence.state-working,
+.office-v3-presence.state-thinking {
+  background: #86e6b4;
+  box-shadow: 0 0 0 4px #86e6b41c;
+}
+.office-v3-presence.state-error {
+  background: #ff968f;
+}
+.office-v3-presence.state-stopping {
+  background: #f2c47d;
+}
+.office-v3-activity-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.office-v3-activity-kicker {
+  font-size: 10px;
+  color: #9fb5bf;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.office-v3-activity-copy strong {
+  font-size: 16px;
+  color: #f5f6f3;
+}
+.office-v3-activity-copy > span:not(.office-v3-activity-kicker) {
+  color: #c2d0d5;
+  font-size: 12px;
+}
+.office-v3-activity-task {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-v3-activity-access {
+  flex: 0 0 auto;
+  border: 1px solid #55746e;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #d3e5de;
+  background: #2a4644;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .office-v3-activity {
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+  .office-v3-activity-access {
+    margin-left: 24px;
+  }
+}
