@@ -8,11 +8,11 @@ AI Office is a **local-first, single-user Codex workspace** for assigning tasks 
 
 ## Implemented in tagged releases
 
-| Release | Scope | Evidence |
-| --- | --- | --- |
-| v0.3.0 | Two Codex slots, persistent task queue, read-only sessions, interactive office | [Milestone](docs/V0_3_MILESTONE_A.md) |
-| v0.4.0 | Authorized isolated writes, worktrees, revision-bound review, Keep/Reject, recovery | [Release verification](docs/V0_4_RELEASE_VERIFICATION.md) |
-| v0.5.0 | Review Center, per-line feedback, Request Changes and review history | [Validation](docs/V0_5_VALIDATION.md) |
+| Release | Scope                                                                               | Evidence                                                  |
+| ------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| v0.3.0  | Two Codex slots, persistent task queue, read-only sessions, interactive office      | [Milestone](docs/V0_3_MILESTONE_A.md)                     |
+| v0.4.0  | Authorized isolated writes, worktrees, revision-bound review, Keep/Reject, recovery | [Release verification](docs/V0_4_RELEASE_VERIFICATION.md) |
+| v0.5.0  | Review Center, per-line feedback, Request Changes and review history                | [Validation](docs/V0_5_VALIDATION.md)                     |
 
 The latest documented published release is **v0.5.0**. Never infer a published release from the `package.json` version.
 
