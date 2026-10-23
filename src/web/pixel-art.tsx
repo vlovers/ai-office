@@ -513,7 +513,8 @@ export function PixelOffice({
         <div className="office-v3-agent-grid">
           {agents.map((agent) => {
             const pending = queue.filter((entry) => entry.agentId === agent.id);
-            const running = agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state);
+            const running =
+              agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state);
             return (
               <button
                 key={agent.id}
@@ -523,7 +524,10 @@ export function PixelOffice({
                 aria-pressed={selectedAgent === agent.id}
                 onClick={() => onSelect(agent.id)}
               >
-                <span className={`office-v3-presence state-${agent.status.state}`} aria-hidden="true" />
+                <span
+                  className={`office-v3-presence state-${agent.status.state}`}
+                  aria-hidden="true"
+                />
                 <span className="office-v3-agent-card-content">
                   <strong>{agent.name}</strong>
                   <span>{agent.role ?? 'Agent'} · {agent.status.label}</span>
@@ -537,30 +541,41 @@ export function PixelOffice({
                           : 'No active assignment'}
                   </small>
                 </span>
-                <span className="office-v3-agent-card-count" aria-label={`${pending.length} queued tasks`}>
+                <span
+                  className="office-v3-agent-card-count"
+                  aria-label={`${pending.length} queued tasks`}
+                >
                   {pending.length > 0 ? pending.length : '—'}
                 </span>
               </button>
             );
           })}
-          {agents.length === 0 && <p className="office-operations-help">No agent profiles yet.</p>}
+          {agents.length === 0 && (
+            <p className="office-operations-help">No agent profiles yet.</p>
+          )}
         </div>
         {queue.length > 0 && (
           <div className="office-v3-queue-preview" aria-label="Next queued tasks">
             <strong>Waiting room</strong>
             <ol>
-              {[...queue].sort((a, b) => a.order - b.order).slice(0, 4).map((entry) => (
+              {[...queue]
+                .sort((a, b) => a.order - b.order)
+                .slice(0, 4)
+                .map((entry) => (
                 <li key={entry.taskId}>
                   <button type="button" onClick={() => onSelect(entry.agentId)}>
                     <span>{entry.title}</span>
-                    <small>{agents.find((agent) => agent.id === entry.agentId)?.name ?? 'Unknown agent'}
+                    <small>
+                      {agents.find((agent) => agent.id === entry.agentId)?.name ?? 'Unknown agent'}
                       {entry.waitingReason ? ` · ${entry.waitingReason}` : ''}
                     </small>
                   </button>
                 </li>
               ))}
             </ol>
-            {queue.length > 4 && <span className="office-v3-queue-more">+{queue.length - 4} more queued</span>}
+            {queue.length > 4 && (
+              <span className="office-v3-queue-more">+{queue.length - 4} more queued</span>
+            )}
           </div>
         )}
       </section>
