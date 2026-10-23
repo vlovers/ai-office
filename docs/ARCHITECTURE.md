@@ -1,5 +1,7 @@
 # AI Office architecture — integrated v0.6 Agent Studio and v0.7 Workflow Engine (unreleased)
 
+For a dated source/CI audit, current PR status and delivery gaps, see [repository audit (2026-10-23)](REPOSITORY_AUDIT_2026_10_23.md). Office V2 is merged; Office V3 remains unmerged Draft PR #31. This architecture document describes the implemented local runtime, not a hosted or autonomous service.
+
 Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders Agent Studio and the PHOSPHOR interface. Stable persisted profiles receive independent lazy Codex providers/private worker homes. At most two turns prepare/run globally, with one per profile; the v0.7 workflow layer adds operator-gated Coder → Reviewer → QA orchestration; it does not introduce unrestricted autonomous agent-to-agent dispatch.
 
 ```mermaid
