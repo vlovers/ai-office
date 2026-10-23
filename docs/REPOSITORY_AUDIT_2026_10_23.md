@@ -24,9 +24,13 @@ AI Office is a **single-user, local-first Codex coding workspace** with substant
 ## PR and branch reconciliation
 
 - `main` currently points to `b3f7ee9`, incorporating Office V2 PR #27 and documentation PR #28; both were incorrectly described as pending in older documents.
+
 - [PR #31](https://github.com/vlovers/ai-office/pull/31) is open and Draft, based on `main`. It contains the warmer Office V3 scene, roster, filters, queue preview, collapsible diagnostics and additional environment graphics. It is **not merged**.
+
 - The most recent inspected PR #31 workflow run (run #363, ID `39890922882`) **failed Formatting**; the native filesystem policy job passed. Do not describe V3 as validated or shipped.
+
 - Other open PRs at audit time: #30 (Vitest dependency), #29 (upload-artifact), #21 and #11 (older documentation), #6 and #5 (GitHub Actions upgrades). These require individual review for supersession, compatibility and CI; do not blindly merge or close them.
+
 - No open non-PR GitHub issues were returned by the inspected issues listing. This does **not** mean all roadmap work is complete.
 
 ## Findings, ranked
@@ -59,9 +63,13 @@ AI Office is a **single-user, local-first Codex coding workspace** with substant
 `.github/workflows/validation.yml` defines:
 
 - Ubuntu: `npm ci`, TypeScript, unit/integration, HTTP/SSE smoke, build, Prettier check, browser smoke, isolated-write browser smoke, Agent Studio browser/restart smoke.
+
 - macOS: credential-free native filesystem policy, Reviewer/QA/workflow integration, production dashboard build, browser workflow approval journey and 7-day screenshot artifact.
+
 - No general live-model inference in CI (intentional: usage and credentials).
+
 - Existing workflow has no explicit `npm run test:dashboard:real` / `npm run test:real:workflow` run in normal CI (intentional; manual approval required).
+
 - A GitHub Actions green badge does not prove current release, visual quality or Linux native policy.
 
 ## MVP acceptance scenario
@@ -79,9 +87,13 @@ AI Office is a **single-user, local-first Codex coding workspace** with substant
 ## Proposed implementation order
 
 - **Sprint A (P0):** PR #31 formatting/CI, visual review, stale documentation and first-run acceptance.
+
 - **Sprint B (P0):** Office Experience V4 plus task/workflow navigation and coherent status presentation, tested with real/synthetic labeled states.
+
 - **Sprint C (P1):** Approval-gated GitHub PR preparation and publishing; CI/review status readback.
+
 - **Sprint D (P1):** Scheduling, failure diagnostics and run observability with explicit execution authority.
+
 - **Sprint E (P2):** Dependency-aware multi-agent orchestration, provider adapters only after SDK validation.
 
 ## Audit limitations
