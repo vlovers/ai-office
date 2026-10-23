@@ -12,6 +12,9 @@ This is an **unreleased read-only readiness slice**, not GitHub publishing.
   publication approval. Passing local gates is not permission to push.
 - Pure assessment tests for stale, pending, recovering, rejected and unsafe states.
 - Copyable local PR title/description draft, including review revision and source branch.
+- Read-only POST /api/tasks/:id/delivery/preflight endpoint that reuses the
+  existing server review operation and returns blocked/manual-review checks.
+  It does not claim remote ownership, branch protection or commit readiness.
 - Local-only GitHub remote URL/SSH classifier; rejects credential-bearing URLs,
   non-GitHub hosts, unsafe schemes, extra paths and control characters.
   The operator enters a remote manually; the app does not fetch repository remotes.
@@ -35,4 +38,5 @@ This is an **unreleased read-only readiness slice**, not GitHub publishing.
 ## Boundaries
 
 The current UI does **not** commit, push, create PRs, or query GitHub.
+The preflight API is read-only and does not authorize any mutation.
 The local checklist cannot establish remote access or guarantee a safe push.
