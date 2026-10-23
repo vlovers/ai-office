@@ -19,7 +19,7 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
   const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
-  await page.getByRole('heading', { name: 'Mission control_' }).waitFor();
+  await page.getByRole('heading', { name: 'Office overview_' }).waitFor();
   await expect(page.getByRole('region', { name: 'Get started' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toBeDisabled();
   await page.screenshot({
@@ -161,7 +161,7 @@ try {
   });
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.locator('.result')).toContainText('Reviewed the disposable repository');
-  await page.getByRole('button', { name: 'Mission Control', exact: true }).click();
+  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.reload();
   await page.locator('.task-row').filter({ hasText: 'Review the example project' }).click();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
@@ -205,7 +205,7 @@ try {
   );
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Mission Control', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: 'Office overview', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -307,17 +307,17 @@ try {
   await expect(page.locator('#task-workspace')).toContainText('Agent A concurrent');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   // B's Stop remains usable while A waits for its own process-group cleanup.
-  await page.getByRole('button', { name: 'Mission Control', exact: true }).click();
+  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
   await expect(page.getByRole('button', { name: /Stop agent/ })).toBeEnabled();
   await expect.poll(() => env.store.task(taskA.id)?.state).toBe('stopped');
   assert.equal(env.store.task(taskB.id)?.state, 'running', 'Stopping A affected B');
-  await page.getByRole('button', { name: 'Mission Control', exact: true }).click();
+  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
   await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.getByRole('button', { name: 'Mission Control', exact: true }).click();
+  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
