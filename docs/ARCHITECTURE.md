@@ -1,7 +1,4 @@
-# AI Office architecture — Agent Studio, Workflow Engine and Office V4 (unreleased)
-
-**Integration note (2026-10-24):** [PR #36](https://github.com/vlovers/ai-office/pull/36) merged the isometric Office V4 UI, task navigation/history and workflow triage into `main`. Runtime execution, approvals, isolation and two-worker scheduling remain server-owned. This does not establish a published release or hosted multi-user service.
-
+# AI Office architecture — integrated v0.6 Agent Studio and v0.7 Workflow Engine (unreleased)
 
 Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders Agent Studio and the Office V4 studio interface. Stable persisted profiles receive independent lazy Codex providers/private worker homes. At most two turns prepare/run globally, with one per profile; the v0.7 workflow layer adds operator-gated Coder → Reviewer → QA orchestration; it does not introduce unrestricted autonomous agent-to-agent dispatch.
 
