@@ -308,7 +308,7 @@ function App() {
             className="crt-toggle secondary"
             aria-pressed={crt}
             onClick={() => setCrt(!crt)}
-            title="Static scanlines and phosphor glow. Reduced-motion settings disable the effect."
+            title="Optional retro display effect. Reduced-motion settings disable the effect."
           >
             CRT effects: {crt ? 'on' : 'off'}
           </button>
@@ -316,12 +316,12 @@ function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">AI OFFICE / PHOSPHOR OS</div>
+              <div className="eyebrow">AI OFFICE / WORKSPACE</div>
               <h1>
-                {view === 'focus' ? 'Focus mode' : 'Mission control'}
+                {view === 'focus' ? 'Focus mode' : 'Office overview'}
                 <span>_</span>
               </h1>
-              <p>Your agent profiles. Two workers. Isolated coding and repository review.</p>
+              <p>Your agents, tasks and approvals in one workspace. Two concurrent workers.</p>
             </div>
             <a
               className="button-link"
@@ -340,7 +340,7 @@ function App() {
               aria-pressed={view === 'mission'}
               onClick={() => setView('mission')}
             >
-              Mission Control
+              Office overview
             </button>
             <button
               className="secondary"
