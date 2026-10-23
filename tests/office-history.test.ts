@@ -13,20 +13,26 @@ const tasks = [
 describe('persisted office task history', () => {
   it('orders by most recently updated with deterministic ties', () => {
     expect(selectOfficeHistory(tasks, id('a'), 'all', 8).map((task) => task.id)).toEqual([
-      'failed', 'newer', 'stopped', 'older',
+      'failed',
+      'newer',
+      'stopped',
+      'older',
     ]);
   });
 
   it('filters the selected agent without changing source order', () => {
     expect(selectOfficeHistory(tasks, id('a'), 'selected', 8).map((task) => task.id)).toEqual([
-      'newer', 'stopped', 'older',
+      'newer',
+      'stopped',
+      'older',
     ]);
     expect(tasks[0].id).toBe('older');
   });
 
   it('only treats actual failed or interrupted states as failures', () => {
     expect(selectOfficeHistory(tasks, id('a'), 'failures', 8).map((task) => task.id)).toEqual([
-      'failed', 'stopped',
+      'failed',
+      'stopped',
     ]);
   });
 
