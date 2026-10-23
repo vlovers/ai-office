@@ -1,12 +1,5 @@
 # Changelog
 
-## [Unreleased] — Office V4 integration (2026-10-24)
-
-- Merged [PR #36](https://github.com/vlovers/ai-office/pull/36): isometric Office V4, truthful agent/task states, workflow triage, searchable task history and task-scoped navigation.
-- Integration head passed both required CI jobs ([run](https://github.com/vlovers/ai-office/actions/runs/39944462519)); no release or deployment is implied.
-- Closed superseded PRs #31, #33, #34 and #35; historical UI and roadmap notes below describe earlier milestones.
-
-
 ## [Unreleased] — v0.7 workflow implementation (merged via PR #24)
 
 - Real Codex SDK Reviewer on a verified isolated source snapshot; changed-file context and persistent revision-bound reports.
