@@ -20,12 +20,21 @@ describe('task-scoped navigation', () => {
     expect(taskHasReview({ workspaceId: 'workspace-1', state: 'queued' })).toBe(false);
     expect(taskHasReview({ workspaceId: undefined, state: 'completed' })).toBe(false);
     expect(taskNavigationTarget({ ...task, state: 'running' }, 'review')).toBeNull();
-    expect(taskNavigationTarget(task, 'review')).toEqual({ taskId: task.id, destination: 'review' });
+    expect(taskNavigationTarget(task, 'review')).toEqual({
+      taskId: task.id,
+      destination: 'review',
+    });
   });
 
   it('does not treat a fragment as an authorization to start or mutate a task', () => {
-    expect(taskNavigationTarget(task, 'session')).toEqual({ taskId: task.id, destination: 'session' });
-    expect(taskNavigationTarget(task, 'workflow')).toEqual({ taskId: task.id, destination: 'workflow' });
+    expect(taskNavigationTarget(task, 'session')).toEqual({
+      taskId: task.id,
+      destination: 'session',
+    });
+    expect(taskNavigationTarget(task, 'workflow')).toEqual({
+      taskId: task.id,
+      destination: 'workflow',
+    });
     expect(taskNavigationTarget(undefined, 'session')).toBeNull();
   });
 
