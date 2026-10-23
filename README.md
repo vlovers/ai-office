@@ -12,6 +12,8 @@ The v0.6.0 Agent Studio implementation is integrated into main, with [validation
 
 **Integrated v0.7 implementation (PR #24; unreleased):** [Coder → Reviewer → QA workflow](docs/V0_7_WORKFLOW_ENGINE.md) with native sandbox checks, explicit stage/result gates, persistent reports and Review Center controls. Not released. QA remains read-only and never uses host verification.
 
+Before tagging another release, use the [MVP stabilization acceptance checklist](docs/MVP_STABILIZATION_CHECKLIST.md) to distinguish automated checks, real Codex execution and release approval.
+
 ## Quick start
 
 ```sh
