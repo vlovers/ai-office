@@ -45,8 +45,7 @@
 6. Comprehensive security, browser, native sandbox and release-validation documentation.
 
 Implementation and exact validation: [workflow/migrations](docs/V0_6_AGENT_STUDIO.md),
-[PR stack/security report](docs/V0_6_VALIDATION.md). Checkmarks describe this unmerged
-implementation, not an approved release. Known-pattern secret handling and macOS fixture
+[PR stack/security report](docs/V0_6_VALIDATION.md). Checkmarks describe the implementation merged into `main`, not an approved or tagged release. Known-pattern secret handling and macOS fixture
 validation do not establish arbitrary-content secrecy or Linux runtime safety.
 
 ### v0.6 exit criteria
@@ -59,7 +58,7 @@ validation do not establish arbitrary-content secrecy or Linux runtime safety.
 
 ## v0.7.0 — workflow orchestration (merged into main; not tagged)
 
-Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder → SDK Reviewer → sandboxed QA, pinned source/runtime provenance, manual stage/result gates, durable reports, fail-closed recovery, Review Center actions, and the isometric Office Experience V2 with live agent/queue/history data. The superseded draft PRs #22 and #23 were closed without separate merges. Validation CI #266 passed both the TypeScript/unit/integration/browser/build/format job and native Codex filesystem-policy, recovery/security and browser approval journey job. See [implementation and limitations](docs/V0_7_WORKFLOW_ENGINE.md). This is **merged implementation, not a tagged release or deployment**. Release review, broader repository support and Linux native success-path validation remain separate gates.
+Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder → SDK Reviewer → sandboxed QA, pinned source/runtime provenance, manual stage/result gates, durable reports, fail-closed recovery, Review Center actions, and an initial isometric Office Experience baseline with live agent/queue/history data. Follow-up Office V2 fixes remain in [PR #27](https://github.com/vlovers/ai-office/pull/27) and are not merged. The superseded draft PRs #22 and #23 were closed without separate merges. Validation CI #266 passed both the TypeScript/unit/integration/browser/build/format job and native Codex filesystem-policy, recovery/security and browser approval journey job. See [implementation and limitations](docs/V0_7_WORKFLOW_ENGINE.md). This is **merged implementation, not a tagged release or deployment**. Release review, broader repository support and Linux native success-path validation remain separate gates.
 
 ## v0.8.0 — delivery integration (proposal)
 
