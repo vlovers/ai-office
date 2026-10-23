@@ -170,6 +170,13 @@ function App() {
       document.getElementById(id)?.scrollIntoView({ block: 'start' });
     });
   }, [navigation, dashboard, selected, selectedAgent, view]);
+  const clearTaskNavigation = () => {
+    setNavigation(null);
+    lastNavigation.current = '';
+    if (window.location.hash.startsWith('#task/')) {
+      window.history.replaceState(null, '', '#task-history');
+    }
+  };
   const navigateTask = (item: Task, destination: TaskDestination) => {
     const target = taskNavigationTarget(item, destination);
     if (!target) return;
@@ -225,6 +232,7 @@ function App() {
     const stationTask = workstationTask(dashboard, selected, agentId);
     setSelected(stationTask?.id);
     setResumeSessionId('');
+    clearTaskNavigation();
     // Inspect in place; Focus Mode remains an explicit choice.
     if (!stationTask) showSection('agent');
   };
@@ -594,11 +602,7 @@ function App() {
                           setSelectedAgent(item.agentId);
                           setSelected(item.id);
                           setResumeSessionId('');
-                          setNavigation(null);
-                          lastNavigation.current = '';
-                          if (window.location.hash.startsWith('#task/')) {
-                            window.history.replaceState(null, '', '#task-history');
-                          }
+                          clearTaskNavigation();
                         }}
                       >
                         <span className={`task-indicator ${item.state}`} />
@@ -863,6 +867,7 @@ function App() {
                         executionMode: data.get('executionMode'),
                       });
                       setSelected(created.id);
+                      clearTaskNavigation();
                       form.reset();
                       setExecutionMode('read-only');
                     });
