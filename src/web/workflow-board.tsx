@@ -86,7 +86,11 @@ export function WorkflowBoard({
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
   useEffect(() => {
-    if (inspection) setSelected(inspection.id);
+    if (inspection) {
+      setSelected(inspection.id);
+      // Explicit inspection must load the requested checkpoint, including after a pause.
+      setPaused(false);
+    }
   }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);

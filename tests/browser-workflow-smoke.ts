@@ -220,8 +220,11 @@ try {
     { timeout: 10000 },
   );
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
+  await expect(board.getByText(/^State: active/)).toBeVisible();
+  await expect(board.getByRole('button', { name: 'Pause live updates' })).toBeVisible();
   assert.equal((await env.get()).state, 'completed');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);

@@ -42,7 +42,7 @@ icon and compatibility exports; `office-art.tsx`, `office-scene.tsx`, `office.cs
   assignment, and workflow approval actions lead to the existing tools. Queue and
   history buttons select the exact task ID, rather than only its owning agent.
 - A checkpoint action opens the corresponding workflow, even when another workflow
-  was selected in the board. It never approves a checkpoint.
+  was selected in the board. Explicit inspection resumes paused workflow updates so the requested checkpoint is loaded. It never approves a checkpoint.
 - Loading with unknown counts, initial connection failure, zero-profile, filtered-empty, disconnected-snapshot, failed, and saved
   completion states. Primary contextual actions are unavailable during a server
   disconnect. Workflow fetch failure has a separate notice and clears stale
