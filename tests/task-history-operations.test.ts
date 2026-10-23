@@ -58,7 +58,13 @@ const select = (changes: Partial<TaskHistoryOptions> = {}) =>
 
 describe('task history operations', () => {
   it('sorts failures before running, queued and completed without changing input', () => {
-    expect(select().map((task) => task.id)).toEqual(['broken', 'stopped', 'running', 'queued', 'done']);
+    expect(select().map((task) => task.id)).toEqual([
+      'broken',
+      'stopped',
+      'running',
+      'queued',
+      'done',
+    ]);
     expect(tasks[0]?.id).toBe('done');
   });
 
@@ -72,10 +78,7 @@ describe('task history operations', () => {
   });
 
   it('supports all status groups and chronological ordering', () => {
-    expect(select({ status: 'attention' }).map((task) => task.id)).toEqual([
-      'broken',
-      'stopped',
-    ]);
+    expect(select({ status: 'attention' }).map((task) => task.id)).toEqual(['broken', 'stopped']);
     expect(select({ status: 'active' }).map((task) => task.id)).toEqual(['running']);
     expect(select({ status: 'queued' }).map((task) => task.id)).toEqual(['queued']);
     expect(select({ status: 'completed' }).map((task) => task.id)).toEqual(['done']);
@@ -111,7 +114,10 @@ describe('task history operations', () => {
   });
 
   it('uses stable task ids for timestamp ties', () => {
-    const tied = [{ ...tasks[0]!, id: 'z' }, { ...tasks[0]!, id: 'a' }];
+    const tied = [
+      { ...tasks[0]!, id: 'z' },
+      { ...tasks[0]!, id: 'a' },
+    ];
     expect(selectTaskHistory(tied, options).map((task) => task.id)).toEqual(['a', 'z']);
   });
 });
