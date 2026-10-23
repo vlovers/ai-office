@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
@@ -58,6 +58,7 @@ function App() {
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [selected, setSelected] = useState<string>();
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
+  const lastNavigation = useRef('');
   useEffect(() => {
     const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
     window.addEventListener('hashchange', onHashChange);
@@ -157,6 +158,9 @@ function App() {
     if (selected !== target.id) setSelected(target.id);
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
     if (view !== 'focus') setView('focus');
+    const key = encodeTaskNavigation(navigation);
+    if (lastNavigation.current === key) return;
+    lastNavigation.current = key;
     requestAnimationFrame(() => {
       const id = navigation.destination === 'workflow'
         ? 'task-workflow'
@@ -174,7 +178,10 @@ function App() {
     setResumeSessionId('');
     setView('focus');
     const hash = encodeTaskNavigation(target);
-    if (window.location.hash === hash) setNavigation(target);
+    if (window.location.hash === hash) {
+      lastNavigation.current = '';
+      setNavigation({ ...target });
+    }
     else window.location.hash = hash;
   };
   const task = dashboard?.tasks.find((item) => item.id === selected);
