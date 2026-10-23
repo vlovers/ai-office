@@ -36,6 +36,15 @@ describe('task history CSV export', () => {
     },
   );
 
+  it('neutralizes formula prefixes in IDs and repository metadata too', () => {
+    const csv = exportTaskHistoryCsv([
+      { ...sample, id: '=1+1', agentId: '@user', repositoryId: '-SUM(1,2)' },
+    ]);
+    expect(csv).toContain('"\'=1+1"');
+    expect(csv).toContain('"\'@user"');
+    expect(csv).toContain('"\'-SUM(1,2)"');
+  });
+
   it('does not mutate source task objects', () => {
     const input = Object.freeze({ ...sample });
     exportTaskHistoryCsv([input]);
