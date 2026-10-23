@@ -87,6 +87,7 @@ try {
   await page.getByRole('button', { name: 'All agents', exact: true }).click();
   await expect(page.locator('.office-v3-agent-card')).toHaveCount(2);
   await expect(page.locator('.isometric-office')).toHaveCount(1);
+  await expect(page.locator('.office-environment')).toHaveCount(1);
   await expect(page.locator('.iso-station')).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Show details' })).toHaveAttribute(
     'aria-expanded',
