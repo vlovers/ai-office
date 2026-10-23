@@ -160,9 +160,18 @@ See [Phase 1.2 verification and limitations](docs/PHASE_1_2_DASHBOARD.md), [arch
 
 Two manually assigned Codex agents are supported. Autonomous planning, automatic commits, pushes and merges are not implemented. Editing is restricted to explicitly authorized isolated-write tasks and review continuations.
 
-## PHOSPHOR OS interface
+## Office Experience V4
 
-The PHOSPHOR OS dashboard now has two real pixel workstations, independent event feeds, an explicit agent selector, a submitted queue and Focus Mode, keyboard navigation and optional CRT effects (off by default). The existing read-only Codex workflow is preserved. See the [v0.3 runtime and verification notes](docs/V0_3_MILESTONE_A.md) and [design and verification notes](docs/design/PHOSPHOR_OS.md) for layout, accessibility, screenshot commands and limitations.
+The office is a full-width isometric studio with original furniture and stable agent
+characters. Select a desk or roster profile to inspect its real task and session,
+assign work, or open its exact workflow checkpoint. Four visible profile desks share
+the existing two execution workers. Queue/history links select actual tasks; motion,
+keyboard access, saved outcomes and disconnected snapshots stay explicit.
+
+See [implementation, truthful state mapping and limitations](docs/OFFICE_V4.md) and
+[desktop/mobile fixture screenshots](docs/design/screenshots/office-v4/README.md).
+V4 is an unreleased experience update in PR #31. The existing revision-bound
+confirmation dialogs, isolated worktrees and Codex SDK execution remain in use.
 
 ## Queue, restart and allowance
 

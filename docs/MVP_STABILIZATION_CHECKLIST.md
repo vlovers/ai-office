@@ -6,12 +6,14 @@ This checklist describes **required evidence**, not a claim that the tests have 
 
 - [x] Workflow Operations PR #25 merged into `main`; latest PR-head validation #327 succeeded before merge.
 - [x] v0.7 Workflow Engine merged via PR #24; this is implementation integration, not a tagged release.
-- [ ] Office Experience V2 PR #27 remains draft; CI #314 passed 163 unit/integration tests, 2 smoke tests, build and native sandbox, but failed Prettier on six files. Later commits need fresh validation.
-- [ ] Documentation synchronization PR #28 requires final CI and review.
+- [x] Office Experience V2 PR #27 merged at `b3f7ee9`; confirmed from current main history.
+- [ ] Office Experience V4 is implemented in PR #31; final PR CI/review remains separate from release approval. See [sprint evidence](OFFICE_V4.md).
+- [x] Documentation synchronization PR #28 merged at `5e160bd`; confirmed from current main history.
 
 ## Gate A — Office Experience V2
 
-- [ ] Integrate [PR #27](https://github.com/vlovers/ai-office/pull/27) against current `main`, resolving conflicts explicitly.
+- [x] Integrate [PR #27](https://github.com/vlovers/ai-office/pull/27) against main.
+- [ ] Review and integrate [Office V4 PR #31](https://github.com/vlovers/ai-office/pull/31) after final CI.
 - [ ] Run the repository's exact Prettier version with `npm run format:check`.
 - [ ] Run `npm run check`, `npm run test:sandbox`, and all relevant browser suites on the final commit.
 - [ ] Verify agent selection, occupied/idle seats, overflow roster, persisted history, responsive viewport, keyboard focus, reduced motion and error/empty states in a real browser.
