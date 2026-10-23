@@ -211,6 +211,7 @@ export function PixelOffice({
   const container = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [floorFilter, setFloorFilter] = useState<'all' | 'active' | 'queued'>('all');
   const [historyFilter, setHistoryFilter] = useState<OfficeHistoryFilter>('all');
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
@@ -246,6 +247,12 @@ export function PixelOffice({
     (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
   );
   const nextQueued = selectedQueue[0];
+  const visibleFloorAgents = agents.filter((agent) => {
+    if (floorFilter === 'queued') return queue.some((entry) => entry.agentId === agent.id);
+    if (floorFilter === 'active')
+      return agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state);
+    return true;
+  });
   const filteredHistory = selectOfficeHistory(
     recentTasks,
     selectedAgent,
@@ -510,8 +517,20 @@ export function PixelOffice({
           </div>
           <span>{agents.length} profiles · {queue.length} queued</span>
         </div>
+        <div className="office-v3-floor-filters" role="group" aria-label="Filter office agents">
+          {(['all', 'active', 'queued'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={floorFilter === filter}
+              onClick={() => setFloorFilter(filter)}
+            >
+              {filter === 'all' ? 'All agents' : filter === 'active' ? 'Active' : 'Queued'}
+            </button>
+          ))}
+        </div>
         <div className="office-v3-agent-grid">
-          {agents.map((agent) => {
+          {visibleFloorAgents.map((agent) => {
             const pending = queue.filter((entry) => entry.agentId === agent.id);
             const running =
               agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state);
@@ -550,8 +569,10 @@ export function PixelOffice({
               </button>
             );
           })}
-          {agents.length === 0 && (
-            <p className="office-operations-help">No agent profiles yet.</p>
+          {visibleFloorAgents.length === 0 && (
+            <p className="office-operations-help">
+              {agents.length === 0 ? 'No agent profiles yet.' : 'No agents match this filter.'}
+            </p>
           )}
         </div>
         {queue.length > 0 && (
