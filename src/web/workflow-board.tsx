@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
-import { selectWorkflowOperations, workflowNeedsAttention } from './workflow-operations.js';
+import {
+  selectWorkflowOperations,
+  summarizeWorkflowOperations,
+  workflowNeedsAttention,
+  workflowTriageKind,
+} from './workflow-operations.js';
 
 type Stage = {
   kind: 'coder' | 'reviewer' | 'qa';
@@ -71,7 +76,13 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return value as T;
 }
 
-export function WorkflowBoard({ taskId }: { taskId?: string }) {
+export function WorkflowBoard({
+  taskId,
+  inspection,
+}: {
+  taskId?: string;
+  inspection?: { id: string; request: number };
+}) {
   const [items, setItems] = useState<Summary[]>([]);
   const [stateFilter, setStateFilter] = useState('all');
   const [workflowQuery, setWorkflowQuery] = useState('');
@@ -79,6 +90,13 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
+  useEffect(() => {
+    if (inspection) {
+      setSelected(inspection.id);
+      // Explicit inspection must load the requested checkpoint, including after a pause.
+      setPaused(false);
+    }
+  }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
@@ -161,6 +179,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     cancelled: items.filter((item) => item.state === 'cancelled').length,
   };
   const needsAttention = workflowNeedsAttention;
+  const triage = summarizeWorkflowOperations(items);
   const visibleWorkflows = selectWorkflowOperations(items, {
     query: workflowQuery,
     state: stateFilter,
@@ -204,6 +223,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     <section
       className="panel"
       id={taskId ? undefined : 'workflows'}
+      tabIndex={-1}
       aria-label={taskId ? 'Workflow review results' : 'Workflow timeline'}
     >
       <div className="panel-heading">
@@ -289,6 +309,11 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
             {items.length} workflows · {counts.active} active · {counts.blocked} blocked ·{' '}
             {counts.completed} completed · {counts.cancelled} cancelled
           </p>
+          <p aria-label="Workflow attention summary">
+            {triage.attention} need attention · {triage.failed} failed/interrupted ·{' '}
+            {triage.approval} awaiting approval · {triage.blocked} blocked · {triage.running}{' '}
+            running · {triage.finished} finished
+          </p>
           <label>
             Find workflow by ID or repository
             <input
@@ -351,7 +376,16 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
                   >
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
                   </button>{' '}
-                  {needsAttention(item) && <strong>Needs attention · </strong>}
+                  {needsAttention(item) && (
+                    <strong>
+                      {workflowTriageKind(item) === 'failed'
+                        ? 'Failure to inspect'
+                        : workflowTriageKind(item) === 'approval'
+                          ? 'Approval required'
+                          : 'Blocked checkpoint'}{' '}
+                      ·{' '}
+                    </strong>
+                  )}
                   {item.updatedAt && (
                     <time dateTime={item.updatedAt} title={item.updatedAt}>
                       Updated {new Date(item.updatedAt).toLocaleString()}

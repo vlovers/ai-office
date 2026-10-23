@@ -1,31 +1,12 @@
 import type { AgentId } from '../shared/types.js';
 
-export interface WorkstationPlacement {
-  agentId: AgentId;
-  identity: 'fern' | 'sage';
-  landscape: { x: number; y: number };
-  portrait: { x: number; y: number };
-}
-
-/** Placement only: rendering never creates an agent absent from the runtime. */
-export const OFFICE_LAYOUT: readonly WorkstationPlacement[] = [
-  {
-    agentId: 'codex-1',
-    identity: 'fern',
-    landscape: { x: 235, y: 245 },
-    portrait: { x: 135, y: 260 },
-  },
-  {
-    agentId: 'codex-2',
-    identity: 'sage',
-    landscape: { x: 605, y: 245 },
-    portrait: { x: 280, y: 405 },
-  },
-];
-
-export function officeGeometry(portrait: boolean) {
-  return portrait ? { width: 420, height: 580, wall: 159 } : { width: 840, height: 440, wall: 191 };
-}
+/** Physical profile desks. Worker execution capacity remains server-owned (two). */
+export const STUDIO_DESKS = [
+  { x: 150, y: 170 },
+  { x: 340, y: 170 },
+  { x: 180, y: 330 },
+  { x: 365, y: 330 },
+] as const;
 
 /** Preserve stable workstation order, replacing the last visible slot for inspection.
  * This is a read-only viewport: it never schedules or fabricates execution. */
@@ -35,7 +16,7 @@ export function selectOfficeSeats<
     active?: boolean;
     status: { state: string };
   },
->(agents: readonly T[], selectedAgent: AgentId, capacity = OFFICE_LAYOUT.length): T[] {
+>(agents: readonly T[], selectedAgent: AgentId, capacity: number = STUDIO_DESKS.length): T[] {
   const limit = Number.isFinite(capacity) ? Math.max(0, Math.floor(capacity)) : 0;
   if (limit === 0) return [];
   // Preserve runtime order. The selected profile replaces the last visible
@@ -55,7 +36,8 @@ export function selectOfficeSeats<
   // If selection evicts an active worker, retain them instead of an idle
   // occupant, without changing the order of the surviving workstations.
   const isActive = (agent: T) =>
-    agent.active === true || ['thinking', 'working', 'stopping'].includes(agent.status.state);
+    agent.active === true ||
+    ['preparing', 'thinking', 'working', 'reviewing', 'stopping'].includes(agent.status.state);
   if (isActive(displaced)) {
     const idleIndex = visible.findIndex((agent) => agent.id !== selectedAgent && !isActive(agent));
     if (idleIndex >= 0) visible[idleIndex] = displaced;

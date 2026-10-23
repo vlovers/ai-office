@@ -8,15 +8,67 @@ export interface WorkflowOperationsItem {
 }
 
 export type WorkflowOperationsSort = 'recent' | 'oldest' | 'attention';
+export type WorkflowTriageKind =
+  'failed' | 'approval' | 'blocked' | 'running' | 'finished' | 'other';
+
+export interface WorkflowTriageSummary {
+  total: number;
+  failed: number;
+  approval: number;
+  blocked: number;
+  running: number;
+  finished: number;
+  other: number;
+  attention: number;
+}
+
+/** Persisted workflow/stage states only. Never infer a hung process from elapsed time.
+ * Failure outranks approval; an active workflow with a blocked stage is still blocked.
+ * Terminal workflows are not actionable even if their historical stages failed. */
+export function workflowTriageKind(item: WorkflowOperationsItem): WorkflowTriageKind {
+  if (item.state === 'completed' || item.state === 'cancelled') return 'finished';
+  const states = item.stages.map((stage) => stage.state ?? '');
+  if (states.some((state) => state === 'failed' || state === 'interrupted')) return 'failed';
+  if (states.some((state) => state === 'awaiting_approval')) return 'approval';
+  if (item.state === 'blocked' || states.includes('blocked')) return 'blocked';
+  if (states.some((state) => state === 'running' || state === 'preparing')) return 'running';
+  return 'other';
+}
 
 export function workflowNeedsAttention(item: WorkflowOperationsItem): boolean {
-  return (
-    item.state === 'blocked' ||
-    item.stages.some((stage) =>
-      ['failed', 'interrupted', 'blocked', 'awaiting_approval'].includes(stage.state ?? ''),
-    )
-  );
+  const kind = workflowTriageKind(item);
+  return kind === 'failed' || kind === 'approval' || kind === 'blocked';
 }
+
+export function summarizeWorkflowOperations(
+  items: readonly WorkflowOperationsItem[],
+): WorkflowTriageSummary {
+  const summary: WorkflowTriageSummary = {
+    total: items.length,
+    failed: 0,
+    approval: 0,
+    blocked: 0,
+    running: 0,
+    finished: 0,
+    other: 0,
+    attention: 0,
+  };
+  for (const item of items) {
+    const kind = workflowTriageKind(item);
+    summary[kind]++;
+    if (workflowNeedsAttention(item)) summary.attention++;
+  }
+  return summary;
+}
+
+const attentionRank: Record<WorkflowTriageKind, number> = {
+  failed: 0,
+  approval: 1,
+  blocked: 2,
+  running: 3,
+  other: 4,
+  finished: 5,
+};
 
 export function selectWorkflowOperations<T extends WorkflowOperationsItem>(
   items: readonly T[],
@@ -32,7 +84,8 @@ export function selectWorkflowOperations<T extends WorkflowOperationsItem>(
     )
     .sort((a, b) => {
       if (options.sort === 'attention') {
-        const priority = Number(workflowNeedsAttention(b)) - Number(workflowNeedsAttention(a));
+        const priority =
+          attentionRank[workflowTriageKind(a)] - attentionRank[workflowTriageKind(b)];
         if (priority) return priority;
       }
       const chronological = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');

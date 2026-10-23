@@ -1,10 +1,10 @@
 # AI Office architecture — integrated v0.6 Agent Studio and v0.7 Workflow Engine (unreleased)
 
-Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders Agent Studio and the PHOSPHOR interface. Stable persisted profiles receive independent lazy Codex providers/private worker homes. At most two turns prepare/run globally, with one per profile; the v0.7 workflow layer adds operator-gated Coder → Reviewer → QA orchestration; it does not introduce unrestricted autonomous agent-to-agent dispatch.
+Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders Agent Studio and the Office V4 studio interface. Stable persisted profiles receive independent lazy Codex providers/private worker homes. At most two turns prepare/run globally, with one per profile; the v0.7 workflow layer adds operator-gated Coder → Reviewer → QA orchestration; it does not introduce unrestricted autonomous agent-to-agent dispatch.
 
 ```mermaid
 flowchart LR
-  UI[PHOSPHOR interface] --> API[Loopback API / strict JSON]
+  UI[Office V4 interface] --> API[Loopback API / strict JSON]
   API --> Store[(SQLite v8 / profiles, config pins, tasks, review, queue)]
   Store --> Manager[TaskManager / bounded dynamic profiles]
   Manager --> Leases[Common Git directory + worktree leases]
@@ -106,3 +106,13 @@ describe supported behavior. Existing v0.5 review, Git and decision invariants r
 The workflow layer persists a revision-bound sequence of Coder, Reviewer and optional QA stages. Coder uses an approved isolated write worktree; Reviewer uses a separately prepared read-only source snapshot; QA runs an operator-selected, server-configured command in a verified native read-only sandbox. Each transition requires an explicit operator decision, including approval of exact evidence and result digests. Workflow-bound tasks cannot bypass these gates via the ordinary task start API. Interrupted or failed workflows require inspection rather than automatic retries. See [workflow implementation and limitations](V0_7_WORKFLOW_ENGINE.md) and [validation](V0_7_VALIDATION.md).
 
 This is a local single-user architecture, not a general multi-tenant scheduler. There is no automatic merge, push or deployment, and Linux native success-path compatibility remains unverified.
+
+## Office V4 presentation
+
+The office scene projects existing dashboard/task/SSE and workflow list state.
+`office-art.tsx` owns original vector artwork, `office-scene.tsx` owns selection and
+contextual details, `office-layout.ts` owns stable four-desk placement, and
+`scene-state.ts` derives categorical states. `office.css` replaces the prior scene
+style layers. Profile desks do not grant execution slots. Exact-task and
+exact-workflow navigation reuse the existing session/review/approval components.
+See [Office V4](OFFICE_V4.md) for state provenance and verification.

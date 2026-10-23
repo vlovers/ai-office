@@ -1,7 +1,18 @@
+import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
 import type { AgentEvent, Dashboard, Task, AgentId } from '../shared/types.js';
 
 export type SceneState =
-  'offline' | 'idle' | 'thinking' | 'working' | 'stopping' | 'completed' | 'error';
+  | 'offline'
+  | 'idle'
+  | 'preparing'
+  | 'queued'
+  | 'thinking'
+  | 'working'
+  | 'reviewing'
+  | 'approval'
+  | 'stopping'
+  | 'completed'
+  | 'error';
 export interface SceneStatus {
   state: SceneState;
   label: string;
@@ -14,6 +25,7 @@ export function sceneStatus(
   events: AgentEvent[],
   disconnected = false,
   agentId: AgentId = 'codex-1',
+  workflows: readonly OfficeWorkflow[] = [],
 ): SceneStatus {
   if (disconnected) return { state: 'offline', label: 'Server disconnected' };
   if (!dashboard) return { state: 'offline', label: 'Connecting' };
@@ -23,7 +35,7 @@ export function sceneStatus(
   if (agent.state === 'offline') return { state: 'offline', label: 'Agent offline' };
   if (agent?.state === 'preparing')
     return {
-      state: 'idle',
+      state: 'preparing',
       label:
         active?.executionMode === 'write'
           ? 'Preparing isolated coding session'
@@ -46,6 +58,20 @@ export function sceneStatus(
       ['item.started', 'item.updated'].includes(sdk.type ?? '')
     )
       return { state: 'thinking', label: 'Thinking · SDK reasoning item' };
+    if (
+      workflows.some(
+        (workflow) =>
+          ['active', 'blocked'].includes(workflow.state) &&
+          workflow.stages.some(
+            (stage) =>
+              stage.kind === 'reviewer' &&
+              stage.state === 'running' &&
+              stage.taskId === active.id &&
+              stage.agentId === agentId,
+          ),
+      )
+    )
+      return { state: 'reviewing', label: 'Reviewing · running workflow Reviewer' };
     return {
       state: 'working',
       label:
@@ -54,6 +80,23 @@ export function sceneStatus(
           : 'Working · read-only turn',
     };
   }
+  const checkpoint = officeCheckpoint(workflows, agentId);
+  if (checkpoint) return { state: 'approval', label: checkpoint.label };
+  const blocked = workflows
+    .filter((workflow) => workflow.state === 'blocked')
+    .flatMap((workflow) => workflow.stages)
+    .find(
+      (stage) =>
+        stage.agentId === agentId && ['blocked', 'failed', 'interrupted'].includes(stage.state),
+    );
+  if (blocked)
+    return { state: 'error', label: `Blocked · ${blocked.kind} workflow requires inspection` };
+  const submitted = dashboard.queue.find((entry) => entry.agentId === agentId);
+  if (submitted)
+    return {
+      state: 'queued',
+      label: `Queued · ${submitted.waitingReason ?? 'submitted for execution'}`,
+    };
   if (
     selected?.agentId === agentId &&
     (selected?.state === 'failed' || selected?.state === 'interrupted')
@@ -63,7 +106,8 @@ export function sceneStatus(
     return { state: 'error', label: 'Connection error' };
   if (dashboard.connection.status === 'authentication-required')
     return { state: 'offline', label: 'Authentication required' };
-  if (agent?.state === 'waiting') return { state: 'idle', label: 'Waiting · submitted queue' };
+  if (agent?.state === 'waiting')
+    return { state: 'idle', label: 'Waiting · no submitted task confirmed' };
   if (selected?.agentId === agentId && selected.state === 'completed')
     return { state: 'completed', label: 'Completed · saved result' };
   return {

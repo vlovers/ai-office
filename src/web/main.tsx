@@ -1,11 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
+import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
+import {
+  decodeTaskNavigation,
+  encodeTaskNavigation,
+  taskHasReview,
+  taskNavigationTarget,
+  type TaskDestination,
+} from './task-navigation.js';
+import {
+  selectTaskHistory,
+  summarizeTaskHistory,
+  type TaskHistoryOrder,
+  type TaskHistoryStatus,
+} from './task-history-operations.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -54,8 +68,23 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
+  const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
+  const [historyAgent, setHistoryAgent] = useState('');
+  const [historyRepository, setHistoryRepository] = useState('');
+  const [workflowInspection, setWorkflowInspection] = useState<{ id: string; request: number }>();
+  const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
+  const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [selected, setSelected] = useState<string>();
+  const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
+  const lastNavigation = useRef('');
+  useEffect(() => {
+    const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   const [eventHistory, setEventHistory] = useState<Record<string, AgentEvent[]>>({});
   const [selectedAgent, setSelectedAgent] = useState<AgentId>('codex-1');
   const [error, setError] = useState('');
@@ -81,6 +110,29 @@ function App() {
       void refresh().catch(() => {});
     }, 2000);
     return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let live = true;
+    const load = async () => {
+      try {
+        const items = await api<OfficeWorkflow[]>('/workflows');
+        if (live) {
+          setWorkflows(items);
+          setWorkflowAvailable(true);
+        }
+      } catch {
+        if (live) {
+          setWorkflows([]);
+          setWorkflowAvailable(false);
+        }
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 3000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   }, []);
   useEffect(() => {
     if (!repositoryId && dashboard?.repositories[0]) setRepositoryId(dashboard.repositories[0].id);
@@ -143,16 +195,92 @@ function App() {
       setPendingStops((previous) => previous.filter((id) => id !== taskId));
     }
   };
+  useEffect(() => {
+    if (!navigation || !dashboard) return;
+    const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
+    if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
+    const key = encodeTaskNavigation(navigation);
+    if (lastNavigation.current === key) return;
+    if (selected !== target.id) setSelected(target.id);
+    if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
+    if (view !== 'focus') setView('focus');
+  }, [navigation, dashboard, selected, selectedAgent, view]);
+  useEffect(() => {
+    if (!navigation || !dashboard || view !== 'focus' || selected !== navigation.taskId) return;
+    const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
+    if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
+    const key = encodeTaskNavigation(navigation);
+    if (lastNavigation.current === key) return;
+    const id =
+      navigation.destination === 'workflow'
+        ? 'task-workflow'
+        : navigation.destination === 'review'
+          ? 'code-review-center'
+          : 'task-workspace';
+    const section = document.getElementById(id);
+    if (!section) return;
+    lastNavigation.current = key;
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
+  }, [navigation, dashboard, selected, view]);
+  const clearTaskNavigation = () => {
+    setNavigation(null);
+    lastNavigation.current = '';
+    if (window.location.hash.startsWith('#task/')) {
+      window.history.replaceState(null, '', '#task-history');
+    }
+  };
+  const navigateTask = (item: Task, destination: TaskDestination) => {
+    const target = taskNavigationTarget(item, destination);
+    if (!target) return;
+    setSelected(item.id);
+    setSelectedAgent(item.agentId);
+    setResumeSessionId('');
+    setView('focus');
+    const hash = encodeTaskNavigation(target);
+    if (window.location.hash === hash) {
+      lastNavigation.current = '';
+      setNavigation({ ...target });
+    } else window.location.hash = hash;
+  };
+  const linkedTask = navigation && dashboard?.tasks.find((item) => item.id === navigation.taskId);
+  const linkError =
+    navigation && dashboard
+      ? !linkedTask
+        ? 'This task is no longer available in the local workspace.'
+        : navigation.destination === 'review' && !taskHasReview(linkedTask)
+          ? 'Code review is not available for this task. Open its session instead.'
+          : ''
+      : '';
+  const taskSummary = summarizeTaskHistory(dashboard?.tasks ?? []);
+  const visibleHistory = selectTaskHistory(dashboard?.tasks ?? [], {
+    query: historyQuery,
+    status: historyStatus,
+    order: historyOrder,
+    ...(historyAgent ? { agentId: historyAgent as AgentId } : {}),
+    ...(historyRepository ? { repositoryId: historyRepository } : {}),
+  });
   const task = dashboard?.tasks.find((item) => item.id === selected);
   const repository = dashboard?.repositories.find((item) => item.id === task?.repositoryId);
   const session = dashboard?.sessions.find((item) => item.id === task?.sessionId);
   const taskConfiguration = task?.configuration ?? session?.configuration;
   const agent = dashboard?.agents.find((item) => item.id === selectedAgent);
   const selectedProfile = dashboard?.profiles?.find((profile) => profile.id === selectedAgent);
+  const officeAgents =
+    dashboard?.agents.filter(
+      (slot) =>
+        !dashboard.profiles?.find((profile) => profile.id === slot.id)?.archived ||
+        slot.taskId ||
+        dashboard.tasks.some((task) => task.id === selected && task.agentId === slot.id),
+    ) ?? [];
   const assignable =
     dashboard?.agents.filter(
       (slot) => !dashboard.profiles?.find((profile) => profile.id === slot.id)?.archived,
     ) ?? [];
+  useEffect(() => {
+    if (dashboard && !officeAgents.some((slot) => slot.id === selectedAgent) && officeAgents[0])
+      setSelectedAgent(officeAgents[0].id);
+  }, [dashboard, selectedAgent, selected]);
   const canAssign = assignable.some((slot) => slot.id === selectedAgent);
   useEffect(() => {
     if (selectedProfile?.maximumMode !== 'write') setExecutionMode('read-only');
@@ -167,6 +295,7 @@ function App() {
     Object.values(eventHistory).flat(),
     connection.includes('disconnected'),
     selectedAgent,
+    workflows,
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
@@ -184,6 +313,7 @@ function App() {
     const stationTask = workstationTask(dashboard, selected, agentId);
     setSelected(stationTask?.id);
     setResumeSessionId('');
+    clearTaskNavigation();
     // Inspect in place; Focus Mode remains an explicit choice.
     if (!stationTask) showSection('agent');
   };
@@ -207,7 +337,7 @@ function App() {
         <a className="brand" href="#overview" onClick={() => setView('mission')}>
           <PixelBot />
           <span>
-            AI OFFICE<small>PHOSPHOR OS / Agent Studio</small>
+            AI OFFICE<small>A space for your agents</small>
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
@@ -217,7 +347,7 @@ function App() {
             href="#overview"
             onClick={() => setView('mission')}
           >
-            <span aria-hidden="true">⌂</span>Dashboard<span className="nav-count">01</span>
+            <span aria-hidden="true">⌂</span>Office<span className="nav-count">01</span>
           </a>
           <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
             <span aria-hidden="true">♙</span>Agents
@@ -281,6 +411,14 @@ function App() {
         </div>
       </aside>
       <main id="overview" tabIndex={-1}>
+        {linkError && (
+          <div className="task-link-warning" role="alert">
+            <p>{linkError}</p>
+            <button className="secondary" type="button" onClick={clearTaskNavigation}>
+              Dismiss task link
+            </button>
+          </div>
+        )}
         <header className="topbar">
           <div className="workspace-chip">
             <span className="eyebrow">REGISTERED WORKTREE</span>
@@ -308,7 +446,7 @@ function App() {
             className="crt-toggle secondary"
             aria-pressed={crt}
             onClick={() => setCrt(!crt)}
-            title="Static scanlines and phosphor glow. Reduced-motion settings disable the effect."
+            title="Optional retro display effect. Reduced-motion settings disable the effect."
           >
             CRT effects: {crt ? 'on' : 'off'}
           </button>
@@ -316,12 +454,12 @@ function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">AI OFFICE / PHOSPHOR OS</div>
+              <div className="eyebrow">AI OFFICE / WORKSPACE</div>
               <h1>
-                {view === 'focus' ? 'Focus mode' : 'Mission control'}
+                {view === 'focus' ? 'Focus mode' : 'Office overview'}
                 <span>_</span>
               </h1>
-              <p>Your agent profiles. Two workers. Isolated coding and repository review.</p>
+              <p>Make room for your next idea. Your agents and their real work, together.</p>
             </div>
             <a
               className="button-link"
@@ -340,7 +478,7 @@ function App() {
               aria-pressed={view === 'mission'}
               onClick={() => setView('mission')}
             >
-              Mission Control
+              Office overview
             </button>
             <button
               className="secondary"
@@ -400,60 +538,99 @@ function App() {
               </button>
             </div>
           )}
+          <section className="office-scene" aria-label="Shared Codex office">
+            <PixelOffice
+              agents={officeAgents.map((slot) => ({
+                id: slot.id,
+                name: slot.name,
+                role: [
+                  dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                  dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived
+                    ? 'archived'
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+                assignable: !dashboard?.profiles?.find((profile) => profile.id === slot.id)
+                  ?.archived,
+                taskId: workstationTask(dashboard, selected, slot.id)?.id,
+                taskTitle: workstationTask(dashboard, selected, slot.id)?.title,
+                taskState: workstationTask(dashboard, selected, slot.id)?.state,
+                access:
+                  workstationTask(dashboard, selected, slot.id)?.executionMode === 'write'
+                    ? 'Isolated write'
+                    : 'Read only',
+                checkpoint: officeCheckpoint(workflows, slot.id)?.workflowId,
+                active: Boolean(slot.taskId),
+                status: sceneStatus(
+                  dashboard,
+                  workstationTask(dashboard, selected, slot.id),
+                  Object.values(eventHistory).flat(),
+                  connection.includes('disconnected'),
+                  slot.id,
+                  workflows,
+                ),
+              }))}
+              recentTasks={(dashboard?.tasks ?? []).map((task) => ({
+                id: task.id,
+                agentId: task.agentId,
+                title: task.title,
+                state: task.state,
+                updatedAt: task.updatedAt,
+              }))}
+              queue={(dashboard?.queue ?? []).map((entry) => ({
+                taskId: entry.taskId,
+                agentId: entry.agentId,
+                title:
+                  dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
+                  'Untitled task',
+                order: entry.order,
+                waitingReason: entry.waitingReason,
+              }))}
+              selectedAgent={selectedAgent}
+              onSelect={selectStation}
+              transport={
+                !dashboard
+                  ? connection.includes('disconnected')
+                    ? 'unavailable'
+                    : 'loading'
+                  : connection.includes('disconnected')
+                    ? 'disconnected'
+                    : 'connected'
+              }
+              onAssign={() => showSection('compose')}
+              onInspectSession={() => {
+                if (stationTask) {
+                  setSelected(stationTask.id);
+                  setView('focus');
+                  showSection('task-workspace');
+                }
+              }}
+              onInspectTask={(taskId) => {
+                const target = dashboard?.tasks.find((item) => item.id === taskId);
+                if (target) {
+                  setSelectedAgent(target.agentId);
+                  setSelected(target.id);
+                  setResumeSessionId('');
+                  showSection('task-workspace');
+                }
+              }}
+              onCheckpoint={() => {
+                const checkpoint = officeCheckpoint(workflows, selectedAgent);
+                if (checkpoint) {
+                  setWorkflowInspection({ id: checkpoint.workflowId, request: Date.now() });
+                  showSection('workflows');
+                }
+              }}
+            />
+            {!workflowAvailable && (
+              <p className="studio-notice" role="status">
+                Workflow status unavailable. Open workflow details to retry.
+              </p>
+            )}
+          </section>
           <div className="mission-grid">
             <div className="mission-board">
-              <section className="office-scene" aria-label="Shared Codex office">
-                <div className="scene-label">
-                  <span>AI OFFICE / SHARED WORKSPACE</span>
-                  <span>TASK-SCOPED ACCESS</span>
-                </div>
-                <PixelOffice
-                  agents={(dashboard?.agents ?? [])
-                    .filter(
-                      (slot) =>
-                        !dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived ||
-                        slot.taskId,
-                    )
-                    .map((slot) => ({
-                      id: slot.id,
-                      name: slot.name,
-                      role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
-                      taskTitle: dashboard?.tasks.find((task) => task.id === slot.taskId)?.title,
-                      taskState: dashboard?.tasks.find((task) => task.id === slot.taskId)?.state,
-                      access: slot.mode,
-                      active: Boolean(slot.taskId),
-                      status: sceneStatus(
-                        dashboard,
-                        workstationTask(dashboard, selected, slot.id),
-                        Object.values(eventHistory).flat(),
-                        connection.includes('disconnected'),
-                        slot.id,
-                      ),
-                    }))}
-                  recentTasks={(dashboard?.tasks ?? []).map((task) => ({
-                    id: task.id,
-                    agentId: task.agentId,
-                    title: task.title,
-                    state: task.state,
-                    updatedAt: task.updatedAt,
-                  }))}
-                  queue={(dashboard?.queue ?? []).map((entry) => ({
-                    taskId: entry.taskId,
-                    agentId: entry.agentId,
-                    title:
-                      dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
-                      'Untitled task',
-                    order: entry.order,
-                    waitingReason: entry.waitingReason,
-                  }))}
-                  selectedAgent={selectedAgent}
-                  onSelect={selectStation}
-                />
-                <div className="scene-caption">
-                  Two worker desks · select other profiles in Agent Studio · Tab / arrows to
-                  navigate
-                </div>
-              </section>
               <div className="stats" aria-label="Workspace statistics">
                 <div>
                   <span>CODEX AGENTS</span>
@@ -521,12 +698,107 @@ function App() {
                   }}
                 />
               )}
-              <WorkflowBoard />
+              <WorkflowBoard inspection={workflowInspection} />
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
                   <span className="subtle">{dashboard?.tasks.length ?? 0} tasks</span>
                 </div>
+                {!!dashboard?.tasks.length && (
+                  <div className="history-controls" aria-label="Task history filters">
+                    <p role="status">
+                      {taskSummary.active} active · {taskSummary.queued} queued ·{' '}
+                      {taskSummary.attention} failed/interrupted · {taskSummary.completed} completed
+                    </p>
+                    <label>
+                      Search tasks
+                      <input
+                        type="search"
+                        value={historyQuery}
+                        onChange={(event) => setHistoryQuery(event.target.value)}
+                        placeholder="Title or task ID"
+                      />
+                    </label>
+                    <label>
+                      Task state
+                      <select
+                        value={historyStatus}
+                        onChange={(event) =>
+                          setHistoryStatus(event.target.value as TaskHistoryStatus)
+                        }
+                      >
+                        <option value="all">All states</option>
+                        <option value="attention">Failed / interrupted</option>
+                        <option value="active">Running / stopping</option>
+                        <option value="queued">Queued</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </label>
+                    <label>
+                      Agent
+                      <select
+                        value={historyAgent}
+                        onChange={(event) => setHistoryAgent(event.target.value)}
+                      >
+                        <option value="">All agents</option>
+                        {dashboard?.agents.map((slot) => (
+                          <option key={slot.id} value={slot.id}>
+                            {slot.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Repository
+                      <select
+                        value={historyRepository}
+                        onChange={(event) => setHistoryRepository(event.target.value)}
+                      >
+                        <option value="">All repositories</option>
+                        {dashboard?.repositories.map((repo) => (
+                          <option key={repo.id} value={repo.id}>
+                            {repo.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Sort
+                      <select
+                        value={historyOrder}
+                        onChange={(event) =>
+                          setHistoryOrder(event.target.value as TaskHistoryOrder)
+                        }
+                      >
+                        <option value="attention">Attention first</option>
+                        <option value="recent">Most recently updated</option>
+                        <option value="oldest">Oldest updates</option>
+                      </select>
+                    </label>
+                    <p role="status">
+                      {visibleHistory.length} of {taskSummary.total} tasks shown
+                    </p>
+                    {(historyQuery ||
+                      historyStatus !== 'all' ||
+                      historyAgent ||
+                      historyRepository ||
+                      historyOrder !== 'attention') && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setHistoryQuery('');
+                          setHistoryStatus('all');
+                          setHistoryOrder('attention');
+                          setHistoryAgent('');
+                          setHistoryRepository('');
+                        }}
+                      >
+                        Reset task filters
+                      </button>
+                    )}
+                  </div>
+                )}
                 {!dashboard?.tasks.length ? (
                   <div className="empty-state">
                     <div>☷</div>
@@ -544,7 +816,7 @@ function App() {
                   </div>
                 ) : (
                   <div className="task-list">
-                    {dashboard.tasks.map((item) => (
+                    {visibleHistory.map((item) => (
                       <button
                         key={item.id}
                         aria-pressed={selected === item.id}
@@ -553,6 +825,7 @@ function App() {
                           setSelectedAgent(item.agentId);
                           setSelected(item.id);
                           setResumeSessionId('');
+                          clearTaskNavigation();
                         }}
                       >
                         <span className={`task-indicator ${item.state}`} />
@@ -567,6 +840,11 @@ function App() {
                         <span className={`badge ${item.state}`}>{item.state}</span>
                       </button>
                     ))}
+                    {visibleHistory.length === 0 && (
+                      <p role="status">
+                        No tasks match these filters. Reset filters to see the full history.
+                      </p>
+                    )}
                   </div>
                 )}
               </section>
@@ -589,6 +867,37 @@ function App() {
                         {repository?.name} ·{' '}
                         {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
                       </span>
+                      <nav className="task-navigation" aria-label="Selected task navigation">
+                        <a
+                          href={encodeTaskNavigation({ taskId: task.id, destination: 'session' })}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigateTask(task, 'session');
+                          }}
+                        >
+                          Session
+                        </a>
+                        {taskHasReview(task) && (
+                          <a
+                            href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigateTask(task, 'review');
+                            }}
+                          >
+                            Code review
+                          </a>
+                        )}
+                        <a
+                          href={encodeTaskNavigation({ taskId: task.id, destination: 'workflow' })}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigateTask(task, 'workflow');
+                          }}
+                        >
+                          Workflow &amp; QA
+                        </a>
+                      </nav>
                       {view === 'focus' && task.id === agent?.taskId && stopControl}
                       {task.workspaceId &&
                         !['queued', 'running', 'stopping'].includes(task.state) && (
@@ -740,14 +1049,17 @@ function App() {
                         <pre>{task.result}</pre>
                       </div>
                     )}
-                    {task.workspaceId &&
-                      !['queued', 'running', 'stopping'].includes(task.state) && (
-                        <ReviewCenter
-                          key={task.id}
-                          task={{ ...task, configuration: taskConfiguration }}
-                          api={api}
-                        />
-                      )}
+                    {taskHasReview(task) ? (
+                      <ReviewCenter
+                        key={task.id}
+                        task={{ ...task, configuration: taskConfiguration }}
+                        api={api}
+                      />
+                    ) : (
+                      <div id="task-workflow" tabIndex={-1}>
+                        <WorkflowBoard taskId={task.id} />
+                      </div>
+                    )}
                     {task.executionMode !== 'write' &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
                         <div className="file-summary">
@@ -798,6 +1110,7 @@ function App() {
                         executionMode: data.get('executionMode'),
                       });
                       setSelected(created.id);
+                      clearTaskNavigation();
                       form.reset();
                       setExecutionMode('read-only');
                     });

@@ -48,6 +48,7 @@
     "test:browser:studio": "node --import tsx tests/browser-studio-smoke.ts",
     "test:workflow:native": "vitest run tests/workflow-execution.test.ts tests/qa-runner.test.ts",
     "test:browser:workflow": "node --import tsx tests/browser-workflow-smoke.ts",
-    "test:real:workflow": "node --import tsx scripts/real-workflow-smoke.ts --run"
+    "test:real:workflow": "node --import tsx scripts/real-workflow-smoke.ts --run",
+    "test:browser:office": "node --import tsx tests/browser-office-smoke.ts"
   }
 }

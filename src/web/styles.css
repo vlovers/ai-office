@@ -1208,6 +1208,7 @@ footer {
   font-size: 10px;
   letter-spacing: 0.3px;
 }
+.focus-mode .office-scene,
 .focus-mode .mission-board > :not(.output),
 .focus-mode .inspector > :not(.agent-panel) {
   display: none;
@@ -1369,63 +1370,6 @@ footer {
   font-size: 11px;
 }
 
-/* One room, independently selectable stations. No nested room/card surfaces. */
-.shared-office {
-  min-width: 0;
-}
-.shared-office .pixel-office {
-  display: block;
-}
-.office-workstation {
-  cursor: pointer;
-  outline: none;
-  --station-ink: #b5d7c2;
-}
-.office-workstation.identity-sage {
-  --jacket: #8b9d83;
-  --hair: #717166;
-}
-.office-workstation.state-thinking,
-.office-workstation.state-stopping {
-  --station-ink: var(--amber);
-}
-.office-workstation.state-error {
-  --station-ink: var(--red);
-}
-.office-workstation.state-offline {
-  --station-ink: #a3b0a8;
-}
-.office-workstation.state-completed {
-  --station-ink: var(--phosphor);
-}
-.station-name,
-.station-status {
-  fill: var(--station-ink);
-}
-.station-selection {
-  stroke: #41684f;
-  stroke-width: 2;
-}
-.office-workstation[aria-pressed='true'] .station-selection {
-  stroke: var(--phosphor);
-}
-.office-workstation:hover .station-hit-area {
-  fill: #71e897;
-  fill-opacity: 0.035;
-}
-.office-workstation:focus-visible .station-hit-area {
-  stroke: var(--phosphor);
-  stroke-width: 3;
-  stroke-dasharray: 5 3;
-}
-.office-workstation.state-offline .codex-character,
-.office-workstation.state-offline .screen-activity {
-  opacity: 0.5;
-}
-.office-workstation.state-offline .screen-glow,
-.office-workstation.state-offline .screen-cursor {
-  display: none;
-}
 .agent-switcher[hidden] {
   display: none;
 }
@@ -1754,548 +1698,180 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
   margin-block: 1rem;
 }
 
-/* Office Experience V2: operational roster stays accessible even when the SVG
-   viewport can only display two workstations. These are real scene statuses. */
-.office-operations {
-  border-top: 1px solid var(--line);
-  background: linear-gradient(180deg, #10271d, #081711);
-  padding: 12px;
+/* Office V3: calmer product shell and a warmer simulation viewport.
+ * Presentation-only: execution, permissions and task state remain server-owned. */
+:root {
+  --bg: #101419;
+  --surface: #181e25;
+  --surface-raised: #202833;
+  --line: #35404c;
+  --line-dim: #2b3540;
+  --text: #edf1f4;
+  --muted: #a9b5c1;
+  --phosphor: #b4e8ce;
+  --amber: #ffd49a;
+  --cyan: #9ccfe5;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
 }
-.office-operations-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 10px;
-  margin-bottom: 10px;
+body {
+  background: radial-gradient(ellipse at 65% -10%, #26313b 0%, #101419 65%);
 }
-.office-operations-heading strong {
-  color: var(--phosphor);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+.sidebar {
+  background: #171d25;
+  border-color: #303b46;
+  border-radius: 16px;
+  box-shadow: 0 18px 48px #05080b55;
 }
-.office-operations-agents {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 8px;
+.brand,
+h1,
+h2,
+h3 {
+  letter-spacing: -0.035em;
 }
-.office-operations-agent {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px;
-  text-align: left;
-  border: 1px solid #28533c;
-  background: #0a1c15;
-  color: var(--text);
+.brand,
+h1 {
+  color: #f0f6f5;
 }
-.office-operations-agent[aria-pressed='true'] {
-  border-color: var(--phosphor);
-  background: #153625;
+.nav-item {
+  border-radius: 9px;
 }
-.office-operations-indicator {
-  width: 9px;
-  height: 9px;
-  flex: 0 0 9px;
-  background: #819c8a;
-  border-radius: 50%;
+.nav-item:hover,
+.nav-item.active {
+  background: #293c3a;
+  border-color: #42645a;
 }
-.office-operations-agent.state-working .office-operations-indicator,
-.office-operations-agent.state-thinking .office-operations-indicator {
-  background: var(--phosphor);
-  box-shadow: 0 0 8px #79f5a577;
+button,
+.button-link {
+  border-radius: 9px;
+  border-color: #547f70;
+  background: #29483e;
+  color: #e3f6ed;
 }
-.office-operations-agent.state-stopping .office-operations-indicator {
-  background: var(--amber);
+button:hover:not(:disabled),
+.button-link:hover {
+  background: #355e4e;
+  border-color: #8bd8b2;
 }
-.office-operations-agent.state-error .office-operations-indicator {
-  background: var(--red);
+input,
+textarea,
+select {
+  background: #131b22;
+  border-color: #43505c;
+  border-radius: 8px;
 }
-.office-operations-agent.state-offline .office-operations-indicator {
-  background: #5b6d63;
-}
-.office-operations-identity {
-  min-width: 0;
-  flex: 1;
-}
-.office-operations-identity strong,
-.office-operations-identity small {
-  display: block;
-  overflow-wrap: anywhere;
-}
-.office-operations-identity strong {
-  font-size: 11px;
-}
-.office-operations-identity small {
-  font-size: 9px;
-  color: var(--muted);
-  margin-top: 3px;
-}
-.office-operations-access {
-  font-size: 9px;
-  color: var(--muted);
-  text-align: right;
-  max-width: 90px;
-}
-@media (max-width: 680px) {
-  .office-operations {
-    padding: 8px;
-  }
-  .office-operations-access {
-    display: none;
-  }
-}
-
-/* Isometric Office V2 — SVG geometry is decorative, never a simulated runtime. */
-.isometric-office .pixel-office {
-  display: block;
-  width: 100%;
-  background: radial-gradient(ellipse at 50% 45%, #224139, #081714 75%);
-  image-rendering: auto;
-}
-.isometric-office .iso-station {
-  cursor: pointer;
-  outline: none;
-}
-.isometric-office .iso-station .station-name {
-  fill: #d3f6e1;
-  paint-order: stroke;
-  stroke: #061a14;
-  stroke-width: 4px;
-  stroke-linejoin: round;
-}
-.isometric-office .iso-station:focus-visible .iso-selection,
-.isometric-office .iso-station:hover .iso-selection {
-  opacity: 1;
-}
-.isometric-office .iso-station:focus-visible .iso-selection {
-  stroke: #f0cd78;
-}
-.isometric-office .state-error .iso-monitor-glow {
-  fill: #72352d;
-}
-.isometric-office .state-offline .iso-monitor-glow {
-  fill: #26302d;
-}
-.isometric-office .state-completed .iso-monitor-glow {
-  fill: #215840;
-}
-.scene-motion .isometric-office .state-working .typing-hands {
-  animation: type-hands 0.8s steps(2, end) infinite;
-}
-.scene-motion .isometric-office .state-thinking .iso-monitor-glow {
-  animation: iso-screen-pulse 2.4s ease-in-out infinite;
-}
-.scene-motion .isometric-office .state-idle .character-body {
-  animation: idle-breathe 5s steps(2, end) infinite;
-}
-@keyframes iso-screen-pulse {
-  0%,
-  100% {
-    opacity: 0.75;
-  }
-  50% {
-    opacity: 1;
-  }
+:focus-visible {
+  outline-color: #ffd49a;
 }
 @media (prefers-reduced-motion: reduce) {
-  .scene-motion .isometric-office .iso-monitor-glow,
-  .scene-motion .isometric-office .typing-hands {
-    animation: none;
+  .shared-office,
+  .shared-office * {
+    scroll-behavior: auto;
   }
 }
 
-.office-operations-help,
-.office-operations-empty {
-  margin: 0 0 12px;
-  font-size: 10px;
-  line-height: 1.6;
-  color: var(--muted);
+/* Office-first layout. Scene artwork and interactions live in office.css. */
+@media (min-width: 1200px) {
+  .mission-grid {
+    grid-template-columns: minmax(0, 1fr) clamp(290px, 22vw, 350px);
+    gap: 20px;
+  }
+  .content {
+    max-width: 1920px;
+    padding-right: 20px;
+  }
+  .mission-board,
+  .inspector {
+    gap: 18px;
+  }
 }
-.office-operations-empty {
-  padding: 20px;
-  border: 1px dashed var(--line);
-  text-align: center;
-}
-
-.office-operations-task {
-  display: block;
-  margin-top: 4px;
-  max-width: 100%;
-  color: var(--phosphor);
+.office-scene {
+  margin-bottom: 24px;
+  border: 0;
+  border-radius: 16px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: #19242d;
 }
-
-/* Profile-aware workflow overview. This is observation, not orchestration. */
-.office-workflow {
-  padding: 16px;
-  background: #0b1d19;
-  border-top: 1px solid #315d4b;
-}
-.office-workflow-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.office-workflow-header strong {
-  color: #b7edc9;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.office-workflow-header span {
+.scene-label,
+.scene-caption {
+  background: #1f2c35;
+  padding: 12px 18px;
   font-size: 10px;
-  color: #91b7a5;
-}
-.office-workflow-lanes {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.office-workflow-lane {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  border: 1px solid #365b4b;
-  background: #142922;
-  padding: 12px;
-}
-.office-workflow-step {
-  color: #83af9a;
-  font-size: 10px;
-}
-.office-workflow-lane > strong {
-  color: #e0f9e8;
-  font-size: 14px;
-}
-.office-workflow-count {
-  color: #a4c9b5;
-  font-size: 10px;
-}
-.office-workflow-members {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 6px;
-}
-.office-workflow-members button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  min-width: 0;
-  padding: 6px;
-  color: #cce9d8;
-  background: #0c201a;
-  border: 1px solid #345b47;
-  text-align: left;
-  overflow-wrap: anywhere;
-  font-size: 11px;
-}
-.office-workflow-members button[aria-pressed='true'] {
-  border-color: #9bffb8;
-  background: #244934;
-}
-.office-workflow-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: #728c7c;
-}
-.office-workflow-dot.state-working,
-.office-workflow-dot.state-thinking {
-  background: #85ffb2;
-}
-.office-workflow-dot.state-stopping {
-  background: #e4b36e;
-}
-.office-workflow-dot.state-error {
-  background: #e77b79;
-}
-@media (max-width: 600px) {
-  .office-workflow-lanes {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Queue cards expose actual persisted FIFO entries; they never schedule work. */
-.office-queue {
-  border-top: 1px solid var(--line);
-  padding: 12px;
-  background: #0b2019;
-}
-.office-queue-items {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: 8px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.office-queue-items button {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  min-height: 56px;
-  padding: 10px;
-  border: 1px solid #28533c;
-  background: #102d22;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-.office-queue-items button[aria-pressed='true'] {
-  border-color: var(--phosphor);
-}
-.office-queue-items button:focus-visible {
-  outline: 2px solid var(--phosphor);
-  outline-offset: 2px;
-}
-.office-queue-position {
-  flex-shrink: 0;
-  color: var(--phosphor);
-  font-size: 11px;
-}
-.office-queue-details {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.office-queue-details strong,
-.office-queue-details small {
-  display: block;
-}
-.office-queue-details small {
-  margin-top: 5px;
-  color: var(--muted);
-}
-
-/* Inspector is a live, read-only view of the selected workstation. */
-.office-inspector {
-  border-top: 1px solid var(--line);
-  padding: 12px;
-  background: #10271f;
-}
-.office-inspector-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 10px;
-}
-.office-inspector-content > div {
-  min-width: 0;
-  border: 1px solid #28533c;
-  background: #091b15;
-  padding: 12px;
-}
-.office-inspector-content strong {
-  color: var(--phosphor);
-  overflow-wrap: anywhere;
-}
-.office-inspector-content p {
-  margin: 7px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-
-/* State legend is categorical: terminal states are alternatives, not fabricated transitions. */
-.office-lifecycle {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 0;
-  margin: 10px 0 0;
-  list-style: none;
-}
-.office-lifecycle li {
-  border: 1px solid #28533c;
-  padding: 4px 6px;
-  color: var(--muted);
-  font-size: 9px;
-  text-transform: uppercase;
-}
-.office-lifecycle li[aria-current='step'] {
-  border-color: var(--phosphor);
-  background: #1c4933;
-  color: var(--phosphor);
-}
-
-/* Real persisted task activity; statuses and timestamps are never synthesized. */
-.office-history {
-  border-top: 1px solid var(--line);
-  background: #0c211b;
-  padding: 12px;
-}
-.office-history-items {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.office-history-items button {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  border: 1px solid #28533c;
-  background: #091b15;
-  color: var(--text);
-  padding: 9px;
-  text-align: left;
-  cursor: pointer;
-}
-.office-history-items button[aria-pressed='true'] {
-  border-color: var(--phosphor);
-}
-.office-history-items button:focus-visible {
-  outline: 2px solid var(--phosphor);
-  outline-offset: 2px;
-}
-.office-history-state {
-  flex: 0 0 82px;
-  font-size: 9px;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.office-history-state.state-completed {
-  color: var(--phosphor);
-}
-.office-history-state.state-failed {
-  color: var(--red);
-}
-.office-history-state.state-running {
-  color: var(--amber);
-}
-.office-history-items time {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 9px;
-  white-space: nowrap;
-}
-@media (max-width: 560px) {
-  .office-history-items time {
-    display: none;
-  }
-}
-
-/* Office V2 presence shell: operational hierarchy without changing runtime state. */
-.isometric-office > .office-operations-heading:first-child {
-  padding: 15px 18px;
-  margin: 0;
-  background: linear-gradient(110deg, #142f28, #0b201c 70%);
-  border-bottom: 1px solid #315e4b;
-  gap: 12px;
-}
-.isometric-office > .office-operations-heading:first-child strong {
-  color: #d5f9df;
-  font-size: clamp(12px, 1.2vw, 16px);
   letter-spacing: 0.06em;
 }
-.isometric-office > .office-operations-heading:first-child span {
-  color: #a6dfbc;
-  font-variant-numeric: tabular-nums;
+.scene-label > span:first-child,
+.scene-caption > span:first-child {
+  color: #d9ebe5;
 }
-.isometric-office > .office-operations-help[role='status'] {
-  margin: 0;
-  padding: 9px 18px;
-  background: #26331e;
-  color: #f0d9a1;
-  border-bottom: 1px solid #75643c;
-  line-height: 1.5;
+.pixel-office {
+  image-rendering: auto;
 }
-.isometric-office > .pixel-office {
-  display: block;
-  width: 100%;
-  height: auto;
-  background: radial-gradient(ellipse at 50% 30%, #21443b, #071915 75%);
+.page-heading p {
+  font-size: 13px;
 }
-.isometric-office .office-workstation {
-  cursor: pointer;
-  outline: none;
+.page-heading .eyebrow {
+  color: #a6b7c0;
 }
-.isometric-office .office-workstation .station-hit-area {
-  pointer-events: all;
-}
-.isometric-office .office-workstation:focus-visible .iso-selection {
-  stroke-width: 5;
-  stroke-dasharray: none;
-}
-.isometric-office .office-workstation[aria-pressed='true'] .station-name {
-  fill: #f4db93;
+@media (max-width: 1199px) {
+  .mission-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .inspector {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    align-items: start;
+  }
 }
 @media (max-width: 600px) {
-  .isometric-office > .office-operations-heading:first-child {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 12px;
-  }
-  .isometric-office > .office-operations-help[role='status'] {
+  .scene-label,
+  .scene-caption {
     padding: 10px 12px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .isometric-office .office-workstation,
-  .isometric-office .office-workstation * {
-    animation: none !important;
-    transition: none !important;
+    flex-wrap: wrap;
   }
 }
 
-/* History expansion remains an explicit user action and uses persisted snapshots only. */
-.office-history-toggle {
+/* Task-scoped navigation is intentionally read-only; permissions stay server-side. */
+.task-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+.task-navigation a {
   display: inline-flex;
   align-items: center;
-  margin: 0 0 12px;
-  padding: 8px 12px;
   min-height: 36px;
-  color: #d4f4df;
-  background: #183d2e;
-  border: 1px solid #54896a;
-  cursor: pointer;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #426354);
+  border-radius: 4px;
+  color: var(--text, #e3f3e9);
+  text-decoration: none;
   font: inherit;
-  font-size: 11px;
 }
-.office-history-toggle:hover {
-  background: #24513c;
+.task-navigation a:hover {
+  background: rgba(135, 215, 164, 0.12);
 }
-.office-history-toggle:focus-visible {
+.task-navigation a:focus-visible {
   outline: 2px solid #b7ffca;
   outline-offset: 3px;
 }
+#task-workflow {
+  scroll-margin-top: 24px;
+}
 
-.office-history-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 0 0 12px;
+.task-link-warning {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #426354);
+  border-left: 4px solid #dfb46b;
+  border-radius: 4px;
 }
-.office-history-filters button {
-  min-height: 34px;
-  padding: 7px 10px;
-  border: 1px solid #3e6652;
-  background: #10291f;
-  color: #bdd8c5;
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-}
-.office-history-filters button[aria-pressed='true'] {
-  border-color: #9fe9b4;
-  background: #25553b;
-  color: #e6ffed;
-}
-.office-history-filters button:focus-visible {
-  outline: 2px solid #b7ffca;
-  outline-offset: 2px;
+.task-link-warning p {
+  margin: 0 0 8px;
 }

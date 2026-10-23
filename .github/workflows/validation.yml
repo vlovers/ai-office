@@ -44,6 +44,20 @@ jobs:
       - name: Browser smoke (deterministic fixtures)
         run: npm run test:browser
 
+      - name: Office V4 scene and state browser smoke (no model calls)
+        run: npm run test:browser:office
+        env:
+          AI_OFFICE_BROWSER_ARTIFACTS: ${{ runner.temp }}/office-v4
+
+      - name: Upload office screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: office-v4-browser
+          path: ${{ runner.temp }}/office-v4
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Isolated write browser smoke (no model calls)
         run: npm run test:browser:write
 

@@ -143,3 +143,102 @@ it('keeps saved outcomes and live reasoning scoped to their owning workstation',
   data.agents = [];
   expect(sceneStatus(data, first, [], false, 'codex-1').state).toBe('offline');
 });
+
+it('distinguishes unsubmitted tasks from a real persisted FIFO entry', () => {
+  const waiting = task('draft');
+  const data = dashboard([waiting]);
+  expect(sceneStatus(data, waiting, []).state).toBe('idle');
+  data.queue = [
+    {
+      taskId: waiting.id,
+      agentId: waiting.agentId,
+      order: 1,
+      enqueuedAt: '',
+      mode: 'local-cli-chatgpt',
+      resumeSessionId: null,
+      waitingReason: 'Workspace busy',
+    },
+  ];
+  expect(sceneStatus(data, waiting, [])).toEqual({
+    state: 'queued',
+    label: 'Queued · Workspace busy',
+  });
+});
+it('derives approval only from an actionable persisted workflow and prioritizes live work', () => {
+  const workflows = [
+    {
+      id: 'flow',
+      state: 'active',
+      stages: [{ kind: 'coder', agentId: 'codex-1', state: 'awaiting_approval', taskId: null }],
+    },
+  ];
+  expect(sceneStatus(dashboard(), undefined, [], false, 'codex-1', workflows).state).toBe(
+    'approval',
+  );
+  expect(sceneStatus(dashboard(), undefined, [], true, 'codex-1', workflows).state).toBe('offline');
+  expect(
+    sceneStatus(dashboard(), undefined, [], false, 'codex-1', [
+      { ...workflows[0]!, state: 'cancelled' },
+    ]).state,
+  ).toBe('idle');
+  const running = task('live', 'running');
+  expect(
+    sceneStatus(dashboard([running], running.id), running, [], false, 'codex-1', workflows).state,
+  ).toBe('working');
+});
+it('calls a task reviewing only when the exact workflow Reviewer stage is running', () => {
+  const running = task('review', 'running');
+  const data = dashboard([running], running.id);
+  const workflows = [
+    {
+      id: 'flow',
+      state: 'active',
+      stages: [{ kind: 'reviewer', agentId: 'codex-1', state: 'running', taskId: running.id }],
+    },
+  ];
+  expect(sceneStatus(data, running, [], false, 'codex-1', workflows).state).toBe('reviewing');
+  expect(
+    sceneStatus(data, running, [], false, 'codex-1', [
+      { ...workflows[0]!, stages: [{ ...workflows[0]!.stages[0]!, taskId: 'different' }] },
+    ]).state,
+  ).toBe('working');
+  expect(
+    sceneStatus(
+      data,
+      running,
+      [event(running.id, 'item.started', 'reasoning')],
+      false,
+      'codex-1',
+      workflows,
+    ).state,
+  ).toBe('thinking');
+});
+
+it('shows explicit blocked workflow diagnostics without fabricating an approval', () => {
+  const blocked = [
+    {
+      id: 'flow',
+      state: 'blocked',
+      stages: [{ kind: 'coder', agentId: 'codex-1', state: 'blocked', taskId: null }],
+    },
+  ];
+  expect(sceneStatus(dashboard(), undefined, [], false, 'codex-1', blocked)).toEqual({
+    state: 'error',
+    label: 'Blocked · coder workflow requires inspection',
+  });
+  const evidence = [
+    { ...blocked[0]!, stages: [{ ...blocked[0]!.stages[0]!, evidence: { revision: 'actual' } }] },
+  ];
+  expect(sceneStatus(dashboard(), undefined, [], false, 'codex-1', evidence).state).toBe(
+    'approval',
+  );
+});
+
+it('does not label an actual preparing reservation as ready or running', () => {
+  const data = dashboard([task('prepare')], 'prepare');
+  data.agents[0]!.state = 'preparing';
+  expect(sceneStatus(data, undefined, [])).toEqual({
+    state: 'preparing',
+    label: 'Preparing read-only session',
+  });
+});

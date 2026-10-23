@@ -25,6 +25,28 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
+  const officeArtifacts = process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(tmpdir(), 'ai-office-v4');
+  await mkdir(officeArtifacts, { recursive: true });
+  await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
+    'data-state',
+    'approval',
+    { timeout: 10000 },
+  );
+  await page
+    .locator('.studio-kicker')
+    .first()
+    .evaluate((node) => {
+      node.textContent = 'TEST FIXTURE / APPROVAL PENDING';
+    });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
+    await page.getByRole('region', { name: 'Shared Codex office' }).screenshot({
+      path: join(officeArtifacts, `approval-${width === 1440 ? 'desktop' : 'mobile'}.png`),
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
+  await expect(page.locator('#workflows')).toBeFocused();
   const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
   const gate = async (label: string, configure?: () => Promise<void>) => {
@@ -73,6 +95,11 @@ try {
     undefined,
   );
   await expect(board.getByRole('button', { name: 'Start QA', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute(
+    'data-state',
+    'approval',
+    { timeout: 10000 },
+  );
   // Another tab advancing a checkpoint must invalidate an already checked dialog.
   await board.getByRole('button', { name: 'Approve Reviewer result', exact: true }).click();
   await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
@@ -187,6 +214,17 @@ try {
     release();
     await page.unroute(routePattern);
   }
+  await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
+    'data-state',
+    'approval',
+    { timeout: 10000 },
+  );
+  await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
+  await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
+  await expect(board.getByText(/^State: active/)).toBeVisible();
+  await expect(board.getByRole('button', { name: 'Pause live updates' })).toBeVisible();
   assert.equal((await env.get()).state, 'completed');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);

@@ -175,3 +175,45 @@ it('smoke: two assigned agents stream independently and Stop A leaves B running'
     await other.cleanup();
   }
 });
+
+it('smoke: shutting down with an active task and open SSE never writes after end', async () => {
+  const env = await sandbox();
+  const app = await createApp(env.manager);
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const post = async (path: string, body: unknown) => {
+      const response = await fetch(address + '/api' + path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(response.ok).toBe(true);
+      return response.json();
+    };
+    const repo = await post('/repositories', { path: env.repository });
+    const task = await post('/tasks', {
+      repositoryId: repo.id,
+      agentId: 'codex-1',
+      title: 'Shutdown fixture',
+      prompt: 'WAIT_FIXTURE',
+    });
+    await post(`/tasks/${task.id}/start`, {});
+    await until(
+      () => env.store.task(task.id),
+      (task) => task?.state === 'running',
+    );
+    const response = await fetch(address + `/api/tasks/${task.id}/stream`);
+    reader = response.body!.getReader();
+    await reader.read();
+    await app.close();
+    expect(['stopped', 'interrupted']).toContain(env.store.task(task.id)?.state);
+    while (!(await reader.read()).done) {
+      /* Drain the ended stream. */
+    }
+  } finally {
+    await reader?.cancel();
+    await app.close();
+    await env.cleanup();
+  }
+});

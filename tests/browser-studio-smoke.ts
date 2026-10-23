@@ -123,6 +123,16 @@ try {
   await expect(card).toHaveCount(0);
   await studio.getByLabel('Show archived profiles').check();
   await expect(card).toContainText('archived');
+  await page.locator('.task-row').filter({ hasText: 'Studio review' }).click();
+  await page.waitForResponse(
+    (response) => response.url().endsWith('/api/dashboard') && response.ok(),
+  );
+  await expect(page.getByLabel('Assign to agent')).toHaveValue(profile.id);
+  await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toContainText(
+    'Review bot',
+  );
+  await expect(page.locator('.studio-agent[aria-pressed="true"]')).toContainText('archived');
+  await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();
   await card.getByRole('button', { name: 'Restore Review bot', exact: true }).click();
   await expect(card).not.toContainText('archived');
   const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
