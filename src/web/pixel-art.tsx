@@ -193,6 +193,43 @@ function RoomDetails({ portrait }: { portrait: boolean }) {
   );
 }
 
+/** Original architectural dressing. Purely decorative; no fabricated agent telemetry. */
+function OfficeEnvironment({ portrait }: { portrait: boolean }) {
+  return (
+    <g className="office-environment" aria-hidden="true" pointerEvents="none">
+      <g transform={portrait ? 'translate(210 218) scale(.55)' : 'translate(420 190) scale(.9)'}>
+        <path d="M-110 30L0 -22L110 30L0 82Z" fill="#293f40" stroke="#8f9e83" strokeWidth="3" />
+        <path d="M-92 31L0 -11L92 31L0 74Z" fill="#44665a" />
+        <path d="M-65 32L0 1L65 32L0 63Z" fill="#58776b" />
+        <path d="M-30 34L0 19L30 34L0 49Z" fill="#b5a17b" opacity=".6" />
+      </g>
+      <g transform={portrait ? 'translate(90 165) scale(.5)' : 'translate(210 165) scale(.8)'}>
+        <path d="M-46 4L0 -19L46 4L0 28Z" fill="#866348" />
+        <path d="M-46 4V57L0 82V28Z" fill="#523d34" />
+        <path d="M0 28L46 4V57L0 82Z" fill="#6e4e39" />
+        <path d="M-34 14L-8 27V46L-34 33Z" fill="#b9d0c2" />
+        <path d="M7 27L33 14V33L7 46Z" fill="#e1c69e" />
+        <path d="M-35 41L-10 54M9 55L33 42" stroke="#b69a74" strokeWidth="3" />
+      </g>
+      <g transform={portrait ? 'translate(328 218) scale(.48)' : 'translate(650 180) scale(.8)'}>
+        <path d="M-45 20L0 -2L45 20L0 42Z" fill="#b49b78" />
+        <path d="M-45 20V62L0 85V42Z" fill="#705a48" />
+        <path d="M0 42L45 20V62L0 85Z" fill="#8b6d54" />
+        <path d="M-16 10L0 2L17 10L0 19Z" fill="#d7e1cf" />
+        <path d="M0 2V-37" stroke="#7b9e8a" strokeWidth="6" />
+        <path d="M0 -30L-22 -49M0 -22L25 -46" stroke="#709b79" strokeWidth="5" />
+        <path d="M-22 -49L-34 -64L-7 -56Z" fill="#4b8166" />
+        <path d="M25 -46L35 -66L10 -57Z" fill="#7aa17a" />
+      </g>
+      <g transform={portrait ? 'translate(210 92) scale(.55)' : 'translate(420 92) scale(.9)'}>
+        <path d="M-57 -22H57V22H-57Z" fill="#233c40" stroke="#d0b994" strokeWidth="4" />
+        <path d="M-43 8L-23 -3L-7 7L16 -11L39 0" fill="none" stroke="#b9e3c4" strokeWidth="3" />
+        <circle cx="39" cy="0" r="4" fill="#e7ca8b" />
+      </g>
+    </g>
+  );
+}
+
 /** One room; scene placement and visual identity are independent of runtime state. */
 export function PixelOffice({
   agents,
@@ -429,6 +466,7 @@ export function PixelOffice({
             fill="none"
           />
         </g>
+        <OfficeEnvironment portrait={narrow} />
         <RoomDetails portrait={narrow} />
         {OFFICE_LAYOUT.map((placement, index) => {
           const agent = seatedAgents[index];
