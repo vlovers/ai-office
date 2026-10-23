@@ -1,16 +1,4 @@
-<!-- Integration status updated 2026-10-24; retain the existing historical milestone details below. -->
-
 # AI Office roadmap
-
-## Current integrated baseline (2026-10-24)
-
-- [x] Office V4, workflow triage, task-history operations and task navigation merged through [PR #36](https://github.com/vlovers/ai-office/pull/36), commit `f2c08c3`.
-- [x] Both required PR CI jobs passed on the integration head `0797b5a` ([run](https://github.com/vlovers/ai-office/actions/runs/39944462519)).
-- [ ] Validate live Codex-provider execution, long-running recovery/soak, supported-host first-run UX, Linux native success path, and release approval before tagging.
-- [ ] Audit post-merge UI screenshots and accessibility manually; deterministic browser tests alone do not prove visual quality.
-
-This section supersedes any older references below to Office V2/V3 being the current UI or PR #31 being pending. Merged implementation is not a published release.
-
 
 > Planning document, not a release promise. The source of truth for shipped functionality is tagged releases and their validation evidence. Security boundaries must never be inferred from a UI setting alone.
 
