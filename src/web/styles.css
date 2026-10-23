@@ -2299,3 +2299,33 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
   outline: 2px solid #b7ffca;
   outline-offset: 2px;
 }
+
+/* Task-scoped navigation is intentionally read-only; permissions stay server-side. */
+.task-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+.task-navigation a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #426354);
+  border-radius: 4px;
+  color: var(--text, #e3f3e9);
+  text-decoration: none;
+  font: inherit;
+}
+.task-navigation a:hover {
+  background: rgba(135, 215, 164, 0.12);
+}
+.task-navigation a:focus-visible {
+  outline: 2px solid #b7ffca;
+  outline-offset: 3px;
+}
+#task-workflow {
+  scroll-margin-top: 24px;
+}
