@@ -20,6 +20,7 @@ import {
   type TaskHistoryOrder,
   type TaskHistoryStatus,
 } from './task-history-operations.js';
+import { exportTaskHistoryCsv } from './task-history-export.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -706,6 +707,25 @@ function App() {
                 </div>
                 {!!dashboard?.tasks.length && (
                   <div className="history-controls" aria-label="Task history filters">
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={visibleHistory.length === 0}
+                      title="Export filtered task metadata only. Prompts, logs and paths are excluded."
+                      onClick={() => {
+                        const csv = exportTaskHistoryCsv(visibleHistory);
+                        const url = URL.createObjectURL(
+                          new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
+                        );
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = 'ai-office-task-history.csv';
+                        link.click();
+                        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      }}
+                    >
+                      Export filtered CSV ({visibleHistory.length})
+                    </button>
                     <p role="status">
                       {taskSummary.active} active · {taskSummary.queued} queued ·{' '}
                       {taskSummary.attention} failed/interrupted · {taskSummary.completed} completed
