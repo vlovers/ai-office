@@ -2400,3 +2400,61 @@ select {
     scroll-behavior: auto;
   }
 }
+
+/* V3 information hierarchy: office-first viewport, operational inspector second. */
+@media (min-width: 1200px) {
+  .mission-grid {
+    grid-template-columns: minmax(0, 1fr) clamp(290px, 22vw, 350px);
+    gap: 20px;
+  }
+  .content {
+    max-width: 1920px;
+    padding-right: 20px;
+  }
+  .mission-board,
+  .inspector {
+    gap: 18px;
+  }
+}
+.office-scene {
+  border: 1px solid #46545f;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #19242d;
+}
+.scene-label,
+.scene-caption {
+  background: #1f2c35;
+  padding: 12px 18px;
+  font-size: 10px;
+  letter-spacing: .06em;
+}
+.scene-label > span:first-child,
+.scene-caption > span:first-child {
+  color: #d9ebe5;
+}
+.pixel-office {
+  image-rendering: auto;
+}
+.page-heading p {
+  font-size: 13px;
+}
+.page-heading .eyebrow {
+  color: #a6b7c0;
+}
+@media (max-width: 1199px) {
+  .mission-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .inspector {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    align-items: start;
+  }
+}
+@media (max-width: 600px) {
+  .scene-label,
+  .scene-caption {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+  }
+}
