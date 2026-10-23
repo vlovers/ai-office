@@ -822,17 +822,17 @@ function App() {
                         <pre>{task.result}</pre>
                       </div>
                     )}
-                    <div id="task-workflow" tabIndex={-1}>
-                      {taskHasReview(task) ? (
-                        <ReviewCenter
-                          key={task.id}
-                          task={{ ...task, configuration: taskConfiguration }}
-                          api={api}
-                        />
-                      ) : (
+                    {taskHasReview(task) ? (
+                      <ReviewCenter
+                        key={task.id}
+                        task={{ ...task, configuration: taskConfiguration }}
+                        api={api}
+                      />
+                    ) : (
+                      <div id="task-workflow" tabIndex={-1}>
                         <WorkflowBoard taskId={task.id} />
-                      )}
-                    </div>
+                      </div>
+                    )}
                     {task.executionMode !== 'write' &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
                         <div className="file-summary">
