@@ -67,7 +67,7 @@ Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder →
 
 ## v0.8.0 — delivery integration (proposal)
 
-Verification dashboard and explicitly authorized GitHub PR preparation/publishing, minimal GitHub permissions, revision-pinned checks, manual confirmation for push/PR actions.
+Verification dashboard and explicitly authorized GitHub PR preparation/publishing, minimal GitHub permissions, revision-pinned checks, manual confirmation for push/PR actions. The [GitHub Delivery Center contract](docs/GITHUB_DELIVERY_CENTER.md) defines server-side revision checks, explicit commit/push/PR approvals, fail-closed recovery and acceptance tests. **This is a specification, not a shipped integration.**
 
 ## Non-goals for v0.6
 
