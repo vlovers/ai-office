@@ -88,6 +88,15 @@ try {
   await expect(page.locator('.office-v3-agent-card')).toHaveCount(2);
   await expect(page.locator('.isometric-office')).toHaveCount(1);
   await expect(page.locator('.iso-station')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Show details' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await page.getByRole('button', { name: 'Show details' }).click();
+  await expect(page.getByRole('button', { name: 'Hide details' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
   await expect(page.locator('.office-operations-agent')).toHaveCount(2);
   await expect(page.locator('.office-operations .office-operations-heading')).toContainText(
     '0 active',
