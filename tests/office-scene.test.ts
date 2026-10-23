@@ -185,8 +185,12 @@ it('counts active session flags even when the scene status is idle', () => {
   const markup = renderToStaticMarkup(
     createElement(PixelOffice, {
       agents: [
-        { id: 'active-idle', name: 'Background worker', active: true,
-          status: { state: 'idle', label: 'Idle' } },
+        {
+          id: 'active-idle',
+          name: 'Background worker',
+          active: true,
+          status: { state: 'idle', label: 'Idle' },
+        },
       ],
       selectedAgent: 'active-idle',
       onSelect: () => {},

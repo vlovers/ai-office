@@ -138,7 +138,12 @@ function RoomDetails({ portrait }: { portrait: boolean }) {
         <path d="M-24 1L0 -12L24 1L0 15Z" fill="#79523b" stroke="#a67b50" strokeWidth="2" />
         <path d="M-24 1V17L0 31V15Z" fill="#4a332a" />
         <path d="M0 15L24 1V17L0 31Z" fill="#654633" />
-        <path d="M-16 -3V-51M-16 -43L-29 -54M-16 -35L0 -49" stroke="#618b60" strokeWidth="6" strokeLinecap="round" />
+        <path
+          d="M-16 -3V-51M-16 -43L-29 -54M-16 -35L0 -49"
+          stroke="#618b60"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
         <path d="M-16 -49L-39 -62L-35 -33Z" fill="#438064" />
         <path d="M-15 -39L9 -64L9 -33Z" fill="#68a47b" />
         <path d="M-20 -29L-43 -37L-27 -15Z" fill="#397557" />
@@ -222,7 +227,10 @@ export function PixelOffice({
   );
   const nextQueued = selectedQueue[0];
   const filteredHistory = selectOfficeHistory(
-    recentTasks, selectedAgent, historyFilter, recentTasks.length,
+    recentTasks,
+    selectedAgent,
+    historyFilter,
+    recentTasks.length,
   );
   const visibleHistory = filteredHistory.slice(0, showAllTasks ? 24 : 8);
   const workstationSummary = seatedAgents
@@ -243,8 +251,8 @@ export function PixelOffice({
       {offscreenAgents.length > 0 && (
         <div className="office-operations-help" role="status">
           {offscreenAgents.length} profiles outside the two-desk view
-          {offscreenActive.length > 0 ? ` · ${offscreenActive.length} active` : ''}.
-          Select any profile in the roster below to bring it into view.
+          {offscreenActive.length > 0 ? ` · ${offscreenActive.length} active` : ''}. Select any
+          profile in the roster below to bring it into view.
         </div>
       )}
       <svg
@@ -509,7 +517,11 @@ export function PixelOffice({
               aria-pressed={historyFilter === filter}
               onClick={() => setHistoryFilter(filter)}
             >
-              {filter === 'all' ? 'All tasks' : filter === 'selected' ? 'Selected agent' : 'Failures'}
+              {filter === 'all'
+                ? 'All tasks'
+                : filter === 'selected'
+                  ? 'Selected agent'
+                  : 'Failures'}
             </button>
           ))}
         </div>
@@ -530,26 +542,26 @@ export function PixelOffice({
         ) : (
           <ol className="office-history-items">
             {visibleHistory.map((task) => (
-                <li key={task.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(task.agentId)}
-                    aria-pressed={selectedAgent === task.agentId}
-                    title={`Inspect agent for ${task.title}`}
-                  >
-                    <span className={`office-history-state state-${task.state}`}>{task.state}</span>
-                    <span className="office-queue-details">
-                      <strong>{task.title}</strong>
-                      <small>
-                        {agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}
-                      </small>
-                    </span>
-                    <time dateTime={task.updatedAt}>
-                      {task.updatedAt.slice(0, 16).replace('T', ' ')}
-                    </time>
-                  </button>
-                </li>
-              ))}
+              <li key={task.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(task.agentId)}
+                  aria-pressed={selectedAgent === task.agentId}
+                  title={`Inspect agent for ${task.title}`}
+                >
+                  <span className={`office-history-state state-${task.state}`}>{task.state}</span>
+                  <span className="office-queue-details">
+                    <strong>{task.title}</strong>
+                    <small>
+                      {agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}
+                    </small>
+                  </span>
+                  <time dateTime={task.updatedAt}>
+                    {task.updatedAt.slice(0, 16).replace('T', ' ')}
+                  </time>
+                </button>
+              </li>
+            ))}
           </ol>
         )}
       </section>

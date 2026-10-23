@@ -47,8 +47,9 @@ describe('office seat priority', () => {
   it('does not invent seats or agents', () => {
     expect(selectOfficeSeats(agents, 'profile-3' as AgentId, 0)).toEqual([]);
     expect(selectOfficeSeats([], 'profile-3' as AgentId)).toEqual([]);
-    expect(selectOfficeSeats(agents, 'profile-3' as AgentId, 1).map((a) => a.id))
-      .toEqual(['profile-3']);
+    expect(selectOfficeSeats(agents, 'profile-3' as AgentId, 1).map((a) => a.id)).toEqual([
+      'profile-3',
+    ]);
   });
 });
 

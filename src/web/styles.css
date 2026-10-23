@@ -2200,7 +2200,7 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
 .isometric-office > .office-operations-heading:first-child strong {
   color: #d5f9df;
   font-size: clamp(12px, 1.2vw, 16px);
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 .isometric-office > .office-operations-heading:first-child span {
   color: #a6dfbc;

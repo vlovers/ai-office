@@ -57,9 +57,7 @@ export function selectOfficeSeats<
   const isActive = (agent: T) =>
     agent.active === true || ['thinking', 'working', 'stopping'].includes(agent.status.state);
   if (isActive(displaced)) {
-    const idleIndex = visible.findIndex(
-      (agent) => agent.id !== selectedAgent && !isActive(agent),
-    );
+    const idleIndex = visible.findIndex((agent) => agent.id !== selectedAgent && !isActive(agent));
     if (idleIndex >= 0) visible[idleIndex] = displaced;
   }
   return visible;
