@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessDeliveryReadiness } from '../src/web/delivery-readiness.js';
+import { assessDeliveryReadiness, buildDeliveryDraft } from '../src/web/delivery-readiness.js';
 import type { Task, WorkspaceReview } from '../src/shared/types.js';
 
 const task = { state: 'completed', workspaceId: 'workspace-1' } as Task;
@@ -66,4 +66,16 @@ describe('GitHub delivery read-only readiness', () => {
     assessDeliveryReadiness(frozenTask, frozenReview);
     expect(frozenReview.revision).toBe('revision-1');
   });
+  it('prepares deterministic PR metadata without mutating review or sending credentials', () => {
+    const draft = buildDeliveryDraft(
+      { ...task, title: '  Fix   task\\nworkflow  ' } as Task,
+      review,
+    );
+    expect(draft.title).toBe('Fix task\\nworkflow');
+    expect(draft.body).toContain('Changed files: 1');
+    expect(draft.body).toContain('Review revision: revision-1');
+    expect(draft.body).toContain('No GitHub action has been performed.');
+    expect(draft.body).not.toContain('workspace-1');
+  });
+
 });
