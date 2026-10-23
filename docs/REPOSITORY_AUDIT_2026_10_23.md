@@ -8,18 +8,18 @@ AI Office is a **single-user, local-first Codex coding workspace** with substant
 
 ## Verified repository inventory
 
-| Area | Source / evidence | Finding |
-| --- | --- | --- |
-| Runtime | `package.json`, `src/server/index.ts`, `src/server/app.ts` | Node 24, Fastify 5, React 19/Vite 8, TypeScript 7, local loopback API |
-| Codex | `src/server/providers/`, `package.json` | Pinned official `@openai/codex-sdk@0.162.1`; local CLI login preferred; optional explicit API-key mode |
-| Persistence | `src/server/store.ts`, `docs/ARCHITECTURE.md` | SQLite/WAL with migrated agent, task, session, review, workflow and execution records |
-| Agents and scheduling | `src/server/agents.ts`, `src/server/manager.ts`, `tests/dynamic-agents.test.ts` | Persisted editable profiles; two concurrent worker slots; bounded queued submissions |
-| Isolation | `src/server/workspaces.ts`, `src/server/providers/native-isolation.ts`, `docs/SECURITY.md` | Registered repositories, explicit isolated-write approval, worktree leases, fail-closed cleanup; macOS native path verified historically |
-| Review | `src/web/review-center.tsx`, `src/server/repositories.ts`, `tests/review-center.test.ts` | Revision-bound diffs, feedback, Request Changes, Keep/Reject; no automatic merge |
-| Workflow | `src/server/workflows.ts`, `src/server/workflow-execution.ts`, `src/server/reviewer-runtime.ts`, `src/server/qa-runner.ts` | Coder → Reviewer → optional read-only QA with explicit checkpoints and persisted reports |
-| Web office | `src/web/main.tsx`, `src/web/pixel-art.tsx`, `src/web/office-layout.ts` | Office V2 integrated in main; SVG two-seat scene and dynamic profile overflow, not a multi-room simulator |
-| Verification | `.github/workflows/validation.yml`, `tests/`, `docs/V0_7_VALIDATION.md` | Typecheck, unit/integration, HTTP/SSE, build, formatting, browser smoke and macOS native workflow job; historical green runs are not fresh main validation |
-| Releases | `README.md`, `CHANGELOG.md`, `ROADMAP.md` | v0.5.0 documented as last published release; v0.6/v0.7 integrated but untagged |
+| Area                  | Source / evidence                                                                                                          | Finding                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime               | `package.json`, `src/server/index.ts`, `src/server/app.ts`                                                                 | Node 24, Fastify 5, React 19/Vite 8, TypeScript 7, local loopback API                                                                                      |
+| Codex                 | `src/server/providers/`, `package.json`                                                                                    | Pinned official `@openai/codex-sdk@0.162.1`; local CLI login preferred; optional explicit API-key mode                                                     |
+| Persistence           | `src/server/store.ts`, `docs/ARCHITECTURE.md`                                                                              | SQLite/WAL with migrated agent, task, session, review, workflow and execution records                                                                      |
+| Agents and scheduling | `src/server/agents.ts`, `src/server/manager.ts`, `tests/dynamic-agents.test.ts`                                            | Persisted editable profiles; two concurrent worker slots; bounded queued submissions                                                                       |
+| Isolation             | `src/server/workspaces.ts`, `src/server/providers/native-isolation.ts`, `docs/SECURITY.md`                                 | Registered repositories, explicit isolated-write approval, worktree leases, fail-closed cleanup; macOS native path verified historically                   |
+| Review                | `src/web/review-center.tsx`, `src/server/repositories.ts`, `tests/review-center.test.ts`                                   | Revision-bound diffs, feedback, Request Changes, Keep/Reject; no automatic merge                                                                           |
+| Workflow              | `src/server/workflows.ts`, `src/server/workflow-execution.ts`, `src/server/reviewer-runtime.ts`, `src/server/qa-runner.ts` | Coder → Reviewer → optional read-only QA with explicit checkpoints and persisted reports                                                                   |
+| Web office            | `src/web/main.tsx`, `src/web/pixel-art.tsx`, `src/web/office-layout.ts`                                                    | Office V2 integrated in main; SVG two-seat scene and dynamic profile overflow, not a multi-room simulator                                                  |
+| Verification          | `.github/workflows/validation.yml`, `tests/`, `docs/V0_7_VALIDATION.md`                                                    | Typecheck, unit/integration, HTTP/SSE, build, formatting, browser smoke and macOS native workflow job; historical green runs are not fresh main validation |
+| Releases              | `README.md`, `CHANGELOG.md`, `ROADMAP.md`                                                                                  | v0.5.0 documented as last published release; v0.6/v0.7 integrated but untagged                                                                             |
 
 ## PR and branch reconciliation
 
