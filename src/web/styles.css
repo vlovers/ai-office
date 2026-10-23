@@ -2300,7 +2300,6 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
   outline-offset: 2px;
 }
 
-
 /* Office V3: calmer product shell and a warmer simulation viewport.
  * Presentation-only: execution, permissions and task state remain server-owned. */
 :root {
@@ -2314,7 +2313,12 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
   --phosphor: #b4e8ce;
   --amber: #ffd49a;
   --cyan: #9ccfe5;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -2427,7 +2431,7 @@ select {
   background: #1f2c35;
   padding: 12px 18px;
   font-size: 10px;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 .scene-label > span:first-child,
 .scene-caption > span:first-child {
@@ -2498,7 +2502,7 @@ select {
 .office-v3-activity-kicker {
   font-size: 10px;
   color: #9fb5bf;
-  letter-spacing: .09em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 .office-v3-activity-copy strong {

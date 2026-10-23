@@ -168,7 +168,11 @@ function RoomDetails({ portrait }: { portrait: boolean }) {
         <path d="M0 0L48 -16L96 0L48 16Z" fill="#bd916a" />
         <path d="M0 0V45L48 61V16Z" fill="#725a4a" />
         <path d="M48 16L96 0V45L48 61Z" fill="#8e6a50" />
-        <path d="M15 14L34 20M15 27L34 33M60 19L81 12M60 33L81 26" stroke="#e2bb89" strokeWidth="4" />
+        <path
+          d="M15 14L34 20M15 27L34 33M60 19L81 12M60 33L81 26"
+          stroke="#e2bb89"
+          strokeWidth="4"
+        />
         <circle cx="48" cy="-33" r="18" fill="#eac28e" opacity=".8" />
         <path d="M48 -16V-5" stroke="#eac28e" strokeWidth="5" />
       </g>
@@ -265,7 +269,10 @@ export function PixelOffice({
         </span>
       </div>
       <div className="office-v3-activity" aria-label="Selected agent live status">
-        <span className={`office-v3-presence state-${selectedProfile?.status.state ?? 'offline'}`} aria-hidden="true" />
+        <span
+          className={`office-v3-presence state-${selectedProfile?.status.state ?? 'offline'}`}
+          aria-hidden="true"
+        />
         <div className="office-v3-activity-copy">
           <span className="office-v3-activity-kicker">Selected workstation</span>
           <strong>{selectedProfile?.name ?? 'Select an agent'}</strong>
@@ -375,16 +382,12 @@ export function PixelOffice({
         <g aria-hidden="true" className="office-v3-architecture" pointerEvents="none">
           {/* Layered floor materials and a central communal area, not extra workstations. */}
           <path
-            d={narrow
-              ? 'M87 294L210 248L334 294L210 342Z'
-              : 'M266 286L420 230L574 286L420 344Z'}
+            d={narrow ? 'M87 294L210 248L334 294L210 342Z' : 'M266 286L420 230L574 286L420 344Z'}
             fill="#aa8466"
             opacity=".34"
           />
           <path
-            d={narrow
-              ? 'M104 295L210 257L316 295L210 334Z'
-              : 'M285 287L420 238L555 287L420 335Z'}
+            d={narrow ? 'M104 295L210 257L316 295L210 334Z' : 'M285 287L420 238L555 287L420 335Z'}
             fill="#d4b38b"
             opacity=".2"
             stroke="#cba77b"
@@ -411,9 +414,7 @@ export function PixelOffice({
           </g>
           {/* Floor edge accents make the room legible as a constructed space. */}
           <path
-            d={narrow
-              ? 'M12 280L210 360L408 280'
-              : 'M40 270L420 390L800 270'}
+            d={narrow ? 'M12 280L210 360L408 280' : 'M40 270L420 390L800 270'}
             stroke="#c9aa81"
             strokeWidth="5"
             strokeOpacity=".75"
