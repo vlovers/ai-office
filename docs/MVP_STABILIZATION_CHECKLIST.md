@@ -1,17 +1,5 @@
 # MVP stabilization acceptance checklist
 
-## Post-merge Office V4 baseline (2026-10-24)
-
-- [x] Office V4 and workflow/task operations merged in [PR #36](https://github.com/vlovers/ai-office/pull/36) (`main` commit `f2c08c3`).
-- [x] Required integration PR CI passed on head `0797b5a` ([run](https://github.com/vlovers/ai-office/actions/runs/39944462519)).
-- [ ] Perform real authenticated Codex-provider task and review journey on the integrated version.
-- [ ] Complete supported-host restart/soak, security/credential review and Linux native success-path verification.
-- [ ] Independently review actual responsive screenshots, keyboard focus, text scaling and reduced-motion behavior.
-- [ ] Record final release-candidate SHA and obtain explicit approval before any tag/deployment.
-
-The older checklist below is retained for historical gate definitions. Any statement that Office V2/V3 is still an unmerged PR is outdated.
-
-
 This checklist describes **required evidence**, not a claim that the tests have passed. Keep release claims separate from merged implementation.
 
 ## Current baseline (2026-10-23)
