@@ -1,0 +1,32 @@
+name: Office V2 one-time formatting
+on:
+  push:
+    branches:
+      - feat/office-experience-v2
+    paths:
+      - .github/workflows/office-format-once.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'vlovers/ai-office'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Format changed Office files using pinned Prettier
+        run: npx prettier --write src/web/office-history.ts src/web/office-layout.ts src/web/pixel-art.tsx src/web/styles.css tests/office-history.test.ts tests/office-scene.test.ts tests/office-seat-priority.test.ts
+      - name: Commit formatter output only
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- src/web/office-history.ts src/web/office-layout.ts src/web/pixel-art.tsx src/web/styles.css tests/office-history.test.ts tests/office-scene.test.ts tests/office-seat-priority.test.ts
+          git commit -m "style(office): apply pinned Prettier"
+          git push origin HEAD:feat/office-experience-v2
