@@ -2536,3 +2536,115 @@ select {
     margin-left: 24px;
   }
 }
+
+/* Office V3 floorboard: every profile is reachable, even beyond the two rendered desks. */
+.office-v3-floorboard {
+  padding: 18px;
+  border-top: 1px solid #3b4b55;
+  background: #1b2831;
+}
+.office-v3-floorboard-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: #afc3ca;
+}
+.office-v3-floorboard-heading > div {
+  display: flex;
+  flex-direction: column;
+}
+.office-v3-floorboard-heading strong {
+  color: #f2f5f3;
+  font-size: 17px;
+}
+.office-v3-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 10px;
+}
+.office-v3-agent-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid #41535d;
+  border-radius: 12px;
+  background: #23323c;
+  color: #e9f1ef;
+}
+.office-v3-agent-card[aria-pressed='true'] {
+  border-color: #b3e5c9;
+  background: #30463f;
+  box-shadow: inset 0 0 0 1px #b3e5c9;
+}
+.office-v3-agent-card-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+.office-v3-agent-card-content strong {
+  font-size: 14px;
+}
+.office-v3-agent-card-content span,
+.office-v3-agent-card-content small {
+  overflow: hidden;
+  color: #bdcdd2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-v3-agent-card-count {
+  margin-left: auto;
+  color: #d8e8df;
+  font-variant-numeric: tabular-nums;
+}
+.office-v3-queue-preview {
+  margin-top: 16px;
+  border-top: 1px solid #3b4b55;
+  padding-top: 14px;
+}
+.office-v3-queue-preview > strong {
+  color: #e9f1ef;
+}
+.office-v3-queue-preview ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.office-v3-queue-preview button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  background: #263841;
+  border-color: #40565e;
+}
+.office-v3-queue-preview button span,
+.office-v3-queue-preview button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-v3-queue-preview button small,
+.office-v3-queue-more {
+  color: #b4c6cb;
+}
+@media (max-width: 600px) {
+  .office-v3-floorboard {
+    padding: 12px;
+  }
+  .office-v3-floorboard-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
