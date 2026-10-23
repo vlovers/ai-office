@@ -15,8 +15,8 @@ export function csvCell(value: string): string {
 }
 
 export function exportTaskHistoryCsv(tasks: readonly ExportTask[]): string {
-  const rows = tasks.map((task) =>
-    [
+  const rows = tasks.map((task) => {
+    const cells = [
       task.id,
       task.title,
       task.state,
@@ -24,9 +24,8 @@ export function exportTaskHistoryCsv(tasks: readonly ExportTask[]): string {
       task.repositoryId,
       task.createdAt,
       task.updatedAt,
-    ]
-      .map((value) => csvCell(value ?? ''))
-      .join(','),
-  );
+    ];
+    return cells.map((value) => csvCell(value ?? '')).join(',');
+  });
   return [columns.map(csvCell).join(','), ...rows].join('\r\n') + '\r\n';
 }
