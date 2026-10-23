@@ -19,8 +19,8 @@ export function parseGitHubRemote(input: string): GitHubRemote | null {
   let repository = '';
   const ssh = /^git@github\.com:([^/]+)\/([^/]+)$/.exec(input);
   if (ssh) {
-    owner = ssh[1];
-    repository = ssh[2];
+    owner = ssh[1] ?? '';
+    repository = ssh[2] ?? '';
   } else {
     let url: URL;
     try {
@@ -39,8 +39,8 @@ export function parseGitHubRemote(input: string): GitHubRemote | null {
     ) return null;
     const parts = url.pathname.split('/');
     if (parts.length !== 3 || parts[0] !== '') return null;
-    owner = parts[1];
-    repository = parts[2];
+    owner = parts[1] ?? '';
+    repository = parts[2] ?? '';
   }
   repository = repository.replace(/\.git$/, '');
   if (!slug.test(owner) || !repoSlug.test(repository) || owner === '.' || owner === '..') {
