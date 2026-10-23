@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   selectWorkflowOperations,
   workflowNeedsAttention,
-  workflowTriageKind,
   summarizeWorkflowOperations,
+  workflowTriageKind,
   type WorkflowOperationsSort,
 } from '../src/web/workflow-operations.js';
 
@@ -117,14 +117,7 @@ describe('persisted workflow triage semantics', () => {
       'finished',
       'other',
     ]);
-    expect(fixture.map(workflowNeedsAttention)).toEqual([
-      true,
-      true,
-      true,
-      false,
-      false,
-      false,
-    ]);
+    expect(fixture.map(workflowNeedsAttention)).toEqual([true, true, true, false, false, false]);
   });
 
   it('does not surface historical failed stages in terminal workflows', () => {
