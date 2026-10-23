@@ -4,13 +4,15 @@
 
 ![CI](https://github.com/vlovers/ai-office/actions/workflows/validation.yml/badge.svg) · [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-> **v0.5.0 latest published release · v0.6.0 Agent Studio release candidate · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
+> **v0.5.0 latest documented published release · v0.6.0 Agent Studio and v0.7 workflow integrated in `main` but not independently released · Node.js 24.x** — Read-only by default. Isolated writes require server-configured authorization/workspace roots and explicit confirmation. The authorized root must contain the source checkout and its common Git metadata. No automatic merging or background deployments. Single-user local tool.
 
 The v0.6.0 Agent Studio implementation is integrated into main, with [validation evidence](docs/V0_6_VALIDATION.md) and [usage/limitations](docs/V0_6_AGENT_STUDIO.md); no v0.6.0 tag or release exists yet. The v0.5.0 Code Review Center has passed the [PR validation](docs/V0_5_VALIDATION.md) and [focused security audit](docs/V0_5_SECURITY_AUDIT.md). It was [released as v0.5.0](https://github.com/vlovers/ai-office/releases/tag/v0.5.0); CI and local-fixture validation do not establish arbitrary host/runtime safety. The v0.4.0 baseline passed macOS real Codex write validation and automated checks. See [release notes](docs/releases/v0.4.0.md) and [verification evidence](docs/V0_4_RELEASE_VERIFICATION.md) for completed checks and remaining limitations.
 
-**Unreleased v0.6 implementation:** [Agent Studio workflow and migration](docs/V0_6_AGENT_STUDIO.md) · [audit/validation and PR stack](docs/V0_6_VALIDATION.md) · [roadmap](ROADMAP.md). Create/edit/duplicate/archive persisted profiles; submitted tasks and corrections keep their original configuration. Saved profiles share two workers. This branch has not been released.
+**Unreleased v0.6 implementation:** [Agent Studio workflow and migration](docs/V0_6_AGENT_STUDIO.md) · [audit/validation and PR stack](docs/V0_6_VALIDATION.md) · [roadmap](ROADMAP.md). Create/edit/duplicate/archive persisted profiles; submitted tasks and corrections keep their original configuration. Saved profiles share two workers. The integrated v0.6 implementation has not been separately released.
 
-**Draft v0.7 implementation (PR #22):** [Coder → Reviewer → QA workflow](docs/V0_7_WORKFLOW_ENGINE.md) with native sandbox checks, explicit stage/result gates, persistent reports and Review Center controls. Not released. QA remains read-only and never uses host verification.
+**Integrated v0.7 implementation (PR #24; unreleased):** [Coder → Reviewer → QA workflow](docs/V0_7_WORKFLOW_ENGINE.md) with native sandbox checks, explicit stage/result gates, persistent reports and Review Center controls. Not released. QA remains read-only and never uses host verification.
+
+Before tagging another release, use the [MVP stabilization acceptance checklist](docs/MVP_STABILIZATION_CHECKLIST.md) to distinguish automated checks, real Codex execution and release approval.
 
 ## Quick start
 

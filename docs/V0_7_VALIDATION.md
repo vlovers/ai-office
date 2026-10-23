@@ -1,6 +1,6 @@
 # v0.7 validation — 2026-10-22
 
-Implementation: [workflow, isolation, lifecycle and limits](V0_7_WORKFLOW_ENGINE.md). Delivery remains in [Draft PR #22](https://github.com/vlovers/ai-office/pull/22); no merge, release or deployment was performed.
+Implementation: [workflow, isolation, lifecycle and limits](V0_7_WORKFLOW_ENGINE.md). Implementation was merged through [PR #24](https://github.com/vlovers/ai-office/pull/24); no v0.7 tag, separate release or deployment is established by this document. PR #22 was superseded.
 
 ## Local verification
 
@@ -15,7 +15,7 @@ Environment: macOS, Node.js 24.21.0, Codex SDK/CLI 0.162.1.
 - Browser workflow coverage includes dismissed approvals, stale request versions, changed dialogs, delayed selection responses, read-only Reviewer snapshots, selected QA plans, persistent results, Review Center integration, HTML escaping and mobile overflow checks.
 - Migration checks preserve schema-8 tasks, configurations, profiles, independent queues and a closed-file backup. Queued/running QA recovery interrupts without redispatch; repeated restart is idempotent.
 
-CI repeats portable checks on Linux and the native Reviewer/QA plus complete browser journey on macOS. The exact final SHA and CI conclusion are attached to PR #22; this document does not substitute for those checks.
+CI repeats portable checks on Linux and the native Reviewer/QA plus complete browser journey on macOS. Integration CI #266 passed on the PR #24 delivery path. This document does not establish validation of later `main` commits or a tagged release.
 
 ## Real Codex model trial
 

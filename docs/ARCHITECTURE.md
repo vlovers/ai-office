@@ -1,6 +1,6 @@
-# AI Office architecture — v0.6 implementation (unreleased)
+# AI Office architecture — integrated v0.6 Agent Studio and v0.7 Workflow Engine (unreleased)
 
-Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders Agent Studio and the PHOSPHOR interface. Stable persisted profiles receive independent lazy Codex providers/private worker homes. At most two turns prepare/run globally, with one per profile; no orchestration/team framework is introduced.
+Node 24/Fastify owns the loopback API, SQLite metadata and task-scoped SSE. React/Vite renders Agent Studio and the PHOSPHOR interface. Stable persisted profiles receive independent lazy Codex providers/private worker homes. At most two turns prepare/run globally, with one per profile; the v0.7 workflow layer adds operator-gated Coder → Reviewer → QA orchestration; it does not introduce unrestricted autonomous agent-to-agent dispatch.
 
 ```mermaid
 flowchart LR
@@ -100,3 +100,9 @@ reservation, blocking reuse until manual inspection. SSE stays keyed to task ID.
 
 [Workflow/API and migration limits](V0_6_AGENT_STUDIO.md) and [audit evidence](V0_6_VALIDATION.md)
 describe supported behavior. Existing v0.5 review, Git and decision invariants remain in use.
+
+## v0.7 workflow orchestration
+
+The workflow layer persists a revision-bound sequence of Coder, Reviewer and optional QA stages. Coder uses an approved isolated write worktree; Reviewer uses a separately prepared read-only source snapshot; QA runs an operator-selected, server-configured command in a verified native read-only sandbox. Each transition requires an explicit operator decision, including approval of exact evidence and result digests. Workflow-bound tasks cannot bypass these gates via the ordinary task start API. Interrupted or failed workflows require inspection rather than automatic retries. See [workflow implementation and limitations](V0_7_WORKFLOW_ENGINE.md) and [validation](V0_7_VALIDATION.md).
+
+This is a local single-user architecture, not a general multi-tenant scheduler. There is no automatic merge, push or deployment, and Linux native success-path compatibility remains unverified.

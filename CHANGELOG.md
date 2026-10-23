@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — v0.7 workflow implementation (Draft PR #22)
+## [Unreleased] — v0.7 workflow implementation (merged via PR #24)
 
 - Real Codex SDK Reviewer on a verified isolated source snapshot; changed-file context and persistent revision-bound reports.
 - Native sandbox capability probes and read-only QA commands with explicit stage/result approvals, process cleanup, crash recovery and artifact lifecycle.
@@ -32,7 +32,7 @@
 
 This project follows semantic versioning for release labels. Until a stable 1.0 release, APIs and storage formats may change.
 
-## [Unreleased] — v0.6 Agent Studio implementation
+## v0.6 implementation notes (historical; unreleased)
 
 - Persisted editable/duplicate/archive/restore Codex profiles with stable IDs and append-only revisions.
 - Transactional schema 7/8 migration retaining v0.5 ownership, queues, sessions, workspaces and review history.
