@@ -682,7 +682,9 @@ function App() {
                       </button>
                     ))}
                     {visibleHistory.length === 0 && (
-                      <p role="status">No tasks match these filters. Reset filters to see the full history.</p>
+                      <p role="status">
+                        No tasks match these filters. Reset filters to see the full history.
+                      </p>
                     )}
                   </div>
                 )}
