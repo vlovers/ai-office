@@ -8,6 +8,7 @@ import type {
 } from '../shared/types.js';
 import { diffLines } from '../shared/diff.js';
 import { WorkflowBoard } from './workflow-board.js';
+import { assessDeliveryReadiness } from './delivery-readiness.js';
 
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
 const changeType = (status: string) =>
@@ -300,6 +301,33 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
             {record?.number ?? '—'}{' '}
             {historical ? '· HISTORICAL PATCH — not current filesystem' : '· Current Git review'}
           </p>
+          {!historical && (
+            <details aria-label="GitHub delivery readiness">
+              <summary>GitHub delivery readiness · read-only preview</summary>
+              {(() => {
+                const readiness = assessDeliveryReadiness(task, review);
+                return (
+                  <>
+                    <p>
+                      Local checks: <strong>{readiness.eligible ? 'ready for manual review' : 'blocked'}</strong>.
+                      This is not approval to commit, push or create a PR.
+                    </p>
+                    <p>
+                      Branch <code>{readiness.branch}</code> · Base commit <code>{readiness.base}</code>
+                      {' '}· Revision <code>{readiness.revision ?? 'unavailable'}</code>
+                    </p>
+                    <ul>
+                      {readiness.gates.map((gate) => (
+                        <li key={gate.code}>
+                          <strong>{gate.status.toUpperCase()}</strong> — {gate.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                );
+              })()}
+            </details>
+          )}
           <details>
             <summary>Workspace identity</summary>
             <p>
