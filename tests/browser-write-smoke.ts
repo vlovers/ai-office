@@ -267,7 +267,9 @@ try {
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Keep isolated changes' }).click();
   await expect(review).toContainText('kept');
-  const kept = store.workspaces().find((workspace) => workspace.decision === 'kept')!;
+  await expect.poll(() => store.workspaces().some((workspace) => workspace.decision === 'kept'), { timeout: 10000 }).toBe(true);
+  const kept = store.workspaces().find((workspace) => workspace.decision === 'kept');
+  assert.ok(kept, 'Expected a persisted kept workspace after confirmation');
   assert.equal(await readFile(join(kept.path, 'README.md'), 'utf8'), 'Corrected by fixture\n');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);
