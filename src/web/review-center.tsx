@@ -8,6 +8,8 @@ import type {
 } from '../shared/types.js';
 import { diffLines } from '../shared/diff.js';
 import { WorkflowBoard } from './workflow-board.js';
+import { assessDeliveryReadiness, buildDeliveryDraft } from './delivery-readiness.js';
+import { parseGitHubRemote } from '../shared/github-remote.js';
 
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
 const changeType = (status: string) =>
@@ -41,6 +43,7 @@ function Code({ text, path }: { text: string; path: string }) {
 }
 export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
   const [review, setReview] = useState<WorkspaceReview>();
+  const [deliveryRemote, setDeliveryRemote] = useState('');
   const [history, setHistory] = useState<ReviewHistoryEntry[]>([]);
   const [historical, setHistorical] = useState('');
   const [selected, setSelected] = useState('');
@@ -300,6 +303,67 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
             {record?.number ?? '—'}{' '}
             {historical ? '· HISTORICAL PATCH — not current filesystem' : '· Current Git review'}
           </p>
+          {!historical && (
+            <details aria-label="GitHub delivery readiness">
+              <summary>GitHub delivery readiness · read-only preview</summary>
+              {(() => {
+                const readiness = assessDeliveryReadiness(task, review);
+                return (
+                  <>
+                    <p>
+                      Local checks: <strong>{readiness.eligible ? 'ready for manual review' : 'blocked'}</strong>.
+                      This is not approval to commit, push or create a PR.
+                    </p>
+                    <p>
+                      Branch <code>{readiness.branch}</code> · Base commit <code>{readiness.base}</code>
+                      {' '}· Revision <code>{readiness.revision ?? 'unavailable'}</code>
+                    </p>
+                    <label htmlFor="delivery-remote">GitHub remote (local validation only)</label>
+                    <input
+                      id="delivery-remote"
+                      value={deliveryRemote}
+                      onChange={(event) => setDeliveryRemote(event.target.value)}
+                      placeholder="https://github.com/owner/repository"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <p aria-live="polite">
+                      {deliveryRemote
+                        ? parseGitHubRemote(deliveryRemote)
+                          ? 'Recognized GitHub repository: ' +
+                            parseGitHubRemote(deliveryRemote)?.owner +
+                            '/' +
+                            parseGitHubRemote(deliveryRemote)?.repository +
+                            '. Ownership and permissions are NOT verified.'
+                          : 'Unsupported or unsafe remote format. Credentials and non-GitHub remotes are rejected.'
+                        : 'Enter a remote to validate its format. No network request is made.'}
+                    </p>
+                    <p>Draft PR text (copy only; no remote operations):</p>
+                    <label htmlFor="delivery-draft-title">Suggested PR title</label>
+                    <input
+                      id="delivery-draft-title"
+                      readOnly
+                      value={buildDeliveryDraft(task, review).title}
+                    />
+                    <label htmlFor="delivery-draft-body">Suggested PR description</label>
+                    <textarea
+                      id="delivery-draft-body"
+                      readOnly
+                      rows={12}
+                      value={buildDeliveryDraft(task, review).body}
+                    />
+                    <ul>
+                      {readiness.gates.map((gate) => (
+                        <li key={gate.code}>
+                          <strong>{gate.status.toUpperCase()}</strong> — {gate.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                );
+              })()}
+            </details>
+          )}
           <details>
             <summary>Workspace identity</summary>
             <p>
