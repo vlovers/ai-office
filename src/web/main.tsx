@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
@@ -7,6 +7,13 @@ import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
+import {
+  decodeTaskNavigation,
+  encodeTaskNavigation,
+  taskHasReview,
+  taskNavigationTarget,
+  type TaskDestination,
+} from './task-navigation.js';
 import {
   selectTaskHistory,
   summarizeTaskHistory,
@@ -71,6 +78,13 @@ function App() {
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [selected, setSelected] = useState<string>();
+  const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
+  const lastNavigation = useRef('');
+  useEffect(() => {
+    const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   const [eventHistory, setEventHistory] = useState<Record<string, AgentEvent[]>>({});
   const [selectedAgent, setSelectedAgent] = useState<AgentId>('codex-1');
   const [error, setError] = useState('');
@@ -181,6 +195,63 @@ function App() {
       setPendingStops((previous) => previous.filter((id) => id !== taskId));
     }
   };
+  useEffect(() => {
+    if (!navigation || !dashboard) return;
+    const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
+    if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
+    const key = encodeTaskNavigation(navigation);
+    if (lastNavigation.current === key) return;
+    if (selected !== target.id) setSelected(target.id);
+    if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
+    if (view !== 'focus') setView('focus');
+  }, [navigation, dashboard, selected, selectedAgent, view]);
+  useEffect(() => {
+    if (!navigation || !dashboard || view !== 'focus' || selected !== navigation.taskId) return;
+    const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
+    if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
+    const key = encodeTaskNavigation(navigation);
+    if (lastNavigation.current === key) return;
+    const id =
+      navigation.destination === 'workflow'
+        ? 'task-workflow'
+        : navigation.destination === 'review'
+          ? 'code-review-center'
+          : 'task-workspace';
+    const section = document.getElementById(id);
+    if (!section) return;
+    lastNavigation.current = key;
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
+  }, [navigation, dashboard, selected, view]);
+  const clearTaskNavigation = () => {
+    setNavigation(null);
+    lastNavigation.current = '';
+    if (window.location.hash.startsWith('#task/')) {
+      window.history.replaceState(null, '', '#task-history');
+    }
+  };
+  const navigateTask = (item: Task, destination: TaskDestination) => {
+    const target = taskNavigationTarget(item, destination);
+    if (!target) return;
+    setSelected(item.id);
+    setSelectedAgent(item.agentId);
+    setResumeSessionId('');
+    setView('focus');
+    const hash = encodeTaskNavigation(target);
+    if (window.location.hash === hash) {
+      lastNavigation.current = '';
+      setNavigation({ ...target });
+    } else window.location.hash = hash;
+  };
+  const linkedTask = navigation && dashboard?.tasks.find((item) => item.id === navigation.taskId);
+  const linkError =
+    navigation && dashboard
+      ? !linkedTask
+        ? 'This task is no longer available in the local workspace.'
+        : navigation.destination === 'review' && !taskHasReview(linkedTask)
+          ? 'Code review is not available for this task. Open its session instead.'
+          : ''
+      : '';
   const taskSummary = summarizeTaskHistory(dashboard?.tasks ?? []);
   const visibleHistory = selectTaskHistory(dashboard?.tasks ?? [], {
     query: historyQuery,
@@ -242,6 +313,7 @@ function App() {
     const stationTask = workstationTask(dashboard, selected, agentId);
     setSelected(stationTask?.id);
     setResumeSessionId('');
+    clearTaskNavigation();
     // Inspect in place; Focus Mode remains an explicit choice.
     if (!stationTask) showSection('agent');
   };
@@ -339,6 +411,14 @@ function App() {
         </div>
       </aside>
       <main id="overview" tabIndex={-1}>
+        {linkError && (
+          <div className="task-link-warning" role="alert">
+            <p>{linkError}</p>
+            <button className="secondary" type="button" onClick={clearTaskNavigation}>
+              Dismiss task link
+            </button>
+          </div>
+        )}
         <header className="topbar">
           <div className="workspace-chip">
             <span className="eyebrow">REGISTERED WORKTREE</span>
@@ -745,6 +825,7 @@ function App() {
                           setSelectedAgent(item.agentId);
                           setSelected(item.id);
                           setResumeSessionId('');
+                          clearTaskNavigation();
                         }}
                       >
                         <span className={`task-indicator ${item.state}`} />
@@ -786,6 +867,37 @@ function App() {
                         {repository?.name} ·{' '}
                         {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
                       </span>
+                      <nav className="task-navigation" aria-label="Selected task navigation">
+                        <a
+                          href={encodeTaskNavigation({ taskId: task.id, destination: 'session' })}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigateTask(task, 'session');
+                          }}
+                        >
+                          Session
+                        </a>
+                        {taskHasReview(task) && (
+                          <a
+                            href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigateTask(task, 'review');
+                            }}
+                          >
+                            Code review
+                          </a>
+                        )}
+                        <a
+                          href={encodeTaskNavigation({ taskId: task.id, destination: 'workflow' })}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigateTask(task, 'workflow');
+                          }}
+                        >
+                          Workflow &amp; QA
+                        </a>
+                      </nav>
                       {view === 'focus' && task.id === agent?.taskId && stopControl}
                       {task.workspaceId &&
                         !['queued', 'running', 'stopping'].includes(task.state) && (
@@ -937,14 +1049,17 @@ function App() {
                         <pre>{task.result}</pre>
                       </div>
                     )}
-                    {task.workspaceId &&
-                      !['queued', 'running', 'stopping'].includes(task.state) && (
-                        <ReviewCenter
-                          key={task.id}
-                          task={{ ...task, configuration: taskConfiguration }}
-                          api={api}
-                        />
-                      )}
+                    {taskHasReview(task) ? (
+                      <ReviewCenter
+                        key={task.id}
+                        task={{ ...task, configuration: taskConfiguration }}
+                        api={api}
+                      />
+                    ) : (
+                      <div id="task-workflow" tabIndex={-1}>
+                        <WorkflowBoard taskId={task.id} />
+                      </div>
+                    )}
                     {task.executionMode !== 'write' &&
                       !['queued', 'running', 'stopping'].includes(task.state) && (
                         <div className="file-summary">
@@ -995,6 +1110,7 @@ function App() {
                         executionMode: data.get('executionMode'),
                       });
                       setSelected(created.id);
+                      clearTaskNavigation();
                       form.reset();
                       setExecutionMode('read-only');
                     });
