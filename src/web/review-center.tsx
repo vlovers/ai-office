@@ -44,6 +44,13 @@ function Code({ text, path }: { text: string; path: string }) {
 export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
   const [review, setReview] = useState<WorkspaceReview>();
   const [deliveryRemote, setDeliveryRemote] = useState('');
+  const [deliveryResult, setDeliveryResult] = useState<{
+    status: 'blocked' | 'manual-review';
+    revision: string | null;
+    checks: { id: string; ok: boolean; message: string }[];
+  }>();
+  const [deliveryError, setDeliveryError] = useState('');
+  const [deliveryChecking, setDeliveryChecking] = useState(false);
   const [history, setHistory] = useState<ReviewHistoryEntry[]>([]);
   const [historical, setHistorical] = useState('');
   const [selected, setSelected] = useState('');
@@ -322,7 +329,11 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
                     <input
                       id="delivery-remote"
                       value={deliveryRemote}
-                      onChange={(event) => setDeliveryRemote(event.target.value)}
+                      onChange={(event) => {
+                        setDeliveryRemote(event.target.value);
+                        setDeliveryResult(undefined);
+                        setDeliveryError('');
+                      }}
                       placeholder="https://github.com/owner/repository"
                       autoComplete="off"
                       spellCheck={false}
@@ -338,6 +349,58 @@ export function ReviewCenter({ task, api }: { task: Task; api: Api }) {
                           : 'Unsupported or unsafe remote format. Credentials and non-GitHub remotes are rejected.'
                         : 'Enter a remote to validate its format. No network request is made.'}
                     </p>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={
+                        deliveryChecking ||
+                        busy ||
+                        running ||
+                        unsaved ||
+                        !parseGitHubRemote(deliveryRemote)
+                      }
+                      onClick={() => {
+                        setDeliveryChecking(true);
+                        setDeliveryResult(undefined);
+                        setDeliveryError('');
+                        void api<{
+                          status: 'blocked' | 'manual-review';
+                          revision: string | null;
+                          checks: { id: string; ok: boolean; message: string }[];
+                        }>(`/tasks/${task.id}/delivery/preflight`, {
+                          remote: deliveryRemote,
+                        })
+                          .then((result) => {
+                            if (result.revision !== review.revision) {
+                              setDeliveryError('Review changed since the page loaded. Refresh before proceeding.');
+                            } else {
+                              setDeliveryResult(result);
+                            }
+                          })
+                          .catch(() => {
+                            setDeliveryError('Server preflight unavailable. No changes were published.');
+                          })
+                          .finally(() => setDeliveryChecking(false));
+                      }}
+                    >
+                      {deliveryChecking ? 'Checking…' : 'Run server preflight'}
+                    </button>
+                    {deliveryError && <p role="alert">{deliveryError}</p>}
+                    {deliveryResult && (
+                      <div aria-live="polite">
+                        <p>
+                          Server preflight: <strong>{deliveryResult.status}</strong>.
+                          No commit, push or PR was created.
+                        </p>
+                        <ul>
+                          {deliveryResult.checks.map((check) => (
+                            <li key={check.id}>
+                              {check.ok ? 'PASS' : 'BLOCKED'} — {check.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <p>Draft PR text (copy only; no remote operations):</p>
                     <label htmlFor="delivery-draft-title">Suggested PR title</label>
                     <input
