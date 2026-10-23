@@ -2329,3 +2329,14 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
 #task-workflow {
   scroll-margin-top: 24px;
 }
+
+.task-link-warning {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #426354);
+  border-left: 4px solid #dfb46b;
+  border-radius: 4px;
+}
+.task-link-warning p {
+  margin: 0 0 8px;
+}
