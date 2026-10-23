@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — documentation and Office UI work in progress (2026-10-23)
+
+- Office Experience V2 (PR #27) integrated into `main` with a two-seat interactive scene, live roster/queue/history presentation and keyboard selection.
+- Office V3 remains Draft PR #31: warmer visuals, additional environment art, agent cards/filters, queue preview and collapsible diagnostics. Its last inspected CI failed formatting; these changes are **not shipped**.
+- Repository audit, MVP acceptance checklist and roadmap synchronized with merged PR status and outstanding gates.
+- No v0.6/v0.7/V3 release or autonomous GitHub publishing is implied.
+
 ## [Unreleased] — v0.7 workflow implementation (merged via PR #24)
 
 - Real Codex SDK Reviewer on a verified isolated source snapshot; changed-file context and persistent revision-bound reports.
