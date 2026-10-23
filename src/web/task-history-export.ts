@@ -24,7 +24,9 @@ export function exportTaskHistoryCsv(tasks: readonly ExportTask[]): string {
       task.repositoryId,
       task.createdAt,
       task.updatedAt,
-    ].map((value) => csvCell(value ?? '')).join(','),
+    ]
+      .map((value) => csvCell(value ?? ''))
+      .join(','),
   );
   return [columns.map(csvCell).join(','), ...rows].join('\r\n') + '\r\n';
 }
