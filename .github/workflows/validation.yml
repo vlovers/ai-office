@@ -38,12 +38,7 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Formatting
-        run: |
-          if ! npm run format:check; then
-            npx prettier --write src/web/main.tsx tests/task-navigation.test.ts
-            git diff -- src/web/main.tsx tests/task-navigation.test.ts
-            exit 1
-          fi
+        run: npm run format:check
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
