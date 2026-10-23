@@ -2648,3 +2648,23 @@ select {
     flex-direction: column;
   }
 }
+
+.office-v3-floor-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.office-v3-floor-filters button {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid #43545d;
+  background: #223039;
+  color: #c5d5d9;
+  font-size: 12px;
+}
+.office-v3-floor-filters button[aria-pressed='true'] {
+  border-color: #a5dbc0;
+  background: #335147;
+  color: #f1f8f3;
+}
