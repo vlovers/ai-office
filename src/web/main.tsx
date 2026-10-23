@@ -160,16 +160,24 @@ function App() {
     if (selected !== target.id) setSelected(target.id);
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
     if (view !== 'focus') setView('focus');
-    lastNavigation.current = key;
-    requestAnimationFrame(() => {
-      const id = navigation.destination === 'workflow'
-        ? 'task-workflow'
-        : navigation.destination === 'review'
-          ? 'code-review-center'
-          : 'task-workspace';
-      document.getElementById(id)?.scrollIntoView({ block: 'start' });
-    });
   }, [navigation, dashboard, selected, selectedAgent, view]);
+  useEffect(() => {
+    if (!navigation || !dashboard || view !== 'focus' || selected !== navigation.taskId) return;
+    const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
+    if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
+    const key = encodeTaskNavigation(navigation);
+    if (lastNavigation.current === key) return;
+    const id = navigation.destination === 'workflow'
+      ? 'task-workflow'
+      : navigation.destination === 'review'
+        ? 'code-review-center'
+        : 'task-workspace';
+    const section = document.getElementById(id);
+    if (!section) return;
+    lastNavigation.current = key;
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
+  }, [navigation, dashboard, selected, view]);
   const clearTaskNavigation = () => {
     setNavigation(null);
     lastNavigation.current = '';
