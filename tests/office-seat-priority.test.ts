@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { officeGeometry, selectOfficeSeats } from '../src/web/office-layout.js';
+import { STUDIO_DESKS, selectOfficeSeats } from '../src/web/office-layout.js';
 import type { AgentId } from '../src/shared/types.js';
 
 const agent = (id: string, state = 'idle', active = false) => ({
@@ -17,14 +17,14 @@ describe('office seat priority', () => {
   ];
 
   it('keeps selected profile and displaced active worker visible', () => {
-    expect(selectOfficeSeats(agents, 'profile-3' as AgentId).map((a) => a.id)).toEqual([
+    expect(selectOfficeSeats(agents, 'profile-3' as AgentId, 2).map((a) => a.id)).toEqual([
       'codex-2',
       'profile-3',
     ]);
   });
 
   it('preserves default seat order when selected profile is unavailable', () => {
-    expect(selectOfficeSeats(agents, 'missing' as AgentId).map((a) => a.id)).toEqual([
+    expect(selectOfficeSeats(agents, 'missing' as AgentId, 2).map((a) => a.id)).toEqual([
       'codex-1',
       'codex-2',
     ]);
@@ -53,25 +53,23 @@ describe('office seat priority', () => {
   });
 });
 
-describe('office responsive geometry', () => {
-  it('provides a consistent portrait viewport for narrow containers', () => {
-    expect(officeGeometry(true)).toEqual({ width: 420, height: 580, wall: 159 });
+describe('studio placement', () => {
+  it('provides four distinct desks within the projected room', () => {
+    expect(STUDIO_DESKS).toHaveLength(4);
+    expect(new Set(STUDIO_DESKS.map((desk) => `${desk.x}:${desk.y}`)).size).toBe(4);
+    expect(
+      STUDIO_DESKS.every((desk) => desk.x > 0 && desk.y > 0 && desk.x < 500 && desk.y < 500),
+    ).toBe(true);
   });
-
-  it('provides a consistent landscape viewport for wider containers', () => {
-    expect(officeGeometry(false)).toEqual({ width: 840, height: 440, wall: 191 });
-  });
-
-  it('does not reshuffle occupied seats when workers change status', () => {
+  it('does not reshuffle profiles when their execution state changes', () => {
     const profiles = [
-      agent('idle-1'),
-      agent('idle-2'),
-      agent('running-1', 'working'),
-      agent('running-2', 'stopping'),
+      agent('one'),
+      agent('two'),
+      agent('three', 'reviewing'),
+      agent('four', 'working'),
     ];
-    expect(selectOfficeSeats(profiles, 'unknown' as AgentId).map((a) => a.id)).toEqual([
-      'idle-1',
-      'idle-2',
-    ]);
+    expect(selectOfficeSeats(profiles, 'unknown').map((a) => a.id)).toEqual(
+      profiles.map((a) => a.id),
+    );
   });
 });

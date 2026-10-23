@@ -71,7 +71,13 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return value as T;
 }
 
-export function WorkflowBoard({ taskId }: { taskId?: string }) {
+export function WorkflowBoard({
+  taskId,
+  inspection,
+}: {
+  taskId?: string;
+  inspection?: { id: string; request: number };
+}) {
   const [items, setItems] = useState<Summary[]>([]);
   const [stateFilter, setStateFilter] = useState('all');
   const [workflowQuery, setWorkflowQuery] = useState('');
@@ -79,6 +85,9 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
+  useEffect(() => {
+    if (inspection) setSelected(inspection.id);
+  }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
@@ -204,6 +213,7 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
     <section
       className="panel"
       id={taskId ? undefined : 'workflows'}
+      tabIndex={-1}
       aria-label={taskId ? 'Workflow review results' : 'Workflow timeline'}
     >
       <div className="panel-heading">

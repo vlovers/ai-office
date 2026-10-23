@@ -2,7 +2,6 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import { PixelOffice, type OfficeAgent } from '../src/web/pixel-art.js';
-import { OFFICE_LAYOUT } from '../src/web/office-layout.js';
 
 const agents: OfficeAgent[] = [
   {
@@ -14,188 +13,117 @@ const agents: OfficeAgent[] = [
 ];
 const render = (slots = agents) =>
   renderToStaticMarkup(
-    createElement(PixelOffice, {
-      agents: slots,
-      selectedAgent: 'codex-1',
-      onSelect: () => {},
-    }),
+    createElement(PixelOffice, { agents: slots, selectedAgent: 'codex-1', onSelect: () => {} }),
   );
-
-it('renders one room with separately identified, keyboard-accessible real workstations', () => {
+it('renders one original room with keyboard-accessible real workstations', () => {
   const markup = render();
   expect(markup.match(/class="shared-office isometric-office"/g)).toHaveLength(1);
   expect(markup.match(/role="button"/g)).toHaveLength(2);
   expect(markup.match(/tabindex="0"/g)).toHaveLength(2);
   expect(markup).toContain('data-agent-id="codex-1" data-state="thinking"');
-  expect(markup).toContain('data-agent-id="codex-2" data-state="error"');
   expect(markup).toContain('aria-label="Select Codex 01 workstation" aria-pressed="true"');
-  expect(markup).toContain('aria-label="Select Codex 02 workstation" aria-pressed="false"');
-  expect(markup).toContain('Thinking · SDK reasoning item. Read only.');
-  expect(markup).toContain('aria-label="Agent workflow overview"');
+  expect(markup).toContain('Thinking · SDK reasoning item. No active access.');
+  expect(markup.match(/class="office-environment"/g)).toHaveLength(1);
 });
-
-it('never creates characters or interactive agents missing from the runtime', () => {
-  expect(render([])).not.toContain('role="button"');
-  const markup = render([agents[1]!]);
-  expect(markup.match(/role="button"/g)).toHaveLength(1);
-  expect(markup).not.toContain('Select Codex 01');
-  expect(markup).toContain('Select Codex 02');
+it('never invents characters when the runtime has no agents', () => {
+  const markup = render([]);
+  expect(markup).not.toContain('role="button"');
+  expect(markup).toContain('Your office is ready for company.');
+  expect(markup).toContain('Open Agent Studio');
+  expect(render([agents[1]!])).not.toContain('Select Codex 01');
 });
-
-it('places each identity independently in wide and portrait layouts', () => {
-  expect(new Set(OFFICE_LAYOUT.map((station) => station.agentId)).size).toBe(OFFICE_LAYOUT.length);
-  expect(OFFICE_LAYOUT[0]!.landscape.x).not.toBe(OFFICE_LAYOUT[1]!.landscape.x);
-  expect(OFFICE_LAYOUT[0]!.portrait.y).not.toBe(OFFICE_LAYOUT[1]!.portrait.y);
-  expect(OFFICE_LAYOUT[0]!.identity).not.toBe(OFFICE_LAYOUT[1]!.identity);
-});
-
-it('uses two desks for active and selected dynamic profiles without inventing IDs or HTML', () => {
-  const dynamic: OfficeAgent[] = [
-    { id: 'profile-a', name: '<script>unsafe</script>', status: { state: 'idle', label: 'Idle' } },
-    { id: 'profile-b', name: 'Second', status: { state: 'idle', label: 'Idle' }, active: true },
-    { id: 'profile-c', name: 'Third', status: { state: 'idle', label: 'Idle' } },
-  ];
+it('shows four stable profile desks and reveals a selected overflow profile', () => {
+  const profiles = Array.from({ length: 7 }, (_, i) => ({
+    ...agents[0]!,
+    id: `agent-${i}`,
+    name: `Profile ${i}`,
+  }));
   const markup = renderToStaticMarkup(
-    createElement(PixelOffice, { agents: dynamic, selectedAgent: 'profile-c', onSelect: () => {} }),
+    createElement(PixelOffice, { agents: profiles, selectedAgent: 'agent-6', onSelect: () => {} }),
   );
-  expect(markup.match(/role="button"/g)).toHaveLength(2);
-  expect(markup).toContain('data-agent-id="profile-b"');
-  expect(markup).toContain('data-agent-id="profile-c"');
-  expect(markup).not.toContain('data-agent-id="profile-a"');
-  const selectedActive = renderToStaticMarkup(
-    createElement(PixelOffice, { agents: dynamic, selectedAgent: 'profile-b', onSelect: () => {} }),
-  );
-  expect(selectedActive.match(/role="button"/g)).toHaveLength(2);
-  expect(selectedActive).toContain('&lt;script&gt;');
-  expect(selectedActive).not.toContain('<script>');
+  expect(markup.match(/role="button"/g)).toHaveLength(4);
+  expect(markup).toContain('data-agent-id="agent-6"');
+  expect(markup).toContain('3 more profiles in the roster.');
+  expect(markup.match(/class="studio-agent state-/g)).toHaveLength(7);
 });
-
-it('shows only real queued tasks, waiting reasons, and their assigned agents', () => {
-  const markup = renderToStaticMarkup(
-    createElement(PixelOffice, {
-      agents,
-      selectedAgent: 'codex-1',
-      onSelect: () => {},
-      queue: [
-        { taskId: 'task-b', agentId: 'codex-2', title: 'Review changes', order: 2 },
-        {
-          taskId: 'task-a',
-          agentId: 'codex-1',
-          title: 'Implement API',
-          order: 1,
-          waitingReason: 'Workspace busy',
-        },
-      ],
-    }),
-  );
-  expect(markup).toContain('aria-label="Live task queue"');
-  expect(markup).toContain('2 waiting');
-  expect(markup.indexOf('Implement API')).toBeLessThan(markup.indexOf('Review changes'));
-  expect(markup).toContain('Workspace busy');
-  expect(markup).toContain('Inspect agent assigned to Review changes');
-  expect(render()).toContain('No queued tasks.');
-});
-
-it('inspects selected live agent without inventing assignments or access', () => {
+it('escapes profile and task names and preserves actual task IDs for inspection', () => {
   const markup = renderToStaticMarkup(
     createElement(PixelOffice, {
       agents: [
         {
           ...agents[0]!,
-          taskTitle: 'Build service',
-          taskState: 'running',
-          role: 'Coder',
+          name: '<script>unsafe</script>',
+          taskId: 'saved-id',
+          taskTitle: 'Saved review',
+          taskState: 'completed',
           access: 'read-only',
         },
-        agents[1]!,
       ],
       selectedAgent: 'codex-1',
       onSelect: () => {},
-      queue: [{ taskId: 'next', agentId: 'codex-1', title: 'Review service', order: 1 }],
+      onInspectSession: () => {},
+      queue: [
+        { taskId: 'b', agentId: 'codex-2', title: 'Later', order: 2 },
+        {
+          taskId: 'a',
+          agentId: 'codex-1',
+          title: 'First',
+          order: 1,
+          waitingReason: 'Workspace busy',
+        },
+      ],
+      onInspectTask: () => {},
     }),
   );
-  expect(markup).toContain('aria-label="Selected agent inspector"');
-  expect(markup).toContain('Build service');
-  expect(markup).toContain('Task lifecycle: running');
-  expect(markup).toContain('aria-label="Selected task lifecycle"');
-  expect(markup).toContain('aria-current="step">running</li>');
-  expect(markup).toContain('1 queued for this agent');
-  expect(markup).toContain('Execution access: read-only');
-  expect(render()).toContain('No running assignment');
+  expect(markup).toContain('&lt;script&gt;');
+  expect(markup).not.toContain('<script>');
+  expect(markup).toContain('Task lifecycle: completed');
+  expect(markup).toContain('Inspect task &amp; session');
+  expect(markup.indexOf('Inspect queued task First')).toBeLessThan(
+    markup.indexOf('Inspect queued task Later'),
+  );
+  expect(markup).toContain('Workspace busy');
 });
-
-it('renders latest persisted task activity without fabricating tasks', () => {
+it('distinguishes approval, queued and reviewing by text and symbols', () => {
+  const markup = render(
+    ['approval', 'queued', 'reviewing'].map((state, i) => ({
+      ...agents[0]!,
+      id: `p${i}`,
+      status: { state: state as OfficeAgent['status']['state'], label: state },
+    })),
+  );
+  expect(markup).toContain('◇ Approval');
+  expect(markup).toContain('≡ Queued');
+  expect(markup).toContain('⌕ Reviewing');
+});
+it('makes snapshot freshness explicit and disables contextual actions while disconnected', () => {
   const markup = renderToStaticMarkup(
     createElement(PixelOffice, {
       agents,
       selectedAgent: 'codex-1',
       onSelect: () => {},
-      recentTasks: [
-        {
-          id: 'older',
-          agentId: 'codex-1',
-          title: 'Earlier review',
-          state: 'completed',
-          updatedAt: '2026-10-20T10:00:00Z',
-        },
-        {
-          id: 'newer',
-          agentId: 'codex-2',
-          title: 'Latest QA',
-          state: 'failed',
-          updatedAt: '2026-10-21T11:00:00Z',
-        },
-      ],
+      onAssign: () => {},
+      transport: 'disconnected',
     }),
   );
-  expect(markup).toContain('aria-label="Recent agent tasks"');
-  expect(markup.indexOf('Latest QA')).toBeLessThan(markup.indexOf('Earlier review'));
-  expect(markup).toContain('Inspect agent for Latest QA');
-  expect(markup).toContain('state-failed');
-  expect(render()).toContain('No recorded tasks.');
+  expect(markup).toContain('showing the last saved snapshot');
+  expect(markup).toContain('disabled="">Assign a task');
 });
 
-it('exposes real room occupancy and offscreen worker counts without fake profiles', () => {
-  const dynamic: OfficeAgent[] = [
-    { id: 'one', name: 'One', status: { state: 'idle', label: 'Idle' } },
-    { id: 'two', name: 'Two', status: { state: 'working', label: 'Working' } },
-    { id: 'three', name: 'Three', status: { state: 'thinking', label: 'Thinking' } },
-  ];
-  const markup = renderToStaticMarkup(
-    createElement(PixelOffice, { agents: dynamic, selectedAgent: 'one', onSelect: () => {} }),
-  );
-  expect(markup).toContain('data-visible-seats="2"');
-  expect(markup).toContain('3 profiles');
-  expect(markup).toContain('1 profiles outside the two-desk view');
-  expect(markup).toContain('1 active');
-  expect(markup).toContain('Interactive isometric office. One: Idle; Two: Working');
-  expect(markup).not.toContain('data-agent-id="three"');
-});
-
-it('shows filtered history controls without inventing persisted records', () => {
-  const markup = render();
-  expect(markup).toContain('aria-label="Filter task history"');
-  expect(markup).toContain('All tasks');
-  expect(markup).toContain('Selected agent');
-  expect(markup).toContain('Failures');
-  expect(markup).toContain('No recorded tasks.');
-});
-
-it('counts active session flags even when the scene status is idle', () => {
-  const markup = renderToStaticMarkup(
-    createElement(PixelOffice, {
-      agents: [
-        {
-          id: 'active-idle',
-          name: 'Background worker',
-          active: true,
-          status: { state: 'idle', label: 'Idle' },
-        },
-      ],
-      selectedAgent: 'active-idle',
-      onSelect: () => {},
-    }),
-  );
-  expect(markup).toContain('1 running · 0 queued · 0 errors');
-  expect(markup).toContain('1 active · 0 errors');
+it('treats initial loading and initial connection failure as unknown counts, not an empty office', () => {
+  for (const transport of ['loading', 'unavailable'] as const) {
+    const markup = renderToStaticMarkup(
+      createElement(PixelOffice, {
+        agents: [],
+        selectedAgent: 'missing',
+        onSelect: () => {},
+        transport,
+      }),
+    );
+    expect(markup).toContain('Loading profiles…');
+    expect(markup).toContain('Waiting for the task queue…');
+    expect(markup).not.toContain('No agent profiles yet.');
+    expect(markup).not.toContain('No queued tasks.');
+    expect(markup).not.toContain('Your office is ready for company.');
+  }
 });

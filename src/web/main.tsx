@@ -5,6 +5,7 @@ import { AgentStudio } from './agent-studio.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
+import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
 import './styles.css';
 
@@ -54,6 +55,9 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
+  const [workflowInspection, setWorkflowInspection] = useState<{ id: string; request: number }>();
+  const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
+  const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [selected, setSelected] = useState<string>();
   const [eventHistory, setEventHistory] = useState<Record<string, AgentEvent[]>>({});
@@ -81,6 +85,29 @@ function App() {
       void refresh().catch(() => {});
     }, 2000);
     return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let live = true;
+    const load = async () => {
+      try {
+        const items = await api<OfficeWorkflow[]>('/workflows');
+        if (live) {
+          setWorkflows(items);
+          setWorkflowAvailable(true);
+        }
+      } catch {
+        if (live) {
+          setWorkflows([]);
+          setWorkflowAvailable(false);
+        }
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 3000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   }, []);
   useEffect(() => {
     if (!repositoryId && dashboard?.repositories[0]) setRepositoryId(dashboard.repositories[0].id);
@@ -149,10 +176,19 @@ function App() {
   const taskConfiguration = task?.configuration ?? session?.configuration;
   const agent = dashboard?.agents.find((item) => item.id === selectedAgent);
   const selectedProfile = dashboard?.profiles?.find((profile) => profile.id === selectedAgent);
+  const officeAgents =
+    dashboard?.agents.filter(
+      (slot) =>
+        !dashboard.profiles?.find((profile) => profile.id === slot.id)?.archived || slot.taskId,
+    ) ?? [];
   const assignable =
     dashboard?.agents.filter(
       (slot) => !dashboard.profiles?.find((profile) => profile.id === slot.id)?.archived,
     ) ?? [];
+  useEffect(() => {
+    if (dashboard && !officeAgents.some((slot) => slot.id === selectedAgent) && officeAgents[0])
+      setSelectedAgent(officeAgents[0].id);
+  }, [dashboard, selectedAgent]);
   const canAssign = assignable.some((slot) => slot.id === selectedAgent);
   useEffect(() => {
     if (selectedProfile?.maximumMode !== 'write') setExecutionMode('read-only');
@@ -167,6 +203,7 @@ function App() {
     Object.values(eventHistory).flat(),
     connection.includes('disconnected'),
     selectedAgent,
+    workflows,
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
@@ -207,7 +244,7 @@ function App() {
         <a className="brand" href="#overview" onClick={() => setView('mission')}>
           <PixelBot />
           <span>
-            AI OFFICE<small>PHOSPHOR OS / Agent Studio</small>
+            AI OFFICE<small>A space for your agents</small>
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
@@ -217,7 +254,7 @@ function App() {
             href="#overview"
             onClick={() => setView('mission')}
           >
-            <span aria-hidden="true">⌂</span>Dashboard<span className="nav-count">01</span>
+            <span aria-hidden="true">⌂</span>Office<span className="nav-count">01</span>
           </a>
           <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
             <span aria-hidden="true">♙</span>Agents
@@ -321,7 +358,7 @@ function App() {
                 {view === 'focus' ? 'Focus mode' : 'Office overview'}
                 <span>_</span>
               </h1>
-              <p>Your agents, tasks and approvals in one workspace. Two concurrent workers.</p>
+              <p>Make room for your next idea. Your agents and their real work, together.</p>
             </div>
             <a
               className="button-link"
@@ -400,60 +437,90 @@ function App() {
               </button>
             </div>
           )}
+          <section className="office-scene" aria-label="Shared Codex office">
+            <PixelOffice
+              agents={officeAgents.map((slot) => ({
+                id: slot.id,
+                name: slot.name,
+                role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                taskId: workstationTask(dashboard, selected, slot.id)?.id,
+                taskTitle: workstationTask(dashboard, selected, slot.id)?.title,
+                taskState: workstationTask(dashboard, selected, slot.id)?.state,
+                access:
+                  workstationTask(dashboard, selected, slot.id)?.executionMode === 'write'
+                    ? 'Isolated write'
+                    : 'Read only',
+                checkpoint: officeCheckpoint(workflows, slot.id)?.workflowId,
+                active: Boolean(slot.taskId),
+                status: sceneStatus(
+                  dashboard,
+                  workstationTask(dashboard, selected, slot.id),
+                  Object.values(eventHistory).flat(),
+                  connection.includes('disconnected'),
+                  slot.id,
+                  workflows,
+                ),
+              }))}
+              recentTasks={(dashboard?.tasks ?? []).map((task) => ({
+                id: task.id,
+                agentId: task.agentId,
+                title: task.title,
+                state: task.state,
+                updatedAt: task.updatedAt,
+              }))}
+              queue={(dashboard?.queue ?? []).map((entry) => ({
+                taskId: entry.taskId,
+                agentId: entry.agentId,
+                title:
+                  dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
+                  'Untitled task',
+                order: entry.order,
+                waitingReason: entry.waitingReason,
+              }))}
+              selectedAgent={selectedAgent}
+              onSelect={selectStation}
+              transport={
+                !dashboard
+                  ? connection.includes('disconnected')
+                    ? 'unavailable'
+                    : 'loading'
+                  : connection.includes('disconnected')
+                    ? 'disconnected'
+                    : 'connected'
+              }
+              onAssign={() => showSection('compose')}
+              onInspectSession={() => {
+                if (stationTask) {
+                  setSelected(stationTask.id);
+                  setView('focus');
+                  showSection('task-workspace');
+                }
+              }}
+              onInspectTask={(taskId) => {
+                const target = dashboard?.tasks.find((item) => item.id === taskId);
+                if (target) {
+                  setSelectedAgent(target.agentId);
+                  setSelected(target.id);
+                  setResumeSessionId('');
+                  showSection('task-workspace');
+                }
+              }}
+              onCheckpoint={() => {
+                const checkpoint = officeCheckpoint(workflows, selectedAgent);
+                if (checkpoint) {
+                  setWorkflowInspection({ id: checkpoint.workflowId, request: Date.now() });
+                  showSection('workflows');
+                }
+              }}
+            />
+            {!workflowAvailable && (
+              <p className="studio-notice" role="status">
+                Workflow status unavailable. Open workflow details to retry.
+              </p>
+            )}
+          </section>
           <div className="mission-grid">
             <div className="mission-board">
-              <section className="office-scene" aria-label="Shared Codex office">
-                <div className="scene-label">
-                  <span>AI OFFICE / SHARED WORKSPACE</span>
-                  <span>TASK-SCOPED ACCESS</span>
-                </div>
-                <PixelOffice
-                  agents={(dashboard?.agents ?? [])
-                    .filter(
-                      (slot) =>
-                        !dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived ||
-                        slot.taskId,
-                    )
-                    .map((slot) => ({
-                      id: slot.id,
-                      name: slot.name,
-                      role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
-                      taskTitle: dashboard?.tasks.find((task) => task.id === slot.taskId)?.title,
-                      taskState: dashboard?.tasks.find((task) => task.id === slot.taskId)?.state,
-                      access: slot.mode,
-                      active: Boolean(slot.taskId),
-                      status: sceneStatus(
-                        dashboard,
-                        workstationTask(dashboard, selected, slot.id),
-                        Object.values(eventHistory).flat(),
-                        connection.includes('disconnected'),
-                        slot.id,
-                      ),
-                    }))}
-                  recentTasks={(dashboard?.tasks ?? []).map((task) => ({
-                    id: task.id,
-                    agentId: task.agentId,
-                    title: task.title,
-                    state: task.state,
-                    updatedAt: task.updatedAt,
-                  }))}
-                  queue={(dashboard?.queue ?? []).map((entry) => ({
-                    taskId: entry.taskId,
-                    agentId: entry.agentId,
-                    title:
-                      dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
-                      'Untitled task',
-                    order: entry.order,
-                    waitingReason: entry.waitingReason,
-                  }))}
-                  selectedAgent={selectedAgent}
-                  onSelect={selectStation}
-                />
-                <div className="scene-caption">
-                  Two worker desks · select other profiles in Agent Studio · Tab / arrows to
-                  navigate
-                </div>
-              </section>
               <div className="stats" aria-label="Workspace statistics">
                 <div>
                   <span>CODEX AGENTS</span>
@@ -521,7 +588,7 @@ function App() {
                   }}
                 />
               )}
-              <WorkflowBoard />
+              <WorkflowBoard inspection={workflowInspection} />
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
