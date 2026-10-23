@@ -1,46 +1,55 @@
-# MVP stabilization acceptance checklist
+# AI Office MVP stabilization acceptance checklist
 
-This checklist describes **required evidence**, not a claim that the tests have passed. Keep release claims separate from merged implementation.
+> Updated 2026-10-23 against `main` `b3f7ee9`. This is an **acceptance plan**, not a record of fresh successful tests. See [repository audit](REPOSITORY_AUDIT_2026_10_23.md) and [roadmap](../ROADMAP.md).
 
-## Current baseline (2026-10-23)
+## Current integration baseline
 
-- [x] Workflow Operations PR #25 merged into `main`; latest PR-head validation #327 succeeded before merge.
-- [x] v0.7 Workflow Engine merged via PR #24; this is implementation integration, not a tagged release.
-- [ ] Office Experience V2 PR #27 remains draft; CI #314 passed 163 unit/integration tests, 2 smoke tests, build and native sandbox, but failed Prettier on six files. Later commits need fresh validation.
-- [ ] Documentation synchronization PR #28 requires final CI and review.
+- [x] v0.6 Agent Studio merged into main (not tagged).
+- [x] v0.7 Workflow Engine PR #24 and Workflow Operations PR #25 merged into main (not tagged).
+- [x] Office Experience V2 PR #27 merged into main.
+- [x] Documentation synchronization PR #28 merged into main.
+- [ ] Office Experience V3 PR #31 remains Draft; inspected CI run #363 failed Prettier. No merge/release claim.
+- [ ] Re-run complete validation on the eventual release candidate SHA.
 
-## Gate A — Office Experience V2
+## Gate A — Source, CI and UI
 
-- [ ] Integrate [PR #27](https://github.com/vlovers/ai-office/pull/27) against current `main`, resolving conflicts explicitly.
-- [ ] Run the repository's exact Prettier version with `npm run format:check`.
-- [ ] Run `npm run check`, `npm run test:sandbox`, and all relevant browser suites on the final commit.
-- [ ] Verify agent selection, occupied/idle seats, overflow roster, persisted history, responsive viewport, keyboard focus, reduced motion and error/empty states in a real browser.
-- [ ] Confirm no presentation control dispatches work or escalates permissions without a server-enforced approval.
+- [ ] Pin candidate commit SHA, Node/OS/Git/CLI/SDK versions and exact commands.
+- [ ] `npm ci && npm run format:check && npm run check` pass on candidate.
+- [ ] `npm run test:browser`, `npm run test:browser:write`, `npm run test:browser:studio` and `npm run test:browser:workflow` pass in supported environments.
+- [ ] `npm run test:sandbox` and `npm run test:workflow:native` pass on macOS.
+- [ ] Inspect actual desktop/mobile screenshots; test 200% text, keyboard focus, reduced motion, empty/offline/blocked/error states and multiple agent profiles.
+- [ ] Verify no UI interaction bypasses explicit server-side permissions or approval checkpoints.
+- [ ] Resolve V3 CSS/TSX formatting and browser failures, or defer V3 without claiming it shipped.
 
-## Gate B — Workflow and runtime
+## Gate B — Real Codex and safety
 
-- [ ] Exercise read-only review with the installed supported Codex CLI and a disposable registered repository.
-- [ ] Exercise approved isolated-write task and verify the primary checkout and common Git metadata are unchanged.
-- [ ] Exercise Coder → Reviewer → QA with explicit approval of baseline, evidence, reviewer input/result and QA command/result.
-- [ ] Verify failed/denied approval, stale revision, cancellation and backend restart fail closed without silent redispatch.
-- [ ] Inspect logs and browser payloads for leaked keys, credentials, private paths and unsafe HTML rendering.
-- [ ] Verify cleanup/lease behavior and record residual worktrees or manual recovery steps.
-- [ ] Do not assert Linux native sandbox support without a native success-path run on Linux.
+- [ ] Run a read-only task using supported installed Codex CLI and a disposable registered repository.
+- [ ] Explicitly authorize isolated write; verify primary checkout/common Git metadata stay unchanged.
+- [ ] Exercise persisted session resume and restart with compatible authentication/configuration.
+- [ ] Exercise revision-bound Request Changes, Keep/Reject and stale review rejection.
+- [ ] Exercise Coder → Reviewer → QA with baseline/evidence/input/result approvals.
+- [ ] Test denied/dismissed approval, cancellation, stale revision, interrupted worker, uncertain cleanup and recovery diagnostics.
+- [ ] Inspect logs, browser payloads and reports for known credential/private-path exposure; do not claim universal secret detection.
+- [ ] Record remaining worktrees, leases and any manual recovery actions.
+- [ ] Do not claim Linux native support without a real supported-host success-path test.
 
-## Gate C — First-run UX
+## Gate C — First-run operator journey
 
-- [ ] Confirm Node 24, Git and supported Codex CLI are detected or reported with actionable errors.
-- [ ] Confirm local login does not silently fall back to API-key billing.
-- [ ] Confirm users can register a trusted repository, create an agent profile, submit a read-only task and inspect the result without guessing the next step.
-- [ ] Confirm missing workspace roots, unsupported sandbox and unavailable CLI fail with safe explanations.
+- [ ] Detect Node 24, Git, supported Codex CLI and existing local login with actionable failures.
+- [ ] Ensure no silent API-key billing fallback.
+- [ ] Register trusted repository, create/select profile, create/start task and inspect streamed/final result.
+- [ ] Find task/session/review/QA and permission context without guessing UI navigation.
+- [ ] Explain blocked permissions, unavailable CLI, invalid roots and disconnected backend safely.
+- [ ] Review time-to-first-task, error recovery and usability on desktop/mobile.
 
-## Gate D — Release truth
+## Gate D — Delivery and release truth
 
-- [ ] Confirm actual tags/releases before choosing the next version; do not infer a release from `package.json`.
-- [ ] Align README, CHANGELOG, ROADMAP, architecture, validation, release notes and package version with that decision.
-- [ ] Capture final commit SHA, CI URLs, native test environment and known limitations.
-- [ ] Create tag/release only after Gates A–C pass and release approval is explicit.
+- [ ] Confirm actual GitHub tags/releases; select version only after acceptance.
+- [ ] Align `README.md`, `CHANGELOG.md`, `ROADMAP.md`, architecture, validation, screenshots and release notes with shipped behavior.
+- [ ] Record exact commit SHA, CI run URLs, local real-model evidence and limitations.
+- [ ] Obtain explicit operator approval for tag/release; do not auto-merge, push user changes or deploy.
+- [ ] Leave PR #31 Draft until its independent CI and visual review gates pass.
 
-## Explicitly deferred
+## Deferred beyond local MVP
 
-Multi-user hosting, automatic merges/push/deploy, unverified provider adapters, unbounded concurrency and claims of generalized filesystem secrecy are outside the current MVP.
+GitHub PR publishing, recurring schedules, dependency-aware autonomous delegation, multi-user hosting, unverified provider adapters, unbounded concurrency and automatic merge/deploy.
