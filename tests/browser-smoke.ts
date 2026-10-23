@@ -282,6 +282,9 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
+  // A full reload resets disclosure state; explicitly reopen before asserting details.
+  if (await page.getByRole('button', { name: 'Show details', exact: true }).isVisible())
+    await page.getByRole('button', { name: 'Show details', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText(
     'Agent A concurrent',
   );

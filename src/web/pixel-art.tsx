@@ -554,7 +554,9 @@ export function PixelOffice({
             <span className="office-v3-activity-kicker">Live floor</span>
             <strong>Agent presence</strong>
           </div>
-          <span>{agents.length} profiles · {queue.length} queued</span>
+          <span>
+            {agents.length} profiles · {queue.length} queued
+          </span>
         </div>
         <div className="office-v3-floor-filters" role="group" aria-label="Filter office agents">
           {(['all', 'active', 'queued'] as const).map((filter) => (
@@ -588,7 +590,9 @@ export function PixelOffice({
                 />
                 <span className="office-v3-agent-card-content">
                   <strong>{agent.name}</strong>
-                  <span>{agent.role ?? 'Agent'} · {agent.status.label}</span>
+                  <span>
+                    {agent.role ?? 'Agent'} · {agent.status.label}
+                  </span>
                   <small title={agent.taskTitle ?? pending[0]?.title ?? ''}>
                     {agent.taskTitle
                       ? `Working on: ${agent.taskTitle}`
@@ -755,11 +759,7 @@ export function PixelOffice({
           </p>
         )}
       </section>
-      <section
-        className="office-history"
-        aria-label="Recent agent tasks"
-        hidden={!showOperations}
-      >
+      <section className="office-history" aria-label="Recent agent tasks" hidden={!showOperations}>
         <div className="office-operations-heading">
           <strong>Recent task activity</strong>
           <span>Persisted task snapshots · latest first</span>
@@ -820,11 +820,7 @@ export function PixelOffice({
           </ol>
         )}
       </section>
-      <section
-        className="office-queue"
-        aria-label="Live task queue"
-        hidden={!showOperations}
-      >
+      <section className="office-queue" aria-label="Live task queue" hidden={!showOperations}>
         <div className="office-operations-heading">
           <strong>Task queue</strong>
           <span>{queue.length} waiting</span>

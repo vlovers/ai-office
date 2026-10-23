@@ -757,7 +757,13 @@ export async function createApp(manager: TaskManager) {
       'X-Content-Type-Options': 'nosniff',
     });
     const write = (event: AgentEvent) => {
-      if (event.taskId !== taskId || event.id <= cursor || response.destroyed) return;
+      if (
+        event.taskId !== taskId ||
+        event.id <= cursor ||
+        response.destroyed ||
+        response.writableEnded
+      )
+        return;
       cursor = event.id;
       if (response.writableLength > 1024 * 1024) {
         response.destroy();
@@ -771,9 +777,10 @@ export async function createApp(manager: TaskManager) {
     do {
       batch = manager.store.events(taskId, cursor);
       batch.forEach(write);
-    } while (batch.length === 500 && !response.destroyed);
+    } while (batch.length === 500 && !response.destroyed && !response.writableEnded);
     response.write(': connected\n\n');
     const heartbeat = setInterval(() => {
+      if (response.destroyed || response.writableEnded) return;
       if (!response.write(': heartbeat\n\n')) response.destroy();
     }, 15_000);
     response.on('close', () => {
