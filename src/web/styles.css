@@ -2698,7 +2698,11 @@ select {
   background: #30473f;
   color: #eef7f0;
 }
-.office-v3-operations-detail[hidden] {
+.isometric-office .office-workflow[hidden],
+.isometric-office .office-inspector[hidden],
+.isometric-office .office-history[hidden],
+.isometric-office .office-queue[hidden],
+.isometric-office .office-operations[hidden] {
   display: none !important;
 }
 @media (max-width: 600px) {
