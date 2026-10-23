@@ -179,7 +179,9 @@ function App() {
   const officeAgents =
     dashboard?.agents.filter(
       (slot) =>
-        !dashboard.profiles?.find((profile) => profile.id === slot.id)?.archived || slot.taskId,
+        !dashboard.profiles?.find((profile) => profile.id === slot.id)?.archived ||
+        slot.taskId ||
+        dashboard.tasks.some((task) => task.id === selected && task.agentId === slot.id),
     ) ?? [];
   const assignable =
     dashboard?.agents.filter(
@@ -188,7 +190,7 @@ function App() {
   useEffect(() => {
     if (dashboard && !officeAgents.some((slot) => slot.id === selectedAgent) && officeAgents[0])
       setSelectedAgent(officeAgents[0].id);
-  }, [dashboard, selectedAgent]);
+  }, [dashboard, selectedAgent, selected]);
   const canAssign = assignable.some((slot) => slot.id === selectedAgent);
   useEffect(() => {
     if (selectedProfile?.maximumMode !== 'write') setExecutionMode('read-only');
@@ -442,7 +444,16 @@ function App() {
               agents={officeAgents.map((slot) => ({
                 id: slot.id,
                 name: slot.name,
-                role: dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                role: [
+                  dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                  dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived
+                    ? 'archived'
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+                assignable: !dashboard?.profiles?.find((profile) => profile.id === slot.id)
+                  ?.archived,
                 taskId: workstationTask(dashboard, selected, slot.id)?.id,
                 taskTitle: workstationTask(dashboard, selected, slot.id)?.title,
                 taskState: workstationTask(dashboard, selected, slot.id)?.state,

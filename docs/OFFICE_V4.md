@@ -34,7 +34,7 @@ icon and compatibility exports; `office-art.tsx`, `office-scene.tsx`, `office.cs
 - Four profile desks, distinct from the unchanged two-worker execution capacity.
   Profile order remains stable; selecting an overflow profile reveals it while
   retaining a displaced active worker where possible. The roster includes every
-  visible profile. Archived profiles remain visible while they have an active task.
+  visible profile. Archived profiles remain visible while they have an active task or are selected for saved-task inspection; new assignment remains disabled.
 - Stable character palettes and accessories derived from profile IDs, shared
   between the room and roster. Selection also uses a stroke, focus outline,
   pressed semantics, text, and matching portrait, rather than color alone.
@@ -123,6 +123,21 @@ Set `AI_OFFICE_BROWSER_ARTIFACTS` to a writable directory for scene and workflow
 screenshots. CI runs the office suite and uploads `office-v4-browser` artifacts;
 its native job retains `workflow-browser` evidence. The [selected screenshot
 index](design/screenshots/office-v4/README.md) records the reviewed local captures.
+
+## Local verification results (2026-10-23)
+
+- `npm run check`: 176 unit/integration tests across 30 files, three HTTP/SSE smoke
+  tests, TypeScript and production build passed. The complete unit/integration run
+  took 368.68 seconds. An earlier overlapping run hit four wall-clock timeouts;
+  the sequential rerun passed without widening limits or skipping tests.
+- `npm run format:check` and `git diff --check` passed.
+- All five browser suites passed. The final Agent Studio regression additionally
+  preserves selection of an archived profile's saved task and keeps assignment
+  disabled for that profile.
+- `npm run test:sandbox` passed actual native filesystem-policy probes without
+  inference. Workflow browser execution also passed its real native QA stage.
+- Screenshots were inspected at desktop/mobile sizes; see the visual findings in
+  the screenshot index. Exact-head GitHub check status remains visible on PR #31.
 
 ## Known limits and remaining MVP work
 

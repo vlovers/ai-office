@@ -17,6 +17,7 @@ export interface OfficeAgent {
   access?: string;
   active?: boolean;
   checkpoint?: string;
+  assignable?: boolean;
 }
 export interface OfficeQueueItem {
   taskId: string;
@@ -288,7 +289,7 @@ export function PixelOffice({
                 {onAssign && (
                   <button
                     className="secondary"
-                    disabled={transport !== 'connected'}
+                    disabled={transport !== 'connected' || selected.assignable === false}
                     onClick={onAssign}
                   >
                     Assign a task
