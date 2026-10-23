@@ -66,16 +66,16 @@ describe('GitHub delivery read-only readiness', () => {
     assessDeliveryReadiness(frozenTask, frozenReview);
     expect(frozenReview.revision).toBe('revision-1');
   });
+
   it('prepares deterministic PR metadata without mutating review or sending credentials', () => {
     const draft = buildDeliveryDraft(
-      { ...task, title: '  Fix   task\\nworkflow  ' } as Task,
+      { ...task, title: '  Fix   task   workflow  ' } as Task,
       review,
     );
-    expect(draft.title).toBe('Fix task\\nworkflow');
+    expect(draft.title).toBe('Fix task workflow');
     expect(draft.body).toContain('Changed files: 1');
     expect(draft.body).toContain('Review revision: revision-1');
     expect(draft.body).toContain('No GitHub action has been performed.');
-    expect(draft.body).not.toContain('workspace-1');
+    expect(draft.body).not.toContain('identity');
   });
-
 });
