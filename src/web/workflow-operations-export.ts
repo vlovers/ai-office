@@ -15,15 +15,12 @@ export function exportWorkflowOperationsCsv(workflows: readonly ExportWorkflow[]
       workflowTriageKind(workflow),
       String(workflow.version),
       workflow.updatedAt ?? '',
-    ].map(csvCell).join(','),
+    ]
+      .map(csvCell)
+      .join(','),
   );
-  const header = [
-    'Workflow ID',
-    'Repository ID',
-    'State',
-    'Triage',
-    'Version',
-    'Updated at',
-  ].map(csvCell).join(',');
+  const header = ['Workflow ID', 'Repository ID', 'State', 'Triage', 'Version', 'Updated at']
+    .map(csvCell)
+    .join(',');
   return [header, ...rows].join('\r\n') + '\r\n';
 }
