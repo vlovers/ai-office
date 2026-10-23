@@ -562,16 +562,17 @@ export function PixelOffice({
                 .sort((a, b) => a.order - b.order)
                 .slice(0, 4)
                 .map((entry) => (
-                <li key={entry.taskId}>
-                  <button type="button" onClick={() => onSelect(entry.agentId)}>
-                    <span>{entry.title}</span>
-                    <small>
-                      {agents.find((agent) => agent.id === entry.agentId)?.name ?? 'Unknown agent'}
-                      {entry.waitingReason ? ` · ${entry.waitingReason}` : ''}
-                    </small>
-                  </button>
-                </li>
-              ))}
+                  <li key={entry.taskId}>
+                    <button type="button" onClick={() => onSelect(entry.agentId)}>
+                      <span>{entry.title}</span>
+                      <small>
+                        {agents.find((agent) => agent.id === entry.agentId)?.name ??
+                          'Unknown agent'}
+                        {entry.waitingReason ? ` · ${entry.waitingReason}` : ''}
+                      </small>
+                    </button>
+                  </li>
+                ))}
             </ol>
             {queue.length > 4 && (
               <span className="office-v3-queue-more">+{queue.length - 4} more queued</span>
