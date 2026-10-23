@@ -14,6 +14,8 @@ The v0.6.0 Agent Studio implementation is integrated into main, with [validation
 
 Before tagging another release, use the [MVP stabilization acceptance checklist](docs/MVP_STABILIZATION_CHECKLIST.md) to distinguish automated checks, real Codex execution and release approval.
 
+**Current repository status (2026-10-23):** Office Experience V2 (PR #27) and documentation PR #28 are merged into `main`. Office V3 is still [Draft PR #31](https://github.com/vlovers/ai-office/pull/31), **not released or merged**; its last inspected CI run failed formatting. For verified capabilities, gaps, priorities and evidence limits see the [repository audit](docs/REPOSITORY_AUDIT_2026_10_23.md) and [updated roadmap](ROADMAP.md).
+
 ## Quick start
 
 ```sh
@@ -160,9 +162,9 @@ See [Phase 1.2 verification and limitations](docs/PHASE_1_2_DASHBOARD.md), [arch
 
 Two manually assigned Codex agents are supported. Autonomous planning, automatic commits, pushes and merges are not implemented. Editing is restricted to explicitly authorized isolated-write tasks and review continuations.
 
-## PHOSPHOR OS interface
+## Office interface (V2 integrated; V3 in draft)
 
-The PHOSPHOR OS dashboard now has two real pixel workstations, independent event feeds, an explicit agent selector, a submitted queue and Focus Mode, keyboard navigation and optional CRT effects (off by default). The existing read-only Codex workflow is preserved. See the [v0.3 runtime and verification notes](docs/V0_3_MILESTONE_A.md) and [design and verification notes](docs/design/PHOSPHOR_OS.md) for layout, accessibility, screenshot commands and limitations.
+The integrated Office V2 dashboard has two interactive SVG workstations, independent event feeds, an explicit agent selector, a submitted queue and Focus Mode, keyboard navigation and optional CRT effects (off by default). The existing read-only Codex workflow is preserved. See the [v0.3 runtime and verification notes](docs/V0_3_MILESTONE_A.md) and [design and verification notes](docs/design/PHOSPHOR_OS.md) for layout, accessibility, screenshot commands and limitations.
 
 ## Queue, restart and allowance
 
