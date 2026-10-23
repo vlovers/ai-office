@@ -2,6 +2,13 @@
 
 This checklist describes **required evidence**, not a claim that the tests have passed. Keep release claims separate from merged implementation.
 
+## Current baseline (2026-10-23)
+
+- [x] Workflow Operations PR #25 merged into `main`; latest PR-head validation #327 succeeded before merge.
+- [x] v0.7 Workflow Engine merged via PR #24; this is implementation integration, not a tagged release.
+- [ ] Office Experience V2 PR #27 remains draft; CI #314 passed 163 unit/integration tests, 2 smoke tests, build and native sandbox, but failed Prettier on six files. Later commits need fresh validation.
+- [ ] Documentation synchronization PR #28 requires final CI and review.
+
 ## Gate A — Office Experience V2
 
 - [ ] Integrate [PR #27](https://github.com/vlovers/ai-office/pull/27) against current `main`, resolving conflicts explicitly.
