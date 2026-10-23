@@ -8,7 +8,13 @@ export interface WorkflowOperationsItem {
 }
 
 export type WorkflowOperationsSort = 'recent' | 'oldest' | 'attention';
-export type WorkflowTriageKind = 'failed' | 'approval' | 'blocked' | 'running' | 'finished' | 'other';
+export type WorkflowTriageKind =
+  | 'failed'
+  | 'approval'
+  | 'blocked'
+  | 'running'
+  | 'finished'
+  | 'other';
 
 export interface WorkflowTriageSummary {
   total: number;
@@ -39,7 +45,9 @@ export function workflowNeedsAttention(item: WorkflowOperationsItem): boolean {
   return kind === 'failed' || kind === 'approval' || kind === 'blocked';
 }
 
-export function summarizeWorkflowOperations(items: readonly WorkflowOperationsItem[]): WorkflowTriageSummary {
+export function summarizeWorkflowOperations(
+  items: readonly WorkflowOperationsItem[],
+): WorkflowTriageSummary {
   const summary: WorkflowTriageSummary = {
     total: items.length,
     failed: 0,
