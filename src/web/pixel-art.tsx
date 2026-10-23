@@ -264,6 +264,31 @@ export function PixelOffice({
           {activeCount} running · {queue.length} queued · {errorCount} errors
         </span>
       </div>
+      <div className="office-v3-activity" aria-label="Selected agent live status">
+        <span className={`office-v3-presence state-${selectedProfile?.status.state ?? 'offline'}`} aria-hidden="true" />
+        <div className="office-v3-activity-copy">
+          <span className="office-v3-activity-kicker">Selected workstation</span>
+          <strong>{selectedProfile?.name ?? 'Select an agent'}</strong>
+          <span>
+            {selectedProfile
+              ? `${selectedProfile.status.label} · ${selectedProfile.role ?? 'Agent'}`
+              : 'No agent selected'}
+          </span>
+          {selectedProfile?.taskTitle && (
+            <span className="office-v3-activity-task" title={selectedProfile.taskTitle}>
+              Current task: {selectedProfile.taskTitle}
+            </span>
+          )}
+          {!selectedProfile?.taskTitle && nextQueued && (
+            <span className="office-v3-activity-task" title={nextQueued.title}>
+              Next queued: {nextQueued.title}
+            </span>
+          )}
+        </div>
+        <span className="office-v3-activity-access">
+          {selectedProfile?.access ?? 'No access selected'}
+        </span>
+      </div>
       {offscreenAgents.length > 0 && (
         <div className="office-operations-help" role="status">
           {offscreenAgents.length} profiles outside the two-desk view
