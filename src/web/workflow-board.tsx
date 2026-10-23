@@ -297,8 +297,8 @@ export function WorkflowBoard({ taskId }: { taskId?: string }) {
           </p>
           <p aria-label="Workflow attention summary">
             {triage.attention} need attention · {triage.failed} failed/interrupted ·{' '}
-            {triage.approval} awaiting approval · {triage.blocked} blocked ·{' '}
-            {triage.running} running · {triage.finished} finished
+            {triage.approval} awaiting approval · {triage.blocked} blocked · {triage.running}{' '}
+            running · {triage.finished} finished
           </p>
           <label>
             Find workflow by ID or repository
