@@ -372,6 +372,54 @@ export function PixelOffice({
             AI OFFICE
           </text>
         </g>
+        <g aria-hidden="true" className="office-v3-architecture" pointerEvents="none">
+          {/* Layered floor materials and a central communal area, not extra workstations. */}
+          <path
+            d={narrow
+              ? 'M87 294L210 248L334 294L210 342Z'
+              : 'M266 286L420 230L574 286L420 344Z'}
+            fill="#aa8466"
+            opacity=".34"
+          />
+          <path
+            d={narrow
+              ? 'M104 295L210 257L316 295L210 334Z'
+              : 'M285 287L420 238L555 287L420 335Z'}
+            fill="#d4b38b"
+            opacity=".2"
+            stroke="#cba77b"
+            strokeWidth="2"
+          />
+          {/* Left wall: noticeboard and pinned sketches. */}
+          <g transform={narrow ? 'translate(37 126) scale(.55)' : 'translate(64 150) scale(.9)'}>
+            <path d="M0 0L86 -25V44L0 69Z" fill="#9b6e52" stroke="#d7b087" strokeWidth="4" />
+            <path d="M12 13L38 5V33L12 41Z" fill="#f1d7b4" />
+            <path d="M47 1L72 -6V20L47 27Z" fill="#c9dfd8" />
+            <path d="M46 36L73 28" stroke="#e3c5a2" strokeWidth="4" />
+            <circle cx="24" cy="16" r="3" fill="#cc7b6b" />
+            <circle cx="59" cy="3" r="3" fill="#cc7b6b" />
+          </g>
+          {/* Right wall: books and an ambient lamp. */}
+          <g transform={narrow ? 'translate(346 129) scale(.48)' : 'translate(737 146) scale(.8)'}>
+            <path d="M-76 -13L0 12V22L-76 -3Z" fill="#c79b74" />
+            <path d="M-72 -34L-60 -30V-10L-72 -14Z" fill="#e4b77b" />
+            <path d="M-56 -42L-43 -38V-4L-56 -8Z" fill="#87b8a4" />
+            <path d="M-39 -31L-24 -27V1L-39 -3Z" fill="#b78c9b" />
+            <path d="M-19 -36L-5 -32V8L-19 4Z" fill="#e0c5a0" />
+            <path d="M-77 -47L-40 -69L-4 -46" stroke="#eacb9e" strokeWidth="5" fill="none" />
+            <circle cx="-40" cy="-48" r="10" fill="#f4d29c" opacity=".9" />
+          </g>
+          {/* Floor edge accents make the room legible as a constructed space. */}
+          <path
+            d={narrow
+              ? 'M12 280L210 360L408 280'
+              : 'M40 270L420 390L800 270'}
+            stroke="#c9aa81"
+            strokeWidth="5"
+            strokeOpacity=".75"
+            fill="none"
+          />
+        </g>
         <RoomDetails portrait={narrow} />
         {OFFICE_LAYOUT.map((placement, index) => {
           const agent = seatedAgents[index];
