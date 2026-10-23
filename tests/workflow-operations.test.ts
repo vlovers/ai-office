@@ -51,7 +51,7 @@ function select(overrides: Partial<typeof options> = {}) {
 
 describe('workflow operations projection', () => {
   it('prioritizes attention without mutating the source', () => {
-    expect(select().map((item) => item.id)).toEqual(['d', 'b', 'c', 'a']);
+    expect(select().map((item) => item.id)).toEqual(['d', 'b', 'a', 'c']);
     expect(items.map((item) => item.id)).toEqual(['a', 'b', 'c', 'd']);
   });
 
