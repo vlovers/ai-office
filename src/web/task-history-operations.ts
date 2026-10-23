@@ -15,7 +15,9 @@ export function taskNeedsAttention(task: Pick<Task, 'state'>): boolean {
   return task.state === 'failed' || task.state === 'interrupted';
 }
 
-export function taskHistoryGroup(task: Pick<Task, 'state'>): Exclude<TaskHistoryStatus, 'all'> | 'other' {
+export function taskHistoryGroup(
+  task: Pick<Task, 'state'>,
+): Exclude<TaskHistoryStatus, 'all'> | 'other' {
   if (taskNeedsAttention(task)) return 'attention';
   if (task.state === 'running' || task.state === 'stopping') return 'active';
   if (task.state === 'queued') return 'queued';
@@ -24,7 +26,14 @@ export function taskHistoryGroup(task: Pick<Task, 'state'>): Exclude<TaskHistory
 }
 
 export function summarizeTaskHistory(tasks: readonly Pick<Task, 'state'>[]) {
-  const summary = { total: tasks.length, active: 0, queued: 0, attention: 0, completed: 0, other: 0 };
+  const summary = {
+    total: tasks.length,
+    active: 0,
+    queued: 0,
+    attention: 0,
+    completed: 0,
+    other: 0,
+  };
   for (const task of tasks) summary[taskHistoryGroup(task)]++;
   return summary;
 }
@@ -38,7 +47,9 @@ const rank: Record<ReturnType<typeof taskHistoryGroup>, number> = {
 };
 
 /** Deterministic, read-only projection of persisted tasks. No scheduling, approvals or mutations. */
-export function selectTaskHistory<T extends Pick<Task, 'id' | 'title' | 'state' | 'agentId' | 'repositoryId' | 'updatedAt'>>(
+export function selectTaskHistory<
+  T extends Pick<Task, 'id' | 'title' | 'state' | 'agentId' | 'repositoryId' | 'updatedAt'>,
+>(
   tasks: readonly T[],
   options: TaskHistoryOptions,
 ): T[] {
