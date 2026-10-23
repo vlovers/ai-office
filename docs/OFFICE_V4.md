@@ -2,8 +2,8 @@
 
 V4 replaces the layered V1/V2/V3 office implementation with one original isometric
 studio, a complete profile roster, a contextual task inspector, a submitted queue,
-and collapsed recent activity. This is an unreleased change in PR #31, not a new
-product version, release, or deployment.
+and collapsed recent activity. This implementation was integrated into `main` via PR #36 (superseding draft PR #31); it is not a new
+product version, tagged release, or deployment.
 
 ## Verified starting point
 

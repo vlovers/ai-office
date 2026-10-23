@@ -167,9 +167,9 @@ try {
   await board.getByLabel('Find workflow by ID or repository').fill('');
   await board.getByLabel('Sort workflows').selectOption('oldest');
   await board.getByLabel('Sort workflows').selectOption('attention');
-  await board.getByLabel('Workflow operations overview').getByRole('checkbox').check();
+  await board.getByRole('checkbox', { name: /Needs attention/ }).check();
   await expect(operationsQueue).toContainText(otherId.slice(0, 8));
-  await board.getByLabel('Workflow operations overview').getByRole('checkbox').uncheck();
+  await board.getByRole('checkbox', { name: /Needs attention/ }).uncheck();
   await board.getByRole('button', { name: 'Pause live updates' }).click();
   await expect(board.getByRole('button', { name: 'Resume live updates' })).toHaveAttribute(
     'aria-pressed',

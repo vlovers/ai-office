@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
+import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
 import {
   selectWorkflowOperations,
   summarizeWorkflowOperations,
@@ -87,6 +88,7 @@ export function WorkflowBoard({
   const [stateFilter, setStateFilter] = useState('all');
   const [workflowQuery, setWorkflowQuery] = useState('');
   const [triageOnly, setTriageOnly] = useState(false);
+  const [selectedOnly, setSelectedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
@@ -180,12 +182,16 @@ export function WorkflowBoard({
   };
   const needsAttention = workflowNeedsAttention;
   const triage = summarizeWorkflowOperations(items);
-  const visibleWorkflows = selectWorkflowOperations(items, {
+  const filteredWorkflows = selectWorkflowOperations(items, {
     query: workflowQuery,
     state: stateFilter,
     triageOnly,
     sort: sortBy,
   });
+  const visibleWorkflows = selectedOnly
+    ? filteredWorkflows.filter((item) => item.id === selected)
+    : filteredWorkflows;
+  const workflowChoices = filteredWorkflows;
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
@@ -352,7 +358,50 @@ export function WorkflowBoard({
             />{' '}
             Needs attention (blocked, interrupted, failed or awaiting approval)
           </label>
-          <p>{visibleWorkflows.length} matching workflows</p>
+          <label>
+            <input
+              type="checkbox"
+              checked={selectedOnly}
+              onChange={(event) => setSelectedOnly(event.target.checked)}
+            />{' '}
+            Show selected workflow only
+          </label>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              setWorkflowQuery('');
+              setStateFilter('all');
+              setTriageOnly(false);
+              setSelectedOnly(false);
+              setSortBy('attention');
+            }}
+          >
+            Reset workflow filters
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            disabled={visibleWorkflows.length === 0}
+            title="Export filtered workflow metadata only. Reports, prompts and commands are excluded."
+            onClick={() => {
+              const csv = exportWorkflowOperationsCsv(visibleWorkflows);
+              const url = URL.createObjectURL(
+                new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
+              );
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'ai-office-workflow-operations.csv';
+              link.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            Export workflow CSV ({visibleWorkflows.length})
+          </button>
+          <p role="status">
+            {visibleWorkflows.length} displayed · {filteredWorkflows.length} matching filters
+            {selectedOnly ? ' · focused on selected workflow' : ''}
+          </p>
           <p role="note">
             Attention is derived from persisted stage states, not from a live process health probe.
             An old update does not prove that a workflow is stuck. Inspect its timeline and
@@ -423,12 +472,12 @@ export function WorkflowBoard({
                 setSelected(event.target.value);
               }}
             >
-              {selected && !visibleWorkflows.some((item) => item.id === selected) && (
+              {selected && !workflowChoices.some((item) => item.id === selected) && (
                 <option value={selected} disabled>
                   Selected workflow (outside current filters)
                 </option>
               )}
-              {visibleWorkflows.map((item) => (
+              {workflowChoices.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id.slice(0, 8)} · {item.state} · v{item.version}
                 </option>
