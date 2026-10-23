@@ -38,6 +38,36 @@ AI Office supports read-only reviews and write-enabled tasks in dedicated Git wo
 
 Read-only execution retains its original restrictive profile. Isolated coding grants writes only inside its dedicated worktree; primary checkout and Git metadata remain denied. The SDK has no interactive approval callback: actions requiring escalation stay blocked. Host verification is disabled by default. Enabling it requires AI_OFFICE_ALLOW_HOST_VERIFICATION=1 and separate confirmation of full host permissions; inspect AI-edited scripts before running them. See the [security model](docs/SECURITY.md), [security audit](docs/V0_4_SECURITY_AUDIT.md), and [workspace recovery](docs/WORKSPACE_RECOVERY.md).
 
+### Recovering a stale local server lease
+
+If `npm start` exits with `ResourceLockedError`, do not delete the
+`.ai-office` directory or its SQLite files. AI Office deliberately refuses to
+steal existing leases after a crash.
+
+From the repository root, run:
+
+```sh
+node scripts/diagnose-lock.mjs
+lsof -nP -iTCP:4310 -sTCP:LISTEN
+```
+
+The diagnostic reads `.ai-office/server.lock/owner.json` and checks whether
+its recorded PID exists. It does not change any files. A missing PID alone
+does **not** prove no other AI Office instance is running. Confirm there is
+no server process or active task using the workspace, and inspect any worker
+processes before recovery. If the old owner has exited and no instance is
+using the lease, archive only the lease directory:
+
+```sh
+mv .ai-office/server.lock ".ai-office/server.lock.stale.$(date +%Y%m%d-%H%M%S)"
+npm start
+```
+
+Never rename a lease held by a live server. Leave `office.sqlite`,
+`office.sqlite-wal`, `office.sqlite-shm`, `workers`, and `codex-home`
+untouched. Production UI listens at `http://127.0.0.1:4310`; the Vite
+development server may use port 5173 and is not started by `npm start`.
+
 ## Requirements
 
 - Node.js **24.x**, npm, and Git at `/usr/bin/git`.

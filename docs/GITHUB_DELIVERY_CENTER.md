@@ -41,3 +41,12 @@ Status: design and acceptance criteria only. **No GitHub publishing API or UI is
 3. Explicit draft PR creation, duplicate reconciliation, pinned CI status and accessible UI.
 
 **Out of scope:** autonomous pushes, automatic merging, unattended releases, multi-user permissions and provider-neutral hosting.
+
+## Implemented read-only preview (unreleased)
+
+The delivery branch adds Code Review Center local readiness gates, a copyable PR
+metadata draft, credential-free GitHub remote syntax validation and
+`POST /api/tasks/:id/delivery/preflight`. This server endpoint uses a fresh
+workspace review and reports `blocked` or `manual-review`; neither authorizes
+commit, push, PR creation or merge. Repository ownership, remote permission and
+exact Git state still require the full server-side validation contract above.
