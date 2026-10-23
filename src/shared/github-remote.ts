@@ -44,7 +44,14 @@ export function parseGitHubRemote(input: string): GitHubRemote | null {
     repository = parts[2] ?? '';
   }
   repository = repository.replace(/\.git$/, '');
-  if (!slug.test(owner) || !repoSlug.test(repository) || owner === '.' || owner === '..' || repository === '.' || repository === '..') {
+  if (
+    !slug.test(owner) ||
+    !repoSlug.test(repository) ||
+    owner === '.' ||
+    owner === '..' ||
+    repository === '.' ||
+    repository === '..'
+  ) {
     return null;
   }
   return {
