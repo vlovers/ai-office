@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { AgentId } from '../shared/types.js';
 import { OFFICE_LAYOUT, officeGeometry, selectOfficeSeats } from './office-layout.js';
+import { selectOfficeHistory } from './office-history.js';
+import type { OfficeHistoryFilter } from './office-history.js';
 import type { SceneStatus } from './scene-state.js';
 import type { SceneState } from './scene-state.js';
 
@@ -128,6 +130,49 @@ function IsometricDesk({ state }: { state: SceneState }) {
   );
 }
 
+/** Static room dressing. Decorative only: no invented agent activity or telemetry. */
+function RoomDetails({ portrait }: { portrait: boolean }) {
+  return (
+    <g aria-hidden="true" className="office-room-details" pointerEvents="none">
+      <g transform={portrait ? 'translate(76 183) scale(.64)' : 'translate(102 224) scale(.9)'}>
+        <path d="M-24 1L0 -12L24 1L0 15Z" fill="#79523b" stroke="#a67b50" strokeWidth="2" />
+        <path d="M-24 1V17L0 31V15Z" fill="#4a332a" />
+        <path d="M0 15L24 1V17L0 31Z" fill="#654633" />
+        <path
+          d="M-16 -3V-51M-16 -43L-29 -54M-16 -35L0 -49"
+          stroke="#618b60"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        <path d="M-16 -49L-39 -62L-35 -33Z" fill="#438064" />
+        <path d="M-15 -39L9 -64L9 -33Z" fill="#68a47b" />
+        <path d="M-20 -29L-43 -37L-27 -15Z" fill="#397557" />
+      </g>
+      <g transform={portrait ? 'translate(345 260) scale(.68)' : 'translate(730 233) scale(.9)'}>
+        <path d="M-42 8L0 -14L42 8L0 30Z" fill="#7b5944" stroke="#b28a60" strokeWidth="3" />
+        <path d="M-42 8V48L0 70V30Z" fill="#4c372d" />
+        <path d="M0 30L42 8V48L0 70Z" fill="#664735" />
+        <path d="M-27 4L0 -10L27 4L0 18Z" fill="#253e39" />
+        <path d="M-21 2L0 -8L21 2L0 12Z" fill="#c7e6c9" />
+        <path d="M-14 2L0 -5L14 2L0 9Z" fill="#416d63" />
+        <path d="M-22 26L-5 34M-22 36L-5 44M7 38L25 28" stroke="#a28b67" strokeWidth="3" />
+      </g>
+      <g transform={portrait ? 'translate(210 110) scale(.75)' : 'translate(420 89)'}>
+        <path d="M-45 -25H45V25H-45Z" fill="#0b2524" stroke="#6da58c" strokeWidth="3" />
+        <path d="M-31 8L-12 -3L3 7L28 -10" fill="none" stroke="#b5e2bd" strokeWidth="3" />
+        <circle cx="-31" cy="8" r="4" fill="#9addae" />
+        <circle cx="28" cy="-10" r="4" fill="#9addae" />
+        <path d="M-32 16H29" stroke="#3b6658" strokeWidth="2" />
+      </g>
+      <g transform={portrait ? 'translate(206 485)' : 'translate(422 332)'}>
+        <path d="M-34 0L0 -17L34 0L0 17Z" fill="#466a56" opacity=".8" />
+        <path d="M-17 -2L0 -11L17 -2L0 7Z" fill="#8ba57c" />
+        <path d="M-13 -3L0 -9L13 -3L0 4Z" fill="#2e4c41" />
+      </g>
+    </g>
+  );
+}
+
 /** One room; scene placement and visual identity are independent of runtime state. */
 export function PixelOffice({
   agents,
@@ -145,6 +190,8 @@ export function PixelOffice({
   const prefix = useId();
   const container = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<OfficeHistoryFilter>('all');
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setNarrow(entry.contentRect.width < 560);
@@ -153,8 +200,8 @@ export function PixelOffice({
     return () => observer.disconnect();
   }, []);
   const geometry = officeGeometry(narrow);
-  const activeCount = agents.filter((agent) =>
-    ['thinking', 'working', 'stopping'].includes(agent.status.state),
+  const activeCount = agents.filter(
+    (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
   ).length;
   const errorCount = agents.filter((agent) => agent.status.state === 'error').length;
   const selectedProfile = agents.find((agent) => agent.id === selectedAgent);
@@ -170,20 +217,50 @@ export function PixelOffice({
     'stopped',
     'interrupted',
   ] as const;
-  // Keep the selected profile visible, then fill remaining seats with running agents.
+  // Keep stable physical seats; reveal the selected profile if it was offscreen.
   // The roster below remains the complete, untruncated list.
   const seatedAgents = selectOfficeSeats(agents, selectedAgent, OFFICE_LAYOUT.length);
+  const seatedIds = new Set(seatedAgents.map((agent) => agent.id));
+  const offscreenAgents = agents.filter((agent) => !seatedIds.has(agent.id));
+  const offscreenActive = offscreenAgents.filter(
+    (agent) => agent.active || ['thinking', 'working', 'stopping'].includes(agent.status.state),
+  );
+  const nextQueued = selectedQueue[0];
+  const filteredHistory = selectOfficeHistory(
+    recentTasks,
+    selectedAgent,
+    historyFilter,
+    recentTasks.length,
+  );
+  const visibleHistory = filteredHistory.slice(0, showAllTasks ? 24 : 8);
+  const workstationSummary = seatedAgents
+    .map((agent) => `${agent.name}: ${agent.status.label}`)
+    .join('; ');
   return (
     <div
       ref={container}
       className="shared-office isometric-office"
       data-layout={narrow ? 'portrait' : 'landscape'}
     >
+      <div className="office-operations-heading" aria-label="Office presence summary">
+        <strong>Live office · {agents.length} profiles</strong>
+        <span aria-live="polite">
+          {activeCount} running · {queue.length} queued · {errorCount} errors
+        </span>
+      </div>
+      {offscreenAgents.length > 0 && (
+        <div className="office-operations-help" role="status">
+          {offscreenAgents.length} profiles outside the two-desk view
+          {offscreenActive.length > 0 ? ` · ${offscreenActive.length} active` : ''}. Select any
+          profile in the roster below to bring it into view.
+        </div>
+      )}
       <svg
         className="pixel-office"
+        data-visible-seats={seatedAgents.length}
         viewBox={`0 0 ${geometry.width} ${geometry.height}`}
         role="group"
-        aria-label="Interactive isometric office, showing real agent status"
+        aria-label={`Interactive isometric office. ${workstationSummary || 'No occupied desks'}`}
       >
         <defs>
           <linearGradient id={`${prefix}-wall`} x2="0" y2="1">
@@ -254,6 +331,7 @@ export function PixelOffice({
             AI OFFICE
           </text>
         </g>
+        <RoomDetails portrait={narrow} />
         {OFFICE_LAYOUT.map((placement, index) => {
           const agent = seatedAgents[index];
           if (!agent) return null;
@@ -412,6 +490,12 @@ export function PixelOffice({
                 </ol>
               )}
               <p>{selectedQueue.length} queued for this agent</p>
+              {nextQueued && (
+                <p>
+                  Next submitted task: {nextQueued.title}
+                  {nextQueued.waitingReason ? ` · ${nextQueued.waitingReason}` : ''}
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -425,34 +509,59 @@ export function PixelOffice({
           <strong>Recent task activity</strong>
           <span>Persisted task snapshots · latest first</span>
         </div>
-        {recentTasks.length === 0 ? (
-          <p className="office-operations-help">No recorded tasks.</p>
+        <div className="office-history-filters" role="group" aria-label="Filter task history">
+          {(['all', 'selected', 'failures'] as const).map((filter) => (
+            <button
+              type="button"
+              key={filter}
+              aria-pressed={historyFilter === filter}
+              onClick={() => setHistoryFilter(filter)}
+            >
+              {filter === 'all'
+                ? 'All tasks'
+                : filter === 'selected'
+                  ? 'Selected agent'
+                  : 'Failures'}
+            </button>
+          ))}
+        </div>
+        {filteredHistory.length > 8 && (
+          <button
+            type="button"
+            className="office-history-toggle"
+            aria-expanded={showAllTasks}
+            onClick={() => setShowAllTasks((value) => !value)}
+          >
+            {showAllTasks ? 'Show recent 8' : `Show up to 24 · ${filteredHistory.length} available`}
+          </button>
+        )}
+        {filteredHistory.length === 0 ? (
+          <p className="office-operations-help">
+            {recentTasks.length === 0 ? 'No recorded tasks.' : 'No tasks match this filter.'}
+          </p>
         ) : (
           <ol className="office-history-items">
-            {[...recentTasks]
-              .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-              .slice(0, 8)
-              .map((task) => (
-                <li key={task.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(task.agentId)}
-                    aria-pressed={selectedAgent === task.agentId}
-                    title={`Inspect agent for ${task.title}`}
-                  >
-                    <span className={`office-history-state state-${task.state}`}>{task.state}</span>
-                    <span className="office-queue-details">
-                      <strong>{task.title}</strong>
-                      <small>
-                        {agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}
-                      </small>
-                    </span>
-                    <time dateTime={task.updatedAt}>
-                      {task.updatedAt.slice(0, 16).replace('T', ' ')}
-                    </time>
-                  </button>
-                </li>
-              ))}
+            {visibleHistory.map((task) => (
+              <li key={task.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(task.agentId)}
+                  aria-pressed={selectedAgent === task.agentId}
+                  title={`Inspect agent for ${task.title}`}
+                >
+                  <span className={`office-history-state state-${task.state}`}>{task.state}</span>
+                  <span className="office-queue-details">
+                    <strong>{task.title}</strong>
+                    <small>
+                      {agents.find((agent) => agent.id === task.agentId)?.name ?? 'Unknown agent'}
+                    </small>
+                  </span>
+                  <time dateTime={task.updatedAt}>
+                    {task.updatedAt.slice(0, 16).replace('T', ' ')}
+                  </time>
+                </button>
+              </li>
+            ))}
           </ol>
         )}
       </section>

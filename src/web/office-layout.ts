@@ -27,8 +27,8 @@ export function officeGeometry(portrait: boolean) {
   return portrait ? { width: 420, height: 580, wall: 159 } : { width: 840, height: 440, wall: 191 };
 }
 
-/** Always display the inspected agent before filling spare seats with active workers.
- * Does not invent agents or alter execution/queue priority. */
+/** Preserve stable workstation order, replacing the last visible slot for inspection.
+ * This is a read-only viewport: it never schedules or fabricates execution. */
 export function selectOfficeSeats<
   T extends {
     id: AgentId;
@@ -36,15 +36,29 @@ export function selectOfficeSeats<
     status: { state: string };
   },
 >(agents: readonly T[], selectedAgent: AgentId, capacity = OFFICE_LAYOUT.length): T[] {
-  const visible = agents.slice(0, Math.max(0, capacity));
-  const selected = agents.find((agent) => agent.id === selectedAgent);
-  if (!selected || visible.some((agent) => agent.id === selectedAgent)) return visible;
-  // Keep existing workstation identity/keyboard order stable whenever possible.
-  // Only replace a seat when the selected profile is otherwise hidden.
-  const replaceIndex = visible.findLastIndex(
-    (agent) => !agent.active && !['thinking', 'working', 'stopping'].includes(agent.status.state),
-  );
-  const slot = replaceIndex === -1 ? visible.length - 1 : replaceIndex;
-  if (slot >= 0) visible[slot] = selected;
+  const limit = Number.isFinite(capacity) ? Math.max(0, Math.floor(capacity)) : 0;
+  if (limit === 0) return [];
+  // Preserve runtime order. The selected profile replaces the last visible
+  // unselected profile when necessary; it never changes desk identity/order.
+  const unique: T[] = [];
+  const seen = new Set<AgentId>();
+  for (const agent of agents) {
+    if (seen.has(agent.id)) continue;
+    seen.add(agent.id);
+    unique.push(agent);
+  }
+  const selectedIndex = unique.findIndex((agent) => agent.id === selectedAgent);
+  const visible = unique.slice(0, limit);
+  if (selectedIndex < 0 || selectedIndex < limit) return visible;
+  const displaced = visible[visible.length - 1]!;
+  visible[visible.length - 1] = unique[selectedIndex]!;
+  // If selection evicts an active worker, retain them instead of an idle
+  // occupant, without changing the order of the surviving workstations.
+  const isActive = (agent: T) =>
+    agent.active === true || ['thinking', 'working', 'stopping'].includes(agent.status.state);
+  if (isActive(displaced)) {
+    const idleIndex = visible.findIndex((agent) => agent.id !== selectedAgent && !isActive(agent));
+    if (idleIndex >= 0) visible[idleIndex] = displaced;
+  }
   return visible;
 }

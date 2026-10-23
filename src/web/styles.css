@@ -2188,3 +2188,114 @@ dialog[aria-label='Confirm workflow checkpoint'] code {
     display: none;
   }
 }
+
+/* Office V2 presence shell: operational hierarchy without changing runtime state. */
+.isometric-office > .office-operations-heading:first-child {
+  padding: 15px 18px;
+  margin: 0;
+  background: linear-gradient(110deg, #142f28, #0b201c 70%);
+  border-bottom: 1px solid #315e4b;
+  gap: 12px;
+}
+.isometric-office > .office-operations-heading:first-child strong {
+  color: #d5f9df;
+  font-size: clamp(12px, 1.2vw, 16px);
+  letter-spacing: 0.06em;
+}
+.isometric-office > .office-operations-heading:first-child span {
+  color: #a6dfbc;
+  font-variant-numeric: tabular-nums;
+}
+.isometric-office > .office-operations-help[role='status'] {
+  margin: 0;
+  padding: 9px 18px;
+  background: #26331e;
+  color: #f0d9a1;
+  border-bottom: 1px solid #75643c;
+  line-height: 1.5;
+}
+.isometric-office > .pixel-office {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: radial-gradient(ellipse at 50% 30%, #21443b, #071915 75%);
+}
+.isometric-office .office-workstation {
+  cursor: pointer;
+  outline: none;
+}
+.isometric-office .office-workstation .station-hit-area {
+  pointer-events: all;
+}
+.isometric-office .office-workstation:focus-visible .iso-selection {
+  stroke-width: 5;
+  stroke-dasharray: none;
+}
+.isometric-office .office-workstation[aria-pressed='true'] .station-name {
+  fill: #f4db93;
+}
+@media (max-width: 600px) {
+  .isometric-office > .office-operations-heading:first-child {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 12px;
+  }
+  .isometric-office > .office-operations-help[role='status'] {
+    padding: 10px 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .isometric-office .office-workstation,
+  .isometric-office .office-workstation * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* History expansion remains an explicit user action and uses persisted snapshots only. */
+.office-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  min-height: 36px;
+  color: #d4f4df;
+  background: #183d2e;
+  border: 1px solid #54896a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.office-history-toggle:hover {
+  background: #24513c;
+}
+.office-history-toggle:focus-visible {
+  outline: 2px solid #b7ffca;
+  outline-offset: 3px;
+}
+
+.office-history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 12px;
+}
+.office-history-filters button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #3e6652;
+  background: #10291f;
+  color: #bdd8c5;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.office-history-filters button[aria-pressed='true'] {
+  border-color: #9fe9b4;
+  background: #25553b;
+  color: #e6ffed;
+}
+.office-history-filters button:focus-visible {
+  outline: 2px solid #b7ffca;
+  outline-offset: 2px;
+}

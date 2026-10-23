@@ -154,3 +154,48 @@ it('renders latest persisted task activity without fabricating tasks', () => {
   expect(markup).toContain('state-failed');
   expect(render()).toContain('No recorded tasks.');
 });
+
+it('exposes real room occupancy and offscreen worker counts without fake profiles', () => {
+  const dynamic: OfficeAgent[] = [
+    { id: 'one', name: 'One', status: { state: 'idle', label: 'Idle' } },
+    { id: 'two', name: 'Two', status: { state: 'working', label: 'Working' } },
+    { id: 'three', name: 'Three', status: { state: 'thinking', label: 'Thinking' } },
+  ];
+  const markup = renderToStaticMarkup(
+    createElement(PixelOffice, { agents: dynamic, selectedAgent: 'one', onSelect: () => {} }),
+  );
+  expect(markup).toContain('data-visible-seats="2"');
+  expect(markup).toContain('3 profiles');
+  expect(markup).toContain('1 profiles outside the two-desk view');
+  expect(markup).toContain('1 active');
+  expect(markup).toContain('Interactive isometric office. One: Idle; Two: Working');
+  expect(markup).not.toContain('data-agent-id="three"');
+});
+
+it('shows filtered history controls without inventing persisted records', () => {
+  const markup = render();
+  expect(markup).toContain('aria-label="Filter task history"');
+  expect(markup).toContain('All tasks');
+  expect(markup).toContain('Selected agent');
+  expect(markup).toContain('Failures');
+  expect(markup).toContain('No recorded tasks.');
+});
+
+it('counts active session flags even when the scene status is idle', () => {
+  const markup = renderToStaticMarkup(
+    createElement(PixelOffice, {
+      agents: [
+        {
+          id: 'active-idle',
+          name: 'Background worker',
+          active: true,
+          status: { state: 'idle', label: 'Idle' },
+        },
+      ],
+      selectedAgent: 'active-idle',
+      onSelect: () => {},
+    }),
+  );
+  expect(markup).toContain('1 running · 0 queued · 0 errors');
+  expect(markup).toContain('1 active · 0 errors');
+});
