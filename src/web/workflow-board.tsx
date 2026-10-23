@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
+import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
 import {
   selectWorkflowOperations,
   summarizeWorkflowOperations,
@@ -377,6 +378,25 @@ export function WorkflowBoard({
             }}
           >
             Reset workflow filters
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            disabled={visibleWorkflows.length === 0}
+            title="Export filtered workflow metadata only. Reports, prompts and commands are excluded."
+            onClick={() => {
+              const csv = exportWorkflowOperationsCsv(visibleWorkflows);
+              const url = URL.createObjectURL(
+                new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
+              );
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'ai-office-workflow-operations.csv';
+              link.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            Export workflow CSV ({visibleWorkflows.length})
           </button>
           <p>{visibleWorkflows.length} matching workflows</p>
           <p role="note">
