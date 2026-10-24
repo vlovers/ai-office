@@ -44,7 +44,8 @@ function setup() {
   const path = join(root, 'repo');
   execFileSync('git', ['init', '-q', path]);
   const gitDir = realpathSync(join(path, '.git'));
-  const db = new DatabaseSync(join(root, 'delivery.sqlite'));
+  const dbPath = join(root, 'delivery.sqlite');
+  const db = new DatabaseSync(dbPath);
   const sessions = new DeliverySessions(db, () => 10_000);
   sessions.setOperator('operator-1', true);
   sessions.setGrant('operator-1', 'workspace-1', 'approve:draft-pr', true);
@@ -107,6 +108,7 @@ function setup() {
   });
   return {
     db,
+    dbPath,
     sessions,
     approvals,
     transfers,
@@ -240,6 +242,40 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       expect(result.status).toBe('uncertain');
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
       expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('reconciles an uncertain POST from another SQLite connection without a second POST', async () => {
+    const t = setup();
+    try {
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') throw new Error('Simulated lost GitHub response');
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      const reopened = new DatabaseSync(t.dbPath);
+      try {
+        const restoredSessions = new DeliverySessions(reopened, () => 10_000);
+        expect(new DeliveryJournal(reopened).get('workspace-1')?.state).toBe('uncertain');
+        t.fetcher.mockImplementation(async (url, init) => {
+          if (url.includes('/pulls?')) return json([receipt]);
+          return original(url, init);
+        });
+        const result = await createSessionBoundGitHubDraft({
+          ...t.context(),
+          sessions: restoredSessions,
+        });
+        expect(result.status).toBe('published');
+        expect(new DeliveryJournal(reopened).get('workspace-1')?.pullRequestUrl).toBe(
+          receipt.html_url,
+        );
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      } finally {
+        reopened.close();
+      }
     } finally {
       t.close();
     }
