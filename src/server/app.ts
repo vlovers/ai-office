@@ -10,6 +10,7 @@ import { WorkflowStore } from './workflows.js';
 import { workflowTimeline } from './workflow-timeline.js';
 import { diagnoseWorkflow } from './workflow-diagnostics.js';
 import { deliveryPreflight } from './delivery-preflight.js';
+import { validateDeliveryConfirmation } from './delivery-confirmation.js';
 import { assessHandoff } from './handoff-assessment.js';
 import { git, revalidateRepository, validateRepository } from './repositories.js';
 import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
@@ -647,6 +648,27 @@ export async function createApp(manager: TaskManager) {
     if (!task) throw new AppError(404, 'Task not found.');
     const review = (await manager.reviewOperation(taskId, 'review')) as WorkspaceReview;
     return deliveryPreflight(task, review, input.remote);
+  });
+  // Read-only confirmation preview. Does not authorize a future write operation:
+  // a publisher must repeat all checks under an exclusive workspace lease.
+  app.post('/api/tasks/:id/delivery/confirmation', async (request) => {
+    const taskId = id.parse((request.params as { id: string }).id);
+    const input = z
+      .object({
+        remote: z.string().min(1).max(2048),
+        revision: z.string().min(1).max(256),
+        branch: z.string().min(1).max(256),
+        owner: z.string().min(1).max(256),
+        repository: z.string().min(1).max(256),
+        acknowledged: z.literal(true),
+      })
+      .strict()
+      .parse(request.body);
+    const task = manager.store.task(taskId);
+    if (!task) throw new AppError(404, 'Task not found.');
+    const review = (await manager.reviewOperation(taskId, 'review')) as WorkspaceReview;
+    const preflight = deliveryPreflight(task, review, input.remote);
+    return validateDeliveryConfirmation(preflight, input);
   });
   app.get('/api/tasks/:id/review/history', async (request) => {
     const query = z
