@@ -125,10 +125,7 @@ export async function createDraftPublication(
         throw new Error('Matching remote PR exists without local journal ownership.');
       }
       if (
-        inventory.candidates.some(
-          (candidate) =>
-            candidate.head.ref === plan.branch,
-        )
+        inventory.candidates.some((candidate) => candidate.head.ref === plan.branch)
       ) {
         throw new Error('Remote PR head branch conflict requires manual reconciliation.');
       }
