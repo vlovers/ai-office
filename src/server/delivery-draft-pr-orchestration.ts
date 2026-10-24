@@ -102,7 +102,10 @@ export async function createDraftPublication(
       }
       try {
         const url = validatePublicationReceipt(plan, receipt);
-        return { status: 'published', entry: journal.publish(workspaceId, operationKey, url) } as const;
+        return {
+          status: 'published',
+          entry: journal.publish(workspaceId, operationKey, url),
+        } as const;
       } catch {
         journal.markUncertain(workspaceId, operationKey);
         return {
@@ -147,6 +150,10 @@ async function reconcileOnly(
   }
   return {
     status: 'published',
-    entry: context.journal.confirmUncertain(context.workspaceId, operationKey, result.pullRequestUrl),
+    entry: context.journal.confirmUncertain(
+      context.workspaceId,
+      operationKey,
+      result.pullRequestUrl,
+    ),
   };
 }
