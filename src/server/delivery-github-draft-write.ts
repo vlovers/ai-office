@@ -82,7 +82,10 @@ export function validateGitHubDraftWrite(
   ) {
     throw new Error('Invalid draft pull request title.');
   }
-  if (options.body !== undefined && (typeof options.body !== 'string' || options.body.length > 65536)) {
+  if (
+    options.body !== undefined &&
+    (typeof options.body !== 'string' || options.body.length > 65536)
+  ) {
     throw new Error('Invalid draft pull request body.');
   }
   return repository;
@@ -132,7 +135,9 @@ export async function createCommitAttestedGitHubDraft(
   }
   if (response.status !== 201) {
     // Do not inspect/echo the response body: it can contain untrusted content.
-    throw new Error(`GitHub draft publication returned HTTP ${response.status}; outcome uncertain.`);
+    throw new Error(
+      `GitHub draft publication returned HTTP ${response.status}; outcome uncertain.`,
+    );
   }
   const body: unknown = await response.json();
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
