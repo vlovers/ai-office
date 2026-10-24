@@ -1,4 +1,15 @@
-import { mkdtemp, chmod, rm, stat, symlink, link, writeFile, readFile, mkdir, realpath } from 'node:fs/promises';
+import {
+  mkdtemp,
+  chmod,
+  rm,
+  stat,
+  symlink,
+  link,
+  writeFile,
+  readFile,
+  mkdir,
+  realpath,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -89,9 +100,7 @@ it('refuses public pre-existing database without changing its mode or bytes', as
   await writeFile(database, 'do not modify', { mode: 0o644 });
   await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
   expect((await stat(database)).mode & 0o777).toBe(0o644);
-  expect(await readFile(database, 'utf8')).toBe(
-    'do not modify',
-  );
+  expect(await readFile(database, 'utf8')).toBe('do not modify');
 });
 
 it('refuses unsafe existing data directories rather than chmod-repairing them', async () => {
