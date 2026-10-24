@@ -19,7 +19,9 @@ export class DeliveryJournal {
 
   get(workspaceId: string): DeliveryJournalEntry | null {
     const row = this.db
-      .prepare('SELECT workspace_id, operation_key, state, pull_request_url FROM delivery_journal WHERE workspace_id=?')
+      .prepare(
+        'SELECT workspace_id, operation_key, state, pull_request_url FROM delivery_journal WHERE workspace_id=?',
+      )
       .get(workspaceId);
     if (!row) return null;
     return {
@@ -54,7 +56,11 @@ export class DeliveryJournal {
    * A repeated completion with the same URL is harmless; conflicting URLs fail.
    */
   publish(workspaceId: string, operationKey: string, pullRequestUrl: string): DeliveryJournalEntry {
-    if (!/^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/pull\/[1-9][0-9]*$/.test(pullRequestUrl))
+    if (
+      !/^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/pull\/[1-9][0-9]*$/.test(
+        pullRequestUrl,
+      )
+    )
       throw new Error('Invalid GitHub pull request URL.');
     const updated = this.db
       .prepare(
