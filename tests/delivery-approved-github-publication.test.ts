@@ -224,6 +224,26 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('times out a hung POST, preserves uncertain state and never blindly retries', async () => {
+    const t = setup();
+    try {
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (url, init) =>
+        init.method === 'POST' ? new Promise<Response>(() => undefined) : original(url, init),
+      );
+      const context = {
+        ...t.context(),
+        write: { ...t.context().write, timeoutMs: 100 },
+      };
+      expect((await createSessionBoundGitHubDraft(context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect((await createSessionBoundGitHubDraft(context)).status).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('treats invalid post-write PR detail as uncertain, not published', async () => {
     const t = setup();
     try {
