@@ -72,6 +72,7 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     token: write.token,
     fetcher: write.fetcher,
     signal: write.signal,
+    timeoutMs: write.timeoutMs,
   };
   const identity = {
     workspaceId,
