@@ -1,12 +1,10 @@
-import { DatabaseSync } from 'node:sqlite';
 import { execFileSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  reserveApprovedPublicationAtomically,
-} from '../src/server/delivery-approved-publication-reservation.js';
+import { reserveApprovedPublicationAtomically } from '../src/server/delivery-approved-publication-reservation.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
