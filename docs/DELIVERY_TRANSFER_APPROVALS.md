@@ -50,6 +50,25 @@ Never infer success from a timeout. A restarted worker must reconcile
 outstanding journal entries using read-only evidence; an approval must never
 be regenerated automatically to retry an uncertain external operation.
 
+## Leased transfer execution composition
+
+`executeAuthorizedTransferStage` now composes the shared repository lease,
+refreshed publication snapshot, independently supplied local Git attestation,
+stage-specific operator approval, durable transfer intent, a single trusted
+external operation and independent read-only receipt verification. A confirmed
+receipt requires the exact reviewed SHA. A push cannot start until the matching
+commit receipt is confirmed. Duplicate requests, changed snapshots, expired
+approvals, ambiguous HTTP responses and invalid receipts fail closed.
+
+This is still **server-only**. The executor and local verification callbacks
+must be supplied by trusted server code, never an HTTP request. No actual Git
+commit, push, GitHub credential exchange, automatic retry, browser endpoint or
+background publisher is registered by this module. A production integration
+must authenticate the operator, verify repository/worktree ownership, bind
+least-privilege credentials, implement secure Origin/CSRF controls and exercise
+native cross-process tests before activation. In particular, callers must not
+invoke an external operation after the shared lease has been released.
+
 ## Failure matrix
 
 | Event                                                 | Required behavior                                  |
