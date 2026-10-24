@@ -1,4 +1,4 @@
-import { mkdtemp, chmod, rm, stat, symlink, link, writeFile, realpath } from 'node:fs/promises';
+import { mkdtemp, chmod, rm, stat, symlink, link, writeFile, readFile, mkdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -89,7 +89,7 @@ it('refuses public pre-existing database without changing its mode or bytes', as
   await writeFile(database, 'do not modify', { mode: 0o644 });
   await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
   expect((await stat(database)).mode & 0o777).toBe(0o644);
-  expect(await (await import('node:fs/promises')).readFile(database, 'utf8')).toBe(
+  expect(await readFile(database, 'utf8')).toBe(
     'do not modify',
   );
 });
@@ -114,7 +114,7 @@ it('refuses SQLite symlinks, hardlinks and non-regular files before SQLite opens
   expect((await stat(source)).nlink).toBe(2);
   await rm(database);
   await rm(source);
-  await (await import('node:fs/promises')).mkdir(database);
+  await mkdir(database);
   await expect(openDeliveryDatabase(directory)).rejects.toThrow();
 });
 
@@ -127,4 +127,21 @@ it('does not relax private database permissions across a successful restart', as
   const second = await openDeliveryDatabase(directory);
   second.close();
   expect((await stat(database)).mode & 0o077).toBe(0);
+});
+
+it('refuses unsafe WAL and SHM sidecars without mutating their targets', async () => {
+  for (const suffix of ['-wal', '-shm']) {
+    const directory = await root();
+    const external = join(directory, 'external');
+    const sidecar = join(directory, 'delivery.sqlite' + suffix);
+    await writeFile(external, 'private sentinel', { mode: 0o600 });
+    await symlink(external, sidecar);
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect(await readFile(external, 'utf8')).toBe('private sentinel');
+    await rm(sidecar);
+    await writeFile(sidecar, 'public sentinel', { mode: 0o644 });
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect((await stat(sidecar)).mode & 0o777).toBe(0o644);
+    expect(await readFile(sidecar, 'utf8')).toBe('public sentinel');
+  }
 });
