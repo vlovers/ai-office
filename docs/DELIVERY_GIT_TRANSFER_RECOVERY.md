@@ -87,3 +87,19 @@ are individually monotonic rather than one cross-journal transaction; a crash
 between stages is safe to resume, but a production startup coordinator must
 still discover registered workspaces and invoke this under the lease. It is
 not an authenticated commit/push API, and no browser publication is enabled.
+
+## Stage-specific operator approvals (unreleased)
+
+The new `DeliveryTransferApprovalLedger` provides independent durable one-use
+approvals for commit and push. Each approval is bound to a trusted operator and
+session, workspace, operation key, GitHub destination, managed branch and exact
+reviewed head/base SHAs. Approval expiry, revocation, replay protection and
+persistent clock rollback protection are covered by SQLite tests, including
+independent connections and restart fixtures. See
+[`DELIVERY_TRANSFER_APPROVALS.md`](./DELIVERY_TRANSFER_APPROVALS.md).
+
+**This does not close issue #58.** The approval ledger is not yet composed
+atomically with commit/push intent reservation under the shared Git lease.
+Trusted session/Origin/CSRF enforcement, least-privilege production credentials,
+cross-process native Git fixtures and startup coordination remain release
+blockers. No browser write endpoint or automatic Git transfer is enabled.
