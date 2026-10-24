@@ -1,6 +1,7 @@
 import type { DeliveryJournal, DeliveryJournalEntry } from './delivery-journal.js';
 import {
   attestGitHubCommitRefs,
+  readGitHubDraftCommitReceipt,
   validateAttestedDraftReceipt,
   type ApprovedCommitSnapshot,
   type GitHubCommitReceipt,
@@ -183,6 +184,65 @@ export async function reconcileUncertainDraft(
         context.workspaceId,
         readiness.operationKey,
         result.pullRequestUrl,
+      );
+    },
+  );
+}
+
+/**
+ * Recover an ambiguous commit-pinned publication without a second POST.
+ * A complete PR listing identifies the unique candidate; a separate fresh
+ * PR detail GET verifies both commit SHAs before changing durable state.
+ * Missing, stale or malformed evidence leaves the journal uncertain.
+ */
+export async function reconcileCommitAttestedDraft(
+  context: DeliveryPublicationContext & {
+    approval: ApprovedCommitSnapshot;
+    gitHubRefOptions?: GitHubRefOptions;
+    listAllRemoteDrafts: (
+      plan: AllowedPlan,
+    ) => Promise<{ complete: boolean; candidates: RemoteDraftCandidate[] }>;
+  },
+): Promise<DeliveryJournalEntry> {
+  const readiness = requireNewPublication(context.plan);
+  if (context.approval.operationKey !== readiness.operationKey) {
+    throw new Error('Approved commit snapshot does not match the publication operation.');
+  }
+  return withPublicationLease(
+    context.repository,
+    context.workspaceGitDir,
+    readiness,
+    context.refreshPlan,
+    async (currentPlan) => {
+      const entry = context.journal.get(context.workspaceId);
+      if (entry?.operationKey !== readiness.operationKey || entry.state !== 'uncertain') {
+        throw new Error('Only the matching uncertain operation can be reconciled.');
+      }
+      const snapshot = await context.listAllRemoteDrafts(currentPlan);
+      if (snapshot?.complete !== true || !Array.isArray(snapshot.candidates)) {
+        throw new Error('GitHub PR listing is incomplete; manual recovery required.');
+      }
+      const result = reconcilePublicationCandidates(currentPlan, snapshot.candidates);
+      if (result.status !== 'confirmed') throw new Error(result.reason);
+      const detail = await readGitHubDraftCommitReceipt(
+        currentPlan,
+        result.pullRequestUrl,
+        context.gitHubRefOptions,
+      );
+      const attestation = {
+        ...context.approval,
+        repository: currentPlan.destination.slice('https://github.com/'.length),
+        branch: currentPlan.branch,
+        baseBranch: currentPlan.baseBranch,
+      };
+      const verifiedUrl = validateAttestedDraftReceipt(currentPlan, attestation, detail);
+      if (verifiedUrl !== result.pullRequestUrl) {
+        throw new Error('GitHub PR identity changed during read-only reconciliation.');
+      }
+      return context.journal.confirmUncertain(
+        context.workspaceId,
+        readiness.operationKey,
+        verifiedUrl,
       );
     },
   );
