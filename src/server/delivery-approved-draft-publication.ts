@@ -59,6 +59,13 @@ export async function createApprovedDraftPublication(
       throw new Error('Refreshed publication plan differs from approved operation.');
     }
   };
+  // Even receipt reuse and read-only reconciliation require a live session.
+  // The atomic reservation independently repeats this check inside SQLite.
+  const authorization: unknown = context.authorizeBeforeReserve();
+  if (authorization && typeof (authorization as { then?: unknown }).then === 'function') {
+    void Promise.resolve(authorization).catch(() => undefined);
+    throw new Error('Publication authorization must be synchronous.');
+  }
   return createDraftPublication({
     workspaceId,
     repository: context.repository,
