@@ -142,8 +142,10 @@ export async function createDraftPublication(
         reservation.workspaceId !== workspaceId ||
         reservation.operationKey !== operationKey ||
         reservation.state !== 'reserved' ||
+        reservation.pullRequestUrl !== null ||
         journal.get(workspaceId)?.operationKey !== operationKey ||
-        journal.get(workspaceId)?.state !== 'reserved'
+        journal.get(workspaceId)?.state !== 'reserved' ||
+        journal.get(workspaceId)?.pullRequestUrl !== null
       ) {
         throw new Error('Publication reservation did not persist the reviewed operation.');
       }
