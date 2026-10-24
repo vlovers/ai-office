@@ -1,4 +1,7 @@
 import { acquireLocks } from './lock.js';
+import { createHash } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { repositoryLeaseDirectories } from './repositories.js';
 import {
   validateLeasedPublication,
@@ -23,8 +26,14 @@ export async function withPublicationLease<T>(
   if (readiness.status !== 'requires-lease')
     throw new Error('Publication does not require a new lease.');
   const directories = await repositoryLeaseDirectories(repository, workspaceGitDir);
+  // Use the same lock namespace as TaskManager and Workspaces. A separate
+  // publication-specific suffix would not serialize with normal Git writes.
+  const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+  await mkdir(lockRoot, { recursive: true, mode: 0o700 });
   const release = await acquireLocks(
-    directories.map((directory) => `${directory}/ai-office-publication.lock`),
+    directories.map((directory) =>
+      join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+    ),
     'AI Office delivery publication',
   );
   try {
