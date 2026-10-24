@@ -93,3 +93,17 @@ See [pipeline safety and activation gates](docs/DELIVERY_PUBLICATION_PIPELINE.md
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
+
+
+### v0.8 server-only GitHub draft adapter (unreleased)
+
+A concrete, **single-attempt** authenticated Draft PR POST adapter and
+commit-attested read-only recovery wrapper are implemented behind injected
+server-only functions. The adapter requires an exact server-issued confirmation
+and verified GitHub head/base SHAs; it checks the returned PR's repository,
+branch, draft state and commit identities before persisting a receipt.
+The public HTTP API and UI still do **not** expose publication. Outstanding
+gates include trusted operator identity, durable confirmation binding,
+independently verified local Git worktree and commit/push approval, credential
+provisioning, startup recovery serialization and native end-to-end tests.
+See [delivery publication pipeline](docs/DELIVERY_PUBLICATION_PIPELINE.md).
