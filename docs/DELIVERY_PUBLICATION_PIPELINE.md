@@ -136,7 +136,6 @@ production endpoint:
 No automatic merging, force-pushing, deployment or destructive cleanup is
 authorized by this module.
 
-
 ## Server-only GitHub draft write adapter (unreleased)
 
 `delivery-github-draft-write.ts` implements a **single** authenticated GitHub
