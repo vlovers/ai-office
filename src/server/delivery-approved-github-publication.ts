@@ -54,6 +54,10 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
   const write: GitHubDraftWriteOptions = {
     ...context.write,
     confirmation: { ...commits, action: 'create-draft-pr' },
+    authorizeBeforePost: () => {
+      authorize();
+      context.write.authorizeBeforePost?.();
+    },
   };
   // Reject invalid write configuration before acquiring a lease or using GitHub.
   validateGitHubDraftWrite(plan, commits, write);
