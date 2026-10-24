@@ -35,7 +35,9 @@ export class DeliveryJournal {
   /** Read-only inventory for trusted startup reconciliation; no global updates. */
   listUnresolved(): DeliveryJournalEntry[] {
     const rows = this.db
-      .prepare("SELECT workspace_id FROM delivery_journal WHERE state != 'published' ORDER BY workspace_id")
+      .prepare(
+        "SELECT workspace_id FROM delivery_journal WHERE state != 'published' ORDER BY workspace_id",
+      )
       .all();
     return rows.map((row) => this.get(String(row.workspace_id))!);
   }
