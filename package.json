@@ -39,7 +39,7 @@
     "test:sandbox": "node --import tsx tests/native-sandbox.ts",
     "test:browser": "node --import tsx tests/browser-smoke.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --write src/server/delivery-transfer-approval.ts && git --no-pager diff -- src/server/delivery-transfer-approval.ts && exit 1",
+    "format:check": "prettier --check .",
     "codex:inspect": "node --import tsx scripts/codex-inspect.ts",
     "test:real": "node --import tsx scripts/real-codex-smoke.ts --run",
     "test:dashboard:real": "node --import tsx tests/dashboard-real.ts --run",
