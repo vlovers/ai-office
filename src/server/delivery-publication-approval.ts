@@ -84,11 +84,26 @@ export class DeliveryPublicationApprovalLedger {
     this.db.exec(
       'CREATE INDEX IF NOT EXISTS idx_delivery_approvals_workspace ON delivery_publication_approvals (workspace_id, operation_key)',
     );
+    // Persist a monotonic wall-clock watermark. A backwards clock jump must
+    // never make an expired approval valid again, including after restart.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS delivery_publication_approval_clock (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      last_seen_at INTEGER NOT NULL
+    )`);
   }
 
   private timestamp(): number {
     const now = this.now();
     if (!Number.isSafeInteger(now) || now < 0) throw new Error('Invalid approval clock.');
+    const updated = this.db
+      .prepare(
+        `INSERT INTO delivery_publication_approval_clock (id, last_seen_at)
+         VALUES (1, ?)
+         ON CONFLICT(id) DO UPDATE SET last_seen_at=excluded.last_seen_at
+         WHERE delivery_publication_approval_clock.last_seen_at <= excluded.last_seen_at`,
+      )
+      .run(now);
+    if (updated.changes !== 1) throw new Error('Publication approval clock moved backwards.');
     return now;
   }
 
