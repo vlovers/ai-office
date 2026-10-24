@@ -8,7 +8,7 @@ describe('delivery journal', () => {
     try {
       const journal = new DeliveryJournal(db);
       expect(journal.reserve('workspace-1', 'operation-a').state).toBe('reserved');
-      expect(journal.reserve('workspace-1', 'operation-a').state).toBe('reserved');
+      expect(() => journal.reserve('workspace-1', 'operation-a')).toThrow();
       expect(() => journal.reserve('workspace-1', 'operation-b')).toThrow();
       const url = 'https://github.com/vlovers/ai-office/pull/45';
       expect(journal.publish('workspace-1', 'operation-a', url).state).toBe('published');
@@ -28,6 +28,7 @@ describe('delivery journal', () => {
       journal.reserve('workspace-2', 'operation-a');
       journal.recoverInterrupted();
       expect(journal.get('workspace-2')?.state).toBe('uncertain');
+      expect(() => journal.reserve('workspace-2', 'operation-a')).toThrow();
       expect(() =>
         journal.publish('workspace-2', 'operation-a', 'https://github.com/vlovers/ai-office/pull/45'),
       ).toThrow();
