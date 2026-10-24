@@ -13,9 +13,8 @@ describe('delivery journal', () => {
       const url = 'https://github.com/vlovers/ai-office/pull/45';
       expect(journal.publish('workspace-1', 'operation-a', url).state).toBe('published');
       expect(journal.publish('workspace-1', 'operation-a', url).pullRequestUrl).toBe(url);
-      expect(() =>
-        journal.publish('workspace-1', 'operation-a', 'https://github.com/vlovers/ai-office/pull/46'),
-      ).toThrow();
+      const differentUrl = 'https://github.com/vlovers/ai-office/pull/46';
+      expect(() => journal.publish('workspace-1', 'operation-a', differentUrl)).toThrow();
     } finally {
       db.close();
     }
@@ -29,9 +28,8 @@ describe('delivery journal', () => {
       journal.recoverInterrupted();
       expect(journal.get('workspace-2')?.state).toBe('uncertain');
       expect(() => journal.reserve('workspace-2', 'operation-a')).toThrow();
-      expect(() =>
-        journal.publish('workspace-2', 'operation-a', 'https://github.com/vlovers/ai-office/pull/45'),
-      ).toThrow();
+      const url = 'https://github.com/vlovers/ai-office/pull/45';
+      expect(() => journal.publish('workspace-2', 'operation-a', url)).toThrow();
       expect(() => journal.reserve('workspace-2', 'operation-b')).toThrow();
     } finally {
       db.close();
@@ -43,9 +41,8 @@ describe('delivery journal', () => {
     try {
       const journal = new DeliveryJournal(db);
       journal.reserve('workspace-3', 'operation-a');
-      expect(() =>
-        journal.publish('workspace-3', 'operation-a', 'https://evil.example/pull/1'),
-      ).toThrow();
+      const unsafeUrl = 'https://evil.example/pull/1';
+      expect(() => journal.publish('workspace-3', 'operation-a', unsafeUrl)).toThrow();
       expect(journal.get('workspace-3')?.state).toBe('reserved');
       expect(journal.markUncertain('workspace-3', 'operation-a')?.state).toBe('uncertain');
     } finally {
