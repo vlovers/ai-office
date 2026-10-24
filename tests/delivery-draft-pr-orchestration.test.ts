@@ -133,6 +133,124 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
+  it('rejects malformed GitHub inventory before reserving any durable intent', async () => {
+    const t = setup();
+    try {
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [null],
+      } as unknown as CompleteRemotePrInventory);
+      await expect(createDraftPublication(t.context)).rejects.toThrow('incomplete or invalid');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks managed head branch reuse even when the existing PR targets another base', async () => {
+    const t = setup();
+    try {
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [{ ...receipt, base: { ...receipt.base, ref: 'release' } }],
+      });
+      await expect(createDraftPublication(t.context)).rejects.toThrow('head branch conflict');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('preserves an uncertain outcome when recovery receives malformed inventory', async () => {
+    const t = setup();
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('network disconnected'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [{ ...receipt, head: null }],
+      } as unknown as CompleteRemotePrInventory);
+      const result = await createDraftPublication(t.context);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('reconciles a persisted uncertain intent after SQLite and process-context restart', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-office-restart-'));
+    const repoPath = join(root, 'repo');
+    const databasePath = join(root, 'delivery.sqlite');
+    execFileSync('git', ['init', '-q', repoPath]);
+    const repository = { path: repoPath, gitDir: realpathSync(join(repoPath, '.git')) };
+    let db = new DatabaseSync(databasePath);
+    const createDraft = vi.fn(async (): Promise<GitHubDraftReceipt> => {
+      throw new Error('remote write response lost');
+    });
+    const context = {
+      workspaceId: 'workspace-restarted',
+      repository,
+      workspaceGitDir: repository.gitDir,
+      journal: new DeliveryJournal(db),
+      initialPlan: plan,
+      refreshPlan: async () => plan,
+      verifySnapshot: async () => {},
+      listRemote: async (): Promise<CompleteRemotePrInventory> => ({
+        complete: true,
+        candidates: [],
+      }),
+      createDraft,
+    };
+    try {
+      expect((await createDraftPublication(context)).status).toBe('uncertain');
+      db.close();
+      db = new DatabaseSync(databasePath);
+      const restartedContext = {
+        ...context,
+        journal: new DeliveryJournal(db),
+        listRemote: async (): Promise<CompleteRemotePrInventory> => ({
+          complete: true,
+          candidates: [receipt],
+        }),
+      };
+      expect((await createDraftPublication(restartedContext)).status).toBe('published');
+      expect(restartedContext.journal.get('workspace-restarted')?.pullRequestUrl).toBe(
+        receipt.html_url,
+      );
+      expect(createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a competing publication while the shared repository lease is held', async () => {
+    const t = setup();
+    let releaseDraft: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseDraft = resolve;
+    });
+    try {
+      t.createDraft.mockImplementationOnce(async () => {
+        await gate;
+        return receipt;
+      });
+      const first = createDraftPublication(t.context);
+      await vi.waitFor(() => expect(t.createDraft).toHaveBeenCalledTimes(1));
+      await expect(createDraftPublication(t.context)).rejects.toThrow('Resource is locked');
+      releaseDraft?.();
+      expect((await first).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      releaseDraft?.();
+      t.close();
+    }
+  });
+
   it('blocks changed review snapshots before touching the journal or remote API', async () => {
     const t = setup();
     try {
