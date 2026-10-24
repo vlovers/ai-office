@@ -40,6 +40,10 @@ merge, branch deletion or deployment is enabled.
   malformed pages and page-limit exhaustion fail closed without returning a
   partial result. Credentials are accepted only as server-owned options;
   callers must never source them from a browser request.
+- `delivery-publication-github-recovery.ts` composes the concrete GET-only
+  adapter with the lease-protected uncertain-journal recovery service. It
+  verifies the snapshot and journal state before any GitHub request, and it
+  never performs a remote write or retries an ambiguous POST.
 
 ## Failure and restart matrix
 
