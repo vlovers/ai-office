@@ -167,11 +167,7 @@ describe('read-only GitHub PR discovery', () => {
           link:
             page === 1
               ? [linked(2, 'next'), linked(2, 'last')].join(', ')
-              : [
-                  linked(1, 'first'),
-                  linked(1, 'prev'),
-                  linked(2, 'last'),
-                ].join(', '),
+              : [linked(1, 'first'), linked(1, 'prev'), linked(2, 'last')].join(', '),
         },
       });
     });
@@ -212,11 +208,7 @@ describe('read-only GitHub PR discovery', () => {
   });
 
   it('rejects inconsistent first, previous and last pagination relations', async () => {
-    for (const [relation, targetPage] of [
-      ['first', 2],
-      ['prev', 3],
-      ['last', 0],
-    ] as const) {
+    for (const [relation, targetPage] of [['first', 2], ['prev', 3], ['last', 0]] as const) {
       const fetcher = vi.fn(async (url: string) => {
         const target = new URL(url);
         target.searchParams.set('page', String(targetPage));
