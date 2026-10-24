@@ -10,8 +10,7 @@ const MAX_LIFETIME_MS = 15 * 60_000;
 const DEFAULT_LIFETIME_MS = 5 * 60_000;
 const SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const IDENTIFIER = /^[A-Za-z0-9_.:@-]{1,200}$/;
-const MANAGED_BRANCH =
-  /^ai-office\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MANAGED_BRANCH = /^ai-office\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DESTINATION = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+$/;
 
 function validIdentifier(value: unknown): value is string {
