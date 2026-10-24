@@ -161,9 +161,9 @@ describe('ambiguous GitHub publication outcomes', () => {
           ? json({ ...receipt, head: { ...receipt.head, sha: '3'.repeat(40) } }, 201)
           : original(url, init),
       );
-      await expect(publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher))).rejects.toThrow(
-        'commit identity changed',
-      );
+      await expect(
+        publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher)),
+      ).rejects.toThrow('commit identity changed');
       expect(journal.get('workspace-1')?.state).toBe('uncertain');
       expect(fetcher).toHaveBeenCalledTimes(3);
     } finally {
