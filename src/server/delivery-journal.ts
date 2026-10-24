@@ -58,7 +58,9 @@ export class DeliveryJournal {
    * A repeated completion with the same URL is harmless; conflicting URLs fail.
    */
   publish(workspaceId: string, operationKey: string, pullRequestUrl: string): DeliveryJournalEntry {
-    const validUrl = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/pull\/[1-9]\d*$/.test(pullRequestUrl);
+    const validUrl = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/pull\/[1-9]\d*$/.test(
+      pullRequestUrl,
+    );
     if (!validUrl) throw new Error('Invalid GitHub pull request URL.');
     const updated = this.db
       .prepare(
