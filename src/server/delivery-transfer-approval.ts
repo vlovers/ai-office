@@ -89,10 +89,12 @@ export class DeliveryTransferApprovalLedger {
       throw new Error('Invalid Git transfer approval clock.');
     }
     const result = this.db
-      .prepare(`INSERT INTO delivery_transfer_approval_clock (id, last_seen_at)
+      .prepare(
+        `INSERT INTO delivery_transfer_approval_clock (id, last_seen_at)
         VALUES (1, ?)
         ON CONFLICT(id) DO UPDATE SET last_seen_at=excluded.last_seen_at
-        WHERE delivery_transfer_approval_clock.last_seen_at <= excluded.last_seen_at`)
+        WHERE delivery_transfer_approval_clock.last_seen_at <= excluded.last_seen_at`,
+      )
       .run(value);
     if (result.changes !== 1) throw new Error('Git transfer approval clock moved backwards.');
     return value;
@@ -110,10 +112,12 @@ export class DeliveryTransferApprovalLedger {
     const approvalId = randomUUID();
     const { identity, operator } = binding;
     this.db
-      .prepare(`INSERT INTO delivery_transfer_approvals
+      .prepare(
+        `INSERT INTO delivery_transfer_approvals
         (approval_id, stage, workspace_id, operator_id, session_id, operation_key,
          destination, branch, head_sha, base_sha, issued_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
       .run(
         approvalId,
         binding.stage,
@@ -176,8 +180,10 @@ export class DeliveryTransferApprovalLedger {
   consume(approvalId: string, binding: DeliveryTransferApprovalBinding): void {
     const { args, condition } = this.match(approvalId, binding);
     const result = this.db
-      .prepare(`UPDATE delivery_transfer_approvals SET consumed_at=?
-        WHERE ${condition}`)
+      .prepare(
+        `UPDATE delivery_transfer_approvals SET consumed_at=?
+        WHERE ${condition}`,
+      )
       .run(args[10], ...args);
     if (result.changes !== 1) {
       throw new Error('Git transfer approval is missing, expired or already consumed.');
@@ -194,9 +200,11 @@ export class DeliveryTransferApprovalLedger {
     }
     return (
       this.db
-        .prepare(`UPDATE delivery_transfer_approvals SET revoked_at=?
+        .prepare(
+          `UPDATE delivery_transfer_approvals SET revoked_at=?
         WHERE approval_id=? AND operator_id=? AND session_id=?
-        AND consumed_at IS NULL AND revoked_at IS NULL`)
+        AND consumed_at IS NULL AND revoked_at IS NULL`,
+        )
         .run(this.timestamp(), approvalId, operator.operatorId, operator.sessionId).changes === 1
     );
   }
