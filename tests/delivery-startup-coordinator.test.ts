@@ -61,10 +61,7 @@ describe('trusted delivery startup coordinator', () => {
 
       const input = { journal, transferJournal, registrations: [two, one] };
       const results = await recoverRegisteredDeliveryWorkspaces(input);
-      expect(results.map((result) => result.workspaceId)).toEqual([
-        'workspace-1',
-        'workspace-2',
-      ]);
+      expect(results.map((result) => result.workspaceId)).toEqual(['workspace-1', 'workspace-2']);
       expect(results[0]!.publication?.state).toBe('uncertain');
       expect(results[0]!.commit?.state).toBe('confirmed');
       expect(results[0]!.push?.state).toBe('uncertain');
@@ -117,19 +114,21 @@ describe('trusted delivery startup coordinator', () => {
       const run = (registrations: RegisteredDeliveryWorkspace[]) =>
         recoverRegisteredDeliveryWorkspaces({ journal, transferJournal, registrations });
 
-      await expect(run([one, one, two])).rejects.toThrow('duplicate workspace');
-      await expect(
-        run([one, { ...two, operationKey: 'stale', transferIdentity: {
-          ...two.transferIdentity,
-          operationKey: 'stale',
-        } }]),
-      ).rejects.toThrow('differs from the trusted registration');
-      await expect(
-        run([one, { ...two, transferIdentity: {
+      const stale = {
+        ...two,
+        operationKey: 'stale',
+        transferIdentity: { ...two.transferIdentity, operationKey: 'stale' },
+      };
+      const forged = {
+        ...two,
+        transferIdentity: {
           ...two.transferIdentity,
           destination: 'https://github.com/attacker/repo',
-        } }]),
-      ).rejects.toThrow('belongs to another operation');
+        },
+      };
+      await expect(run([one, one, two])).rejects.toThrow('duplicate workspace');
+      await expect(run([one, stale])).rejects.toThrow('differs from the trusted registration');
+      await expect(run([one, forged])).rejects.toThrow('belongs to another operation');
       expect(journal.get(one.workspaceId)?.state).toBe('reserved');
       expect(journal.get(two.workspaceId)?.state).toBe('reserved');
       expect(transferJournal.get(two.workspaceId, 'commit')?.state).toBe('intent');
@@ -168,8 +167,12 @@ describe('trusted delivery startup coordinator', () => {
     const db = new DatabaseSync(':memory:');
     let releaseHeld!: () => void;
     let notifyHeld!: () => void;
-    const held = new Promise<void>((resolve) => { releaseHeld = resolve; });
-    const acquired = new Promise<void>((resolve) => { notifyHeld = resolve; });
+    const held = new Promise<void>((resolve) => {
+      releaseHeld = resolve;
+    });
+    const acquired = new Promise<void>((resolve) => {
+      notifyHeld = resolve;
+    });
     try {
       const journal = new DeliveryJournal(db);
       const transferJournal = new DeliveryGitTransferJournal(db);
