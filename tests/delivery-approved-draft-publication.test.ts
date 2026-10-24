@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 import { createApprovedDraftPublication } from '../src/server/delivery-approved-draft-publication.js';
+import { reserveApprovedPublicationAtomically } from '../src/server/delivery-approved-publication-reservation.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
@@ -88,6 +89,30 @@ function setup() {
 }
 
 describe('approved Draft PR publication end-to-end boundary', () => {
+  it('recovers a crash after atomic commit but before GitHub creation without replay', async () => {
+    const t = setup();
+    try {
+      const context = t.context();
+      reserveApprovedPublicationAtomically(
+        context.db,
+        context.approvalId,
+        binding,
+        context.authorizeBeforeReserve,
+        context.now,
+      );
+      expect(t.journal().get(binding.workspaceId)?.state).toBe('reserved');
+      t.restart();
+      const result = await createApprovedDraftPublication(t.context());
+      expect(result.status).toBe('uncertain');
+      expect(t.journal().get(binding.workspaceId)?.state).toBe('uncertain');
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(t.listRemote).toHaveBeenCalledTimes(1);
+      expect(() => t.approvals.assertPending(context.approvalId, binding)).toThrow();
+    } finally {
+      t.close();
+    }
+  });
+
   it('requires fresh authorization before reusing an already published receipt', async () => {
     const t = setup();
     try {
