@@ -107,9 +107,7 @@ describe('approved Git transfer intent reservation', () => {
       expect(intent.state).toBe('intent');
       expect(intent.stage).toBe('commit');
       expect(() => t.approvals.assertPending(approvalId, t.binding)).toThrow();
-      await expect(
-        reserveApprovedDeliveryGitTransfer({ ...t.context, approvalId }),
-      ).rejects.toThrow();
+      await expect(reserveApprovedDeliveryGitTransfer({ ...t.context, approvalId })).rejects.toThrow();
       expect(t.transfers.get('workspace-1', 'commit')?.state).toBe('intent');
     } finally {
       t.close();
