@@ -65,6 +65,34 @@ async function assertRegisteredWorktree(
 }
 
 /**
+ * The lease holder's atomic persistence step. Keep both ledgers on the SAME
+ * SQLite connection; never call an external operation before this commits.
+ * This function does not acquire a lease and must only be called by trusted
+ * server code already holding the common-repository lease.
+ */
+export function reserveApprovedTransferIntentAtomically(
+  db: DatabaseSync,
+  approvalId: string,
+  binding: DeliveryTransferApprovalBinding,
+  now?: () => number,
+): DeliveryGitTransferEntry {
+  const approvals = new DeliveryTransferApprovalLedger(db, now);
+  const journal = new DeliveryGitTransferJournal(db);
+  // Keep the monotonic clock watermark if the intent transaction rolls back.
+  approvals.assertPending(approvalId, binding);
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    approvals.consume(approvalId, binding);
+    const intent = journal.begin(binding.stage, binding.identity);
+    db.exec('COMMIT');
+    return intent;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+/**
  * Server-only composition point: shared Git lease + reviewed snapshot +
  * one-use operator approval + durable transfer intent.
  *
@@ -82,26 +110,10 @@ export async function reserveApprovedDeliveryGitTransfer(
 ): Promise<DeliveryGitTransferEntry> {
   assertPlanMatchesBinding(context);
   const { db, binding, repository, worktree, approvalId } = context;
-  const approvals = new DeliveryTransferApprovalLedger(db, context.now);
-  const journal = new DeliveryGitTransferJournal(db);
   return withDeliveryRepositoryLease(repository, worktree.gitDir, async () => {
     await assertRegisteredWorktree(repository, worktree);
     await context.verifySnapshot();
     await assertRegisteredWorktree(repository, worktree);
-
-    // Persist the monotonic approval clock even when the subsequent intent
-    // reservation fails and its transaction is rolled back.
-    approvals.assertPending(approvalId, binding);
-
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      approvals.consume(approvalId, binding);
-      const intent = journal.begin(binding.stage, binding.identity);
-      db.exec('COMMIT');
-      return intent;
-    } catch (error) {
-      db.exec('ROLLBACK');
-      throw error;
-    }
+    return reserveApprovedTransferIntentAtomically(db, approvalId, binding, context.now);
   });
 }
