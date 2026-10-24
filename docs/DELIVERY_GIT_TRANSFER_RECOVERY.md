@@ -71,3 +71,19 @@ activation. Before any authenticated UI action can initiate commit/push:
 4. Establish Origin/CSRF/session authorization, credential boundaries, and
    independent end-to-end browser/native tests.
 5. Do not expose any write endpoint until all checks and CI are green.
+
+## Scoped startup composition (server-only)
+
+`recoverDeliveryWorkspaceWithTransfers` revalidates the registered repository
+and worktree under the same Git lease used for publication, then checks the
+publication operation and both transfer identities **before** any state change.
+It converts interrupted publication reservations and commit/push intents to
+`uncertain`, preserving confirmed receipts and unrelated workspace rows.
+Missing stages remain missing. An existing push stage without its matching
+confirmed commit receipt fails closed. Repeated recovery is idempotent.
+
+Recovery performs no Git writes or GitHub requests. Its SQLite transitions
+are individually monotonic rather than one cross-journal transaction; a crash
+between stages is safe to resume, but a production startup coordinator must
+still discover registered workspaces and invoke this under the lease. It is
+not an authenticated commit/push API, and no browser publication is enabled.
