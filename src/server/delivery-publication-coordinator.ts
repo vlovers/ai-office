@@ -1,4 +1,8 @@
-import { decidePublication, publicationKey, type PublicationReceipt } from './delivery-publication-idempotency.js';
+import {
+  decidePublication,
+  publicationKey,
+  type PublicationReceipt,
+} from './delivery-publication-idempotency.js';
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 
 /**
@@ -16,8 +20,9 @@ export function publicationReadiness(
 ): PublicationReadiness {
   const decision = decidePublication(plan, receipt);
   if (decision.action === 'blocked') return { status: 'blocked', reason: decision.reason };
-  if (decision.action === 'reuse')
+  if (decision.action === 'reuse') {
     return { status: 'already-published', pullRequestUrl: decision.pullRequestUrl };
+  }
   return { status: 'requires-lease', operationKey: decision.key };
 }
 
@@ -29,9 +34,9 @@ export function validateLeasedPublication(
   expectedKey: string,
   currentPlan: DeliveryPublicationPlan,
 ): { valid: true } | { valid: false; reason: string } {
-  if (!currentPlan.allowed)
-    return { valid: false, reason: currentPlan.reason };
-  if (publicationKey(currentPlan) !== expectedKey)
+  if (!currentPlan.allowed) return { valid: false, reason: currentPlan.reason };
+  if (publicationKey(currentPlan) !== expectedKey) {
     return { valid: false, reason: 'Publication snapshot changed while acquiring the lease.' };
+  }
   return { valid: true };
 }
