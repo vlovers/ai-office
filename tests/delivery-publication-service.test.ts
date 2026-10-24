@@ -141,13 +141,27 @@ describe('lease-protected delivery publication pipeline', () => {
     const db = new DatabaseSync(':memory:');
     try {
       const journal = new DeliveryJournal(db);
-      const createDraft = vi.fn(async () => candidate);
+      let release!: () => void;
+      const remoteGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const createDraft = vi.fn(async () => {
+        await remoteGate;
+        return candidate;
+      });
       const args = { ...context(journal), createDraft };
-      const results = await Promise.allSettled([
-        publishApprovedDraft(args),
-        publishApprovedDraft(args),
-      ]);
+      const first = publishApprovedDraft(args);
+      const second = publishApprovedDraft(args);
+      // Keep the remote POST unresolved until both callers have entered the
+      // publication pipeline. A late replay may legitimately reuse a receipt.
+      await vi.waitFor(() => expect(createDraft).toHaveBeenCalledOnce());
+      release();
+      const results = await Promise.allSettled([first, second]);
       expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(createDraft).toHaveBeenCalledOnce();
+      const reused = await publishApprovedDraft(args);
+      expect(reused.pullRequestUrl).toBe(candidate.html_url);
       expect(createDraft).toHaveBeenCalledOnce();
     } finally {
       db.close();
