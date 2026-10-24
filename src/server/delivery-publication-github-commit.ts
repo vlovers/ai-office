@@ -87,7 +87,12 @@ export function reconcileCommitAttestedDraftViaGitHub(
  * any authority. An uncertain POST must still be reconciled read-only.
  */
 export function publishOperatorAuthorizedDraftViaGitHub(
-  context: DeliveryPublicationContext & { approval: ApprovedCommitSnapshot },
+  context: DeliveryPublicationContext & {
+    approval: ApprovedCommitSnapshot;
+    verifyLocalGitState?: (
+      plan: Extract<DeliveryPublicationContext['plan'], { allowed: true }>,
+    ) => Promise<void>;
+  },
   options: GitHubDraftWriteOptions,
   authorization: {
     ledger: DeliveryPublicationApprovalLedger;
