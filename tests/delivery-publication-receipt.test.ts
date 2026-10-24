@@ -32,15 +32,9 @@ describe('GitHub publication receipt verification', () => {
       { ...receipt, head: { ref: plan.branch, repo: { full_name: 'evil/fork' } } },
       'does not match',
     ],
-    [
-      { ...receipt, base: { ref: 'main', repo: { full_name: 'evil/fork' } } },
-      'does not match',
-    ],
+    [{ ...receipt, base: { ref: 'main', repo: { full_name: 'evil/fork' } } }, 'does not match'],
     [{ ...receipt, head: { ref: plan.branch, repo: null } }, 'does not match'],
-    [
-      { ...receipt, html_url: 'https://github.com/attacker/repo/pull/123' },
-      'approved destination',
-    ],
+    [{ ...receipt, html_url: 'https://github.com/attacker/repo/pull/123' }, 'approved destination'],
     [
       { ...receipt, html_url: 'https://github.com/vlovers/ai-office/pull/123?x=1' },
       'approved destination',
