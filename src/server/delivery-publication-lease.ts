@@ -1,0 +1,38 @@
+import { acquireLocks } from './lock.js';
+import { repositoryLeaseDirectories } from './repositories.js';
+import {
+  validateLeasedPublication,
+  type PublicationReadiness,
+} from './delivery-publication-coordinator.js';
+import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
+
+type RepositoryIdentity = { path: string; gitDir: string };
+
+/**
+ * Cross-instance Git metadata lease with an exact review-snapshot check.
+ * The callback must not publish anything until it has independently verified
+ * the current workspace identity, journal state and remote destination.
+ */
+export async function withPublicationLease<T>(
+  repository: RepositoryIdentity,
+  workspaceGitDir: string,
+  readiness: PublicationReadiness,
+  refreshPlan: () => Promise<DeliveryPublicationPlan>,
+  action: () => Promise<T>,
+): Promise<T> {
+  if (readiness.status !== 'requires-lease')
+    throw new Error('Publication does not require a new lease.');
+  const directories = await repositoryLeaseDirectories(repository, workspaceGitDir);
+  const release = await acquireLocks(
+    directories.map((directory) => `${directory}/ai-office-publication.lock`),
+    'AI Office delivery publication',
+  );
+  try {
+    const currentPlan = await refreshPlan();
+    const result = validateLeasedPublication(readiness.operationKey, currentPlan);
+    if (!result.valid) throw new Error(result.reason);
+    return await action();
+  } finally {
+    await release();
+  }
+}
