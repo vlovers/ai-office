@@ -42,7 +42,7 @@ export function auditWorkflowText(source, filename = 'workflow') {
       (line, offset) =>
         offset > index &&
         offset < end &&
-        indentation(line) === stepIndent &&
+        (indentation(line) === stepIndent || indentation(line) === stepIndent + 2) &&
         /^\s*with:\s*(?:#.*)?$/.test(line),
     );
     let safe = false;
