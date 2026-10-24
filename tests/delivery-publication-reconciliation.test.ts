@@ -9,12 +9,13 @@ const plan = {
   revision: 'a'.repeat(64),
   draft: true as const,
 };
+const repo = { full_name: 'vlovers/ai-office' };
 const candidate = {
   html_url: 'https://github.com/vlovers/ai-office/pull/123',
   draft: true,
   state: 'open',
-  head: { ref: plan.branch },
-  base: { ref: 'main' },
+  head: { ref: plan.branch, repo },
+  base: { ref: 'main', repo },
 };
 
 describe('uncertain publication reconciliation', () => {
@@ -24,9 +25,11 @@ describe('uncertain publication reconciliation', () => {
       pullRequestUrl: candidate.html_url,
     });
   });
+
   it('never treats absence as permission to retry', () => {
     expect(reconcilePublicationCandidates(plan, []).status).toBe('unresolved');
   });
+
   it('refuses multiple matching PRs', () => {
     expect(
       reconcilePublicationCandidates(plan, [
@@ -35,20 +38,22 @@ describe('uncertain publication reconciliation', () => {
       ]).status,
     ).toBe('unresolved');
   });
-  it('refuses closed, non-draft or foreign PRs', () => {
+
+  it('refuses closed, non-draft, forked or foreign PRs', () => {
     for (const mismatch of [
       { ...candidate, state: 'closed' },
       { ...candidate, draft: false },
+      { ...candidate, head: { ref: plan.branch, repo: { full_name: 'evil/fork' } } },
       { ...candidate, html_url: 'https://github.com/other/repo/pull/123' },
     ]) {
       expect(reconcilePublicationCandidates(plan, [mismatch]).status).toBe('unresolved');
     }
   });
+
   it('ignores unrelated branch candidates without confirming them', () => {
     expect(
-      reconcilePublicationCandidates(plan, [
-        { ...candidate, head: { ref: 'unrelated' } },
-      ]).status,
+      reconcilePublicationCandidates(plan, [{ ...candidate, head: { ref: 'unrelated', repo } }])
+        .status,
     ).toBe('unresolved');
   });
 });
