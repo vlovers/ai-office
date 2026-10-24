@@ -50,7 +50,7 @@ export function auditWorkflowText(source, filename = 'workflow') {
       const withIndent = indentation(lines[withIndex]);
       for (let line = withIndex + 1; line < end; line += 1) {
         if (lines[line].trim() && indentation(lines[line]) <= withIndent) break;
-        if (/^\s*persist-credentials:\s*false\s*(?:#.*)?$/.test(lines[line])) safe = true;
+        if (/^\s*persist-credentials:\s*false\s*(?:#.*)?$/.test(lines[line]) && indentation(lines[line]) === withIndent + 2) safe = true;
       }
     }
     if (!safe) findings.push(`${location}: checkout requires with.persist-credentials: false`);
