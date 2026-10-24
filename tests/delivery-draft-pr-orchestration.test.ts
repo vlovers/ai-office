@@ -111,9 +111,7 @@ describe('Draft PR publication orchestration', () => {
     const t = setup();
     try {
       t.listRemote.mockRejectedValueOnce(new Error('GitHub 502: internal details'));
-      await expect(createDraftPublication(t.context)).rejects.toThrow(
-        'Remote PR inventory failed',
-      );
+      await expect(createDraftPublication(t.context)).rejects.toThrow('Remote PR inventory failed');
       expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.createDraft).not.toHaveBeenCalled();
     } finally {
