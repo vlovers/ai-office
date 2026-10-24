@@ -40,7 +40,11 @@ export type SessionBoundDraftContext = {
 export async function createSessionBoundGitHubDraft(context: SessionBoundDraftContext) {
   const workspace = deliveryWorkspaceSchema.parse(context.workspace);
   const { workspaceId, plan } = workspace;
-  const operator = context.sessions.authorize(context.sessionToken, workspaceId, 'approve:draft-pr');
+  const operator = context.sessions.authorize(
+    context.sessionToken,
+    workspaceId,
+    'approve:draft-pr',
+  );
   const commits = {
     operationKey: publicationKey(plan),
     headCommitSha: workspace.headSha,

@@ -37,8 +37,7 @@ const receipt = {
   head: { ref: plan.branch, sha: headSha, repo },
   base: { ref: 'main', sha: baseSha, repo },
 };
-const json = (value: unknown, status = 200) =>
-  new Response(JSON.stringify(value), { status });
+const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), 'ai-office-session-draft-'));

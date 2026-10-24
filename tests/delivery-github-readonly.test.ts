@@ -110,7 +110,6 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-
   it('follows an explicit next Link even when GitHub returns a short page', async () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = Number(new URL(url).searchParams.get('page'));
@@ -131,14 +130,21 @@ describe('read-only GitHub PR discovery', () => {
 
   it.each([
     ['cross-origin', 'https://attacker.invalid/pulls?page=2'],
-    ['skipped page', 'https://api.github.com/repos/vlovers/ai-office/pulls?state=all&per_page=5&page=3'],
-    ['different repository', 'https://api.github.com/repos/foreign/repo/pulls?state=all&per_page=5&page=2'],
+    [
+      'skipped page',
+      'https://api.github.com/repos/vlovers/ai-office/pulls?state=all&per_page=5&page=3',
+    ],
+    [
+      'different repository',
+      'https://api.github.com/repos/foreign/repo/pulls?state=all&per_page=5&page=2',
+    ],
   ])('rejects a malicious pagination next link: %s', async (_label, next) => {
-    const fetcher = vi.fn(async () =>
-      new Response(JSON.stringify([candidate]), {
-        status: 200,
-        headers: { link: '<' + next + '>; rel="next"' },
-      }),
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: '<' + next + '>; rel="next"' },
+        }),
     );
     await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
       'pagination',
