@@ -43,7 +43,9 @@ describe('delivery journal', () => {
     try {
       const journal = new DeliveryJournal(db);
       journal.reserve('workspace-3', 'operation-a');
-      expect(() => journal.publish('workspace-3', 'operation-a', 'https://evil.example/pull/1')).toThrow();
+      expect(() =>
+        journal.publish('workspace-3', 'operation-a', 'https://evil.example/pull/1'),
+      ).toThrow();
       expect(journal.get('workspace-3')?.state).toBe('reserved');
       expect(journal.markUncertain('workspace-3', 'operation-a')?.state).toBe('uncertain');
     } finally {
