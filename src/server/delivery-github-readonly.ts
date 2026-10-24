@@ -5,7 +5,7 @@ import { collectRemotePullRequests } from './delivery-publication-pagination.js'
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
 
-type ReadOnlyGitHubOptions = {
+export type ReadOnlyGitHubOptions = {
   fetcher?: Fetcher;
   /** Server-side credential only. Never forward browser-provided tokens. */
   token?: string;
