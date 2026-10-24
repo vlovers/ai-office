@@ -29,6 +29,31 @@ const binding = {
 };
 
 describe('atomic publication approval and journal reservation', () => {
+  it('rechecks expiry inside the transaction after live authorization', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      let clock = 10_000;
+      const now = () => clock;
+      const approvals = new DeliveryPublicationApprovalLedger(db, now);
+      const approvalId = approvals.issue(binding, 100);
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          approvalId,
+          binding,
+          () => {
+            clock = 10_100;
+          },
+          now,
+        ),
+      ).toThrow();
+      expect(new DeliveryJournal(db).get(binding.workspaceId)).toBeNull();
+      expect(() => approvals.assertPending(approvalId, binding)).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
   it('commits both records once and blocks approval replay', () => {
     const db = new DatabaseSync(':memory:');
     try {
