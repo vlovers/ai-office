@@ -52,18 +52,18 @@ be regenerated automatically to retry an uncertain external operation.
 
 ## Failure matrix
 
-| Event | Required behavior |
-| --- | --- |
-| Approval belongs to another operator/session/stage | Reject without external write |
-| Review snapshot, destination, branch or SHA changed | Reject; require fresh review |
-| Approval expired, revoked or already consumed | Reject; no replay |
-| Clock moves backwards across restart | Reject until trusted clock catches up |
-| Another process consumed approval | Atomic SQL update rejects second caller |
-| Crash after approval consumption, before intent | No external write; manual recovery |
-| Crash after intent, before or during external write | Preserve uncertain state; read-only reconciliation |
-| GitHub timeout, rate limit, 5xx or malformed response | Do not infer success or retry blindly |
-| Remote ref does not match reviewed SHA | Do not confirm receipt |
-| Existing publication has a different operation key | Reject; never overwrite another workspace |
+| Event                                                 | Required behavior                                  |
+| ----------------------------------------------------- | -------------------------------------------------- |
+| Approval belongs to another operator/session/stage    | Reject without external write                      |
+| Review snapshot, destination, branch or SHA changed   | Reject; require fresh review                       |
+| Approval expired, revoked or already consumed         | Reject; no replay                                  |
+| Clock moves backwards across restart                  | Reject until trusted clock catches up              |
+| Another process consumed approval                     | Atomic SQL update rejects second caller            |
+| Crash after approval consumption, before intent       | No external write; manual recovery                 |
+| Crash after intent, before or during external write   | Preserve uncertain state; read-only reconciliation |
+| GitHub timeout, rate limit, 5xx or malformed response | Do not infer success or retry blindly              |
+| Remote ref does not match reviewed SHA                | Do not confirm receipt                             |
+| Existing publication has a different operation key    | Reject; never overwrite another workspace          |
 
 ## Tests and activation gates
 
