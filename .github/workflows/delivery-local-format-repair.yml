@@ -1,0 +1,34 @@
+name: Delivery local Git formatting repair
+
+on:
+  push:
+    branches:
+      - feat/delivery-local-git-attestation-2026-10-24
+    paths:
+      - .github/workflows/delivery-local-format-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.repository == 'vlovers/ai-office'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Format local attestation changes
+        run: npx prettier --write ROADMAP.md docs/DELIVERY_LOCAL_GIT_ATTESTATION.md src/server/delivery-local-git-attestation.ts src/server/delivery-publication-github-commit.ts src/server/delivery-publication-service.ts tests/delivery-local-git-attestation.test.ts tests/delivery-publication-service.test.ts
+      - name: Commit formatted changes
+        run: |
+          if ! git diff --quiet -- ROADMAP.md docs/DELIVERY_LOCAL_GIT_ATTESTATION.md src/server/delivery-local-git-attestation.ts src/server/delivery-publication-github-commit.ts src/server/delivery-publication-service.ts tests/delivery-local-git-attestation.test.ts tests/delivery-publication-service.test.ts; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ROADMAP.md docs/DELIVERY_LOCAL_GIT_ATTESTATION.md src/server/delivery-local-git-attestation.ts src/server/delivery-publication-github-commit.ts src/server/delivery-publication-service.ts tests/delivery-local-git-attestation.test.ts tests/delivery-publication-service.test.ts
+            git commit -m "style(delivery): apply Prettier to local Git attestation"
+            git push origin HEAD:feat/delivery-local-git-attestation-2026-10-24
+          fi
