@@ -69,6 +69,27 @@ Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder →
 
 Verification dashboard and explicitly authorized GitHub PR preparation/publishing, minimal GitHub permissions, revision-pinned checks, manual confirmation for push/PR actions. The [GitHub Delivery Center contract](docs/GITHUB_DELIVERY_CENTER.md) defines server-side revision checks, explicit commit/push/PR approvals, fail-closed recovery and acceptance tests. **This is a specification, not a shipped integration.**
 
+### v0.8 publication foundation (unreleased)
+
+The delivery publication boundary now combines the shared Git lease, refreshed
+review snapshot, durable SQLite operation reservation, strict GitHub draft PR
+receipt verification and read-only uncertain-result reconciliation. SQLite
+integration tests cover duplicate requests, concurrent callers, timeouts,
+forked PRs and restart recovery. A new commit-pinned variant also performs
+read-only GitHub head/base ref SHA attestation under the same lease and
+verifies both PR commit SHAs after creation. Its recovery path requires
+complete PR discovery plus a separate fresh PR detail GET before resolving
+an uncertain write. Tests cover moved refs, hostile API responses, stale
+post-write commits and recovery without duplicate POSTs.
+
+This is **not** a connected GitHub publisher: independently approved local
+commit identities, explicit commit/push approvals, real least-privilege
+GitHub authentication, HTTP authorization, operator confirmation UI and
+end-to-end production activation remain outstanding. The server-only,
+GET-only GitHub REST adapter provides bounded, fully paginated discovery
+for reconciliation, but it is not connected to a production endpoint.
+See [pipeline safety and activation gates](docs/DELIVERY_PUBLICATION_PIPELINE.md).
+
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.

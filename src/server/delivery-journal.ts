@@ -91,6 +91,30 @@ export class DeliveryJournal {
   }
 
   /**
+   * Resolve an uncertain remote write only after a fresh, verified GitHub
+   * receipt has been found under the repository lease. Never transition
+   * an unrelated operation or overwrite an existing published receipt.
+   */
+  confirmUncertain(
+    workspaceId: string,
+    operationKey: string,
+    pullRequestUrl: string,
+  ): DeliveryJournalEntry {
+    if (!/^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/pull\/[1-9]\d*$/.test(pullRequestUrl)) {
+      throw new Error('Invalid GitHub pull request URL.');
+    }
+    const updated = this.db
+      .prepare(
+        "UPDATE delivery_journal SET state='published', pull_request_url=? WHERE workspace_id=? AND operation_key=? AND state='uncertain'",
+      )
+      .run(pullRequestUrl, workspaceId, operationKey);
+    if (updated.changes !== 1) {
+      throw new Error('Uncertain publication is missing or belongs to a different operation.');
+    }
+    return this.get(workspaceId)!;
+  }
+
+  /**
    * After restart, an in-flight reservation is uncertain. Never retry an
    * external GitHub operation until the remote outcome has been reconciled.
    */
