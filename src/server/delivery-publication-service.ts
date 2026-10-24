@@ -102,6 +102,8 @@ export async function publishCommitAttestedDraft(
   context: DeliveryPublicationContext & {
     approval: ApprovedCommitSnapshot;
     gitHubRefOptions?: GitHubRefOptions;
+    /** Must be provided by the locally verified production composition. */
+    verifyLocalGitState?: (plan: AllowedPlan) => Promise<void>;
     createDraft: (plan: AllowedPlan, attestation: AttestedGitRefs) => Promise<GitHubCommitReceipt>;
     /** Optional for legacy server-only callers; authenticated entrypoints must provide it. */
     authorizeBeforeReserve?: (plan: AllowedPlan) => Promise<void> | void;
@@ -138,6 +140,7 @@ export async function publishCommitAttestedDraft(
         }
         return existing;
       }
+      await context.verifyLocalGitState?.(currentPlan);
       const attestation = await attestGitHubCommitRefs(
         currentPlan,
         context.approval,

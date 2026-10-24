@@ -80,6 +80,70 @@ beforeEach(() => {
 });
 
 describe('lease-protected delivery publication pipeline', () => {
+  it('blocks local Git failure before GitHub GET and journal reservation', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = remoteRefs();
+      const verifyLocalGitState = vi.fn(async () => {
+        throw new Error('Local Git worktree or index is not clean.');
+      });
+      const createDraft = vi.fn(async () => commitReceipt);
+      await expect(
+        publishCommitAttestedDraft({
+          ...context(journal),
+          approval: approvedCommits,
+          verifyLocalGitState,
+          gitHubRefOptions: { fetcher },
+          createDraft,
+        }),
+      ).rejects.toThrow('not clean');
+      expect(verifyLocalGitState).toHaveBeenCalledWith(plan);
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(createDraft).not.toHaveBeenCalled();
+      expect(journal.get('workspace-1')).toBeNull();
+      expect(acquireLocks).toHaveBeenCalledOnce();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('runs local Git gate inside the lease before remote refs and POST', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const order: string[] = [];
+      const fetcher = remoteRefs();
+      const verifyLocalGitState = vi.fn(async () => {
+        order.push('local');
+        expect(acquireLocks).toHaveBeenCalledOnce();
+        expect(journal.get('workspace-1')).toBeNull();
+      });
+      const createDraft = vi.fn(async () => {
+        order.push('POST');
+        expect(journal.get('workspace-1')?.state).toBe('reserved');
+        return commitReceipt;
+      });
+      const wrappedFetcher = vi.fn(async (url: string, init: RequestInit) => {
+        order.push('GET');
+        return fetcher(url, init);
+      });
+      const result = await publishCommitAttestedDraft({
+        ...context(journal),
+        approval: approvedCommits,
+        verifyLocalGitState,
+        gitHubRefOptions: { fetcher: wrappedFetcher },
+        createDraft,
+      });
+      expect(result.state).toBe('published');
+      expect(order).toEqual(['local', 'GET', 'GET', 'POST']);
+      expect(verifyLocalGitState).toHaveBeenCalledOnce();
+      expect(createDraft).toHaveBeenCalledOnce();
+    } finally {
+      db.close();
+    }
+  });
+
   it('reserves before POST and reuses the durable receipt without another POST', async () => {
     const db = new DatabaseSync(':memory:');
     try {

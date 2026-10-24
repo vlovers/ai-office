@@ -117,6 +117,21 @@ expiry, restart, stale reviews, GitHub errors and ambiguous POST results.
 authentication, CSRF protection and independent commit/push approvals remain
 required before production activation.
 
+### v0.8 local Git worktree attestation (unreleased)
+
+A server-only, read-only local Git gate verifies the selected worktree
+identity, clean index and files, managed branch, exact reviewed head/base
+commit SHAs and credential-free GitHub origin. The commit-pinned publisher
+can now execute this gate inside the shared repository lease **before**
+remote ref GET, SQLite reservation or Draft PR POST. Integration tests
+cover ordering and fail-closed local errors. See
+[local attestation contract](docs/DELIVERY_LOCAL_GIT_ATTESTATION.md).
+
+This does not authorize a commit or push and does not expose an HTTP
+publication route. Trusted operator identity, cross-worktree common-repo
+ownership revalidation, separate commit/push receipts, CSRF protection, credential
+provisioning and native end-to-end activation remain required.
+
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
