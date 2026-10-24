@@ -2,62 +2,108 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
-const SHA_ACTION = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_./-]+@[a-f0-9]{40}$/;
-const SHA_DOCKER = /^docker:\/\/[^\s@]+@sha256:[a-f0-9]{64}$/;
+const SHA_ACTION = /^(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+@[a-f0-9]{40}$/;
+const SHA_DOCKER = /^docker:\/\/[A-Za-z0-9_.:/-]+@sha256:[a-f0-9]{64}$/;
+const LOCAL_ACTION = /^\.\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/;
 
 function indentation(line) {
   return /^\s*/.exec(line)[0].length;
 }
 
+function isSafeReference(reference) {
+  if (reference.startsWith('./')) {
+    return LOCAL_ACTION.test(reference) && reference.slice(2).split('/').every(
+      (segment) => segment !== '.' && segment !== '..',
+    );
+  }
+  if (reference.startsWith('docker://')) {
+    return SHA_DOCKER.test(reference) &&
+      !reference.slice('docker://'.length).split('@')[0].split('/').some(
+        (segment) => segment === '.' || segment === '..',
+      );
+  }
+  return SHA_ACTION.test(reference) &&
+    reference.split('@')[0].split('/').every(
+      (segment) => segment !== '.' && segment !== '..',
+    );
+}
+
 export function auditWorkflowText(source, filename = 'workflow') {
   const findings = [];
   const lines = source.split(/\r?\n/);
+  let topLevelPermissions = false;
+
+  // This intentionally accepts only explicit, static read-only token mappings.
+  // It is a workflow guard, not a general-purpose YAML parser.
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^(\s*)permissions\s*:\s*(.*?)\s*(?:#.*)?$/.exec(lines[index]);
+    if (!match) continue;
+    const depth = indentation(lines[index]);
+    if (depth !== 0 && depth !== 4) continue;
+    const location = filename + ':' + (index + 1);
+    if (depth === 0) topLevelPermissions = true;
+    if (match[2]) {
+      findings.push(location + ': permissions must be an explicit mapping');
+      continue;
+    }
+    let hasContentsRead = false;
+    for (let line = index + 1; line < lines.length; line += 1) {
+      if (!lines[line].trim() || /^\s*#/.test(lines[line])) continue;
+      if (indentation(lines[line]) <= depth) break;
+      const entry = /^\s*([a-z-]+)\s*:\s*(read|write|none)\s*(?:#.*)?$/.exec(lines[line]);
+      if (!entry) {
+        findings.push(filename + ':' + (line + 1) + ': invalid or dynamic token permission');
+        continue;
+      }
+      if (entry[2] === 'write') {
+        findings.push(filename + ':' + (line + 1) + ': write token permissions require separate review');
+      }
+      if (depth === 0 && entry[1] === 'contents' && entry[2] === 'read') {
+        hasContentsRead = true;
+      }
+    }
+    if (depth === 0 && !hasContentsRead) {
+      findings.push(location + ': workflow requires contents: read');
+    }
+  }
+  if (!topLevelPermissions) {
+    findings.push(filename + ': missing top-level permissions: contents: read');
+  }
 
   for (let index = 0; index < lines.length; index += 1) {
-    const match = /^\s*(?:-\s*)?uses:\s*([^\s#]+)/.exec(lines[index]);
+    const match = /^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*(?:#.*)?$/.exec(lines[index]);
     if (!match) continue;
-
-    const reference = match[1];
-    const location = `${filename}:${index + 1}`;
-    if (!reference.startsWith('./') && !SHA_ACTION.test(reference) && !SHA_DOCKER.test(reference)) {
-      findings.push(
-        `${location}: external action must use an immutable commit SHA or Docker digest (${reference})`,
-      );
+    const reference = match[1].trim();
+    const location = filename + ':' + (index + 1);
+    if (!reference || !isSafeReference(reference)) {
+      findings.push(location + ': action must use a static local path, immutable commit SHA or Docker digest (' + reference + ')');
     }
-
     if (!reference.startsWith('actions/checkout@')) continue;
 
     const stepIndent = indentation(lines[index]);
     let end = index + 1;
-    while (
-      end < lines.length &&
-      (!lines[end].trim() ||
-        indentation(lines[end]) > stepIndent ||
-        (indentation(lines[end]) === stepIndent && !/^\s*-\s/.test(lines[end])))
-    ) {
+    while (end < lines.length) {
+      if (/^\s*-\s+/.test(lines[end]) && indentation(lines[end]) <= stepIndent) break;
       end += 1;
     }
 
-    const withIndex = lines.findIndex(
-      (line, offset) =>
-        offset > index &&
-        offset < end &&
-        (indentation(line) === stepIndent || indentation(line) === stepIndent + 2) &&
-        /^\s*with:\s*(?:#.*)?$/.test(line),
-    );
-    let safe = false;
-    if (withIndex !== -1) {
-      const withIndent = indentation(lines[withIndex]);
-      for (let line = withIndex + 1; line < end; line += 1) {
-        if (lines[line].trim() && indentation(lines[line]) <= withIndent) break;
-        if (
-          /^\s*persist-credentials:\s*false\s*(?:#.*)?$/.test(lines[line]) &&
-          indentation(lines[line]) === withIndent + 2
-        )
-          safe = true;
+    let credentialSettings = [];
+    for (let line = index + 1; line < end; line += 1) {
+      if (!/^\s*with\s*:\s*(?:#.*)?$/.test(lines[line])) continue;
+      const withIndent = indentation(lines[line]);
+      if (withIndent !== stepIndent && withIndent !== stepIndent + 2) continue;
+      for (let setting = line + 1; setting < end; setting += 1) {
+        if (!lines[setting].trim() || /^\s*#/.test(lines[setting])) continue;
+        const settingIndent = indentation(lines[setting]);
+        if (settingIndent <= withIndent) break;
+        if (settingIndent !== withIndent + 2) continue;
+        const key = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/.exec(lines[setting]);
+        if (key) credentialSettings.push(key[1].trim());
       }
     }
-    if (!safe) findings.push(`${location}: checkout requires with.persist-credentials: false`);
+    if (credentialSettings.length !== 1 || credentialSettings[0] !== 'false') {
+      findings.push(location + ': checkout requires exactly one with.persist-credentials: false');
+    }
   }
   return findings;
 }
