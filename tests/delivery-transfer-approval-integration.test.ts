@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -53,6 +54,59 @@ describe('durable Git transfer approval integration', () => {
       expect(() => restarted.consume(String(receipt.approval_id), binding)).toThrow();
     } finally {
       restartedDb.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('enforces one-use consumption across real independent Node processes', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-transfer-process-'));
+    const path = join(directory, 'approvals.sqlite');
+    const db = new DatabaseSync(path);
+    let approvalId: string;
+    try {
+      const ledger = new DeliveryTransferApprovalLedger(db, () => 1000);
+      approvalId = ledger.issue(binding);
+    } finally {
+      db.close();
+    }
+
+    const script = [
+      "import { DatabaseSync } from 'node:sqlite';",
+      "import { DeliveryTransferApprovalLedger } from './src/server/delivery-transfer-approval.ts';",
+      'const db = new DatabaseSync(process.argv[1]);',
+      'const ledger = new DeliveryTransferApprovalLedger(db, () => 1000);',
+      'try {',
+      '  ledger.consume(process.argv[2], JSON.parse(process.argv[3]));',
+      "  process.stdout.write('consumed');",
+      '} catch {',
+      "  process.stdout.write('rejected');",
+      '  process.exitCode = 2;',
+      '} finally { db.close(); }',
+    ].join('\\n');
+    const consumeInChild = () =>
+      spawnSync(
+        process.execPath,
+        ['--import', 'tsx', '--input-type=module', '-e', script, path, approvalId, JSON.stringify(binding)],
+        { cwd: process.cwd(), encoding: 'utf8', timeout: 15_000 },
+      );
+    try {
+      const first = consumeInChild();
+      expect(first.error).toBeUndefined();
+      expect(first.status).toBe(0);
+      expect(first.stdout).toBe('consumed');
+      const second = consumeInChild();
+      expect(second.error).toBeUndefined();
+      expect(second.status).toBe(2);
+      expect(second.stdout).toBe('rejected');
+      const verify = new DatabaseSync(path);
+      try {
+        expect(
+          verify.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals WHERE consumed_at IS NOT NULL').get()?.n,
+        ).toBe(1);
+      } finally {
+        verify.close();
+      }
+    } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });
