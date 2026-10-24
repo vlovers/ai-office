@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
+import { reserveApprovedPublicationAtomically } from '../src/server/delivery-approved-publication-reservation.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
+import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import {
   createDraftPublication,
@@ -66,6 +68,147 @@ function setup() {
 }
 
 describe('Draft PR publication orchestration', () => {
+  it('integrates a real one-use SQLite approval with the draft orchestrator', async () => {
+    const t = setup();
+    try {
+      const binding = {
+        workspaceId: 'workspace-1',
+        operator: { operatorId: 'operator-1', sessionId: 'session-1' },
+        plan,
+        commits: {
+          operationKey: publicationKey(plan),
+          headCommitSha: '1'.repeat(40),
+          baseCommitSha: '2'.repeat(40),
+        },
+      };
+      const approvals = new DeliveryPublicationApprovalLedger(t.db, () => 10_000);
+      const approvalId = approvals.issue(binding);
+      const reserveApproved = vi.fn(() =>
+        reserveApprovedPublicationAtomically(
+          t.db,
+          approvalId,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
+      );
+      const context = { ...t.context, reserveApproved };
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(reserveApproved).toHaveBeenCalledTimes(1);
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+      expect(() => approvals.assertPending(approvalId, binding)).toThrow();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks a revoked exact publication approval before remote creation', async () => {
+    const t = setup();
+    try {
+      const binding = {
+        workspaceId: 'workspace-1',
+        operator: { operatorId: 'operator-1', sessionId: 'session-1' },
+        plan,
+        commits: {
+          operationKey: publicationKey(plan),
+          headCommitSha: '1'.repeat(40),
+          baseCommitSha: '2'.repeat(40),
+        },
+      };
+      const approvals = new DeliveryPublicationApprovalLedger(t.db, () => 10_000);
+      const approvalId = approvals.issue(binding);
+      expect(approvals.revoke(approvalId, binding.operator)).toBe(true);
+      const context = {
+        ...t.context,
+        reserveApproved: () =>
+          reserveApprovedPublicationAtomically(
+            t.db,
+            approvalId,
+            binding,
+            () => {},
+            () => 10_000,
+          ),
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(t.journal.get('workspace-1')).toBeNull();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('refuses a reserved journal record with an unexpected PR URL', async () => {
+    const t = setup();
+    try {
+      const context = {
+        ...t.context,
+        reserveApproved: () => {
+          t.db
+            .prepare(
+              "INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', ?)",
+            )
+            .run('workspace-1', publicationKey(plan), receipt.html_url);
+          return t.journal.get('workspace-1')!;
+        },
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow('did not persist');
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('uses the atomic reservation adapter once and reuses the published PR', async () => {
+    const t = setup();
+    try {
+      const reserveApproved = vi.fn(() => t.journal.reserve('workspace-1', publicationKey(plan)));
+      const context = { ...t.context, reserveApproved };
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(reserveApproved).toHaveBeenCalledTimes(1);
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks remote creation when atomic approval reservation fails', async () => {
+    const t = setup();
+    try {
+      const context = {
+        ...t.context,
+        reserveApproved: () => {
+          throw new Error('approval revoked');
+        },
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow('approval revoked');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects an unpersisted reservation receipt without contacting GitHub', async () => {
+    const t = setup();
+    try {
+      const context = {
+        ...t.context,
+        reserveApproved: () => ({
+          workspaceId: 'workspace-1',
+          operationKey: publicationKey(plan),
+          state: 'reserved' as const,
+          pullRequestUrl: null,
+        }),
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow('did not persist');
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
   it('publishes once, reuses durable receipt and never repeats remote creation', async () => {
     const t = setup();
     try {
@@ -166,7 +309,7 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
-  it('blocks managed head branch reuse even when the existing PR targets another base', async () => {
+  it('blocks managed head reuse when an existing PR targets another base', async () => {
     const t = setup();
     try {
       t.listRemote.mockResolvedValueOnce({
@@ -199,7 +342,7 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
-  it('reconciles a persisted uncertain intent after SQLite and process-context restart', async () => {
+  it('reconciles an uncertain intent after SQLite restart', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-office-restart-'));
     const repoPath = join(root, 'repo');
     const databasePath = join(root, 'delivery.sqlite');

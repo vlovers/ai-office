@@ -36,6 +36,28 @@ Status: **unreleased authorization foundation; remote write activation blocked**
 - [ ] Configure quotas/rate limits, bounded secret-free audit collection,
       monitoring, private storage and tested backup/restore/rollback procedures.
 
+## Draft PR approval integration (PR #69; not production-enabled)
+
+The server-only `createApprovedDraftPublication` composition now joins the
+shared Git lease, refreshed publication plan, independently supplied reviewed
+snapshot verifier, complete open/closed PR inventory, atomic one-use approval
+consumption + `DeliveryJournal` reservation, GitHub Draft PR receipt
+validation, and read-only reconciliation after ambiguous outcomes. Both
+approval and journal must use the same SQLite connection. An interrupted
+reservation is **not** permission to retry the external create operation.
+
+The older `createDraftPublication` compatibility API still accepts a
+non-approved journal reservation. **Do not mount or expose that legacy path
+as a production write executor.** The new approved composition is also
+unmounted and requires trusted, live operator authorization; its presence
+does not activate remote writes.
+
+Before any activation: integrate the approved composition with the reviewed
+operator/session boundary and actual least-privilege GitHub write adapter,
+independently attest head/base, test genuine multi-process crash/timeout
+cases and remote pagination on a disposable repository, then obtain an
+independent security review. No unattended PR publication, merge or deploy.
+
 ## Additional blockers before any remote write feature
 
 - [ ] Independently review authenticated UI-to-executor wiring and final live

@@ -35,6 +35,8 @@ export type DraftPublicationContext = {
   listRemote: (plan: AllowedPlan) => Promise<CompleteRemotePrInventory>;
   /** Trusted server-side adapter only. Must create a draft PR; no retries. */
   createDraft: (plan: AllowedPlan) => Promise<GitHubDraftReceipt>;
+  /** Optional trusted atomic approval+reservation adapter; no external writes inside. */
+  reserveApproved?: (plan: AllowedPlan) => DeliveryJournalEntry;
 };
 
 /**
@@ -133,7 +135,20 @@ export async function createDraftPublication(
         throw new Error('Remote PR head branch conflict requires manual reconciliation.');
       }
 
-      journal.reserve(workspaceId, operationKey);
+      const reservation = context.reserveApproved
+        ? context.reserveApproved(plan)
+        : journal.reserve(workspaceId, operationKey);
+      if (
+        reservation.workspaceId !== workspaceId ||
+        reservation.operationKey !== operationKey ||
+        reservation.state !== 'reserved' ||
+        reservation.pullRequestUrl !== null ||
+        journal.get(workspaceId)?.operationKey !== operationKey ||
+        journal.get(workspaceId)?.state !== 'reserved' ||
+        journal.get(workspaceId)?.pullRequestUrl !== null
+      ) {
+        throw new Error('Publication reservation did not persist the reviewed operation.');
+      }
       let receipt: GitHubDraftReceipt;
       try {
         receipt = await context.createDraft(plan);

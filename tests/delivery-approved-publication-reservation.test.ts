@@ -1,0 +1,330 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { describe, expect, it } from 'vitest';
+import { reserveApprovedPublicationAtomically } from '../src/server/delivery-approved-publication-reservation.js';
+import { DeliveryJournal } from '../src/server/delivery-journal.js';
+import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
+import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
+
+const plan = {
+  allowed: true as const,
+  destination: 'https://github.com/vlovers/ai-office',
+  branch: 'ai-office/12345678-1234-1234-1234-123456789abc',
+  baseBranch: 'main',
+  revision: 'a'.repeat(64),
+  draft: true as const,
+};
+const binding = {
+  workspaceId: 'workspace-1',
+  operator: { operatorId: 'operator-1', sessionId: 'session-1' },
+  plan,
+  commits: {
+    operationKey: publicationKey(plan),
+    headCommitSha: '1'.repeat(40),
+    baseCommitSha: '2'.repeat(40),
+  },
+};
+
+describe('atomic publication approval and journal reservation', () => {
+  it('rechecks expiry inside the transaction after live authorization', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      let clock = 10_000;
+      const now = () => clock;
+      const approvals = new DeliveryPublicationApprovalLedger(db, now);
+      const approvalId = approvals.issue(binding, 100);
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          approvalId,
+          binding,
+          () => {
+            clock = 10_100;
+          },
+          now,
+        ),
+      ).toThrow();
+      expect(new DeliveryJournal(db).get(binding.workspaceId)).toBeNull();
+      expect(() => approvals.assertPending(approvalId, binding)).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commits both records once and blocks approval replay', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const ledger = new DeliveryPublicationApprovalLedger(db, () => 10_000);
+      const id = ledger.issue(binding);
+      const entry = reserveApprovedPublicationAtomically(
+        db,
+        id,
+        binding,
+        () => {},
+        () => 10_000,
+      );
+      expect(entry.state).toBe('reserved');
+      expect(entry.operationKey).toBe(publicationKey(plan));
+      expect(() => ledger.assertPending(id, binding)).toThrow();
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
+      ).toThrow();
+      expect(new DeliveryJournal(db).listUnresolved()).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rolls back approval consumption when journal already owns the workspace', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const ledger = new DeliveryPublicationApprovalLedger(db, () => 10_000);
+      const journal = new DeliveryJournal(db);
+      journal.reserve(binding.workspaceId, 'other-operation');
+      const id = ledger.issue(binding);
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
+      ).toThrow();
+      ledger.assertPending(id, binding);
+      expect(journal.get(binding.workspaceId)?.operationKey).toBe('other-operation');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects revoked authorization and asynchronous authorization callbacks', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const ledger = new DeliveryPublicationApprovalLedger(db, () => 10_000);
+      const journal = new DeliveryJournal(db);
+      const id = ledger.issue(binding);
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {
+            throw new Error('operator revoked');
+          },
+          () => 10_000,
+        ),
+      ).toThrow('operator revoked');
+      ledger.assertPending(id, binding);
+      expect(journal.get(binding.workspaceId)).toBeNull();
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          (() => Promise.resolve()) as () => void,
+          () => 10_000,
+        ),
+      ).toThrow('synchronous');
+      ledger.assertPending(id, binding);
+      expect(ledger.revoke(id, binding.operator)).toBe(true);
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
+      ).toThrow();
+      expect(journal.get(binding.workspaceId)).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('survives a restart and refuses replay through a second SQLite connection', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-reserve-'));
+    const filename = join(directory, 'journal.sqlite');
+    try {
+      const first = new DatabaseSync(filename);
+      let approvalId: string;
+      try {
+        const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+        approvalId = approvals.issue(binding);
+        reserveApprovedPublicationAtomically(
+          first,
+          approvalId,
+          binding,
+          () => {},
+          () => 10_000,
+        );
+      } finally {
+        first.close();
+      }
+      const second = new DatabaseSync(filename);
+      try {
+        const journal = new DeliveryJournal(second);
+        expect(journal.get(binding.workspaceId)?.state).toBe('reserved');
+        expect(() =>
+          reserveApprovedPublicationAtomically(
+            second,
+            approvalId,
+            binding,
+            () => {},
+            () => 10_000,
+          ),
+        ).toThrow();
+        expect(journal.get(binding.workspaceId)?.operationKey).toBe(publicationKey(plan));
+        journal.recoverWorkspace(binding.workspaceId, publicationKey(plan));
+        expect(journal.get(binding.workspaceId)?.state).toBe('uncertain');
+      } finally {
+        second.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rolls back a matching duplicate journal reservation without consuming approval', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const approvals = new DeliveryPublicationApprovalLedger(db, () => 10_000);
+      const journal = new DeliveryJournal(db);
+      journal.reserve(binding.workspaceId, publicationKey(plan));
+      const id = approvals.issue(binding);
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
+      ).toThrow('already exists');
+      approvals.assertPending(id, binding);
+      expect(journal.get(binding.workspaceId)?.state).toBe('reserved');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('serializes independent SQLite connections and leaves a single durable reservation', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-contention-'));
+    const filename = join(directory, 'journal.sqlite');
+    const first = new DatabaseSync(filename);
+    const second = new DatabaseSync(filename);
+    try {
+      const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+      const journal = new DeliveryJournal(first);
+      const id = approvals.issue(binding);
+      const reserved = reserveApprovedPublicationAtomically(
+        first,
+        id,
+        binding,
+        () => {},
+        () => 10_000,
+      );
+      expect(reserved.state).toBe('reserved');
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          second,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
+      ).toThrow();
+      expect(new DeliveryJournal(second).listUnresolved()).toHaveLength(1);
+      expect(journal.get(binding.workspaceId)?.operationKey).toBe(publicationKey(plan));
+    } finally {
+      first.close();
+      second.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rolls back a revoked authorization on a separate SQLite connection', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-revoke-'));
+    const filename = join(directory, 'journal.sqlite');
+    const first = new DatabaseSync(filename);
+    const second = new DatabaseSync(filename);
+    try {
+      const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+      const id = approvals.issue(binding);
+      expect(
+        new DeliveryPublicationApprovalLedger(second, () => 10_000).revoke(id, binding.operator),
+      ).toBe(true);
+      expect(() =>
+        reserveApprovedPublicationAtomically(
+          first,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
+      ).toThrow();
+      expect(new DeliveryJournal(second).get(binding.workspaceId)).toBeNull();
+    } finally {
+      first.close();
+      second.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('prevents a second process from replaying a committed publication approval', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-process-'));
+    const filename = join(directory, 'journal.sqlite');
+    try {
+      const first = new DatabaseSync(filename);
+      let approvalId: string;
+      try {
+        const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+        approvalId = approvals.issue(binding);
+        reserveApprovedPublicationAtomically(
+          first,
+          approvalId,
+          binding,
+          () => {},
+          () => 10_000,
+        );
+      } finally {
+        first.close();
+      }
+      const childScript = [
+        "const { DatabaseSync } = require('node:sqlite');",
+        'const db = new DatabaseSync(process.argv[1]);',
+        "const approval = db.prepare('SELECT consumed_at FROM delivery_publication_approvals WHERE approval_id=?').get(process.argv[2]);",
+        "const journal = db.prepare('SELECT state, operation_key FROM delivery_journal WHERE workspace_id=?').get(process.argv[3]);",
+        "if (!approval || approval.consumed_at === null || !journal || journal.state !== 'reserved') process.exit(2);",
+        "const changed = db.prepare('UPDATE delivery_publication_approvals SET consumed_at=12345 WHERE approval_id=? AND consumed_at IS NULL').run(process.argv[2]);",
+        'if (changed.changes !== 0) process.exit(3);',
+        'db.close();',
+      ].join('\n');
+      execFileSync(process.execPath, [
+        '-e',
+        childScript,
+        filename,
+        approvalId,
+        binding.workspaceId,
+      ]);
+      const reopened = new DatabaseSync(filename);
+      try {
+        expect(new DeliveryJournal(reopened).listUnresolved()).toHaveLength(1);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
