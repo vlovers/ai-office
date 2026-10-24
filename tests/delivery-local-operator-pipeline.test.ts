@@ -107,11 +107,7 @@ describe('local Git and durable operator approval publication composition', () =
         repository: t.context.repository,
         commits,
       });
-      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual([
-        'GET',
-        'GET',
-        'POST',
-      ]);
+      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'POST']);
       expect(() =>
         t.ledger.assertPending(t.authorization.approvalId, {
           workspaceId: 'workspace-1',
@@ -131,11 +127,7 @@ describe('local Git and durable operator approval publication composition', () =
     try {
       attestLocalReviewedGitState.mockRejectedValueOnce(new Error('dirty worktree'));
       await expect(
-        publishLocallyAttestedOperatorDraftViaGitHub(
-          t.context,
-          t.options,
-          t.authorization,
-        ),
+        publishLocallyAttestedOperatorDraftViaGitHub(t.context, t.options, t.authorization),
       ).rejects.toThrow('dirty worktree');
       expect(t.fetcher).not.toHaveBeenCalled();
       expect(t.journal.get('workspace-1')).toBeNull();
@@ -200,11 +192,7 @@ describe('local Git and durable operator approval publication composition', () =
         return original(url, init);
       });
       await expect(
-        publishLocallyAttestedOperatorDraftViaGitHub(
-          t.context,
-          t.options,
-          t.authorization,
-        ),
+        publishLocallyAttestedOperatorDraftViaGitHub(t.context, t.options, t.authorization),
       ).rejects.toThrow('head branch moved');
       expect(t.journal.get('workspace-1')).toBeNull();
       t.ledger.assertPending(t.authorization.approvalId, {
@@ -227,19 +215,11 @@ describe('local Git and durable operator approval publication composition', () =
         return original(url, init);
       });
       await expect(
-        publishLocallyAttestedOperatorDraftViaGitHub(
-          t.context,
-          t.options,
-          t.authorization,
-        ),
+        publishLocallyAttestedOperatorDraftViaGitHub(t.context, t.options, t.authorization),
       ).rejects.toThrow('network timeout');
       expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
       expect(() =>
-        publishLocallyAttestedOperatorDraftViaGitHub(
-          t.context,
-          t.options,
-          t.authorization,
-        ),
+        publishLocallyAttestedOperatorDraftViaGitHub(t.context, t.options, t.authorization),
       ).toThrow();
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
