@@ -7,6 +7,10 @@ import {
   listAllGitHubPullRequests,
   type ReadOnlyGitHubOptions,
 } from './delivery-github-readonly.js';
+import {
+  DeliveryPublicationApprovalLedger,
+  type TrustedDeliveryOperator,
+} from './delivery-publication-approval.js';
 import type { ApprovedCommitSnapshot } from './delivery-github-ref-attestation.js';
 import {
   publishCommitAttestedDraft,
@@ -57,4 +61,44 @@ export function reconcileCommitAttestedDraftViaGitHub(
     },
     listAllRemoteDrafts: (plan) => listAllGitHubPullRequests(plan, options),
   });
+}
+
+/**
+ * Server-only authorized entrypoint. The ledger approval must have been
+ * issued after independently authenticated operator review and local Git
+ * verification. It is bound to the operator session, workspace, plan and
+ * both exact commits, and consumed atomically under the shared Git lease.
+ *
+ * This does not register an HTTP route or grant browser-provided identities
+ * any authority. An uncertain POST must still be reconciled read-only.
+ */
+export function publishOperatorAuthorizedDraftViaGitHub(
+  context: DeliveryPublicationContext & { approval: ApprovedCommitSnapshot },
+  options: GitHubDraftWriteOptions,
+  authorization: {
+    ledger: DeliveryPublicationApprovalLedger;
+    approvalId: string;
+    operator: TrustedDeliveryOperator;
+  },
+) {
+  const binding = {
+    workspaceId: context.workspaceId,
+    operator: authorization.operator,
+    plan: context.plan,
+    commits: context.approval,
+  };
+  // Fail closed before lock acquisition or even GitHub GET.
+  validateGitHubDraftWrite(context.plan, context.approval, options);
+  authorization.ledger.assertPending(authorization.approvalId, binding);
+  return publishCommitAttestedDraftViaGitHub(
+    {
+      ...context,
+      authorizeBeforeReserve: (currentPlan) =>
+        authorization.ledger.consume(authorization.approvalId, {
+          ...binding,
+          plan: currentPlan,
+        }),
+    },
+    options,
+  );
 }
