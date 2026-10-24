@@ -1,6 +1,7 @@
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import type { GitHubDraftReceipt } from './delivery-publication-receipt.js';
 import { collectRemotePullRequests } from './delivery-publication-pagination.js';
+import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
 
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -12,6 +13,7 @@ export type ReadOnlyGitHubOptions = {
   perPage?: number;
   maxPages?: number;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -133,20 +135,25 @@ export async function listAllGitHubPullRequests(
       'X-GitHub-Api-Version': '2022-11-28',
     };
     if (options.token) headers.Authorization = `Bearer ${options.token}`;
-    const response = await fetcher(url.toString(), {
-      method: 'GET',
-      redirect: 'error',
-      headers,
-      signal: options.signal,
-    });
-    if (response.redirected || (response.url && response.url !== url.toString())) {
-      throw new Error('GitHub PR listing redirected outside the approved request.');
-    }
-    if (response.status !== 200) {
-      // Never include response body or credential in thrown errors.
-      throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
-    }
-    const payload: unknown = await response.json();
+    const { response, payload } = await withGitHubRequestDeadline(
+      async (signal) => {
+        const response = await fetcher(url.toString(), {
+          method: 'GET',
+          redirect: 'error',
+          headers,
+          signal,
+        });
+        if (response.redirected || (response.url && response.url !== url.toString())) {
+          throw new Error('GitHub PR listing redirected outside the approved request.');
+        }
+        if (response.status !== 200) {
+          // Never include response body or credential in thrown errors.
+          throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
+        }
+        return { response, payload: (await response.json()) as unknown };
+      },
+      { signal: options.signal, timeoutMs: options.timeoutMs },
+    );
     if (!Array.isArray(payload) || payload.length > perPage) {
       throw new Error('Invalid GitHub PR listing page.');
     }
