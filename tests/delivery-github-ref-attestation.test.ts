@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import {
   attestGitHubCommitRefs,
+  readGitHubDraftCommitReceipt,
   validateAttestedDraftReceipt,
   type ApprovedCommitSnapshot,
 } from '../src/server/delivery-github-ref-attestation.js';
@@ -190,4 +191,65 @@ describe('GitHub immutable ref attestation', () => {
       expect(() => validateAttestedDraftReceipt(plan, attestation, changed)).toThrow();
     }
   });
+  it('reads an exact PR detail with SHA, number, branch and repository verification', async () => {
+    const fetcher = vi.fn(async (input: string, init: RequestInit) => {
+      expect(input).toBe('https://api.github.com/repos/vlovers/ai-office/pulls/123');
+      expect(init.method).toBe('GET');
+      expect(init.redirect).toBe('error');
+      return jsonResponse({ ...receipt, number: 123 });
+    });
+    const detail = await readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher });
+    expect(detail.head.sha).toBe(headCommitSha);
+    expect(detail.base.sha).toBe(baseCommitSha);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['missing head SHA', { ...receipt, number: 123, head: { ref: plan.branch, repo } }],
+    ['wrong PR number', { ...receipt, number: 124 }],
+    ['wrong repository', { ...receipt, number: 123, base: { ...receipt.base, repo: { full_name: 'other/repo' } } }],
+    ['closed PR', { ...receipt, number: 123, state: 'closed' }],
+    ['non-draft PR', { ...receipt, number: 123, draft: false }],
+    ['invalid SHA', { ...receipt, number: 123, head: { ...receipt.head, sha: 'bad' } }],
+  ])('rejects untrusted PR detail evidence: %s', async (_label, detail) => {
+    const fetcher = vi.fn(async () => jsonResponse(detail));
+    await expect(
+      readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher }),
+    ).rejects.toThrow();
+  });
+
+  it.each([401, 403, 404, 429, 500])('blocks PR detail HTTP %i', async (status) => {
+    const fetcher = vi.fn(async () => jsonResponse({ message: 'unavailable' }, status));
+    await expect(
+      readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher }),
+    ).rejects.toThrow(`HTTP ${status}`);
+  });
+
+  it('rejects untrusted PR detail URLs and credentials before any GET', async () => {
+    const fetcher = vi.fn();
+    await expect(
+      readGitHubDraftCommitReceipt(plan, 'https://github.com/attacker/repo/pull/123', {
+        fetcher,
+      }),
+    ).rejects.toThrow('Untrusted');
+    await expect(
+      readGitHubDraftCommitReceipt(plan, receipt.html_url + '?redirect=1', { fetcher }),
+    ).rejects.toThrow('Untrusted');
+    await expect(
+      readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher, token: 'bad token' }),
+    ).rejects.toThrow('Invalid server-side');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('rejects redirected PR detail requests', async () => {
+    const fetcher = vi.fn(async () => {
+      const response = jsonResponse({ ...receipt, number: 123 });
+      Object.defineProperty(response, 'url', { value: 'https://evil.example/pull/123' });
+      return response;
+    });
+    await expect(
+      readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher }),
+    ).rejects.toThrow('redirected');
+  });
+
 });
