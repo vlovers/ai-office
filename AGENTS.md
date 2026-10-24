@@ -1,32 +1,53 @@
-# AI engineering contract — ai-office
+# AI engineering contract — AI Office
 
-Read README.md and existing engineering/product policies before changes. ROADMAP.md, docs/ARCHITECTURE.md, docs/SECURITY.md, docs/MVP_STABILIZATION_CHECKLIST.md are relevant source documents; confirm paths before treating references as authoritative.
+Read the README and existing engineering policies before changes.
+Consult ROADMAP.md, docs/ARCHITECTURE.md, docs/SECURITY.md and
+docs/MVP_STABILIZATION_CHECKLIST.md when relevant.
 
 ## Product boundaries
-Local-first agent execution, task queue, write authorization, registered workspace roots, worktree ownership, SSE lifecycle, Review Center and durable recovery. Never expose the local server publicly, elevate agent privileges from prompt/UI, auto-merge, or imply generic host safety.
+
+Local-first agent execution, task queues, write authorization, registered
+workspace roots, worktree ownership, SSE lifecycle, Review Center and durable
+recovery. Never expose the server publicly, elevate privileges through prompts
+or UI, auto-merge, or imply generic host safety.
 
 ## Agent workflow
-1. Discover the current branch, code, PR/issue queue and existing tests; never assume a previously claimed implementation exists.
-2. Plan a cohesive user-visible delivery with acceptance criteria, contracts, non-goals, risk and testing.
-3. Implement in a dedicated branch/worktree. Parallel agents need isolated trees and clear file/API ownership. Preserve unrelated changes.
-4. Execute applicable validation, record exact commands/results and never silently disable checks or replace real behavior with mocks.
-5. Independent reviewer assesses original diff, acceptance criteria, correctness, regressions, safety, compatibility and test value; resolve blockers.
-6. Document evidence, handoff SHA, outstanding limitations and next action. Never auto-merge or deploy/publish without approval.
+
+1. Inspect the current branch, code, PRs, issues and tests.
+2. Plan a cohesive outcome, acceptance criteria, constraints and risks.
+3. Implement in an isolated branch or worktree, preserving unrelated changes.
+4. Execute checks and report exact commands and outcomes.
+5. Obtain independent review of the diff and acceptance criteria.
+6. Resolve blocking findings, document evidence and hand off the commit SHA.
+
+Never disable tests to conceal failures or claim unexecuted checks passed.
+Never deploy, publish or merge without required authorization.
 
 ## Relevant verification
+
 - `npm run format:check`
 - `npm run check`
-- `npm run test:sandbox (supported sandbox)`
+- `npm run test:sandbox` (supported macOS sandbox only)
 - `npm run test:browser`
 - `npm run test:browser:workflow`
-- `npm run test:real:workflow (only with intentionally authorized real Codex setup)`
+- `npm run test:real:workflow` (explicitly authorized real Codex setup only)
 
-Only use disposable databases and safe fixtures for tests that mutate state; never use production credentials. Commands are guidance, not claims of execution. Confirm scripts and environmental prerequisites.
+Use safe fixtures and never run destructive tests against production data.
 
 ## Project-specific acceptance
-Workflows: read-only default, explicit writes, sandbox, token/session redaction, task cancellation/resume, queue idempotency, snapshot version binding, worktree isolation, browser flows and migration integrity.
+
+Verify read-only defaults, explicit write authorization, sandbox boundaries,
+transcript redaction, task cancellation and resume, queue idempotency,
+configuration snapshot binding, worktree isolation, browser journeys and
+migration integrity.
 
 ## Release boundary
-Verify current tagged release separately from features merged into main; real Codex smoke and native sandbox environment must be evidenced, not inferred from mocked tests.
 
-See [Definition of Done](docs/engineering/DEFINITION_OF_DONE.md), [Independent review](docs/engineering/REVIEW_POLICY.md), [Release checklist](docs/engineering/RELEASE_CHECKLIST.md) and [PR template](.github/PULL_REQUEST_TEMPLATE.md).
+Distinguish current tagged releases from functionality merged into main.
+Real Codex and native sandbox tests need environment-specific evidence;
+mock-based checks alone are insufficient.
+
+See [Definition of Done](docs/engineering/DEFINITION_OF_DONE.md),
+[Independent review](docs/engineering/REVIEW_POLICY.md),
+[Release checklist](docs/engineering/RELEASE_CHECKLIST.md) and
+[PR template](.github/PULL_REQUEST_TEMPLATE.md).
