@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { DeliveryJournal, type DeliveryJournalEntry } from './delivery-journal.js';
+import { publicationKey } from './delivery-publication-idempotency.js';
 import {
   DeliveryPublicationApprovalLedger,
   type PublicationApprovalBinding,
@@ -33,13 +34,7 @@ export function reserveApprovedPublicationAtomically(
     }
     approvals.consume(approvalId, binding);
     if (!binding.plan.allowed) throw new Error('Blocked publication cannot be reserved.');
-    const entry = journal.reserve(binding.workspaceId, JSON.stringify([
-      binding.plan.destination,
-      binding.plan.branch,
-      binding.plan.baseBranch,
-      binding.plan.revision,
-      binding.plan.draft,
-    ]));
+    const entry = journal.reserve(binding.workspaceId, publicationKey(binding.plan));
     db.exec('COMMIT');
     return entry;
   } catch (error) {
