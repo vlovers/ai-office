@@ -30,6 +30,9 @@ merge, branch deletion or deployment is enabled.
 - `delivery-publication-reconciliation.ts` compares remote candidates only
   for an already uncertain operation. An absent, duplicate, foreign, closed
   or non-draft PR cannot be treated as confirmation.
+- `delivery-publication-pagination.ts` gathers every page from a trusted
+  read-only adapter and rejects malformed, looping, oversized or incomplete
+  listings. It returns `complete: true` only after the final page succeeds.
 
 ## Failure and restart matrix
 
