@@ -89,6 +89,44 @@ function setup() {
 }
 
 describe('approved Draft PR publication end-to-end boundary', () => {
+  it('never consumes an approval when remote preflight fails after snapshot verification', async () => {
+    const t = setup();
+    try {
+      t.listRemote.mockRejectedValueOnce(new Error('GitHub inventory unavailable'));
+      await expect(createApprovedDraftPublication(t.context())).rejects.toThrow('inventory failed');
+      t.approvals.assertPending(t.context().approvalId, binding);
+      expect(t.journal().get(binding.workspaceId)).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(t.verifyApprovedSnapshot).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects a second approval for a different reviewed revision after publication', async () => {
+    const t = setup();
+    try {
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
+      const foreignPlan = { ...plan, revision: 'c'.repeat(64) };
+      const foreignBinding = {
+        ...binding,
+        plan: foreignPlan,
+        commits: { ...binding.commits, operationKey: publicationKey(foreignPlan) },
+      };
+      await expect(
+        createApprovedDraftPublication({
+          ...t.context(),
+          binding: foreignBinding,
+          initialPlan: foreignPlan,
+          refreshPlan: async () => foreignPlan,
+        }),
+      ).rejects.toThrow('another publication operation');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('recovers a crash after atomic commit but before GitHub creation without replay', async () => {
     const t = setup();
     try {
