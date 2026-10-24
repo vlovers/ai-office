@@ -53,6 +53,9 @@ describe('delivery confirmation contract', () => {
       ).valid,
     ).toBe(false);
     expect(
+      validateDeliveryConfirmation({ ...preflight, checks: [] }, confirmation).valid,
+    ).toBe(false);
+    expect(
       validateDeliveryConfirmation({ ...preflight, revision: null }, confirmation).valid,
     ).toBe(false);
     expect(
