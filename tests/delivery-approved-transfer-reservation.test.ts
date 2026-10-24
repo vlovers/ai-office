@@ -82,7 +82,15 @@ function fixture() {
     now,
   };
   return {
-    root, run, db, dbPath, approvals, transfers, binding, context, repository,
+    root,
+    run,
+    db,
+    dbPath,
+    approvals,
+    transfers,
+    binding,
+    context,
+    repository,
     close: () => {
       db.close();
       rmSync(root, { recursive: true, force: true });
@@ -177,8 +185,12 @@ describe('approved Git transfer intent reservation', () => {
     const foreign = mkdtempSync(join(tmpdir(), 'ai-office-foreign-'));
     let releaseHeld!: () => void;
     let notifyHeld!: () => void;
-    const held = new Promise<void>((resolve) => { releaseHeld = resolve; });
-    const acquired = new Promise<void>((resolve) => { notifyHeld = resolve; });
+    const held = new Promise<void>((resolve) => {
+      releaseHeld = resolve;
+    });
+    const acquired = new Promise<void>((resolve) => {
+      notifyHeld = resolve;
+    });
     try {
       execFileSync('/usr/bin/git', ['init', '-q', '-b', 'main', foreign]);
       const foreignWorktree = { path: foreign, gitDir: realpathSync(join(foreign, '.git')) };
@@ -198,7 +210,9 @@ describe('approved Git transfer intent reservation', () => {
         }),
       ).rejects.toThrow('belongs to another repository');
       const holder = withDeliveryRepositoryLease(
-        t.repository, t.repository.gitDir, async () => {
+        t.repository,
+        t.repository.gitDir,
+        async () => {
           notifyHeld();
           await held;
         },
