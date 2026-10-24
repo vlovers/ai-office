@@ -37,6 +37,8 @@ export type DraftPublicationContext = {
   createDraft: (plan: AllowedPlan) => Promise<GitHubDraftReceipt>;
   /** Optional trusted atomic approval+reservation adapter; no external writes inside. */
   reserveApproved?: (plan: AllowedPlan) => DeliveryJournalEntry;
+  /** Optional independent PR detail verification, including immutable commit SHAs. */
+  verifyRemoteReceipt?: (plan: AllowedPlan, url: string) => Promise<void>;
 };
 
 /**
@@ -103,6 +105,9 @@ export async function createDraftPublication(
           if (decision.action !== 'reuse') {
             throw new Error('Stored publication receipt failed destination verification.');
           }
+          if (context.verifyRemoteReceipt) {
+            await context.verifyRemoteReceipt(plan, existing.pullRequestUrl!);
+          }
           return { status: 'published', entry: existing } as const;
         }
         // Even a reserved record may represent a successful remote write after a crash.
@@ -162,6 +167,7 @@ export async function createDraftPublication(
       }
       try {
         const url = validatePublicationReceipt(plan, receipt);
+        await context.verifyRemoteReceipt?.(plan, url);
         return {
           status: 'published',
           entry: journal.publish(workspaceId, operationKey, url),
@@ -207,6 +213,17 @@ async function reconcileOnly(
       entry: context.journal.get(context.workspaceId)!,
       reason: result.reason,
     };
+  }
+  if (context.verifyRemoteReceipt) {
+    try {
+      await context.verifyRemoteReceipt(plan, result.pullRequestUrl);
+    } catch {
+      return {
+        status: 'uncertain',
+        entry: context.journal.get(context.workspaceId)!,
+        reason: 'Remote PR detail failed independent verification; no write was retried.',
+      };
+    }
   }
   return {
     status: 'published',

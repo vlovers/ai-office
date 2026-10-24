@@ -36,7 +36,7 @@ Status: **unreleased authorization foundation; remote write activation blocked**
 - [ ] Configure quotas/rate limits, bounded secret-free audit collection,
       monitoring, private storage and tested backup/restore/rollback procedures.
 
-## Draft PR approval integration (PR #69; not production-enabled)
+## Draft PR approval integration (PR #69 merged; not production-enabled)
 
 The server-only `createApprovedDraftPublication` composition now joins the
 shared Git lease, refreshed publication plan, independently supplied reviewed
@@ -76,3 +76,25 @@ independent security review. No unattended PR publication, merge or deploy.
 - [ ] Independent security review and all required CI green before activation.
       Keep [issue #58](https://github.com/vlovers/ai-office/issues/58) open until
       its remaining gates are proven. No unattended merge/deploy product feature.
+
+## Session-bound GitHub Draft adapter (issue #70; server-only)
+
+The new `createSessionBoundGitHubDraft` composes live `DeliverySessions` grants,
+trusted immutable workspace registry refresh, confirmed commit/push receipts,
+local Git attestation, exact GitHub head/base SHA attestation, complete remote PR
+inventory, atomic approval+journal reservation, one Draft-only POST, and a
+separate read-only PR-detail SHA verification. A stored or recovered receipt
+is never accepted solely from a branch name or PR URL. Uncertain outcomes do
+not authorize retries, even when a remote PR cannot be found.
+
+All GitHub GET/POST requests and response-body parsing have a bounded
+15-second default deadline (trusted server configuration: 100 ms to 60 s).
+Aborted or hanging adapters cannot indefinitely hold the repository lease.
+A timed-out POST is **always ambiguous**: its SQLite reservation remains
+uncertain and a subsequent invocation performs only read-only reconciliation.
+This bound is not a cancellation guarantee for a remote request already sent.
+
+This adapter accepts only trusted server-side configuration and is **not**
+registered as an HTTP endpoint. It is not permission to enable production
+GitHub write credentials. Real target-host crash/credential tests, independently
+reviewed operator ingress and issue #58 remain release blockers.
