@@ -39,7 +39,11 @@ Use safe fixtures and never run destructive tests against production data.
 Verify read-only defaults, explicit write authorization, sandbox boundaries,
 transcript redaction, task cancellation and resume, queue idempotency,
 configuration snapshot binding, worktree isolation, browser journeys and
-migration integrity.
+migration integrity. For delivery publication and Git transfer, inspect approval
+scope and expiry, target repository/ref attestation, immutable commit identity,
+receipt/journal consistency, lease ownership, retry idempotency, crash recovery,
+and behavior when a remote write succeeds but local confirmation fails. Never
+infer safe publication from a mock-only happy-path test.
 
 ## Release boundary
 
