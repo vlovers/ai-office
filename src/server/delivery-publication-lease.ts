@@ -21,7 +21,7 @@ export async function withPublicationLease<T>(
   workspaceGitDir: string,
   readiness: PublicationReadiness,
   refreshPlan: () => Promise<DeliveryPublicationPlan>,
-  action: () => Promise<T>,
+  action: (plan: Extract<DeliveryPublicationPlan, { allowed: true }>) => Promise<T>,
 ): Promise<T> {
   if (readiness.status !== 'requires-lease')
     throw new Error('Publication does not require a new lease.');
@@ -40,7 +40,8 @@ export async function withPublicationLease<T>(
     const currentPlan = await refreshPlan();
     const result = validateLeasedPublication(readiness.operationKey, currentPlan);
     if (!result.valid) throw new Error(result.reason);
-    return await action();
+    if (!currentPlan.allowed) throw new Error('Publication plan became blocked.');
+    return await action(currentPlan);
   } finally {
     await release();
   }
