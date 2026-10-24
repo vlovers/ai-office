@@ -91,6 +91,18 @@ export class DeliveryGitTransferJournal {
     };
   }
 
+  /** Read-only inventory of stages requiring recovery or manual reconciliation. */
+  listUnresolved(): DeliveryGitTransferEntry[] {
+    const rows = this.db
+      .prepare(
+        "SELECT workspace_id, stage FROM delivery_git_transfers WHERE state != 'confirmed' ORDER BY workspace_id, stage",
+      )
+      .all();
+    return rows.map((row) =>
+      this.get(String(row.workspace_id), String(row.stage) as DeliveryGitStage)!,
+    );
+  }
+
   /**
    * One reservation per workspace/stage, including after restart.
    * A push intent requires an independently confirmed matching commit receipt.

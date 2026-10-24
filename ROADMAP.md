@@ -167,3 +167,17 @@ uncertain without replaying remote writes; confirmed receipts and unrelated
 workspaces remain intact. This does not implement a production startup scanner,
 operator session/CSRF approval or actual commit/push execution. See
 [transfer recovery contract](docs/DELIVERY_GIT_TRANSFER_RECOVERY.md).
+
+### v0.8 trusted startup recovery inventory (unreleased)
+
+A server-only coordinator now enumerates unresolved publication and transfer
+journal rows and validates the complete batch against trusted registered
+workspace/operation identities before changing any state. It then recovers
+each workspace under the existing common-repository lease, preserving
+confirmed receipts and failing closed on missing registrations, duplicate
+identities, foreign worktrees and lease contention. SQLite restart and
+multi-workspace integration fixtures are included. This is **not** wired to
+production startup and does not authorize GitHub writes. Independent-process
+tests, stable persisted registration discovery, authenticated commit/push
+approvals and HTTP/session/CSRF gates remain outstanding. See
+[trusted startup coordinator](docs/DELIVERY_STARTUP_COORDINATOR.md).
