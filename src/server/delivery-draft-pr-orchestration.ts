@@ -75,7 +75,9 @@ export async function createDraftPublication(
   context: DraftPublicationContext,
 ): Promise<DraftPublicationResult> {
   const { workspaceId, journal, initialPlan } = context;
-  if (!workspaceId || !initialPlan.allowed) throw new Error('Publication identity is required.');
+  if (!workspaceId || !initialPlan.allowed) {
+    throw new Error('Publication identity is required.');
+  }
   const operationKey = publicationKey(initialPlan);
   return withPublicationLease(
     context.repository,
@@ -104,7 +106,9 @@ export async function createDraftPublication(
           return { status: 'published', entry: existing } as const;
         }
         // Even a reserved record may represent a successful remote write after a crash.
-        if (existing.state === 'reserved') journal.recoverWorkspace(workspaceId, operationKey);
+        if (existing.state === 'reserved') {
+          journal.recoverWorkspace(workspaceId, operationKey);
+        }
         return reconcileOnly(context, plan, operationKey);
       }
 
