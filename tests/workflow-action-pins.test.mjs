@@ -19,7 +19,10 @@ test('accepts pinned checkout with explicit token opt-out', () => {
 
 test('rejects mutable action tags, including artifact upload tags', () => {
   assert.match(auditWorkflowText(workflow('actions/checkout@v7')).join('\n'), /immutable/);
-  assert.match(auditWorkflowText('steps:\n  - uses: actions/upload-artifact@v7').join('\n'), /immutable/);
+  assert.match(
+    auditWorkflowText('steps:\n  - uses: actions/upload-artifact@v7').join('\n'),
+    /immutable/,
+  );
 });
 
 test('rejects short SHAs and GitHub expressions', () => {
@@ -28,12 +31,21 @@ test('rejects short SHAs and GitHub expressions', () => {
 });
 
 test('rejects missing and enabled checkout credentials', () => {
-  assert.match(auditWorkflowText(workflow(checkout, 'with:\n          fetch-depth: 0')).join('\n'), /persist-credentials/);
-  assert.match(auditWorkflowText(workflow(checkout, 'with:\n          persist-credentials: true')).join('\n'), /persist-credentials/);
+  assert.match(
+    auditWorkflowText(workflow(checkout, 'with:\n          fetch-depth: 0')).join('\n'),
+    /persist-credentials/,
+  );
+  assert.match(
+    auditWorkflowText(workflow(checkout, 'with:\n          persist-credentials: true')).join('\n'),
+    /persist-credentials/,
+  );
 });
 
 test('does not accept a false token setting in env instead of with', () => {
-  assert.match(auditWorkflowText(workflow(checkout, 'env:\n          persist-credentials: false')).join('\n'), /persist-credentials/);
+  assert.match(
+    auditWorkflowText(workflow(checkout, 'env:\n          persist-credentials: false')).join('\n'),
+    /persist-credentials/,
+  );
 });
 
 test('does not accept a false token setting from a different step', () => {
