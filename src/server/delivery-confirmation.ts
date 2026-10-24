@@ -14,9 +14,10 @@ export type DeliveryConfirmation = {
   acknowledged: true;
 };
 
-export type DeliveryConfirmationResult =
-  | { valid: true; destination: string }
-  | { valid: false; reason: string };
+export type DeliveryConfirmationResult = { valid: true; destination: string } | {
+  valid: false;
+  reason: string;
+};
 
 export function validateDeliveryConfirmation(
   preflight: DeliveryPreflight,
