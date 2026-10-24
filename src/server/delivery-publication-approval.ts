@@ -163,6 +163,7 @@ export class DeliveryPublicationApprovalLedger {
       condition: `approval_id=? AND workspace_id=? AND operator_id=? AND session_id=?
         AND operation_key=? AND head_commit_sha=? AND base_commit_sha=?
         AND issued_at<=? AND expires_at>?
+        AND (SELECT last_seen_at FROM delivery_publication_approval_clock WHERE id=1)=?
         AND consumed_at IS NULL AND revoked_at IS NULL`,
     };
   }
@@ -175,7 +176,7 @@ export class DeliveryPublicationApprovalLedger {
     const { args, condition } = this.matchingApproval(approvalId, binding);
     const row = this.db
       .prepare(`SELECT approval_id FROM delivery_publication_approvals WHERE ${condition}`)
-      .get(...args, args[7]);
+      .get(...args, args[7], args[7]);
     if (!row) throw new Error('Publication approval is missing, expired or no longer valid.');
   }
 
@@ -191,7 +192,7 @@ export class DeliveryPublicationApprovalLedger {
         `UPDATE delivery_publication_approvals SET consumed_at=?
          WHERE ${condition}`,
       )
-      .run(args[7], ...args, args[7]);
+      .run(args[7], ...args, args[7], args[7]);
     if (result.changes !== 1) {
       throw new Error('Publication approval is missing, expired or already consumed.');
     }
