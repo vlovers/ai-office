@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
+import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import {
   publishApprovedDraft,
+  publishCommitAttestedDraft,
   reconcileUncertainDraft,
 } from '../src/server/delivery-publication-service.js';
 
@@ -32,6 +34,35 @@ const candidate = {
   head: { ref: plan.branch, repo },
   base: { ref: 'main', repo },
 };
+
+const headCommitSha = '1'.repeat(40);
+const baseCommitSha = '2'.repeat(40);
+const approvedCommits = {
+  operationKey: publicationKey(plan),
+  headCommitSha,
+  baseCommitSha,
+};
+const commitReceipt = {
+  ...candidate,
+  head: { ...candidate.head, sha: headCommitSha },
+  base: { ...candidate.base, sha: baseCommitSha },
+};
+
+function remoteRefs(
+  headSha: string = headCommitSha,
+  baseSha: string = baseCommitSha,
+) {
+  return vi.fn(async (input: string, init: RequestInit) => {
+    expect(init.method).toBe('GET');
+    expect(init.redirect).toBe('error');
+    const branch = input.endsWith('/main') ? 'main' : plan.branch;
+    const sha = branch === 'main' ? baseSha : headSha;
+    return new Response(
+      JSON.stringify({ ref: `refs/heads/${branch}`, object: { type: 'commit', sha } }),
+      { status: 200 },
+    );
+  });
+}
 
 function context(journal: DeliveryJournal) {
   return {
@@ -266,4 +297,154 @@ describe('lease-protected delivery publication pipeline', () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+  it('commit-attested publication pins both remote refs before the single POST', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = remoteRefs();
+      const createDraft = vi.fn(async () => {
+        expect(journal.get('workspace-1')?.state).toBe('reserved');
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        return commitReceipt;
+      });
+      const args = {
+        ...context(journal),
+        approval: approvedCommits,
+        gitHubRefOptions: { fetcher },
+        createDraft,
+      };
+      const first = await publishCommitAttestedDraft(args);
+      expect(first.state).toBe('published');
+      expect(first.pullRequestUrl).toBe(candidate.html_url);
+      const reused = await publishCommitAttestedDraft(args);
+      expect(reused.pullRequestUrl).toBe(candidate.html_url);
+      expect(createDraft).toHaveBeenCalledOnce();
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commit-attested publication blocks stale head before journal reservation', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = remoteRefs('3'.repeat(40));
+      const createDraft = vi.fn(async () => commitReceipt);
+      await expect(
+        publishCommitAttestedDraft({
+          ...context(journal),
+          approval: approvedCommits,
+          gitHubRefOptions: { fetcher },
+          createDraft,
+        }),
+      ).rejects.toThrow('head branch moved');
+      expect(journal.get('workspace-1')).toBeNull();
+      expect(createDraft).not.toHaveBeenCalled();
+      expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commit-attested publication blocks stale base before journal reservation', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = remoteRefs(headCommitSha, '4'.repeat(40));
+      const createDraft = vi.fn(async () => commitReceipt);
+      await expect(
+        publishCommitAttestedDraft({
+          ...context(journal),
+          approval: approvedCommits,
+          gitHubRefOptions: { fetcher },
+          createDraft,
+        }),
+      ).rejects.toThrow('base branch moved');
+      expect(journal.get('workspace-1')).toBeNull();
+      expect(createDraft).not.toHaveBeenCalled();
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commit-attested publication marks a changed PR commit uncertain without retry', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = remoteRefs();
+      const createDraft = vi.fn(async () => ({
+        ...commitReceipt,
+        head: { ...commitReceipt.head, sha: '5'.repeat(40) },
+      }));
+      const args = {
+        ...context(journal),
+        approval: approvedCommits,
+        gitHubRefOptions: { fetcher },
+        createDraft,
+      };
+      await expect(publishCommitAttestedDraft(args)).rejects.toThrow('commit identity changed');
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      await expect(publishCommitAttestedDraft(args)).rejects.toThrow('reconcile before retrying');
+      expect(createDraft).toHaveBeenCalledOnce();
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commit-attested publication blocks GitHub GET errors before reservation', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = vi.fn(async () => new Response('unavailable', { status: 429 }));
+      const createDraft = vi.fn(async () => commitReceipt);
+      await expect(
+        publishCommitAttestedDraft({
+          ...context(journal),
+          approval: approvedCommits,
+          gitHubRefOptions: { fetcher },
+          createDraft,
+        }),
+      ).rejects.toThrow('HTTP 429');
+      expect(journal.get('workspace-1')).toBeNull();
+      expect(createDraft).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commit-attested publication refuses changed review and approval before any GET', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = remoteRefs();
+      const createDraft = vi.fn(async () => commitReceipt);
+      const args = {
+        ...context(journal),
+        approval: approvedCommits,
+        gitHubRefOptions: { fetcher },
+        createDraft,
+      };
+      await expect(
+        publishCommitAttestedDraft({
+          ...args,
+          refreshPlan: async () => ({ ...plan, revision: 'b'.repeat(64) }),
+        }),
+      ).rejects.toThrow('snapshot changed');
+      await expect(
+        publishCommitAttestedDraft({
+          ...args,
+          approval: { ...approvedCommits, operationKey: 'not-reviewed' },
+        }),
+      ).rejects.toThrow('Approved commit snapshot');
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(createDraft).not.toHaveBeenCalled();
+      expect(journal.get('workspace-1')).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
 });
