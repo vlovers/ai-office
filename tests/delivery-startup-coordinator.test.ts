@@ -65,10 +65,10 @@ describe('trusted delivery startup coordinator', () => {
         'workspace-1',
         'workspace-2',
       ]);
-      expect(results[0].publication?.state).toBe('uncertain');
-      expect(results[0].commit?.state).toBe('confirmed');
-      expect(results[0].push?.state).toBe('uncertain');
-      expect(results[1].commit?.state).toBe('uncertain');
+      expect(results[0]!.publication?.state).toBe('uncertain');
+      expect(results[0]!.commit?.state).toBe('confirmed');
+      expect(results[0]!.push?.state).toBe('uncertain');
+      expect(results[1]!.commit?.state).toBe('uncertain');
       expect(journal.get('workspace-2')?.state).toBe('uncertain');
       expect(await recoverRegisteredDeliveryWorkspaces(input)).toEqual(results);
       expect(() => transferJournal.begin('push', one.transferIdentity)).toThrow('already exists');
@@ -216,8 +216,8 @@ describe('trusted delivery startup coordinator', () => {
         transferJournal,
         registrations: [one],
       });
-      expect(result[0].publication?.state).toBe('uncertain');
-      expect(result[0].commit?.state).toBe('uncertain');
+      expect(result[0]!.publication?.state).toBe('uncertain');
+      expect(result[0]!.commit?.state).toBe('uncertain');
       second.close();
 
       const third = new DatabaseSync(path);
