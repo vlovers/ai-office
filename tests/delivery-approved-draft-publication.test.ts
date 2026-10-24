@@ -180,20 +180,31 @@ describe('approved Draft PR publication end-to-end boundary', () => {
     }
   });
 
-  it('serializes competing requests under the shared repository lease', async () => {
+  it('fails closed on a competing request while the shared repository lease is held', async () => {
     const t = setup();
+    let releaseGate = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    let signalEntered = () => {};
+    const entered = new Promise<void>((resolve) => {
+      signalEntered = resolve;
+    });
+    t.verifyApprovedSnapshot.mockImplementationOnce(async () => {
+      signalEntered();
+      await gate;
+    });
     try {
-      const results = await Promise.allSettled([
-        createApprovedDraftPublication(t.context()),
-        createApprovedDraftPublication(t.context()),
-      ]);
-      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
-      expect(t.createDraft).toHaveBeenCalledTimes(1);
+      const first = createApprovedDraftPublication(t.context());
+      await entered;
+      await expect(createApprovedDraftPublication(t.context())).rejects.toThrow('locked');
+      releaseGate();
+      expect((await first).status).toBe('published');
       expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
       expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(1);
     } finally {
+      releaseGate();
       t.close();
     }
   });
