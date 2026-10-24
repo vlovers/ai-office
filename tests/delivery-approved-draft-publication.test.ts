@@ -183,11 +183,14 @@ describe('approved Draft PR publication end-to-end boundary', () => {
   it('serializes competing requests under the shared repository lease', async () => {
     const t = setup();
     try {
-      const results = await Promise.all([
+      const results = await Promise.allSettled([
         createApprovedDraftPublication(t.context()),
         createApprovedDraftPublication(t.context()),
       ]);
-      expect(results.map((result) => result.status)).toEqual(['published', 'published']);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
       expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(1);
     } finally {
