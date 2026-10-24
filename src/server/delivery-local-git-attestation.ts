@@ -118,7 +118,11 @@ export async function attestLocalReviewedGitState(
     (
       await workspaceGit(['rev-parse', '--verify', `refs/heads/${plan.baseBranch}^{commit}`])
     ).trim();
-  const remote = async () => (await workspaceGit(['remote', 'get-url', 'origin'])).trim();
+  const remote = async () => {
+    const output = await workspaceGit(['remote', 'get-url', 'origin']);
+    // Remove only Git's record terminator, never an embedded newline.
+    return output.endsWith('\n') ? output.slice(0, -1) : output;
+  };
 
   if (await status()) throw new Error('Local Git worktree or index is not clean.');
   if ((await branch()) !== plan.branch) {
