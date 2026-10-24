@@ -38,7 +38,7 @@ describe('publication lease entrypoint', () => {
     const lockName = createHash('sha256').update('/repo/.git').digest('hex');
     expect(acquireLocks).toHaveBeenCalledWith(
       [join(lockRoot, lockName)],
-      'AI Office delivery publication',
+      'AI Office delivery publication/recovery',
     );
     expect(action).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledOnce();

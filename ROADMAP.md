@@ -132,6 +132,28 @@ publication route. Trusted operator identity, cross-worktree common-repo
 ownership revalidation, separate commit/push receipts, CSRF protection, credential
 provisioning and native end-to-end activation remain required.
 
+### v0.8 durable transfer receipts and scoped recovery (unreleased, partial #58)
+
+A separate SQLite commit/push intent journal now stores exact operation,
+workspace, GitHub destination, managed branch and reviewed head/base SHA
+identities. Commit receipts must be confirmed before push intent; both
+receipts must be independently confirmed before the stronger server-only
+Draft PR composition can proceed. Unknown outcomes stay blocked, and
+duplicate intents cannot authorize a second write.
+
+Per-workspace publication recovery now runs under the same common-repository
+lease as publishing, revalidates Git worktree ownership and changes only the
+matching operation from reserved to uncertain. The global legacy recovery
+method remains unsafe under concurrent publishers and must not be used for
+multi-process startup. Tests cover SQLite restart, replay, wrong identity,
+shared-lease contention and foreign worktrees.
+
+This does **not** implement authenticated commit/push operations, a concrete
+remote push receipt verifier, complete multi-process startup orchestration
+or browser authorization. See
+[transfer recovery safety contract](docs/DELIVERY_GIT_TRANSFER_RECOVERY.md)
+and [issue #58](https://github.com/vlovers/ai-office/issues/58).
+
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
