@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { deliveryHTTP, deliverySecurityFixture, origin } from './fixtures/delivery-security.js';
@@ -66,6 +66,12 @@ describe('production Delivery independent-process startup', () => {
         JSON.stringify({ publicOrigin: origin, workspaces: [t.workspace] }),
         { mode: 0o600 },
       );
+      // The in-process fixture creates SQLite with the host's default umask.
+      // Production startup intentionally refuses to chmod-repair existing files.
+      for (const suffix of ['', '-wal', '-shm']) {
+        const file = t.dbPath + suffix;
+        if (existsSync(file)) chmodSync(file, 0o600);
+      }
       first = await start(t.root);
       const headers = {
         host: 'delivery.example.test',
