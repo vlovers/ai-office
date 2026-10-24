@@ -1,4 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 import { createDraftPublication } from '../src/server/delivery-draft-pr-orchestration.js';
@@ -22,14 +26,17 @@ const receipt: GitHubDraftReceipt = {
 
 function setup() {
   const db = new DatabaseSync(':memory:');
+  const root = mkdtempSync(join(tmpdir(), 'ai-office-draft-pr-'));
+  execFileSync('git', ['init', '-q', root]);
+  const repository = { path: root, gitDir: realpathSync(join(root, '.git')) };
   const journal = new DeliveryJournal(db);
   const createDraft = vi.fn(async () => receipt);
   const listRemote = vi.fn(async () => ({ complete: true as const, candidates: [] as GitHubDraftReceipt[] }));
   const verifySnapshot = vi.fn(async () => {});
   const context = {
     workspaceId: 'workspace-1',
-    repository: { path: '/tmp/ai-office-test-nonexistent', gitDir: '/tmp/ai-office-test-nonexistent/.git' },
-    workspaceGitDir: '/tmp/ai-office-test-nonexistent/.git',
+    repository,
+    workspaceGitDir: repository.gitDir,
     journal,
     initialPlan: plan,
     refreshPlan: async () => plan,
@@ -37,7 +44,7 @@ function setup() {
     listRemote,
     createDraft,
   };
-  return { db, journal, context, createDraft, listRemote, verifySnapshot };
+  return { db, journal, context, createDraft, listRemote, verifySnapshot, close: () => { db.close(); rmSync(root, { recursive: true, force: true }); } };
 }
 
 describe('Draft PR publication orchestration', () => {
@@ -49,7 +56,7 @@ describe('Draft PR publication orchestration', () => {
       expect(t.createDraft).toHaveBeenCalledTimes(1);
       expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
     } finally {
-      t.db.close();
+      t.close();
     }
   });
 
@@ -63,7 +70,7 @@ describe('Draft PR publication orchestration', () => {
       expect((await createDraftPublication(t.context)).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
     } finally {
-      t.db.close();
+      t.close();
     }
   });
 
@@ -79,7 +86,7 @@ describe('Draft PR publication orchestration', () => {
       expect((await createDraftPublication(t.context)).status).toBe('uncertain');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
     } finally {
-      t.db.close();
+      t.close();
     }
   });
 
@@ -95,7 +102,7 @@ describe('Draft PR publication orchestration', () => {
       expect(t.createDraft).not.toHaveBeenCalled();
       expect(t.journal.get('workspace-1')).toBeNull();
     } finally {
-      t.db.close();
+      t.close();
     }
   });
 });
