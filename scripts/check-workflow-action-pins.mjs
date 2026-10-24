@@ -77,7 +77,9 @@ export function auditWorkflowText(source, filename = 'workflow') {
     const reference = match[1].trim();
     const location = filename + ':' + (index + 1);
     if (!reference || !isSafeReference(reference)) {
-      findings.push(`${location}: action must use a static local path, immutable commit SHA or Docker digest (${reference})`);
+      findings.push(
+        `${location}: action must use a static local path, immutable commit SHA or Docker digest (${reference})`,
+      );
     }
     if (!reference.startsWith('actions/checkout@')) continue;
 
