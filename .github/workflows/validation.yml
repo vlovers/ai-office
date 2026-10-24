@@ -45,15 +45,6 @@ jobs:
         run: npm run build
       - name: Formatting
         run: npm run format:check
-      - name: Diagnostic canonical Prettier output (temporary)
-        if: failure()
-        run: |
-          echo '=== GUARD BEGIN ==='
-          npx prettier scripts/check-workflow-action-pins.mjs
-          echo '=== GUARD END ==='
-          echo '=== TEST BEGIN ==='
-          npx prettier tests/workflow-action-pins.test.mjs
-          echo '=== TEST END ==='
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
