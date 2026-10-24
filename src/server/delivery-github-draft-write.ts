@@ -7,6 +7,7 @@ import {
   type GitHubCommitReceipt,
 } from './delivery-github-ref-attestation.js';
 import { parseGitHubPullRequest } from './delivery-github-readonly.js';
+import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
 
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -28,6 +29,7 @@ export type GitHubDraftWriteOptions = {
   confirmation: ConfirmedDraftWrite;
   fetcher?: Fetcher;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 function expectedRepository(plan: AllowedPlan): string {
@@ -111,35 +113,40 @@ export async function createCommitAttestedGitHubDraft(
     throw new Error('GitHub draft publication attestation does not match the destination.');
   }
   const url = `https://api.github.com/repos/${repository}/pulls`;
-  const response = await (options.fetcher ?? globalThis.fetch)(url, {
-    method: 'POST',
-    redirect: 'error',
-    signal: options.signal,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      Authorization: `Bearer ${options.token}`,
-      'Content-Type': 'application/json',
+  const body: unknown = await withGitHubRequestDeadline(
+    async (signal) => {
+      const response = await (options.fetcher ?? globalThis.fetch)(url, {
+        method: 'POST',
+        redirect: 'error',
+        signal,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          Authorization: `Bearer ${options.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: options.title,
+          body: options.body ?? '',
+          head: plan.branch,
+          base: plan.baseBranch,
+          draft: true,
+          maintainer_can_modify: false,
+        }),
+      });
+      if (response.redirected || (response.url && response.url !== url)) {
+        throw new Error('GitHub draft publication request was redirected.');
+      }
+      if (response.status !== 201) {
+        // Do not inspect/echo the response body: it can contain untrusted content.
+        throw new Error(
+          `GitHub draft publication returned HTTP ${response.status}; outcome uncertain.`,
+        );
+      }
+      return response.json();
     },
-    body: JSON.stringify({
-      title: options.title,
-      body: options.body ?? '',
-      head: plan.branch,
-      base: plan.baseBranch,
-      draft: true,
-      maintainer_can_modify: false,
-    }),
-  });
-  if (response.redirected || (response.url && response.url !== url)) {
-    throw new Error('GitHub draft publication request was redirected.');
-  }
-  if (response.status !== 201) {
-    // Do not inspect/echo the response body: it can contain untrusted content.
-    throw new Error(
-      `GitHub draft publication returned HTTP ${response.status}; outcome uncertain.`,
-    );
-  }
-  const body: unknown = await response.json();
+    { signal: options.signal, timeoutMs: options.timeoutMs },
+  );
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     throw new Error('Invalid GitHub draft publication response.');
   }
