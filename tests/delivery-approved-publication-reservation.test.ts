@@ -59,12 +59,24 @@ describe('atomic publication approval and journal reservation', () => {
     try {
       const ledger = new DeliveryPublicationApprovalLedger(db, () => 10_000);
       const id = ledger.issue(binding);
-      const entry = reserveApprovedPublicationAtomically(db, id, binding, () => {}, () => 10_000);
+      const entry = reserveApprovedPublicationAtomically(
+        db,
+        id,
+        binding,
+        () => {},
+        () => 10_000,
+      );
       expect(entry.state).toBe('reserved');
       expect(entry.operationKey).toBe(publicationKey(plan));
       expect(() => ledger.assertPending(id, binding)).toThrow();
       expect(() =>
-        reserveApprovedPublicationAtomically(db, id, binding, () => {}, () => 10_000),
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
       ).toThrow();
       expect(new DeliveryJournal(db).listUnresolved()).toHaveLength(1);
     } finally {
@@ -80,7 +92,13 @@ describe('atomic publication approval and journal reservation', () => {
       journal.reserve(binding.workspaceId, 'other-operation');
       const id = ledger.issue(binding);
       expect(() =>
-        reserveApprovedPublicationAtomically(db, id, binding, () => {}, () => 10_000),
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
       ).toThrow();
       ledger.assertPending(id, binding);
       expect(journal.get(binding.workspaceId)?.operationKey).toBe('other-operation');
@@ -120,7 +138,13 @@ describe('atomic publication approval and journal reservation', () => {
       ledger.assertPending(id, binding);
       expect(ledger.revoke(id, binding.operator)).toBe(true);
       expect(() =>
-        reserveApprovedPublicationAtomically(db, id, binding, () => {}, () => 10_000),
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
       ).toThrow();
       expect(journal.get(binding.workspaceId)).toBeNull();
     } finally {
@@ -137,7 +161,13 @@ describe('atomic publication approval and journal reservation', () => {
       try {
         const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
         approvalId = approvals.issue(binding);
-        reserveApprovedPublicationAtomically(first, approvalId, binding, () => {}, () => 10_000);
+        reserveApprovedPublicationAtomically(
+          first,
+          approvalId,
+          binding,
+          () => {},
+          () => 10_000,
+        );
       } finally {
         first.close();
       }
@@ -173,7 +203,13 @@ describe('atomic publication approval and journal reservation', () => {
       journal.reserve(binding.workspaceId, publicationKey(plan));
       const id = approvals.issue(binding);
       expect(() =>
-        reserveApprovedPublicationAtomically(db, id, binding, () => {}, () => 10_000),
+        reserveApprovedPublicationAtomically(
+          db,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
       ).toThrow('already exists');
       approvals.assertPending(id, binding);
       expect(journal.get(binding.workspaceId)?.state).toBe('reserved');
@@ -200,7 +236,13 @@ describe('atomic publication approval and journal reservation', () => {
       );
       expect(reserved.state).toBe('reserved');
       expect(() =>
-        reserveApprovedPublicationAtomically(second, id, binding, () => {}, () => 10_000),
+        reserveApprovedPublicationAtomically(
+          second,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
       ).toThrow();
       expect(new DeliveryJournal(second).listUnresolved()).toHaveLength(1);
       expect(journal.get(binding.workspaceId)?.operationKey).toBe(publicationKey(plan));
@@ -223,7 +265,13 @@ describe('atomic publication approval and journal reservation', () => {
         new DeliveryPublicationApprovalLedger(second, () => 10_000).revoke(id, binding.operator),
       ).toBe(true);
       expect(() =>
-        reserveApprovedPublicationAtomically(first, id, binding, () => {}, () => 10_000),
+        reserveApprovedPublicationAtomically(
+          first,
+          id,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
       ).toThrow();
       expect(new DeliveryJournal(second).get(binding.workspaceId)).toBeNull();
     } finally {
@@ -242,7 +290,13 @@ describe('atomic publication approval and journal reservation', () => {
       try {
         const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
         approvalId = approvals.issue(binding);
-        reserveApprovedPublicationAtomically(first, approvalId, binding, () => {}, () => 10_000);
+        reserveApprovedPublicationAtomically(
+          first,
+          approvalId,
+          binding,
+          () => {},
+          () => 10_000,
+        );
       } finally {
         first.close();
       }
@@ -256,7 +310,13 @@ describe('atomic publication approval and journal reservation', () => {
         'if (changed.changes !== 0) process.exit(3);',
         'db.close();',
       ].join('\n');
-      execFileSync(process.execPath, ['-e', childScript, filename, approvalId, binding.workspaceId]);
+      execFileSync(process.execPath, [
+        '-e',
+        childScript,
+        filename,
+        approvalId,
+        binding.workspaceId,
+      ]);
       const reopened = new DatabaseSync(filename);
       try {
         expect(new DeliveryJournal(reopened).listUnresolved()).toHaveLength(1);

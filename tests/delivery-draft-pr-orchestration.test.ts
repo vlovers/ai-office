@@ -84,7 +84,13 @@ describe('Draft PR publication orchestration', () => {
       const approvals = new DeliveryPublicationApprovalLedger(t.db, () => 10_000);
       const approvalId = approvals.issue(binding);
       const reserveApproved = vi.fn(() =>
-        reserveApprovedPublicationAtomically(t.db, approvalId, binding, () => {}, () => 10_000),
+        reserveApprovedPublicationAtomically(
+          t.db,
+          approvalId,
+          binding,
+          () => {},
+          () => 10_000,
+        ),
       );
       const context = { ...t.context, reserveApproved };
       expect((await createDraftPublication(context)).status).toBe('published');
@@ -116,7 +122,13 @@ describe('Draft PR publication orchestration', () => {
       const context = {
         ...t.context,
         reserveApproved: () =>
-          reserveApprovedPublicationAtomically(t.db, approvalId, binding, () => {}, () => 10_000),
+          reserveApprovedPublicationAtomically(
+            t.db,
+            approvalId,
+            binding,
+            () => {},
+            () => 10_000,
+          ),
       };
       await expect(createDraftPublication(context)).rejects.toThrow();
       expect(t.createDraft).not.toHaveBeenCalled();
@@ -132,9 +144,11 @@ describe('Draft PR publication orchestration', () => {
       const context = {
         ...t.context,
         reserveApproved: () => {
-          t.db.prepare(
-            "INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', ?)",
-          ).run('workspace-1', publicationKey(plan), receipt.html_url);
+          t.db
+            .prepare(
+              "INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', ?)",
+            )
+            .run('workspace-1', publicationKey(plan), receipt.html_url);
           return t.journal.get('workspace-1')!;
         },
       };
