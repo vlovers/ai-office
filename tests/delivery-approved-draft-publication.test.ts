@@ -147,7 +147,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
       t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
       expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
-      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(3);
+      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(4);
     } finally {
       t.close();
     }
@@ -234,7 +234,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
       expect((await first).status).toBe('published');
       expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
-      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(3);
+      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(4);
     } finally {
       releaseGate();
       t.close();
