@@ -158,11 +158,17 @@ export async function reconcileGitTransferReceipts(
       }
       if (existing.commit) journal.assertOwned('commit', identity);
       if (existing.push) journal.assertOwned('push', identity);
-      if (existing.commit?.state === 'confirmed' && existing.commit.receiptSha !== identity.headSha) {
+      if (
+        existing.commit?.state === 'confirmed' &&
+        existing.commit.receiptSha !== identity.headSha
+      ) {
         throw new Error('Confirmed commit receipt conflicts with the reviewed head.');
       }
       if (existing.push) {
-        if (existing.commit?.state !== 'confirmed' || existing.commit.receiptSha !== identity.headSha) {
+        if (
+          existing.commit?.state !== 'confirmed' ||
+          existing.commit.receiptSha !== identity.headSha
+        ) {
           throw new Error('Push intent exists without an independently confirmed commit receipt.');
         }
         if (existing.push.state === 'confirmed' && existing.push.receiptSha !== identity.headSha) {
