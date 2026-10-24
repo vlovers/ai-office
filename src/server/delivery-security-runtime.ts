@@ -54,9 +54,9 @@ export async function openDeliveryDatabase(directory: string) {
     throw new DeliverySecurityError(503);
 
   const databasePath = join(path, 'delivery.sqlite');
-  // SQLite may also open existing WAL/shared-memory companions by pathname.
+  // SQLite may open existing rollback-journal, WAL and shared-memory files by pathname.
   // Refuse unsafe companions before handing the database to SQLite.
-  for (const suffix of ['-wal', '-shm']) {
+  for (const suffix of ['-journal', '-wal', '-shm']) {
     let info;
     try {
       info = await lstat(databasePath + suffix);
