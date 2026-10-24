@@ -128,7 +128,7 @@ export class DeliveryTransferApprovalLedger {
         operator.sessionId, identity.operationKey, identity.destination,
         identity.branch, identity.headSha, identity.baseSha,
         timestamp, timestamp, timestamp,
-      ],
+      ] as const,
       condition: `approval_id=? AND stage=? AND workspace_id=? AND operator_id=?
         AND session_id=? AND operation_key=? AND destination=? AND branch=?
         AND head_sha=? AND base_sha=? AND issued_at<=? AND expires_at>?
