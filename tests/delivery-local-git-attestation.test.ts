@@ -101,9 +101,7 @@ describe('lease-scoped local Git attestation', () => {
   it('rejects uncommitted and untracked changes before inspecting refs', async () => {
     for (const status of [' M src/file.ts\0', '?? new-file\0', 'A  staged.ts\0']) {
       replies.status = status;
-      await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
-        'not clean',
-      );
+      await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow('not clean');
       expect(calls).toHaveLength(3);
       calls = [];
     }
@@ -111,21 +109,15 @@ describe('lease-scoped local Git attestation', () => {
 
   it('rejects detached or changed branches', async () => {
     replies.branch = 'main';
-    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
-      'branch changed',
-    );
+    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow('branch changed');
   });
 
   it('rejects stale head or base commit snapshots', async () => {
     replies.head = '3'.repeat(40);
-    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
-      'HEAD differs',
-    );
+    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow('HEAD differs');
     replies.head = review.commits.headCommitSha;
     replies.base = '4'.repeat(40);
-    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
-      'base branch differs',
-    );
+    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow('base branch differs');
   });
 
   it('rejects credential-bearing, foreign and malformed origins', async () => {
@@ -150,9 +142,7 @@ describe('lease-scoped local Git attestation', () => {
       ...worktree,
       gitDir: '/other/.git',
     });
-    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
-      'identity changed',
-    );
+    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow('identity changed');
     expect(git).not.toHaveBeenCalled();
   });
 
@@ -165,9 +155,7 @@ describe('lease-scoped local Git attestation', () => {
       }
       throw new Error('No further Git reads should occur.');
     });
-    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
-      'different repository',
-    );
+    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow('different repository');
     expect(git).toHaveBeenCalledTimes(2);
   });
 

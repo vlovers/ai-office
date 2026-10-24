@@ -41,10 +41,7 @@ function assertReview(
   ) {
     throw new Error('Local Git review does not match approved commits.');
   }
-  if (
-    !/^ai-office\/[0-9a-f]{8}-[0-9a-f-]{27}$/.test(plan.branch) ||
-    plan.baseBranch !== 'main'
-  ) {
+  if (!/^ai-office\/[0-9a-f]{8}-[0-9a-f-]{27}$/.test(plan.branch) || plan.baseBranch !== 'main') {
     throw new Error('Local Git review requires a managed branch and main base.');
   }
   if (
@@ -114,20 +111,14 @@ export async function attestLocalReviewedGitState(
       '--untracked-files=all',
       '--ignore-submodules=none',
     ]);
-  const head = async () =>
-    (await workspaceGit(['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
+  const head = async () => (await workspaceGit(['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
   const branch = async () =>
     (await workspaceGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])).trim();
   const base = async () =>
     (
-      await workspaceGit([
-        'rev-parse',
-        '--verify',
-        `refs/heads/${plan.baseBranch}^{commit}`,
-      ])
+      await workspaceGit(['rev-parse', '--verify', `refs/heads/${plan.baseBranch}^{commit}`])
     ).trim();
-  const remote = async () =>
-    (await workspaceGit(['remote', 'get-url', 'origin'])).trim();
+  const remote = async () => (await workspaceGit(['remote', 'get-url', 'origin'])).trim();
 
   if (await status()) throw new Error('Local Git worktree or index is not clean.');
   if ((await branch()) !== plan.branch) {
