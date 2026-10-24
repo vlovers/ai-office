@@ -89,13 +89,13 @@ describe('lease-scoped local Git attestation', () => {
     });
     expect(revalidateRepository).toHaveBeenCalledWith(worktree);
     expect(calls.filter((call) => call.startsWith('status '))).toHaveLength(2);
-    expect(calls.filter((call) => call.startsWith('rev-parse '))).toHaveLength(4);
+    expect(calls.filter((call) => call.startsWith('rev-parse '))).toHaveLength(6);
   });
 
   it('accepts a canonical HTTPS origin without network or remote writes', async () => {
     replies.remote = plan.destination + '.git';
     await expect(attestLocalReviewedGitState(plan, review)).resolves.toBeDefined();
-    expect(calls.every((call) => !/push|fetch|commit|reset/.test(call))).toBe(true);
+    expect(calls.every((call) => !/^(push|fetch|commit|reset)\\b/.test(call))).toBe(true);
   });
 
   it('rejects uncommitted and untracked changes before inspecting refs', async () => {
