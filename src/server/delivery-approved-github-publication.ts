@@ -54,6 +54,16 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
   const write: GitHubDraftWriteOptions = {
     ...context.write,
     confirmation: { ...commits, action: 'create-draft-pr' },
+    authorizeBeforePost: () => {
+      // The hook is trusted server code; never accept it from an HTTP payload.
+      const preflight: unknown = context.write.authorizeBeforePost?.();
+      if (preflight && typeof (preflight as { then?: unknown }).then === 'function') {
+        void Promise.resolve(preflight).catch(() => undefined);
+        throw new Error('Draft PR authorization must be synchronous.');
+      }
+      authorize();
+      transfers.assertReadyForDraft(identity);
+    },
   };
   // Reject invalid write configuration before acquiring a lease or using GitHub.
   validateGitHubDraftWrite(plan, commits, write);
@@ -123,8 +133,17 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       // Repeat authorization and remote SHA attestation immediately before the
       // single POST. A failure after reservation remains uncertain, never replayed.
       authorize();
+      transfers.assertReadyForDraft(identity);
+      await attestLocalReviewedGitState(currentPlan, {
+        repository: workspace.repository,
+        worktree: workspace.worktree,
+        workspaceGitDir: workspace.worktree.gitDir,
+        commits,
+      });
+      authorize();
       const attestation = await attestGitHubCommitRefs(currentPlan, commits, refOptions);
       authorize();
+      transfers.assertReadyForDraft(identity);
       return createCommitAttestedGitHubDraft(currentPlan, attestation, write);
     },
     verifyRemoteReceipt: async (currentPlan, url) => {

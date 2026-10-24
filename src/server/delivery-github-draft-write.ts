@@ -30,6 +30,8 @@ export type GitHubDraftWriteOptions = {
   fetcher?: Fetcher;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Trusted synchronous live-authorization gate at the last possible point before POST. */
+  authorizeBeforePost?: () => void;
 };
 
 function expectedRepository(plan: AllowedPlan): string {
@@ -115,6 +117,11 @@ export async function createCommitAttestedGitHubDraft(
   const url = `https://api.github.com/repos/${repository}/pulls`;
   const body: unknown = await withGitHubRequestDeadline(
     async (signal) => {
+      const authorization: unknown = options.authorizeBeforePost?.();
+      if (authorization && typeof (authorization as { then?: unknown }).then === 'function') {
+        void Promise.resolve(authorization).catch(() => undefined);
+        throw new Error('Draft PR authorization must be synchronous.');
+      }
       const response = await (options.fetcher ?? globalThis.fetch)(url, {
         method: 'POST',
         redirect: 'error',

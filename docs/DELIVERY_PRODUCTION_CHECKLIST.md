@@ -118,6 +118,13 @@ A timed-out POST is **always ambiguous**: its SQLite reservation remains
 uncertain and a subsequent invocation performs only read-only reconciliation.
 This bound is not a cancellation guarantee for a remote request already sent.
 
+The final Draft POST boundary synchronously rechecks the live operator grant
+and exact commit/push receipts after fresh local Git and remote SHA attestation.
+A revoked grant, invalidated transfer receipt or asynchronous authorization hook
+blocks the POST; because approval was already durably reserved, the outcome
+remains uncertain and is never blindly retried. This does not make the remote
+GitHub operation atomic with local revocation.
+
 This adapter accepts only trusted server-side configuration and is **not**
 registered as an HTTP endpoint. It is not permission to enable production
 GitHub write credentials. Real target-host crash/credential tests, independently

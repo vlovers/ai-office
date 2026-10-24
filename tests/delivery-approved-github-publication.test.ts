@@ -224,6 +224,81 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('re-attests local Git immediately before the single POST', async () => {
+    const t = setup();
+    try {
+      const before = attestLocalReviewedGitState.mock.calls.length;
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(2);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks POST when the live operator grant is revoked at the final adapter gate', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        write: {
+          ...original.write,
+          authorizeBeforePost: () => {
+            t.sessions.setGrant('operator-1', 'workspace-1', 'approve:draft-pr', false);
+          },
+        },
+      });
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks POST when a confirmed push receipt is invalidated at the final adapter gate', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        write: {
+          ...original.write,
+          authorizeBeforePost: () => {
+            t.db
+              .prepare("UPDATE delivery_git_transfers SET state='uncertain' WHERE stage='push'")
+              .run();
+          },
+        },
+      });
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects asynchronous final authorization without sending a POST', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        write: {
+          ...original.write,
+          authorizeBeforePost: (() => Promise.resolve()) as unknown as () => void,
+        },
+      });
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
   it('times out a hung POST, preserves uncertain state and never blindly retries', async () => {
     const t = setup();
     try {
