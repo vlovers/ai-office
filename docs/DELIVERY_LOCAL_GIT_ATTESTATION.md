@@ -26,11 +26,13 @@ wrapper. No shell, Git fetch, checkout, reset, commit or push is performed.
 Errors from Git subprocesses are replaced with a generic message to avoid
 leaking credentials embedded in malformed remote configuration.
 
-`publishLocallyAttestedDraftViaGitHub` composes this check with the
-commit-pinned server-only publication adapter. The local check runs **inside
-the shared Git lease**, before GitHub GET ref attestation, SQLite reservation
-and the single remote POST. A failed check leaves the journal empty and
-cannot create a remote PR.
+`publishLocallyAttestedOperatorDraftViaGitHub` composes this check with the
+SQLite one-use operator approval ledger and commit-pinned server-only GitHub
+adapter. The local check runs **inside the shared Git lease**, before GitHub
+GET ref attestation, approval consumption, SQLite reservation and the single
+remote POST. A failed check leaves the approval pending and journal empty.
+After an ambiguous POST, the approval stays consumed and the journal remains
+uncertain until GET-only reconciliation verifies the exact PR and commit pair.
 
 ## Trust boundary and remaining blockers
 
