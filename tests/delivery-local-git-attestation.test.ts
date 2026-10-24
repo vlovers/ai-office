@@ -126,6 +126,7 @@ describe('lease-scoped local Git attestation', () => {
       'https://github.com/attacker/ai-office',
       'https://evil.example/vlovers/ai-office',
       'file:///repo',
+      'https://github.com/vlovers/ai-office\n',
     ]) {
       replies.remote = remote;
       await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
