@@ -166,7 +166,6 @@ multi-process startup recovery. A confirmation object supplied by an arbitrary
 HTTP client is **not** authorization. No automatic commit, push, merge or deploy
 is provided.
 
-
 ## Durable operator confirmation binding (server-only, unreleased)
 
 The new `DeliveryPublicationApprovalLedger` persists one-use, short-lived
