@@ -71,7 +71,7 @@ export function reconcileCommitAttestedDraftViaGitHub(
 export function publishLocallyAttestedDraftViaGitHub(
   context: DeliveryPublicationContext & {
     approval: ApprovedCommitSnapshot;
-    localReview: Omit<LocalGitReview, 'commits'>;
+    localReview: Omit<LocalGitReview, 'commits' | 'repository'>;
   },
   options: GitHubDraftWriteOptions,
 ) {
@@ -84,6 +84,7 @@ export function publishLocallyAttestedDraftViaGitHub(
     verifyLocalGitState: async (plan) => {
       await attestLocalReviewedGitState(plan, {
         ...context.localReview,
+        repository: context.repository,
         commits: context.approval,
       });
     },
