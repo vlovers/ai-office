@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
+import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import {
   createDraftPublication,
   type CompleteRemotePrInventory,
@@ -128,6 +129,23 @@ describe('Draft PR publication orchestration', () => {
       expect((await createDraftPublication(t.context)).status).toBe('uncertain');
       expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('never reuses a persisted PR URL from a foreign repository', async () => {
+    const t = setup();
+    try {
+      const key = publicationKey(plan);
+      t.journal.reserve('workspace-1', key);
+      t.journal.publish('workspace-1', key, 'https://github.com/foreign/repo/pull/123');
+      await expect(createDraftPublication(t.context)).rejects.toThrow(
+        'Stored publication receipt failed destination verification.',
+      );
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(t.listRemote).not.toHaveBeenCalled();
+      expect(t.journal.get('workspace-1')?.state).toBe('published');
     } finally {
       t.close();
     }
