@@ -1,4 +1,5 @@
 import { parseGitHubPullRequest } from './delivery-github-readonly.js';
+import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import {
@@ -34,6 +35,7 @@ export type GitHubRefOptions = {
   token?: string;
   fetcher?: Fetcher;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 function validCommitSha(value: string): boolean {
@@ -87,19 +89,24 @@ async function fetchExactCommitRef(
     'X-GitHub-Api-Version': '2022-11-28',
   };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
-  const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
-    method: 'GET',
-    redirect: 'error',
-    headers,
-    signal: options.signal,
-  });
-  if (response.redirected || (response.url && response.url !== url.toString())) {
-    throw new Error('GitHub commit ref request was redirected.');
-  }
-  if (response.status !== 200) {
-    throw new Error(`GitHub commit ref request failed with HTTP ${response.status}.`);
-  }
-  const body: unknown = await response.json();
+  const body: unknown = await withGitHubRequestDeadline(
+    async (signal) => {
+      const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
+        method: 'GET',
+        redirect: 'error',
+        headers,
+        signal,
+      });
+      if (response.redirected || (response.url && response.url !== url.toString())) {
+        throw new Error('GitHub commit ref request was redirected.');
+      }
+      if (response.status !== 200) {
+        throw new Error(`GitHub commit ref request failed with HTTP ${response.status}.`);
+      }
+      return response.json();
+    },
+    { signal: options.signal, timeoutMs: options.timeoutMs },
+  );
   if (
     !isRecord(body) ||
     body.ref !== `refs/heads/${branch}` ||
@@ -176,19 +183,24 @@ export async function readGitHubDraftCommitReceipt(
     'X-GitHub-Api-Version': '2022-11-28',
   };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
-  const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
-    method: 'GET',
-    redirect: 'error',
-    headers,
-    signal: options.signal,
-  });
-  if (response.redirected || (response.url && response.url !== url.toString())) {
-    throw new Error('GitHub draft PR detail request was redirected.');
-  }
-  if (response.status !== 200) {
-    throw new Error(`GitHub draft PR detail request failed with HTTP ${response.status}.`);
-  }
-  const body: unknown = await response.json();
+  const body: unknown = await withGitHubRequestDeadline(
+    async (signal) => {
+      const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
+        method: 'GET',
+        redirect: 'error',
+        headers,
+        signal,
+      });
+      if (response.redirected || (response.url && response.url !== url.toString())) {
+        throw new Error('GitHub draft PR detail request was redirected.');
+      }
+      if (response.status !== 200) {
+        throw new Error(`GitHub draft PR detail request failed with HTTP ${response.status}.`);
+      }
+      return response.json();
+    },
+    { signal: options.signal, timeoutMs: options.timeoutMs },
+  );
   if (
     !isRecord(body) ||
     body.number !== Number(match[3]) ||
