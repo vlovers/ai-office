@@ -46,7 +46,9 @@ describe('durable Git transfer approval integration', () => {
         .prepare('SELECT approval_id FROM delivery_transfer_approvals WHERE consumed_at IS NOT NULL')
         .all();
       expect(consumed).toHaveLength(1);
-      expect(() => restarted.consume(String(consumed[0].approval_id), binding)).toThrow();
+      const receipt = consumed[0];
+      if (!receipt) throw new Error('Expected one durable consumed approval.');
+      expect(() => restarted.consume(String(receipt.approval_id), binding)).toThrow();
     } finally {
       restartedDb.close();
       rmSync(directory, { recursive: true, force: true });
