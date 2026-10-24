@@ -36,7 +36,7 @@ export class DeliveryJournal {
    */
   reserve(workspaceId: string, operationKey: string): DeliveryJournalEntry {
     if (!workspaceId || !operationKey) throw new Error('Publication identity is required.');
-    this.db
+    const inserted = this.db
       .prepare(
         "INSERT OR IGNORE INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)",
       )
@@ -44,8 +44,8 @@ export class DeliveryJournal {
     const entry = this.get(workspaceId)!;
     if (entry.operationKey !== operationKey)
       throw new Error('Workspace already has a different publication operation.');
-    if (entry.state !== 'reserved')
-      throw new Error('Publication already completed or requires manual recovery.');
+    if (inserted.changes !== 1)
+      throw new Error('Publication reservation already exists; inspect its outcome before retrying.');
     return entry;
   }
 
