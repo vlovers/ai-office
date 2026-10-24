@@ -84,9 +84,7 @@ describe('durable single-use publication approval ledger', () => {
     try {
       const ledger = new DeliveryPublicationApprovalLedger(db);
       const id = ledger.issue(binding);
-      expect(
-        ledger.revoke(id, { ...binding.operator, sessionId: 'other' }),
-      ).toBe(false);
+      expect(ledger.revoke(id, { ...binding.operator, sessionId: 'other' })).toBe(false);
       ledger.assertPending(id, binding);
       expect(ledger.revoke(id, binding.operator)).toBe(true);
       expect(ledger.revoke(id, binding.operator)).toBe(false);
@@ -103,9 +101,7 @@ describe('durable single-use publication approval ledger', () => {
       expect(() =>
         ledger.issue({ ...binding, plan: { allowed: false, reason: 'stale' } }),
       ).toThrow();
-      expect(() =>
-        ledger.issue({ ...binding, workspaceId: '../workspace' }),
-      ).toThrow();
+      expect(() => ledger.issue({ ...binding, workspaceId: '../workspace' })).toThrow();
       expect(() =>
         ledger.issue({ ...binding, operator: { ...binding.operator, sessionId: '' } }),
       ).toThrow();

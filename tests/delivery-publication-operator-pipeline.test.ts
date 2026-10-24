@@ -35,8 +35,7 @@ const receipt = {
   head: { ref: plan.branch, sha: commits.headCommitSha, repo },
   base: { ref: 'main', sha: commits.baseCommitSha, repo },
 };
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status });
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const confirmation = { ...commits, action: 'create-draft-pr' as const };
 
 function setup() {
@@ -102,11 +101,7 @@ describe('durable operator approval in the GitHub draft pipeline', () => {
         t.authorization,
       );
       expect(result.state).toBe('published');
-      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual([
-        'GET',
-        'GET',
-        'POST',
-      ]);
+      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'POST']);
       expect(() =>
         t.ledger.assertPending(t.authorization.approvalId, {
           workspaceId: 'workspace-1',
