@@ -154,3 +154,37 @@ it('refuses unsafe WAL and SHM sidecars without mutating their targets', async (
     expect(await readFile(sidecar, 'utf8')).toBe('public sentinel');
   }
 });
+
+it('reopens a populated WAL-mode SQLite database without losing session state', async () => {
+  const directory = await root();
+  const first = await openDeliveryDatabase(directory);
+  try {
+    const sessions = new DeliverySessions(first);
+    sessions.setOperator('wal-operator', true);
+    sessions.setGrant('wal-operator', 'workspace', 'review', true);
+    expect(first.prepare('PRAGMA journal_mode').get()?.journal_mode).toBe('wal');
+    const wal = join(directory, 'delivery.sqlite-wal');
+    const shm = join(directory, 'delivery.sqlite-shm');
+    for (const name of [wal, shm]) {
+      expect((await stat(name)).mode & 0o077).toBe(0);
+    }
+    // A second independent connection must read durable state before the
+    // writer closes and SQLite checkpoints its WAL files.
+    const concurrent = await openDeliveryDatabase(directory);
+    try {
+      const restored = new DeliverySessions(concurrent);
+      expect(() => restored.issueEnrollment('wal-operator')).not.toThrow();
+    } finally {
+      concurrent.close();
+    }
+  } finally {
+    first.close();
+  }
+  const reopened = await openDeliveryDatabase(directory);
+  try {
+    const restored = new DeliverySessions(reopened);
+    expect(() => restored.issueEnrollment('wal-operator')).not.toThrow();
+  } finally {
+    reopened.close();
+  }
+});
