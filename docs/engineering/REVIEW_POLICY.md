@@ -1,6 +1,6 @@
 # Independent code review — ai-office
 
-Reviewer must independently inspect task acceptance criteria, original diff, relevant code, tests, configuration, and security/product policies. A different agent/model can be used, but AI review is not deterministic testing.
+Reviewer must independently inspect task acceptance criteria, original diff, relevant code, tests, configuration, and security/product policies. A different agent/model can provide an independent technical assessment, but that assessment is not deterministic testing and does not constitute a GitHub approval by an authorized reviewer. Record the reviewer identity, base/head SHA and scope of evidence; repeat or explicitly reconcile the review after material changes to the head commit.
 
 Priorities: (1) user-visible behavior and data correctness; (2) security/privacy/permissions; (3) regression and migration/API compatibility; (4) ineffective tests, missing boundary cases or mock-only evidence; (5) scope, duplication and maintenance.
 
