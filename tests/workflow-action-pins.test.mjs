@@ -80,14 +80,8 @@ function expectFinding(source, pattern) {
 }
 
 test('requires explicit read-only workflow token permissions', () => {
-  expectFinding(
-    workflow().replace('permissions:\n  contents: read\n', ''),
-    /missing top-level/,
-  );
-  expectFinding(
-    workflow().replace('contents: read', 'contents: write'),
-    /write token permissions/,
-  );
+  expectFinding(workflow().replace('permissions:\n  contents: read\n', ''), /missing top-level/);
+  expectFinding(workflow().replace('contents: read', 'contents: write'), /write token permissions/);
   expectFinding(
     workflow().replace('permissions:\n  contents: read', 'permissions: write-all'),
     /explicit mapping/,
