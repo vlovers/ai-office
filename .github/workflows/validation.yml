@@ -47,11 +47,6 @@ jobs:
         run: npm run build
       - name: Formatting
         run: npm run format:check
-      - name: Show workflow guard formatting diff on failure
-        if: failure()
-        run: |
-          npx prettier --write scripts/check-workflow-action-pins.mjs tests/workflow-action-pins.test.mjs
-          git diff -- scripts/check-workflow-action-pins.mjs tests/workflow-action-pins.test.mjs
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
