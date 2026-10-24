@@ -224,7 +224,6 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
-
   it('refuses the POST when operator permission is revoked at the final adapter gate', async () => {
     const t = setup();
     try {
