@@ -221,7 +221,7 @@ describe('shared-lease workspace recovery', () => {
           repository,
           worktree: foreign,
         }),
-      ).rejects.toThrow('different repository');
+      ).rejects.toThrow('does not belong to the registered repository');
       expect(journal.get('workspace-1')?.state).toBe('reserved');
     } finally {
       db.close();
