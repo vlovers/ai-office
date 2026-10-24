@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
-import { reserveApprovedPublicationAtomically } from '../src/server/delivery-approved-publication-reservation.js';
+import {
+  reserveApprovedPublicationAtomically,
+} from '../src/server/delivery-approved-publication-reservation.js';
 import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import {
@@ -145,7 +147,7 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
-  it('uses the trusted atomic reservation adapter once and never reauthorizes a published PR', async () => {
+  it('uses the atomic reservation adapter once and reuses the published PR', async () => {
     const t = setup();
     try {
       const reserveApproved = vi.fn(() => t.journal.reserve('workspace-1', publicationKey(plan)));
@@ -295,7 +297,7 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
-  it('blocks managed head branch reuse even when the existing PR targets another base', async () => {
+  it('blocks managed head reuse when an existing PR targets another base', async () => {
     const t = setup();
     try {
       t.listRemote.mockResolvedValueOnce({
@@ -328,7 +330,7 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
-  it('reconciles a persisted uncertain intent after SQLite and process-context restart', async () => {
+  it('reconciles an uncertain intent after SQLite restart', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-office-restart-'));
     const repoPath = join(root, 'repo');
     const databasePath = join(root, 'delivery.sqlite');
