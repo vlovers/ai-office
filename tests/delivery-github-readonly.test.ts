@@ -110,6 +110,60 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+
+  it('follows an explicit next Link even when GitHub returns a short page', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        const next = new URL(url);
+        next.searchParams.set('page', '2');
+        return new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: '<' + next.toString() + '>; rel="next"' },
+        });
+      }
+      return json([{ ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }]);
+    });
+    const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
+    expect(result.candidates).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['cross-origin', 'https://attacker.invalid/pulls?page=2'],
+    ['skipped page', 'https://api.github.com/repos/vlovers/ai-office/pulls?state=all&per_page=5&page=3'],
+    ['different repository', 'https://api.github.com/repos/foreign/repo/pulls?state=all&per_page=5&page=2'],
+  ])('rejects a malicious pagination next link: %s', async (_label, next) => {
+    const fetcher = vi.fn(async () =>
+      new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: '<' + next + '>; rel="next"' },
+      }),
+    );
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'pagination',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed when a short first page links to a rate-limited second page', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get('page') === '2') {
+        return json({ message: 'rate limited' }, 429);
+      }
+      const next = new URL(url);
+      next.searchParams.set('page', '2');
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: '<' + next.toString() + '>; rel="next"' },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'HTTP 429',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects untrusted destinations before any request', async () => {
     const fetcher = vi.fn();
     await expect(

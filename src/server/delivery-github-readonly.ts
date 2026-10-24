@@ -56,6 +56,48 @@ export function parseGitHubPullRequest(value: unknown): GitHubDraftReceipt {
 }
 
 /**
+ * Prefer GitHub's explicit pagination evidence over response length. A short
+ * page can still have a next link; ignoring it would silently omit PRs and
+ * could make a duplicate publication look safe.
+ */
+function nextGitHubPage(
+  link: string | null,
+  requestedUrl: URL,
+  page: number,
+  fullPage: boolean,
+): number | null {
+  if (link === null) return fullPage ? page + 1 : null;
+  let hasNext = false;
+  for (const segment of link.split(',')) {
+    const match = /^<([^<>]+)>;\s*rel="(next|prev|first|last)"$/.exec(segment.trim());
+    if (!match) throw new Error('Invalid GitHub PR pagination Link header.');
+    if (match[2] !== 'next') continue;
+    if (hasNext) throw new Error('Duplicate GitHub PR pagination next link.');
+    let target: URL;
+    try {
+      target = new URL(match[1]!);
+    } catch {
+      throw new Error('Invalid GitHub PR pagination next URL.');
+    }
+    if (
+      target.origin !== requestedUrl.origin ||
+      target.pathname !== requestedUrl.pathname ||
+      target.hash !== '' ||
+      target.username !== '' ||
+      target.password !== '' ||
+      target.searchParams.size !== 3 ||
+      target.searchParams.get('state') !== 'all' ||
+      target.searchParams.get('per_page') !== requestedUrl.searchParams.get('per_page') ||
+      target.searchParams.get('page') !== String(page + 1)
+    ) {
+      throw new Error('GitHub PR pagination escaped the approved repository or skipped a page.');
+    }
+    hasNext = true;
+  }
+  return hasNext ? page + 1 : null;
+}
+
+/**
  * Read-only GitHub REST adapter. Requests the approved repository only,
  * includes open and closed PRs, exhausts pagination and fails closed on
  * redirects, rate limits, malformed JSON and interrupted responses.
@@ -111,7 +153,12 @@ export async function listAllGitHubPullRequests(
     const candidates = payload.map(parseGitHubPullRequest);
     return {
       candidates,
-      nextPage: candidates.length === perPage ? page + 1 : null,
+      nextPage: nextGitHubPage(
+        response.headers.get('link'),
+        url,
+        page,
+        candidates.length === perPage,
+      ),
     };
   }, options.maxPages);
 }
