@@ -244,6 +244,28 @@ describe('GitHub immutable ref attestation', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('fails closed on a stalled GitHub ref request before reading the base', async () => {
+    const fetcher = vi.fn(async () => new Promise<Response>(() => undefined));
+    await expect(
+      attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 100 }),
+    ).rejects.toThrow('GitHub request timed out');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('bounds PR detail response parsing after an ambiguous publication', async () => {
+    const fetcher = vi.fn(async () => {
+      const response = jsonResponse({ ...receipt, number: 123 });
+      Object.defineProperty(response, 'json', {
+        value: () => new Promise<never>(() => undefined),
+      });
+      return response;
+    });
+    await expect(
+      readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher, timeoutMs: 100 }),
+    ).rejects.toThrow('GitHub request timed out');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('rejects redirected PR detail requests', async () => {
     const fetcher = vi.fn(async () => {
       const response = jsonResponse({ ...receipt, number: 123 });
