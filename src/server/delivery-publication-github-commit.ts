@@ -9,6 +9,10 @@ import {
 } from './delivery-github-readonly.js';
 import type { ApprovedCommitSnapshot } from './delivery-github-ref-attestation.js';
 import {
+  attestLocalReviewedGitState,
+  type LocalGitReview,
+} from './delivery-local-git-attestation.js';
+import {
   publishCommitAttestedDraft,
   reconcileCommitAttestedDraft,
   type DeliveryPublicationContext,
@@ -56,5 +60,38 @@ export function reconcileCommitAttestedDraftViaGitHub(
       signal: options.signal,
     },
     listAllRemoteDrafts: (plan) => listAllGitHubPullRequests(plan, options),
+  });
+}
+
+/**
+ * Stronger server-only publication boundary. Local worktree review executes
+ * under the same Git lease, before remote GET, SQLite reservation and POST.
+ * Operator authentication and commit/push approval are still separate gates.
+ */
+export function publishLocallyAttestedDraftViaGitHub(
+  context: DeliveryPublicationContext & {
+    approval: ApprovedCommitSnapshot;
+    localReview: Omit<LocalGitReview, 'commits'>;
+  },
+  options: GitHubDraftWriteOptions,
+) {
+  validateGitHubDraftWrite(context.plan, context.approval, options);
+  if (context.localReview.workspaceGitDir !== context.workspaceGitDir) {
+    throw new Error('Local review workspace identity does not match the publication lease.');
+  }
+  return publishCommitAttestedDraft({
+    ...context,
+    verifyLocalGitState: async (plan) => {
+      await attestLocalReviewedGitState(plan, {
+        ...context.localReview,
+        commits: context.approval,
+      });
+    },
+    gitHubRefOptions: {
+      token: options.token,
+      fetcher: options.fetcher,
+      signal: options.signal,
+    },
+    createDraft: (plan, attestation) => createCommitAttestedGitHubDraft(plan, attestation, options),
   });
 }
