@@ -43,7 +43,9 @@ describe('durable Git transfer approval integration', () => {
     try {
       const restarted = new DeliveryTransferApprovalLedger(restartedDb, () => 1000);
       const consumed = restartedDb
-        .prepare('SELECT approval_id FROM delivery_transfer_approvals WHERE consumed_at IS NOT NULL')
+        .prepare(
+          'SELECT approval_id FROM delivery_transfer_approvals WHERE consumed_at IS NOT NULL',
+        )
         .all();
       expect(consumed).toHaveLength(1);
       const receipt = consumed[0];
@@ -64,7 +66,10 @@ describe('durable Git transfer approval integration', () => {
       const ledger = new DeliveryTransferApprovalLedger(db, () => 2000);
       approvalId = ledger.issue(binding);
       expect(
-        ledger.revoke(approvalId, { operatorId: 'operator-a', sessionId: 'wrong-session' }),
+        ledger.revoke(approvalId, {
+          operatorId: 'operator-a',
+          sessionId: 'wrong-session',
+        }),
       ).toBe(false);
       expect(ledger.revoke(approvalId, binding.operator)).toBe(true);
     } finally {
