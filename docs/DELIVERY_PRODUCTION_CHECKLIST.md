@@ -36,14 +36,29 @@ Status: **unreleased authorization foundation; remote write activation blocked**
 - [ ] Configure quotas/rate limits, bounded secret-free audit collection,
       monitoring, private storage and tested backup/restore/rollback procedures.
 
-
 ## SQLite filesystem hardening — operator migration gate (PR #72)
 
-The Delivery data directory must already be owned by the service account and private (no group/other permissions). Existing `delivery.sqlite`, `delivery.sqlite-journal`, `delivery.sqlite-wal` and `delivery.sqlite-shm` files must be regular, owned by that account, private, and have exactly one hard link. Startup now refuses unsafe paths instead of silently changing their permissions. Do not recursively chmod unknown paths or follow links while repairing an installation.
+The Delivery data directory must already be owned by the service account and
+private (no group/other permissions). Existing `delivery.sqlite`,
+`delivery.sqlite-journal`, `delivery.sqlite-wal` and `delivery.sqlite-shm`
+files must be regular, owned by that account, private, and have exactly one hard
+link. Startup now refuses unsafe paths instead of silently changing permissions.
+Do not recursively chmod unknown paths or follow links during repairs.
 
-Before upgrading, stop all Delivery processes and confirm there is no active SQLite writer. Back up the directory to a private location and record owner, mode, link count, and canonical path of every file. Use a trusted administrator to inspect any unexpected symlink, hard link, file type or owner **before** correcting anything; do not automatically overwrite or remove suspect files. If the old service created world-readable files, assess possible credential/session exposure and revoke affected sessions as needed. Only restore known-good data with restrictive permissions, then test WAL open/restart and retained sessions with a disposable copy before restarting the service.
+Before upgrading, stop all Delivery processes and confirm there is no active
+SQLite writer. Back up the directory to a private location and record owner,
+mode, link count and canonical path of every file. A trusted administrator must
+inspect unexpected symlinks, hard links, file types or owners **before** any
+correction; never automatically overwrite or remove suspect files. Assess
+possible session exposure when an old installation had world-readable files.
+Restore known-good data with restrictive permissions, then test WAL
+open/restart and retained sessions with a disposable copy.
 
-The directory must not be writable by untrusted local processes: SQLite uses pathnames for auxiliary files after the preflight, so these checks do not eliminate concurrent path-replacement races. A dedicated service account and a private, trusted parent directory remain deployment requirements. Remote GitHub writes stay disabled.
+The directory must not be writable by untrusted local processes. SQLite uses
+pathnames for auxiliary files after preflight; these checks do not eliminate
+concurrent path-replacement races. A dedicated service account and private,
+trusted parent directory remain deployment requirements. Remote GitHub writes
+stay disabled.
 
 ## Additional blockers before any remote write feature
 
