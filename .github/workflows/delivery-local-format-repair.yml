@@ -1,4 +1,5 @@
 name: Delivery local Git formatting repair
+# One-shot formatting of the reviewed local Git attestation PR.
 
 on:
   push:
