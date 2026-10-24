@@ -10,7 +10,8 @@ What user-visible or operational problem are we solving?
 
 ## Existing evidence
 
-Link relevant files, PRs, tests and prior Issues. Distinguish implemented from verified, accepted and released.
+Link relevant files, PRs, tests and prior issues. Distinguish implemented from
+verified, accepted and released.
 
 ## Scope and non-goals
 
@@ -22,7 +23,8 @@ Link relevant files, PRs, tests and prior Issues. Distinguish implemented from v
 
 - [ ] A concrete behavior or artifact can be verified.
 - [ ] Relevant unit, integration and end-to-end evidence is specified.
-- [ ] Agent permissions, explicit writes, worktree isolation and sandbox boundaries are considered.
+- [ ] Agent permissions, explicit writes, worktree isolation and sandbox
+      boundaries are considered.
 - [ ] Security, compatibility and rollback implications are evaluated.
 - [ ] Reviewer findings and exact CI evidence are recorded.
 
