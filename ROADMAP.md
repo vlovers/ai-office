@@ -69,6 +69,17 @@ Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder →
 
 Verification dashboard and explicitly authorized GitHub PR preparation/publishing, minimal GitHub permissions, revision-pinned checks, manual confirmation for push/PR actions. The [GitHub Delivery Center contract](docs/GITHUB_DELIVERY_CENTER.md) defines server-side revision checks, explicit commit/push/PR approvals, fail-closed recovery and acceptance tests. **This is a specification, not a shipped integration.**
 
+### v0.8 publication foundation (unreleased)
+
+The delivery publication boundary now combines the shared Git lease, refreshed
+review snapshot, durable SQLite operation reservation, strict GitHub draft PR
+receipt verification and read-only uncertain-result reconciliation. SQLite
+integration tests cover duplicate requests, concurrent callers, timeouts,
+forked PRs and restart recovery. This is **not** a connected GitHub publisher:
+commit/push approvals, real GitHub authentication, immutable remote head SHA
+verification, paginated discovery, HTTP authorization and UI remain outstanding.
+See [pipeline safety and activation gates](docs/DELIVERY_PUBLICATION_PIPELINE.md).
+
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
