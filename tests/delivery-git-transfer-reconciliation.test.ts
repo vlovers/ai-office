@@ -229,7 +229,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       await expect(
         reconcileGitTransferReceipts({
           ...t.context,
-          identity: { ...t.identity, workspaceId: 'workspace-foreign' },
+          identity: { ...t.identity, headSha: 'f'.repeat(40) },
         }),
       ).rejects.toThrow('missing or belongs');
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
