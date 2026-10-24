@@ -52,7 +52,15 @@ function setup(stage: 'commit' | 'push' = 'commit') {
     performOnce,
     verifyReceiptReadOnly,
   };
-  return { db, context, transferJournal, approvalLedger, verifyLocalGitState, performOnce, verifyReceiptReadOnly };
+  return {
+    db,
+    context,
+    transferJournal,
+    approvalLedger,
+    verifyLocalGitState,
+    performOnce,
+    verifyReceiptReadOnly,
+  };
 }
 
 beforeEach(() => {
@@ -71,7 +79,9 @@ describe('leased one-use Git transfer execution', () => {
       expect(t.verifyLocalGitState).toHaveBeenCalledTimes(1);
       expect(t.performOnce).toHaveBeenCalledTimes(1);
       expect(t.verifyReceiptReadOnly).toHaveBeenCalledTimes(1);
-      expect(() => t.approvalLedger.assertPending(t.context.approvalId, t.context.binding)).toThrow();
+      expect(() =>
+        t.approvalLedger.assertPending(t.context.approvalId, t.context.binding),
+      ).toThrow();
       await expect(executeAuthorizedTransferStage(t.context)).rejects.toThrow();
       expect(t.performOnce).toHaveBeenCalledTimes(1);
     } finally {
