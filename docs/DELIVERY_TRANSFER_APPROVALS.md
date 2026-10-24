@@ -34,10 +34,10 @@ A future trusted publisher must:
 3. Revalidate repository/worktree identity, the exact publication plan,
    clean reviewed tree and head/base SHAs under that lease.
 4. Confirm the correct stage approval is pending and bound to that review.
-5. Consume the approval **before** the external operation. Record a durable
-   stage intent **before** invoking Git or GitHub; neither operation may run
-   without both conditions satisfied. If either local persistence step fails,
-   stop without performing the external operation.
+5. Consume the approval and reserve the durable stage intent in **one**
+   SQLite `BEGIN IMMEDIATE` transaction on the same database connection,
+   while holding the shared repository lease. Either both changes commit or
+   neither does. Never invoke Git or GitHub before the transaction commits.
 6. Execute at most one authorized external operation. On timeout, crash,
    GitHub 403/429/5xx or ambiguous result, retain an uncertain stage; do not
    replay the operation automatically.
@@ -52,10 +52,16 @@ be regenerated automatically to retry an uncertain external operation.
 
 ## Leased transfer execution composition
 
-`executeAuthorizedTransferStage` now composes the shared repository lease,
+`executeAuthorizedTransferStage` composes the shared repository lease,
 refreshed publication snapshot, independently supplied local Git attestation,
-stage-specific operator approval, durable transfer intent, a single trusted
-external operation and independent read-only receipt verification. A confirmed
+stage-specific operator approval, **atomic** durable transfer intent, a single
+trusted external operation and independent read-only receipt verification.
+The executor requires one explicit `DatabaseSync` connection for both ledgers
+and calls `reserveApprovedTransferIntentAtomically` under the held lease.
+`reserveApprovedDeliveryGitTransfer` is a separate, server-only leased
+reservation primitive with real worktree ownership checks; it does **not**
+perform a Git operation and must not be used to execute one after its lease
+has been released. A confirmed
 receipt requires the exact reviewed SHA. A push cannot start until the matching
 commit receipt is confirmed. Duplicate requests, changed snapshots, expired
 approvals, ambiguous HTTP responses and invalid receipts fail closed.
@@ -78,7 +84,7 @@ invoke an external operation after the shared lease has been released.
 | Approval expired, revoked or already consumed         | Reject; no replay                                  |
 | Clock moves backwards across restart                  | Reject until trusted clock catches up              |
 | Another process consumed approval                     | Atomic SQL update rejects second caller            |
-| Crash after approval consumption, before intent       | No external write; manual recovery                 |
+| Crash during approval/intent transaction               | Both roll back; no external write                  |
 | Crash after intent, before or during external write   | Preserve uncertain state; read-only reconciliation |
 | GitHub timeout, rate limit, 5xx or malformed response | Do not infer success or retry blindly              |
 | Remote ref does not match reviewed SHA                | Do not confirm receipt                             |
@@ -88,9 +94,12 @@ invoke an external operation after the shared lease has been released.
 
 The tests cover stage separation, identity mismatches, one-use consumption,
 expiration, revocation, persistent clock rollback, independent SQLite
-connections and restart recovery. This is not a substitute for cross-process
-native Git integration tests, credential isolation, authenticated HTTP tests
-and a production startup coordinator.
+connections and restart recovery. The atomic reservation tests additionally
+exercise real temporary Git repositories, clean-snapshot attestation, foreign
+worktree rejection, shared-lease contention, duplicate-intent rollback and
+restart recovery. These do not replace authenticated HTTP tests, real remote
+credentials, independent cross-process Git tests or a production startup
+coordinator.
 
 No UI endpoint, background publisher, credential exchange, automatic
 commit/push, force push, reset, branch deletion or deployment is enabled here.
