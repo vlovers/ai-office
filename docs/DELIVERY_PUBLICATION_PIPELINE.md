@@ -135,3 +135,34 @@ production endpoint:
 
 No automatic merging, force-pushing, deployment or destructive cleanup is
 authorized by this module.
+
+
+## Server-only GitHub draft write adapter (unreleased)
+
+`delivery-github-draft-write.ts` implements a **single** authenticated GitHub
+`POST /repos/{owner}/{repo}/pulls` request, with `draft: true` and
+`maintainer_can_modify: false`. It requires a server-owned GitHub credential,
+an exact operator-confirmed operation key and Git commit pair, and a valid
+canonical destination. It rejects missing confirmations, invalid title/body,
+redirects, non-201 responses, malformed JSON, foreign repository identities,
+non-draft responses and changed head/base commit SHAs. It never retries a POST.
+
+`delivery-publication-github-commit.ts` composes this adapter with the existing
+shared Git lease, fresh review-plan validation, two remote ref GET attestations,
+durable SQLite reservation and post-POST receipt verification. Invalid local
+configuration is rejected **before** acquiring a lease or reserving a journal
+entry. After any ambiguous POST result, the journal remains `uncertain`.
+
+The same module provides read-only, commit-pinned recovery: exhaustive GET
+discovery of open/closed PRs, then a separate GET for the matching PR's current
+commit SHAs. Recovery never creates a second PR. Tests cover the complete
+GET/GET/POST flow, idempotent reuse, invalid confirmations, timeouts, SHA
+mismatches and read-only recovery.
+
+**Not production-enabled:** These functions are not registered as HTTP routes.
+A caller must independently establish operator identity, bind the confirmation
+to a trusted persisted review and verified local worktree, enforce least-privilege
+credentials, ensure the approved commits have been pushed safely, and serialize
+multi-process startup recovery. A confirmation object supplied by an arbitrary
+HTTP client is **not** authorization. No automatic commit, push, merge or deploy
+is provided.
