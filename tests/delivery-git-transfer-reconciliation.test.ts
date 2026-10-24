@@ -364,7 +364,7 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
-  it('rejects a changed registry operation under the lease without touching the journal', async () => {
+  it('rejects a changed registry operation before journal mutation', async () => {
     const t = setup();
     try {
       t.journal.begin('commit', t.identity);
@@ -385,7 +385,7 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
-  it('does not confirm a commit if the reviewed registry changes during local Git reads', async () => {
+  it('blocks commit confirmation on registry drift during Git reads', async () => {
     const t = setup();
     try {
       t.journal.begin('commit', t.identity);
@@ -434,7 +434,7 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
-  it('refuses a push intent whose commit receipt was invalidated without repairing it', async () => {
+  it('rejects push intent when its commit receipt was invalidated', async () => {
     const t = setup();
     try {
       t.journal.begin('commit', t.identity);
