@@ -40,6 +40,8 @@ function setup(stage: 'commit' | 'push' = 'commit') {
   const performOnce = vi.fn(async () => undefined);
   const verifyReceiptReadOnly = vi.fn(async () => identity.headSha);
   const context = {
+    db,
+    now: () => 1000,
     repository: { path: '/repo', gitDir: '/repo/.git' },
     workspaceGitDir: '/repo/worktree/.git',
     plan,

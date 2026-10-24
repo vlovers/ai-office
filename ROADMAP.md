@@ -154,6 +154,23 @@ or browser authorization. See
 [transfer recovery safety contract](docs/DELIVERY_GIT_TRANSFER_RECOVERY.md)
 and [issue #58](https://github.com/vlovers/ai-office/issues/58).
 
+### v0.8 atomic approved transfer reservation (unreleased, PR #64)
+
+The server-only commit/push executor now requires one explicit SQLite connection
+for the stage-specific approval and durable transfer journal. Under the shared
+repository lease, it refreshes the reviewed publication snapshot and local
+attestation, then atomically consumes the one-use approval and reserves the
+intent with `BEGIN IMMEDIATE` **before** any trusted external operation.
+Duplicate intents, failed reservations and crashes cannot leave a consumed
+approval without its matching durable intent. Ambiguous results still require
+independent read-only receipt reconciliation and never authorize blind replay.
+
+Real temporary Git/SQLite tests exercise dirty reviews, foreign worktrees,
+lease contention, stage ordering, transaction rollback and restart recovery.
+This does **not** enable remote writes or a browser endpoint. Production gates
+remain authenticated operator sessions, Origin/CSRF, least-privilege GitHub
+credentials, real independent-process tests and startup registration.
+
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.

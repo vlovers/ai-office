@@ -98,8 +98,12 @@ persistent clock rollback protection are covered by SQLite tests, including
 independent connections and restart fixtures. See
 [`DELIVERY_TRANSFER_APPROVALS.md`](./DELIVERY_TRANSFER_APPROVALS.md).
 
-**This does not close issue #58.** The approval ledger is not yet composed
-atomically with commit/push intent reservation under the shared Git lease.
-Trusted session/Origin/CSRF enforcement, least-privilege production credentials,
-cross-process native Git fixtures and startup coordination remain release
-blockers. No browser write endpoint or automatic Git transfer is enabled.
+The server-only transfer executor now composes approval consumption and
+commit/push intent reservation in one `BEGIN IMMEDIATE` SQLite transaction
+under the shared Git lease. Crash/restart, duplicate reservation, foreign
+worktree and local snapshot checks have real-Git regression coverage. This
+eliminates the approval-consumed/intent-missing persistence gap for this
+executor, but **does not close issue #58**. Trusted session/Origin/CSRF
+enforcement, least-privilege production credentials, independent cross-process
+native Git fixtures and startup coordination remain release blockers.
+No browser write endpoint or automatic Git transfer is enabled.

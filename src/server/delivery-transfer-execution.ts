@@ -1,6 +1,8 @@
-import type {
-  DeliveryGitTransferIdentity,
+import type { DatabaseSync } from 'node:sqlite';
+import { reserveApprovedTransferIntentAtomically } from './delivery-approved-transfer-reservation.js';
+import {
   DeliveryGitTransferJournal,
+  type DeliveryGitTransferIdentity,
 } from './delivery-git-transfer-journal.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import { withPublicationLease } from './delivery-publication-lease.js';
@@ -13,12 +15,13 @@ import {
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 
 export type AuthorizedTransferContext = {
+  /** Both approval and transfer journal MUST share this exact SQLite connection. */
+  db: DatabaseSync;
+  now?: () => number;
   repository: { path: string; gitDir: string };
   workspaceGitDir: string;
   plan: DeliveryPublicationPlan;
   refreshPlan: () => Promise<DeliveryPublicationPlan>;
-  transferJournal: DeliveryGitTransferJournal;
-  approvalLedger: DeliveryTransferApprovalLedger;
   approvalId: string;
   binding: DeliveryTransferApprovalBinding;
   /**
@@ -57,8 +60,10 @@ export async function executeAuthorizedTransferStage(context: AuthorizedTransfer
     throw new Error('Git transfer identity does not match the reviewed publication plan.');
   }
 
+  const approvals = new DeliveryTransferApprovalLedger(context.db, context.now);
+  const transferJournal = new DeliveryGitTransferJournal(context.db);
   // Reject invalid or expired approvals before any Git lease or remote access.
-  context.approvalLedger.assertPending(context.approvalId, binding);
+  approvals.assertPending(context.approvalId, binding);
   return withPublicationLease(
     context.repository,
     context.workspaceGitDir,
@@ -73,27 +78,23 @@ export async function executeAuthorizedTransferStage(context: AuthorizedTransfer
         throw new Error('Git transfer destination changed during lease acquisition.');
       }
       await context.verifyLocalGitState(currentPlan, binding.identity);
-      if (context.transferJournal.get(binding.identity.workspaceId, binding.stage)) {
+      if (transferJournal.get(binding.identity.workspaceId, binding.stage)) {
         throw new Error('Git transfer stage already has a durable intent; reconcile before retry.');
       }
       if (binding.stage === 'push') {
-        context.transferJournal.assertConfirmed('commit', binding.identity);
+        transferJournal.assertConfirmed('commit', binding.identity);
       }
-      // Consume only after fresh attestation. A crash after consumption but
-      // before reservation cannot cause an external operation to be replayed.
-      context.approvalLedger.consume(context.approvalId, binding);
-      context.transferJournal.begin(binding.stage, binding.identity);
+      // Consume approval and reserve the intent in one BEGIN IMMEDIATE
+      // transaction on the same SQLite connection. A crash can no longer
+      // persist only the consumed approval without its durable intent.
+      reserveApprovedTransferIntentAtomically(context.db, context.approvalId, binding, context.now);
       try {
         await context.performOnce();
         const verifiedSha = await context.verifyReceiptReadOnly();
-        return context.transferJournal.confirmVerified(
-          binding.stage,
-          binding.identity,
-          verifiedSha,
-        );
+        return transferJournal.confirmVerified(binding.stage, binding.identity, verifiedSha);
       } catch (error) {
         // A timeout or malformed receipt is never evidence of failure.
-        context.transferJournal.markUncertain(binding.stage, binding.identity);
+        transferJournal.markUncertain(binding.stage, binding.identity);
         throw error;
       }
     },
