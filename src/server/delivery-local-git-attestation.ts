@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises';
 import { parseGitHubRemote } from '../shared/github-remote.js';
 import type { ApprovedCommitSnapshot } from './delivery-github-ref-attestation.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
@@ -10,6 +11,7 @@ export type LocalPublicationWorktree = {
 };
 
 export type LocalGitReview = {
+  repository: LocalPublicationWorktree;
   worktree: LocalPublicationWorktree;
   workspaceGitDir: string;
   commits: ApprovedCommitSnapshot;
@@ -46,6 +48,8 @@ function assertReview(
     throw new Error('Local Git review requires a managed branch and main base.');
   }
   if (
+    !review.repository?.path ||
+    !review.repository?.gitDir ||
     !review.worktree?.path ||
     !review.worktree?.gitDir ||
     review.worktree.gitDir !== review.workspaceGitDir
@@ -68,43 +72,62 @@ export async function attestLocalReviewedGitState(
   review: LocalGitReview,
 ): Promise<VerifiedLocalGitReview> {
   assertReview(plan, review);
+  const verifiedRepository = await revalidateRepository(review.repository);
   const verified = await revalidateRepository(review.worktree);
   if (
+    verifiedRepository.path !== review.repository.path ||
+    verifiedRepository.gitDir !== review.repository.gitDir ||
     verified.path !== review.worktree.path ||
     verified.gitDir !== review.workspaceGitDir
   ) {
     throw new Error('Local Git worktree identity changed after review.');
   }
 
-  const run = async (args: string[]): Promise<string> => {
+  const run = async (path: string, args: string[]): Promise<string> => {
     try {
-      return await git(verified.path, args);
+      return await git(path, args);
     } catch {
       // Git stderr can contain credential-bearing remotes. Never surface it.
       throw new Error('Local Git attestation command failed.');
     }
   };
 
+  const workspaceGit = async (args: string[]) => run(verified.path, args);
+  const commonArgs = ['rev-parse', '--path-format=absolute', '--git-common-dir'];
+  let repositoryCommon: string;
+  let workspaceCommon: string;
+  try {
+    repositoryCommon = await realpath((await run(verifiedRepository.path, commonArgs)).trim());
+    workspaceCommon = await realpath((await workspaceGit(commonArgs)).trim());
+  } catch {
+    throw new Error('Local Git common directory could not be verified.');
+  }
+  if (repositoryCommon !== workspaceCommon) {
+    throw new Error('Local Git worktree belongs to a different repository.');
+  }
+
   const status = async () =>
-    run([
+    workspaceGit([
       'status',
       '--porcelain=v1',
       '-z',
       '--untracked-files=all',
       '--ignore-submodules=none',
     ]);
-  const head = async () => (await run(['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
+  const head = async () =>
+    (await workspaceGit(['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
   const branch = async () =>
-    (await run(['symbolic-ref', '--quiet', '--short', 'HEAD'])).trim();
+    (await workspaceGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])).trim();
   const base = async () =>
     (
-      await run([
+      await workspaceGit([
         'rev-parse',
         '--verify',
         `refs/heads/${plan.baseBranch}^{commit}`,
       ])
     ).trim();
-  const remote = async () => (await run(['remote', 'get-url', 'origin'])).trim();
+  const remote = async () =>
+    (await workspaceGit(['remote', 'get-url', 'origin'])).trim();
 
   if (await status()) throw new Error('Local Git worktree or index is not clean.');
   if ((await branch()) !== plan.branch) {
