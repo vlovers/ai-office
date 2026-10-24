@@ -20,7 +20,8 @@ export function reconcilePublicationCandidates(
 ): ReconciliationResult {
   if (!plan.allowed) return { status: 'unresolved', reason: plan.reason };
   const matching = candidates.filter(
-    ({ head, base }) => head.ref === plan.branch && base.ref === plan.baseBranch,
+    (candidate) =>
+      candidate.head.ref === plan.branch && candidate.base.ref === plan.baseBranch,
   );
   if (matching.length !== 1) {
     return {
