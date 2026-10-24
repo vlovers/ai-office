@@ -4,17 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import {
-  reserveApprovedDeliveryGitTransfer,
-} from '../src/server/delivery-approved-transfer-reservation.js';
+import { reserveApprovedDeliveryGitTransfer } from '../src/server/delivery-approved-transfer-reservation.js';
 import { DeliveryGitTransferJournal } from '../src/server/delivery-git-transfer-journal.js';
 import { attestLocalReviewedGitState } from '../src/server/delivery-local-git-attestation.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import { withDeliveryRepositoryLease } from '../src/server/delivery-publication-lease.js';
 import { DeliveryTransferApprovalLedger } from '../src/server/delivery-transfer-approval.js';
-import {
-  recoverDeliveryWorkspaceWithTransfers,
-} from '../src/server/delivery-workspace-recovery.js';
+import { recoverDeliveryWorkspaceWithTransfers } from '../src/server/delivery-workspace-recovery.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 
 const branch = 'ai-office/12345678-1234-1234-1234-123456789abc';
@@ -211,14 +207,10 @@ describe('approved Git transfer intent reservation', () => {
           worktree: foreignWorktree,
         }),
       ).rejects.toThrow('belongs to another repository');
-      const holder = withDeliveryRepositoryLease(
-        t.repository,
-        t.repository.gitDir,
-        async () => {
-          notifyHeld();
-          await held;
-        },
-      );
+      const holder = withDeliveryRepositoryLease(t.repository, t.repository.gitDir, async () => {
+        notifyHeld();
+        await held;
+      });
       await acquired;
       try {
         await expect(
