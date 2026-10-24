@@ -51,6 +51,16 @@ test('does not accept a false token setting in env instead of with', () => {
   );
 });
 
+test('rejects checkout credential opt-out nested inside another with key', () => {
+  const text = `steps:\n  - uses: ${checkout}\n    with:\n      unrelated:\n        persist-credentials: false\n`;
+  assert.match(auditWorkflowText(text).join('\\n'), /persist-credentials/);
+});
+
+test('accepts checkout credential opt-out only as a direct with child', () => {
+  const text = `steps:\n  - uses: ${checkout}\n    with:\n      persist-credentials: false\n      fetch-depth: 0\n`;
+  assert.deepEqual(auditWorkflowText(text), []);
+});
+
 test('does not accept a false token setting from a different step', () => {
   const text = `steps:\n  - uses: ${checkout}\n  - name: unrelated\n    with:\n      persist-credentials: false\n`;
   assert.match(auditWorkflowText(text).join('\n'), /persist-credentials/);
