@@ -4,6 +4,7 @@ import {
   readGitHubDraftCommitReceipt,
   validateAttestedDraftReceipt,
   type ApprovedCommitSnapshot,
+  type AttestedGitRefs,
   type GitHubCommitReceipt,
   type GitHubRefOptions,
 } from './delivery-github-ref-attestation.js';
@@ -101,7 +102,7 @@ export async function publishCommitAttestedDraft(
   context: DeliveryPublicationContext & {
     approval: ApprovedCommitSnapshot;
     gitHubRefOptions?: GitHubRefOptions;
-    createDraft: (plan: AllowedPlan) => Promise<GitHubCommitReceipt>;
+    createDraft: (plan: AllowedPlan, attestation: AttestedGitRefs) => Promise<GitHubCommitReceipt>;
   },
 ): Promise<DeliveryJournalEntry> {
   const readiness = requireNewPublication(context.plan);
@@ -144,7 +145,7 @@ export async function publishCommitAttestedDraft(
         validateAttestedDraftReceipt(
           currentPlan,
           attestation,
-          await context.createDraft(currentPlan),
+          await context.createDraft(currentPlan, attestation),
         ),
       );
     },
