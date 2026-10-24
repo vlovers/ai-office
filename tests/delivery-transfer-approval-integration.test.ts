@@ -95,7 +95,9 @@ describe('durable Git transfer approval integration', () => {
     try {
       const restarted = new DeliveryTransferApprovalLedger(restartedDb, () => 4999);
       expect(() => restarted.issue(binding)).toThrow('moved backwards');
-      expect(restartedDb.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals').get()?.n).toBe(1);
+      expect(
+        restartedDb.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals').get()?.n,
+      ).toBe(1);
     } finally {
       restartedDb.close();
       rmSync(directory, { recursive: true, force: true });
