@@ -77,7 +77,9 @@ receipt verification and read-only uncertain-result reconciliation. SQLite
 integration tests cover duplicate requests, concurrent callers, timeouts,
 forked PRs and restart recovery. This is **not** a connected GitHub publisher:
 commit/push approvals, real GitHub authentication, immutable remote head SHA
-verification, paginated discovery, HTTP authorization and UI remain outstanding.
+verification, HTTP authorization and UI remain outstanding. A server-only,
+GET-only GitHub REST adapter now provides bounded, fully paginated discovery
+for reconciliation, but it is not connected to a production endpoint.
 See [pipeline safety and activation gates](docs/DELIVERY_PUBLICATION_PIPELINE.md).
 
 ## Non-goals for v0.6
