@@ -13,7 +13,7 @@ import {
 import { withDeliveryRepositoryLease } from '../src/server/delivery-publication-lease.js';
 
 function gitRepo() {
-  const path = mkdtempSync(join(tmpdir(), 'ai-office-startup-'));
+  const path = realpathSync(mkdtempSync(join(tmpdir(), 'ai-office-startup-')));
   execFileSync('/usr/bin/git', ['init', '-q', '-b', 'main', path]);
   execFileSync('/usr/bin/git', ['-C', path, 'config', 'user.name', 'AI Office Test']);
   execFileSync('/usr/bin/git', ['-C', path, 'config', 'user.email', 'test@example.invalid']);

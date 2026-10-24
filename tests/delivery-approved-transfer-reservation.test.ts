@@ -18,7 +18,7 @@ const destination = 'https://github.com/vlovers/ai-office';
 const now = () => 1000;
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'ai-office-approved-transfer-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'ai-office-approved-transfer-')));
   const path = join(root, 'repo');
   const run = (...args: string[]) =>
     execFileSync('/usr/bin/git', ['-C', path, ...args], { encoding: 'utf8' }).trim();
@@ -180,7 +180,7 @@ describe('approved Git transfer intent reservation', () => {
 
   it('rejects forged plans, foreign worktrees and competing leases', async () => {
     const t = fixture();
-    const foreign = mkdtempSync(join(tmpdir(), 'ai-office-foreign-'));
+    const foreign = realpathSync(mkdtempSync(join(tmpdir(), 'ai-office-foreign-')));
     let releaseHeld!: () => void;
     let notifyHeld!: () => void;
     const held = new Promise<void>((resolve) => {

@@ -2,6 +2,28 @@
 
 > Planning document, not a release promise. The source of truth for shipped functionality is tagged releases and their validation evidence. Security boundaries must never be inferred from a UI setting alone.
 
+## v0.8 Delivery authorization foundation (unreleased)
+
+- [x] Dedicated Delivery API with administrator-mediated opaque sessions,
+      expiry/revocation, persistent clock and live workspace/operation grants.
+- [x] Exact HTTPS Origin/Host, session CSRF, secure host cookies, bounded strict
+      requests and safe errors. The dashboard retains its local-only model.
+- [x] Fresh shared-lease Git attestation and existing one-use approval ledgers;
+      live authorization inside atomic transfer intent reservation.
+- [x] GET-only server credential boundary with expiry/durable 401/403 quarantine;
+      registered-workspace startup recovery before listening.
+- [x] Real SQLite/Git/HTTP, concurrent-server and independent-process restart tests.
+- [ ] Deployment TLS/browser validation, trusted enrollment/registry provisioning,
+      actual least-privilege credential audit, operational limits and review.
+- [ ] Authenticated UI and separately reviewed native remote executor wiring.
+      Commit/push/publication/merge routes and automatic retries remain disabled.
+
+See [security runbook](docs/DELIVERY_PRODUCTION_SECURITY.md),
+[threat model](docs/DELIVERY_THREAT_MODEL.md) and
+[production checklist](docs/DELIVERY_PRODUCTION_CHECKLIST.md). Earlier increment
+notes below describe their implementation-time scope; this foundation supplies
+the session/CSRF boundary for the dedicated API only.
+
 ## Shipped
 
 - **v0.3.0:** Two fixed Codex slots, persistent queues, read-only sessions, PHOSPHOR OS.

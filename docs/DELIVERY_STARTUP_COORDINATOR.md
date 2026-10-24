@@ -3,6 +3,12 @@
 Status: **unreleased, server-only integration**. This is not a production
 startup hook, authenticated endpoint, commit/push implementation or deployment.
 
+The [dedicated Delivery runtime](DELIVERY_PRODUCTION_SECURITY.md) now calls this
+coordinator under its metadata startup lock before listening, using an immutable
+server-owned config registry. This does not automatically discover/adopt the
+local dashboard's task registry or enable any GitHub write endpoint. The older
+activation notes below describe this module's original server-only scope.
+
 ## Why a separate coordinator exists
 
 A process restart may leave a publication reservation, commit intent or push

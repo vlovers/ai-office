@@ -24,6 +24,8 @@ export type ApprovedTransferReservation = {
   worktree: RepositoryIdentity;
   /** Trusted server-only callback: independently verify the reviewed snapshot. */
   verifySnapshot: () => Promise<void>;
+  /** Synchronous live authorization, rechecked inside the intent transaction. */
+  authorizeBeforeReserve?: () => void;
   now?: () => number;
 };
 
@@ -75,6 +77,7 @@ export function reserveApprovedTransferIntentAtomically(
   approvalId: string,
   binding: DeliveryTransferApprovalBinding,
   now?: () => number,
+  authorizeBeforeReserve?: () => void,
 ): DeliveryGitTransferEntry {
   const approvals = new DeliveryTransferApprovalLedger(db, now);
   const journal = new DeliveryGitTransferJournal(db);
@@ -82,6 +85,13 @@ export function reserveApprovedTransferIntentAtomically(
   approvals.assertPending(approvalId, binding);
   db.exec('BEGIN IMMEDIATE');
   try {
+    const authorization: unknown = authorizeBeforeReserve?.();
+    if (authorization && typeof (authorization as { then?: unknown }).then === 'function') {
+      // A void callback can accidentally be async in TypeScript. Never proceed
+      // before such a check finishes, or leave a rejection unhandled.
+      void Promise.resolve(authorization).catch(() => undefined);
+      throw new Error('Git transfer authorization must be synchronous.');
+    }
     approvals.consume(approvalId, binding);
     const intent = journal.begin(binding.stage, binding.identity);
     db.exec('COMMIT');
@@ -114,6 +124,12 @@ export async function reserveApprovedDeliveryGitTransfer(
     await assertRegisteredWorktree(repository, worktree);
     await context.verifySnapshot();
     await assertRegisteredWorktree(repository, worktree);
-    return reserveApprovedTransferIntentAtomically(db, approvalId, binding, context.now);
+    return reserveApprovedTransferIntentAtomically(
+      db,
+      approvalId,
+      binding,
+      context.now,
+      context.authorizeBeforeReserve,
+    );
   });
 }

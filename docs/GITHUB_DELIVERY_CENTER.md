@@ -2,6 +2,12 @@
 
 Status: design and acceptance criteria only. **No GitHub publishing API or UI is implemented by this document.**
 
+The unreleased [Delivery authorization foundation](DELIVERY_PRODUCTION_SECURITY.md)
+now implements a separate authenticated API for review, stage approvals, durable
+intent reservation and GET-only remote attestation. It has no publishing executor
+or authenticated dashboard UI. See the [threat model](DELIVERY_THREAT_MODEL.md)
+and explicit [production blockers](DELIVERY_PRODUCTION_CHECKLIST.md).
+
 ## Operator journey
 
 1. Choose a completed, explicitly **Kept** isolated-write task. Show the registered repository, source base SHA, task workspace ownership and a bounded changed-file summary.

@@ -27,7 +27,7 @@ const script = [
 
 describe('Delivery startup recovery across independent Node processes', () => {
   it('never steals a live Git lease and recovers exactly once after release', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ai-office-startup-process-'));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'ai-office-startup-process-')));
     const path = join(root, 'repo');
     execFileSync('/usr/bin/git', ['init', '-q', '-b', 'main', path]);
     const git = (...args: string[]) =>

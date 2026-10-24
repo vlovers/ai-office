@@ -1,5 +1,12 @@
 # Security model
 
+The [dedicated Delivery API](DELIVERY_PRODUCTION_SECURITY.md) adds an unreleased
+production authorization foundation with trusted sessions, workspace grants,
+Origin/CSRF and server-only read credentials. It is a separate ingress; the
+dashboard described below must remain loopback-only. Remote writes are disabled.
+See its [threat model](DELIVERY_THREAT_MODEL.md) and
+[activation checklist](DELIVERY_PRODUCTION_CHECKLIST.md).
+
 AI Office is a single-user local development tool for trusted repositories. It is not a container, a multi-user service, a secret scanner or an authorization boundary against other processes running as the same OS user. Do not expose it through a proxy or tunnel. Local-first describes control and metadata; model inference is remote.
 
 ## HTTP and authentication
