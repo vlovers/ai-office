@@ -8,8 +8,12 @@ docs/MVP_STABILIZATION_CHECKLIST.md when relevant.
 
 Local-first agent execution, task queues, write authorization, registered
 workspace roots, worktree ownership, SSE lifecycle, Review Center and durable
-recovery. Never expose the server publicly, elevate privileges through prompts
-or UI, auto-merge, or imply generic host safety.
+recovery. The dashboard (including Vite, task/workflow routes and SSE) must
+remain loopback-only; never proxy it to a public origin. The separately
+configured, unreleased Delivery API is a different HTTPS ingress with its own
+operator sessions, workspace grants and CSRF protections. Its remote write
+routes are disabled: approval/transfer reservations are not execution authority.
+Never elevate privileges through prompts/UI, auto-merge or imply generic host safety.
 
 ## Agent workflow
 
@@ -30,6 +34,8 @@ Never deploy, publish or merge without required authorization.
 - `npm run test:sandbox` (supported macOS sandbox only)
 - `npm run test:browser`
 - `npm run test:browser:workflow`
+- `npm run test:browser:office` (Office V4 interaction/accessibility smoke)
+- `npm run test:workflow:native` (workflow/QA integration fixtures)
 - `npm run test:real:workflow` (explicitly authorized real Codex setup only)
 
 Use safe fixtures and never run destructive tests against production data.
@@ -45,11 +51,21 @@ receipt/journal consistency, lease ownership, retry idempotency, crash recovery,
 and behavior when a remote write succeeds but local confirmation fails. Never
 infer safe publication from a mock-only happy-path test.
 
-## Release boundary
+## Separate acceptance and release gates
 
-Distinguish current tagged releases from functionality merged into main.
-Real Codex and native sandbox tests need environment-specific evidence;
-mock-based checks alone are insufficient.
+For the local MVP, require exact-SHA CI plus supported native sandbox and
+explicitly authorized real-Codex evidence before claiming runtime acceptance.
+For Delivery, separately check TLS ingress, live operator grants, session/CSRF,
+private credentials, durable journal/recovery, Git attestation and independent
+security review. No GitHub commit/push/Draft PR executor may be activated merely
+because an approval or transfer intent can be reserved. The dedicated Delivery
+production checklist remains a separate, currently blocked activation gate.
+
+Distinguish tagged releases from functionality merged into main. Record the
+base/head SHAs, applicable commands, environment, failures and N/A reasons;
+mock-based checks alone are insufficient. A branch behind main must be
+reconciled and revalidated before integration; passing an older PR-head CI
+is not evidence for a newer base or release candidate.
 
 See [Definition of Done](docs/engineering/DEFINITION_OF_DONE.md),
 [Independent review](docs/engineering/REVIEW_POLICY.md),
