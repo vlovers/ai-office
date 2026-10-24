@@ -152,6 +152,86 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it('honors consistent next/last and first/prev/last links across pages', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const current = new URL(url);
+      const page = Number(current.searchParams.get('page'));
+      const linked = (targetPage: number, relation: string) => {
+        const target = new URL(url);
+        target.searchParams.set('page', String(targetPage));
+        return `<${target.toString()}>; rel="${relation}"`;
+      };
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: {
+          link:
+            page === 1
+              ? [linked(2, 'next'), linked(2, 'last')].join(', ')
+              : [
+                  linked(1, 'first'),
+                  linked(1, 'prev'),
+                  linked(2, 'last'),
+                ].join(', '),
+        },
+      });
+    });
+    const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
+    expect(result.candidates).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a last-page hint beyond the current page without a next link', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const last = new URL(url);
+      last.searchParams.set('page', '3');
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: `<${last.toString()}>; rel="last"` },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'pagination Link header is incomplete',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects duplicate pagination relations even when the links agree', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const next = new URL(url);
+      next.searchParams.set('page', '2');
+      const item = `<${next.toString()}>; rel="next"`;
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: [item, item].join(', ') },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'Duplicate GitHub PR pagination relation',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects inconsistent first, previous and last pagination relations', async () => {
+    for (const [relation, targetPage] of [
+      ['first', 2],
+      ['prev', 3],
+      ['last', 0],
+    ] as const) {
+      const fetcher = vi.fn(async (url: string) => {
+        const target = new URL(url);
+        target.searchParams.set('page', String(targetPage));
+        return new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: `<${target.toString()}>; rel="${relation}"` },
+        });
+      });
+      await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+        'inconsistent page',
+      );
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
+  });
+
   it('fails closed when a short first page links to a rate-limited second page', async () => {
     const fetcher = vi.fn(async (url: string) => {
       if (new URL(url).searchParams.get('page') === '2') {
