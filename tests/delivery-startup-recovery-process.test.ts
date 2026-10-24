@@ -12,17 +12,17 @@ const script = [
   "import { DatabaseSync } from 'node:sqlite';",
   "import { DeliveryJournal } from './src/server/delivery-journal.ts';",
   "import { DeliveryGitTransferJournal } from './src/server/delivery-git-transfer-journal.ts';",
-  "import { recoverRegisteredDeliveryOperations } from './src/server/delivery-startup-recovery.ts';",
+  "import { recoverRegisteredDeliveryWorkspaces } from './src/server/delivery-startup-coordinator.ts';",
   'const db = new DatabaseSync(process.argv[1]);',
   'try {',
   '  const registration = JSON.parse(process.argv[2]);',
-  '  const report = await recoverRegisteredDeliveryOperations(',
-  '    new DeliveryJournal(db),',
-  '    new DeliveryGitTransferJournal(db),',
-  '    async () => registration,',
-  '  );',
+  '  const report = await recoverRegisteredDeliveryWorkspaces({',
+  '    journal: new DeliveryJournal(db),',
+  '    transferJournal: new DeliveryGitTransferJournal(db),',
+  '    registrations: [registration],',
+  '  });',
   '  process.stdout.write(JSON.stringify(report));',
-  '} finally { db.close(); }',
+  '} catch { process.stdout.write("blocked"); } finally { db.close(); }',
 ].join('\n');
 
 describe('Delivery startup recovery across independent Node processes', () => {
@@ -76,25 +76,21 @@ describe('Delivery startup recovery across independent Node processes', () => {
         );
         expect(child.error).toBeUndefined();
         expect(child.status).toBe(0);
-        return JSON.parse(child.stdout) as {
-          recovered: Array<{ workspaceId: string; commit: string; publication: string }>;
-          blocked: Array<{ workspaceId: string; reason: string }>;
-        };
+        return child.stdout;
       };
       await withDeliveryRepositoryLease(repository, repository.gitDir, async () => {
-        const blocked = recoverInChild();
-        expect(blocked.recovered).toEqual([]);
-        expect(blocked.blocked).toEqual([
-          { workspaceId: 'workspace-a', reason: 'lease-or-recovery-failed' },
-        ]);
+        expect(recoverInChild()).toBe('blocked');
         expect(journal.get('workspace-a')?.state).toBe('reserved');
         expect(transfers.get('workspace-a', 'commit')?.state).toBe('intent');
       });
-      const recovered = recoverInChild();
-      expect(recovered.blocked).toEqual([]);
-      expect(recovered.recovered[0]?.publication).toBe('uncertain');
-      expect(recovered.recovered[0]?.commit).toBe('uncertain');
-      const repeat = recoverInChild();
+      const recovered = JSON.parse(recoverInChild()) as Array<{
+        workspaceId: string;
+        publication: { state: string };
+        commit: { state: string };
+      }>;
+      expect(recovered[0]?.publication.state).toBe('uncertain');
+      expect(recovered[0]?.commit.state).toBe('uncertain');
+      const repeat = JSON.parse(recoverInChild());
       expect(repeat).toEqual(recovered);
       expect(journal.get('workspace-a')?.state).toBe('uncertain');
       expect(transfers.get('workspace-a', 'commit')?.state).toBe('uncertain');
