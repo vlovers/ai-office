@@ -31,8 +31,8 @@ export class DeliveryJournal {
   }
 
   /**
-   * Atomic reservation: only one operation can own a workspace. Even matching
-   * retries cannot re-run a write while the first attempt may have succeeded.
+   * Atomic reservation: only one operation can own a workspace. Matching
+   * retries are rejected because the first attempt may already have written.
    */
   reserve(workspaceId: string, operationKey: string): DeliveryJournalEntry {
     if (!workspaceId || !operationKey) throw new Error('Publication identity is required.');
