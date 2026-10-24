@@ -27,7 +27,13 @@ import {
  * exist at the expected GitHub refs, as checked inside the shared lease.
  */
 export function publishCommitAttestedDraftViaGitHub(
-  context: DeliveryPublicationContext & { approval: ApprovedCommitSnapshot },
+  context: DeliveryPublicationContext & {
+    approval: ApprovedCommitSnapshot;
+    /** Server-owned authorization hook; never bind to untrusted HTTP input. */
+    authorizeBeforeReserve?: (
+      plan: Extract<DeliveryPublicationContext['plan'], { allowed: true }>,
+    ) => Promise<void> | void;
+  },
   options: GitHubDraftWriteOptions,
 ) {
   // Fail before lock, remote GET or SQLite reservation on missing authorization.
