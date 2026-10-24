@@ -8,6 +8,7 @@ import {
   writeFile,
   readFile,
   mkdir,
+  access,
   realpath,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -216,4 +217,17 @@ it('rejects a symlinked data-directory alias without modifying the target', asyn
   await expect(openDeliveryDatabase(alias)).rejects.toThrow('unavailable');
   expect(await readFile(database, 'utf8')).toBe('unchanged target');
   expect((await stat(database)).mode & 0o077).toBe(0);
+});
+
+it('does not create a child through a symlinked ancestor before rejecting it', async () => {
+  const target = await root();
+  const parent = await root();
+  const alias = join(parent, 'alias');
+  await symlink(target, alias, 'dir');
+  await expect(openDeliveryDatabase(join(alias, 'unexpected-child'))).rejects.toThrow(
+    'unavailable',
+  );
+  await expect(access(join(target, 'unexpected-child'))).rejects.toMatchObject({
+    code: 'ENOENT',
+  });
 });
