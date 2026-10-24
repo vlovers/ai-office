@@ -58,10 +58,8 @@ function isValidCompleteInventory(
         typeof candidate.state === 'string' &&
         typeof candidate.head?.ref === 'string' &&
         typeof candidate.base?.ref === 'string' &&
-        (candidate.head.repo === null ||
-          typeof candidate.head.repo?.full_name === 'string') &&
-        (candidate.base.repo === null ||
-          typeof candidate.base.repo?.full_name === 'string'),
+        (candidate.head.repo === null || typeof candidate.head.repo?.full_name === 'string') &&
+        (candidate.base.repo === null || typeof candidate.base.repo?.full_name === 'string'),
     )
   );
 }
