@@ -1,56 +1,65 @@
-# AI Office — MVP evidence and activation gates
+# AI Office MVP evidence and activation gates
 
-Status: **review checklist; not release approval**. Updated 2026-10-24.
+Status: Review checklist, not release approval. Updated 2026-10-24.
 
-This document separates the existing **local-first, single-user coding workspace** from the **unreleased Delivery service**. A green CI workflow is not proof that arbitrary customer repositories, browsers or credentials are safe.
+The local-first coding workspace and the unreleased Delivery service have separate deployment and acceptance requirements. Passing CI does not prove arbitrary workspaces or credentials are safe.
 
-## Product slices and evidence
+## Product acceptance
 
-- **Local Codex task:** Two workers, persistent FIFO queues and SSE; Fresh-install manual task, cancel, restart and resumed session on supported macOS.
-- **Agent Studio:** Persisted profiles, immutable execution snapshots; Migration of populated v0.5 data; archive/edit while sessions remain active.
-- **Isolated editing:** Approved worktree writes and revision-bound Keep/Reject; Dirty worktree, changed review revision, denied host escape and recovery.
-- **Coder → Reviewer → QA:** Stage-gated workflow and sandbox verification; Real-model end-to-end run; explicit operator checkpoint before each consequential stage.
-- **Office V4:** Task/queue/profile projections; Mobile/keyboard/reduced motion and disconnected state against actual backend.
-- **Delivery authorization:** Dedicated HTTPS-oriented sessions, Origin/CSRF and live grants; Target TLS/browser deployment, operator enrollment, real grants and private audit.
-- **GitHub publication:** Server-only journal, leases, reconciliation and Draft PR primitives; #58, #68 and #70, independent audit and disposable-repo native crash testing.
+**Codex execution.** Verify task submission, two-worker FIFO scheduling, SSE, cancellation, restart and resume on a supported real macOS runtime.
 
-See `README.md`, `ROADMAP.md`, `docs/MVP_STABILIZATION_CHECKLIST.md` and `docs/DELIVERY_PRODUCTION_CHECKLIST.md` for detailed contracts. The local application and Delivery service are not interchangeable deployment surfaces.
+**Agent Studio.** Verify saved profiles, immutable execution snapshots, migrations from populated v0.5 data, and edits during active sessions.
 
-## P0 — release process
+**Isolated editing.** Verify approved worktree-only writes, revision-bound Keep/Reject, dirty-worktree denial, host escape prevention and recovery.
 
-1. Freeze the intended release commit and record Node, Git, OS, Codex CLI and SDK versions. Record provenance, test commands and artifacts. Never label a merge as a release.
-2. Run `npm ci`, `npm run check`, `npm run format:check`, `npm run test:sandbox` and `npm run test:browser` on the exact commit. Preserve failed as well as passing output.
-3. Perform the explicit real-Codex dashboard scenario only with the operator's informed approval (it consumes allowance). Test clean task, cancellation, restart/resume and review. Keep local private data out of commits.
-4. Exercise migration from an actual disposable pre-upgrade database, plus backup/restore and restart. Confirm existing task/session/review associations and immutable configuration snapshots.
-5. Conduct a security review of worktree scope, noninteractive approval limits, secrets, CSRF, session expiry/revocation, concurrent leases and all side-effect routes. Document target-platform limitations.
-6. Require a human go/no-go signoff with known blockers and rollback steps before tagging a release. Keep prerelease Delivery features distinctly described.
+**Coder, Reviewer and QA.** Verify actual stage transitions, approvals, reports, cancellation and restart using real Codex where expressly authorized.
 
-## P0 — Delivery activation dependency chain
+**Office V4.** Verify real task and queue projections, keyboard interaction, reduced motion, mobile layout, disconnected state and truthful errors.
 
-**Remote writes remain disabled** throughout these steps until a separately approved activation review.
+**Delivery authorization.** Verify target TLS ingress, operator enrollment, live grants, Origin/CSRF checks, least-privilege credentials and private audit records.
 
-1. **#68 publication atomicity:** consuming an exact approval and reserving the journal entry must be one SQLite transaction. Prove crash and concurrency cases with real databases.
-2. **#70 trusted server-only Draft executor:** re-attest operator/session/grants, worktree/repository ownership, exact review and head/base SHAs under the common Git lease. Complete open/closed PR inventory and use no more than one POST per durable intent. An ambiguous result is GET-only reconciliation, never automatic retry.
-3. **#58 commit/push and restart safety:** independently confirmed exact commit and push receipts, stage approvals, per-workspace recovery, and no global recovery race; verify actual least-privilege credentials.
-4. **Deployment controls:** target TLS and browser Origin/cookie/CSRF behavior, enrollment, grants, credential rotation, audit/quotas, backup/restore and rollback on a disposable remote.
-5. **Independent security review:** adversarial races and failure injection; require explicit operator confirmation and separate activation decision.
+**GitHub Draft PR publication.** Keep remote writes off until issues #58, #68 and #70 are complete, independently reviewed and tested with disposable real Git repositories.
 
-None of these gates permits automatic merge, force push, reset, deletion, deployment or unattended repository writes.
+## Local MVP release gate
 
-## Mandatory failure matrix for any proposed Delivery activation
+Freeze the exact source SHA and record operating system, Node, Git, Codex CLI and SDK versions.
 
-- **Stale review, moved branch/head/base or foreign worktree:** Fail closed before write; do not rebind approval.
-- **Revoked/expired session or live grant:** Fail closed within transactional decision.
-- **Duplicate request across processes:** One durable reservation; never duplicate POST.
-- **Crash before/after SQLite commit:** Deterministic recovery; no lost authorization ambiguity.
-- **GitHub timeout, 403/429/5xx or malformed/paginated inventory:** Keep unresolved/uncertain; GET-only reconciliation; no blind retry.
-- **Different repo/fork, duplicate PR or unverifiable SHA:** Reject receipt and keep publication blocked.
-- **Crash during startup recovery with concurrent publisher:** Shared lease prevents cross-process corruption.
-- **Operator denied confirmation:** Zero remote writes; preserve safe review state.
-- **Secret/configuration leakage:** Fail audit; scrub logs and artifacts, rotate affected credentials.
+Run `npm ci`, `npm run check`, `npm run format:check`, `npm run test:sandbox` and `npm run test:browser`. Keep both successful and failed evidence.
 
-## Acceptance log template
+Perform a real Codex dashboard test only with explicit approval because it consumes provider allowance. Exercise task execution, cancellation, restart and review. Never commit private runtime artifacts.
 
-For each scenario record: date, source SHA, system/runtime versions, environment type, command/manual steps, result, trace or private artifact location, reviewer and known limitations. Never commit tokens, home paths, private local transcripts or raw unredacted traces.
+Test migration, backup, restore and rollback with disposable databases containing task, session, profile and review history.
 
-**Decision rule:** absent evidence means *unverified*, not *passed*. A green simulated test does not replace real-machine and real-browser acceptance. Existing tracked issues remain the source of truth for delivery work; avoid creating duplicate implementation tickets.
+Conduct an independent review of permissions, secrets, leases, file ownership, sandbox restrictions and error handling. Document platform-specific limitations.
+
+Require human release approval and verify the exact CI and native evidence before tagging. A merged PR is not itself a release.
+
+## Delivery activation dependency chain
+
+**Issue #68.** Approval consumption and matching journal reservation must commit atomically on the same SQLite connection. Prove crash and multi-process behavior.
+
+**Issue #70.** Recheck verified operator session, live grants, exact repository ownership, immutable review and head/base SHAs inside the common Git lease. Require full open/closed PR discovery. Allow at most one Draft-only POST per durable intent; uncertain outcomes must reconcile through GET-only calls.
+
+**Issue #58.** Require independently confirmed commit/push receipts, explicit stage approvals and isolated startup recovery. No blind retry after uncertainty.
+
+**Deployment acceptance.** Verify TLS, cookies, CSRF, operator enrollment, least-privilege credentials, quotas, logs, credential rotation, backups and rollback in the target environment.
+
+**Independent review.** Attempt revoked grants, stale reviews, moved references, foreign worktrees, malformed paginated responses, duplicate requests, timeouts, crashes and concurrently running recovery.
+
+Automatic merge, force push, reset, deletion, deployment and unattended writes remain out of scope.
+
+## Failure outcomes
+
+Stale reviews, foreign repositories, changed refs or revoked grants must block writes before any external request.
+
+Concurrent duplicates must reserve once. Crashes must retain journal evidence without reissuing an uncertain remote write.
+
+Incomplete remote inventory, wrong PR destination, fork mismatches, unverifiable SHAs, GitHub errors and expired credentials must fail closed.
+
+Concurrent restart recovery must use the same repository lease namespace. Denied confirmation must cause zero writes. Secret exposure is a release blocker.
+
+## Evidence record
+
+Record date, source SHA, runtime versions, commands, environment, outcome, private artifact location, reviewer and limitations for each scenario. Exclude tokens, home paths, private transcripts and unredacted traces.
+
+Missing evidence means unverified, not passed. For details consult `README.md`, `ROADMAP.md`, `docs/MVP_STABILIZATION_CHECKLIST.md` and `docs/DELIVERY_PRODUCTION_CHECKLIST.md`.
