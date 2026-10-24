@@ -19,6 +19,8 @@ export type GitTransferReconciliationContext = {
   journal: DeliveryGitTransferJournal;
   identity: DeliveryGitTransferIdentity;
   plan: AllowedPlan;
+  /** Re-read the trusted registry while holding the shared Git lease. */
+  refreshPlan: () => Promise<DeliveryPublicationPlan>;
   repository: RepositoryIdentity;
   worktree: RepositoryIdentity;
   /** Trusted synchronous session/grant check, not browser-supplied code. */
@@ -112,11 +114,19 @@ export async function reconcileGitTransferReceipts(
   if (!Number.isSafeInteger(deadlineMs) || deadlineMs < 100 || deadlineMs > 60_000) {
     throw new Error('Invalid Git transfer reconciliation deadline.');
   }
+  const assertFreshPlan = async (): Promise<void> => {
+    const refreshed = await context.refreshPlan();
+    if (!refreshed.allowed || publicationKey(refreshed) !== identity.operationKey) {
+      throw new Error('Reviewed Git transfer plan changed during reconciliation.');
+    }
+  };
   assertSynchronousAuthorization(context.authorize);
   return withDeliveryRepositoryLease(
     context.repository,
     context.worktree.gitDir,
     async (): Promise<GitTransferReconciliationResult> => {
+      assertSynchronousAuthorization(context.authorize);
+      await assertFreshPlan();
       assertSynchronousAuthorization(context.authorize);
       const current = (): Receipts => ({
         commit: journal.get(identity.workspaceId, 'commit'),
@@ -128,8 +138,16 @@ export async function reconcileGitTransferReceipts(
       }
       if (existing.commit) journal.assertOwned('commit', identity);
       if (existing.push) journal.assertOwned('push', identity);
-      if (!existing.commit && existing.push) {
-        throw new Error('Push receipt exists without a matching commit intent.');
+      if (existing.commit?.state === 'confirmed' && existing.commit.receiptSha !== identity.headSha) {
+        throw new Error('Confirmed commit receipt conflicts with the reviewed head.');
+      }
+      if (existing.push) {
+        if (existing.commit?.state !== 'confirmed' || existing.commit.receiptSha !== identity.headSha) {
+          throw new Error('Push intent exists without an independently confirmed commit receipt.');
+        }
+        if (existing.push.state === 'confirmed' && existing.push.receiptSha !== identity.headSha) {
+          throw new Error('Confirmed push receipt conflicts with the reviewed head.');
+        }
       }
       // Do not globally recover other workspaces or infer that a missing
       // remote ref authorizes another push.
@@ -148,6 +166,8 @@ export async function reconcileGitTransferReceipts(
           },
         });
         assertSynchronousAuthorization(context.authorize);
+        await assertFreshPlan();
+        assertSynchronousAuthorization(context.authorize);
         journal.confirmVerified('commit', identity, identity.headSha);
       } catch {
         return { status: 'blocked', stage: 'commit', ...current() };
@@ -157,6 +177,8 @@ export async function reconcileGitTransferReceipts(
       try {
         assertSynchronousAuthorization(context.authorize);
         await attestRemoteWithinDeadline(plan, identity, context.remote, deadlineMs);
+        assertSynchronousAuthorization(context.authorize);
+        await assertFreshPlan();
         assertSynchronousAuthorization(context.authorize);
         journal.confirmVerified('push', identity, identity.headSha);
       } catch {
