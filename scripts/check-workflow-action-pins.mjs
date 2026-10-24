@@ -5,6 +5,10 @@ import { dirname, join, resolve } from 'node:path';
 const SHA_ACTION = /^(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+@[a-f0-9]{40}$/;
 const SHA_DOCKER = /^docker:\/\/[A-Za-z0-9_.:/-]+@sha256:[a-f0-9]{64}$/;
 const LOCAL_ACTION = /^\.\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/;
+const PERMISSIONS_DECLARATION = /^(\s*)permissions\s*:\s*(.*?)\s*(?:#.*)?$/;
+const TOKEN_PERMISSION = /^\s*([a-z-]+)\s*:\s*(read|write|none)\s*(?:#.*)?$/;
+const USES_DECLARATION = /^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*(?:#.*)?$/;
+const CREDENTIAL_SETTING = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/;
 
 function indentation(line) {
   return /^\s*/.exec(line)[0].length;
@@ -33,7 +37,7 @@ export function auditWorkflowText(source, filename = 'workflow') {
   // This intentionally accepts only explicit, static read-only token mappings.
   // It is a workflow guard, not a general-purpose YAML parser.
   for (let index = 0; index < lines.length; index += 1) {
-    const match = /^(\s*)permissions\s*:\s*(.*?)\s*(?:#.*)?$/.exec(lines[index]);
+    const match = PERMISSIONS_DECLARATION.exec(lines[index]);
     if (!match) continue;
     const depth = indentation(lines[index]);
     if (depth !== 0 && depth !== 4) continue;
@@ -47,19 +51,13 @@ export function auditWorkflowText(source, filename = 'workflow') {
     for (let line = index + 1; line < lines.length; line += 1) {
       if (!lines[line].trim() || /^\s*#/.test(lines[line])) continue;
       if (indentation(lines[line]) <= depth) break;
-      const entry = /^\s*([a-z-]+)\s*:\s*(read|write|none)\s*(?:#.*)?$/.exec(
-        lines[line],
-      );
+      const entry = TOKEN_PERMISSION.exec(lines[line]);
       if (!entry) {
-        findings.push(
-          filename + ':' + (line + 1) + ': invalid or dynamic token permission',
-        );
+        findings.push(`${filename}:${line + 1}: invalid or dynamic token permission`);
         continue;
       }
       if (entry[2] === 'write') {
-        findings.push(
-          filename + ':' + (line + 1) + ': write token permissions require separate review',
-        );
+        findings.push(`${filename}:${line + 1}: write token permissions require separate review`);
       }
       if (depth === 0 && entry[1] === 'contents' && entry[2] === 'read') {
         hasContentsRead = true;
@@ -74,24 +72,20 @@ export function auditWorkflowText(source, filename = 'workflow') {
   }
 
   for (let index = 0; index < lines.length; index += 1) {
-    const match = /^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*(?:#.*)?$/.exec(lines[index]);
+    const match = USES_DECLARATION.exec(lines[index]);
     if (!match) continue;
     const reference = match[1].trim();
     const location = filename + ':' + (index + 1);
     if (!reference || !isSafeReference(reference)) {
-      findings.push(
-        location +
-          ': action must use a static local path, immutable commit SHA or Docker digest (' +
-          reference +
-          ')',
-      );
+      findings.push(`${location}: action must use a static local path, immutable commit SHA or Docker digest (${reference})`);
     }
     if (!reference.startsWith('actions/checkout@')) continue;
 
     const stepIndent = indentation(lines[index]);
     let end = index + 1;
     while (end < lines.length) {
-      if (/^\s*-\s+/.test(lines[end]) && indentation(lines[end]) <= stepIndent) break;
+      const nextStep = /^\s*-\s+/.test(lines[end]);
+      if (nextStep && indentation(lines[end]) <= stepIndent) break;
       end += 1;
     }
 
@@ -105,16 +99,12 @@ export function auditWorkflowText(source, filename = 'workflow') {
         const settingIndent = indentation(lines[setting]);
         if (settingIndent <= withIndent) break;
         if (settingIndent !== withIndent + 2) continue;
-        const key = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/.exec(
-          lines[setting],
-        );
+        const key = CREDENTIAL_SETTING.exec(lines[setting]);
         if (key) credentialSettings.push(key[1].trim());
       }
     }
     if (credentialSettings.length !== 1 || credentialSettings[0] !== 'false') {
-      findings.push(
-        location + ': checkout requires exactly one with.persist-credentials: false',
-      );
+      findings.push(`${location}: checkout requires exactly one with.persist-credentials: false`);
     }
   }
   return findings;
