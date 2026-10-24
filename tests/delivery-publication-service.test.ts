@@ -8,6 +8,7 @@ import { publicationKey } from '../src/server/delivery-publication-idempotency.j
 import {
   publishApprovedDraft,
   publishCommitAttestedDraft,
+  reconcileCommitAttestedDraft,
   reconcileUncertainDraft,
 } from '../src/server/delivery-publication-service.js';
 
@@ -443,4 +444,112 @@ describe('lease-protected delivery publication pipeline', () => {
       db.close();
     }
   });
+  it('commit-pinned timeout recovery confirms only a fresh PR detail with exact SHAs', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const createDraft = vi.fn().mockRejectedValue(new Error('POST timed out'));
+      await expect(
+        publishCommitAttestedDraft({
+          ...context(journal),
+          approval: approvedCommits,
+          gitHubRefOptions: { fetcher: remoteRefs() },
+          createDraft,
+        }),
+      ).rejects.toThrow('POST timed out');
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      const detailFetcher = vi.fn(async (input: string, init: RequestInit) => {
+        expect(input).toBe('https://api.github.com/repos/vlovers/ai-office/pulls/123');
+        expect(init.method).toBe('GET');
+        expect(init.redirect).toBe('error');
+        return new Response(JSON.stringify({ ...commitReceipt, number: 123 }), { status: 200 });
+      });
+      const recovered = await reconcileCommitAttestedDraft({
+        ...context(journal),
+        approval: approvedCommits,
+        gitHubRefOptions: { fetcher: detailFetcher },
+        listAllRemoteDrafts: async () => ({ complete: true, candidates: [candidate] }),
+      });
+      expect(recovered.state).toBe('published');
+      expect(recovered.pullRequestUrl).toBe(candidate.html_url);
+      expect(createDraft).toHaveBeenCalledOnce();
+      expect(detailFetcher).toHaveBeenCalledOnce();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commit-pinned recovery refuses changed or missing PR SHAs and remains uncertain', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      await expect(
+        publishCommitAttestedDraft({
+          ...context(journal),
+          approval: approvedCommits,
+          gitHubRefOptions: { fetcher: remoteRefs() },
+          createDraft: async () => {
+            throw new Error('timeout');
+          },
+        }),
+      ).rejects.toThrow('timeout');
+      for (const detail of [
+        { ...commitReceipt, number: 123, head: { ...commitReceipt.head, sha: '3'.repeat(40) } },
+        { ...candidate, number: 123 },
+        { ...commitReceipt, number: 124 },
+      ]) {
+        const detailFetcher = vi.fn(async () =>
+          new Response(JSON.stringify(detail), { status: 200 }),
+        );
+        await expect(
+          reconcileCommitAttestedDraft({
+            ...context(journal),
+            approval: approvedCommits,
+            gitHubRefOptions: { fetcher: detailFetcher },
+            listAllRemoteDrafts: async () => ({ complete: true, candidates: [candidate] }),
+          }),
+        ).rejects.toThrow();
+        expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it('commit-pinned recovery rejects duplicate/incomplete listing without a PR detail GET', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      await expect(
+        publishCommitAttestedDraft({
+          ...context(journal),
+          approval: approvedCommits,
+          gitHubRefOptions: { fetcher: remoteRefs() },
+          createDraft: async () => {
+            throw new Error('timeout');
+          },
+        }),
+      ).rejects.toThrow('timeout');
+      const detailFetcher = vi.fn();
+      for (const snapshot of [
+        { complete: false, candidates: [candidate] },
+        { complete: true, candidates: [candidate, candidate] },
+        { complete: true, candidates: [] },
+      ]) {
+        await expect(
+          reconcileCommitAttestedDraft({
+            ...context(journal),
+            approval: approvedCommits,
+            gitHubRefOptions: { fetcher: detailFetcher },
+            listAllRemoteDrafts: async () => snapshot,
+          }),
+        ).rejects.toThrow();
+      }
+      expect(detailFetcher).not.toHaveBeenCalled();
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+    } finally {
+      db.close();
+    }
+  });
+
 });
