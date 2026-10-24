@@ -12,7 +12,8 @@ worktree and exact Git commit pair. It requires:
 - An allowed revision-pinned publication plan for a managed `ai-office/*`
   branch targeting `main`.
 - A worktree root and Git directory that pass existing repository identity
-  revalidation, with the Git directory bound to the selected workspace.
+  revalidation, with the Git directory bound to the selected workspace and
+  its canonical Git common directory equal to the registered repository's.
 - A completely clean tracked/untracked worktree and index (including
   submodule changes), an attached exact managed branch, and the approved
   `HEAD` and local `refs/heads/main` commit SHAs.
@@ -42,8 +43,7 @@ The shared lease coordinates AI Office writers. An unrelated external Git
 process is not required to honor that lease; the second read detects many
 races but cannot prevent a malicious external writer from changing refs
 immediately afterward. A production publisher must also verify that the
-workspace belongs to the expected common Git repository, enforce verified
-operator identity and CSRF/Origin policy, persist separate commit/push
+enforce verified operator identity and CSRF/Origin policy, persist separate commit/push
 receipts, attest the remote refs and verify the resulting PR's immutable
 commit identities. Remote commit SHA attestation remains a distinct gate.
 
