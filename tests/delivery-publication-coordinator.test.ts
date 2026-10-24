@@ -49,11 +49,12 @@ describe('publication coordinator', () => {
   it('revalidates the exact plan after obtaining an exclusive lease', () => {
     const key = publicationKey(plan);
     expect(validateLeasedPublication(key, plan)).toEqual({ valid: true });
-    expect(
-      validateLeasedPublication(key, { ...plan, revision: 'b'.repeat(64) }),
-    ).toMatchObject({ valid: false });
-    expect(
-      validateLeasedPublication(key, { allowed: false, reason: 'Preflight failed.' }),
-    ).toEqual({ valid: false, reason: 'Preflight failed.' });
+    expect(validateLeasedPublication(key, { ...plan, revision: 'b'.repeat(64) })).toMatchObject({
+      valid: false,
+    });
+    expect(validateLeasedPublication(key, { allowed: false, reason: 'Preflight failed.' })).toEqual({
+      valid: false,
+      reason: 'Preflight failed.',
+    });
   });
 });
