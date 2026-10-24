@@ -4,13 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { reserveApprovedDeliveryGitTransfer } from '../src/server/delivery-approved-transfer-reservation.js';
+import {
+  reserveApprovedDeliveryGitTransfer,
+} from '../src/server/delivery-approved-transfer-reservation.js';
 import { DeliveryGitTransferJournal } from '../src/server/delivery-git-transfer-journal.js';
 import { attestLocalReviewedGitState } from '../src/server/delivery-local-git-attestation.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import { withDeliveryRepositoryLease } from '../src/server/delivery-publication-lease.js';
 import { DeliveryTransferApprovalLedger } from '../src/server/delivery-transfer-approval.js';
-import { recoverDeliveryWorkspaceWithTransfers } from '../src/server/delivery-workspace-recovery.js';
+import {
+  recoverDeliveryWorkspaceWithTransfers,
+} from '../src/server/delivery-workspace-recovery.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 
 const branch = 'ai-office/12345678-1234-1234-1234-123456789abc';
@@ -99,7 +103,7 @@ function fixture() {
 }
 
 describe('approved Git transfer intent reservation', () => {
-  it('uses real Git attestation, one lease and an atomic approval/intent reservation', async () => {
+  it('atomically reserves reviewed Git transfer intent under a shared lease', async () => {
     const t = fixture();
     try {
       const approvalId = t.approvals.issue(t.binding);
@@ -149,7 +153,7 @@ describe('approved Git transfer intent reservation', () => {
     }
   });
 
-  it('requires a confirmed commit before reserving push and preserves its approval on failure', async () => {
+  it('requires a confirmed commit before reserving push', async () => {
     const t = fixture();
     try {
       const pushBinding = { ...t.binding, stage: 'push' as const };
@@ -178,7 +182,7 @@ describe('approved Git transfer intent reservation', () => {
     }
   });
 
-  it('rejects forged plan, foreign worktree and competing repository lease without DB changes', async () => {
+  it('rejects forged plans, foreign worktrees and competing leases', async () => {
     const t = fixture();
     const foreign = mkdtempSync(join(tmpdir(), 'ai-office-foreign-'));
     let releaseHeld!: () => void;
