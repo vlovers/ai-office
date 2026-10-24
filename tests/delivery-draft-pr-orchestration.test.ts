@@ -94,7 +94,7 @@ describe('Draft PR publication orchestration', () => {
   it('fails closed on incomplete inventory, duplicate PR and mismatched receipt', async () => {
     const t = setup();
     try {
-      t.listRemote.mockResolvedValueOnce({ complete: false, reason: 'page 2 failed', candidates: [] });
+      t.listRemote.mockResolvedValueOnce({ complete: false, reason: 'page 2 failed' });
       await expect(createDraftPublication(t.context)).rejects.toThrow('incomplete');
       expect(t.journal.get('workspace-1')).toBeNull();
       t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
