@@ -44,6 +44,8 @@ export class DeliveryJournal {
     const entry = this.get(workspaceId)!;
     if (entry.operationKey !== operationKey)
       throw new Error('Workspace already has a different publication operation.');
+    if (entry.state !== 'reserved')
+      throw new Error('Publication already completed or requires manual recovery.');
     return entry;
   }
 
