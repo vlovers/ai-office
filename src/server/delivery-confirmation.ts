@@ -22,9 +22,12 @@ export function validateDeliveryConfirmation(
   preflight: DeliveryPreflight,
   confirmation: DeliveryConfirmation,
 ): DeliveryConfirmationResult {
+  const requiredChecks = ['task', 'identity', 'kept', 'review', 'remote-format'];
+  const checksById = new Map(preflight.checks.map((check) => [check.id, check]));
   if (
     preflight.status !== 'manual-review' ||
-    preflight.checks.length === 0 ||
+    checksById.size !== preflight.checks.length ||
+    requiredChecks.some((id) => checksById.get(id)?.ok !== true) ||
     preflight.checks.some((check) => !check.ok)
   ) {
     return { valid: false, reason: 'Delivery preflight is blocked.' };
