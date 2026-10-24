@@ -1,5 +1,5 @@
 import type { DeliveryJournalEntry, DeliveryJournal } from './delivery-journal.js';
-import { publicationKey } from './delivery-publication-idempotency.js';
+import { decidePublication, publicationKey } from './delivery-publication-idempotency.js';
 import { withPublicationLease } from './delivery-publication-lease.js';
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import {
@@ -90,6 +90,17 @@ export async function createDraftPublication(
           throw new Error('Workspace already belongs to another publication operation.');
         }
         if (existing.state === 'published') {
+          const decision = decidePublication(plan, {
+            revision: plan.revision,
+            branch: plan.branch,
+            destination: plan.destination,
+            baseBranch: plan.baseBranch,
+            draft: true,
+            pullRequestUrl: existing.pullRequestUrl ?? '',
+          });
+          if (decision.action !== 'reuse') {
+            throw new Error('Stored publication receipt failed destination verification.');
+          }
           return { status: 'published', entry: existing } as const;
         }
         // Even a reserved record may represent a successful remote write after a crash.
