@@ -14,6 +14,10 @@ const MANAGED_BRANCH =
   /^ai-office\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DESTINATION = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+$/;
 
+function validIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && IDENTIFIER.test(value);
+}
+
 export type DeliveryTransferApprovalBinding = {
   stage: DeliveryGitStage;
   identity: DeliveryGitTransferIdentity;
@@ -26,15 +30,19 @@ function validate(binding: DeliveryTransferApprovalBinding): void {
     (stage !== 'commit' && stage !== 'push') ||
     !identity ||
     !operator ||
-    !IDENTIFIER.test(identity.workspaceId) ||
-    !IDENTIFIER.test(operator.operatorId) ||
-    !IDENTIFIER.test(operator.sessionId) ||
+    !validIdentifier(identity.workspaceId) ||
+    !validIdentifier(operator.operatorId) ||
+    !validIdentifier(operator.sessionId) ||
     typeof identity.operationKey !== 'string' ||
     identity.operationKey.length < 1 ||
     identity.operationKey.length > 300 ||
+    typeof identity.destination !== 'string' ||
     !DESTINATION.test(identity.destination) ||
+    typeof identity.branch !== 'string' ||
     !MANAGED_BRANCH.test(identity.branch) ||
+    typeof identity.headSha !== 'string' ||
     !SHA.test(identity.headSha) ||
+    typeof identity.baseSha !== 'string' ||
     !SHA.test(identity.baseSha) ||
     identity.headSha.length !== identity.baseSha.length
   ) {
@@ -127,6 +135,7 @@ export class DeliveryTransferApprovalLedger {
   private match(approvalId: string, binding: DeliveryTransferApprovalBinding) {
     validate(binding);
     if (
+      typeof approvalId !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(approvalId)
     ) {
       throw new Error('Invalid Git transfer approval identifier.');
