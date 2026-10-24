@@ -115,7 +115,7 @@ cover ordering and fail-closed local errors. See
 
 This does not authorize a commit or push and does not expose an HTTP
 publication route. Trusted operator identity, cross-worktree common-repo
-membership, separate commit/push receipts, CSRF protection, credential
+ownership revalidation, separate commit/push receipts, CSRF protection, credential
 provisioning and native end-to-end activation remain required.
 
 ## Non-goals for v0.6
