@@ -112,7 +112,7 @@ function nextGitHubPage(
   }
   // A last-page hint beyond the current page without a next link would
   // silently truncate the remote inventory and could hide duplicate PRs.
-  if (last !== null && (last > page) !== (next !== null)) {
+  if (last !== null && last > page !== (next !== null)) {
     throw new Error('GitHub PR pagination Link header is incomplete.');
   }
   if (next !== null && last !== null && last < next) {
