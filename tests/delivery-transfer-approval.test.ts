@@ -46,7 +46,10 @@ describe('Git transfer operator approvals', () => {
         { ...binding, operator: { ...binding.operator, sessionId: 'session-2' } },
         { ...binding, operator: { ...binding.operator, operatorId: 'operator-2' } },
         { ...binding, identity: { ...binding.identity, workspaceId: 'workspace-2' } },
-        { ...binding, identity: { ...binding.identity, destination: 'https://github.com/other/repo' } },
+        {
+          ...binding,
+          identity: { ...binding.identity, destination: 'https://github.com/other/repo' },
+        },
         { ...binding, identity: { ...binding.identity, headSha: 'c'.repeat(40) } },
         { ...binding, identity: { ...binding.identity, operationKey: 'operation-2' } },
       ];
@@ -83,9 +86,13 @@ describe('Git transfer operator approvals', () => {
     const db = new DatabaseSync(':memory:');
     try {
       const ledger = new DeliveryTransferApprovalLedger(db, () => 1000);
-      expect(() => ledger.issue({ ...binding, identity: { ...binding.identity, branch: 'main' } })).toThrow();
+      expect(() =>
+        ledger.issue({ ...binding, identity: { ...binding.identity, branch: 'main' } }),
+      ).toThrow();
       expect(() => ledger.issue(binding, 900_001)).toThrow();
-      expect(db.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals').get()?.n).toBe(0);
+      expect(db.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals').get()?.n).toBe(
+        0,
+      );
     } finally {
       db.close();
     }
