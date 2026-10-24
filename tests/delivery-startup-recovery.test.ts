@@ -113,7 +113,10 @@ describe('scoped startup recovery across delivery journals', () => {
         recoverDeliveryWorkspaceWithTransfers({
           journal,
           transferJournal,
-          transferIdentity: { ...identity, branch: 'ai-office/87654321-1234-1234-1234-123456789abc' },
+          transferIdentity: {
+            ...identity,
+            branch: 'ai-office/87654321-1234-1234-1234-123456789abc',
+          },
           workspaceId: identity.workspaceId,
           operationKey: identity.operationKey,
           repository,
@@ -162,8 +165,12 @@ describe('scoped startup recovery across delivery journals', () => {
     const db = new DatabaseSync(':memory:');
     let release!: () => void;
     let acquired!: () => void;
-    const held = new Promise<void>((resolve) => { release = resolve; });
-    const entered = new Promise<void>((resolve) => { acquired = resolve; });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
     try {
       const journal = new DeliveryJournal(db);
       const transferJournal = new DeliveryGitTransferJournal(db);

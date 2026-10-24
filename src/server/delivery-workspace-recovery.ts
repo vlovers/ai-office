@@ -105,9 +105,7 @@ export async function recoverDeliveryWorkspaceWithTransfers(
     const recoveredCommit = commit
       ? transferJournal.recoverWorkspace('commit', transferIdentity)
       : null;
-    const recoveredPush = push
-      ? transferJournal.recoverWorkspace('push', transferIdentity)
-      : null;
+    const recoveredPush = push ? transferJournal.recoverWorkspace('push', transferIdentity) : null;
     return {
       publication: recoveredPublication,
       commit: recoveredCommit,
