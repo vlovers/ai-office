@@ -14,7 +14,7 @@ Security fixes target the latest `main` branch. Older commits and experimental b
 
 - **v0.5.0** is the latest documented tagged release; its [security assessment](docs/V0_5_SECURITY.md) and [validation](docs/V0_5_VALIDATION.md) describe their actual scope.
 - **v0.6 Agent Studio and v0.7 workflow engine** are integrated into `main` but have not been separately released. See [Agent Studio validation](docs/V0_6_VALIDATION.md) and [workflow limits](docs/V0_7_WORKFLOW_ENGINE.md).
-- The **v0.8 Delivery authorization foundation** is unreleased. It is a separate ingress and is **not permission to execute GitHub remote writes**. Consult the [Delivery threat model](docs/DELIVERY_THREAT_MODEL.md), [security design](docs/DELIVERY_PRODUCTION_SECURITY.md) and [activation checklist](docs/DELIVERY_PRODUCTION_CHECKLIST.md) before evaluating it.
+- The **v0.8 Delivery authorization foundation** is unreleased. It is a separate ingress and is **not permission to execute GitHub remote writes**. Consult the [Delivery threat model](https://github.com/vlovers/ai-office/blob/main/docs/DELIVERY_THREAT_MODEL.md), [security design](https://github.com/vlovers/ai-office/blob/main/docs/DELIVERY_PRODUCTION_SECURITY.md) and [activation checklist](https://github.com/vlovers/ai-office/blob/main/docs/DELIVERY_PRODUCTION_CHECKLIST.md) before evaluating it.
 
 Check actual GitHub tags/releases before relying on these version statements.
 
@@ -30,4 +30,4 @@ Read-only tasks use restrictive filesystem permissions. Isolated writes require 
 
 Host verification is disabled by default. Enabling it requires a separate operator opt-in and can execute project scripts with full host permissions **outside** the agent sandbox. Reviewer/QA native read-only checks are a different mechanism; approval of QA never authorizes host verification. Neither fixture tests nor mock GitHub responses establish safe live Codex execution or remote-write correctness.
 
-For implementation-specific assumptions, limitations and recovery instructions, consult the [runtime security model](docs/SECURITY.md), [workspace recovery](docs/WORKSPACE_RECOVERY.md), [MVP acceptance gates](docs/MVP_STABILIZATION_CHECKLIST.md) and [Delivery activation gates](docs/MVP_EVIDENCE_AND_ACTIVATION_GATES.md). The [v0.4 security audit](docs/V0_4_SECURITY_AUDIT.md) records historical reproduced issues, not a blanket safety certification.
+For implementation-specific assumptions, limitations and recovery instructions, consult the [runtime security model](docs/SECURITY.md), [workspace recovery](docs/WORKSPACE_RECOVERY.md), [MVP acceptance gates](docs/MVP_STABILIZATION_CHECKLIST.md) and [Delivery activation gates](https://github.com/vlovers/ai-office/blob/main/docs/MVP_EVIDENCE_AND_ACTIVATION_GATES.md). The [v0.4 security audit](docs/V0_4_SECURITY_AUDIT.md) records historical reproduced issues, not a blanket safety certification.
