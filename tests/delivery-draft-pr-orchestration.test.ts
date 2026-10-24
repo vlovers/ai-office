@@ -66,6 +66,25 @@ function setup() {
 }
 
 describe('Draft PR publication orchestration', () => {
+  it('refuses a reserved journal record with an unexpected PR URL', async () => {
+    const t = setup();
+    try {
+      const context = {
+        ...t.context,
+        reserveApproved: () => {
+          t.db.prepare(
+            "INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', ?)",
+          ).run('workspace-1', publicationKey(plan), receipt.html_url);
+          return t.journal.get('workspace-1')!;
+        },
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow('did not persist');
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
   it('uses the trusted atomic reservation adapter once and never reauthorizes a published PR', async () => {
     const t = setup();
     try {
