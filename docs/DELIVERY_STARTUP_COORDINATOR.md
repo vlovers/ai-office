@@ -58,3 +58,19 @@ startup; test two independent processes with real SQLite files and shared Git
 worktrees; add separate authenticated commit/push approvals, Origin/CSRF/session
 checks and least-privilege credentials. Keep all remote write HTTP routes
 disabled until those gates and full CI pass.
+
+## Independent-process lease regression
+
+The native Node integration fixture `tests/delivery-startup-recovery-process.test.ts`
+creates a real Git repository and file-backed SQLite journals. While one Node
+process owns the common-repository lease, a second independent Node process
+attempts startup recovery through `recoverRegisteredDeliveryWorkspaces` and
+must fail closed without changing either journal. Once the lease is released,
+that second process can mark the matching publication and transfer intent
+uncertain. A further restart observes the same durable result without any
+external write or automatic retry.
+
+This verifies lock contention and restart behavior on the CI host, not a
+production bootstrap or a native macOS/Linux deployment guarantee. Keep
+production startup blocked until registry discovery and authentication gates
+are connected and validated.
