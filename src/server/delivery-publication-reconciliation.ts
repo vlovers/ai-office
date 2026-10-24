@@ -6,8 +6,7 @@ import {
 
 export type RemoteDraftCandidate = GitHubDraftReceipt;
 export type ReconciliationResult =
-  | { status: 'confirmed'; pullRequestUrl: string }
-  | { status: 'unresolved'; reason: string };
+  { status: 'confirmed'; pullRequestUrl: string } | { status: 'unresolved'; reason: string };
 
 /**
  * Read-only reconciliation after an ambiguous write. The caller must supply

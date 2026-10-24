@@ -47,17 +47,17 @@ merge, branch deletion or deployment is enabled.
 
 ## Failure and restart matrix
 
-| Situation | Durable state | Safe next action |
-| --- | --- | --- |
-| No reservation; plan stale under lease | absent | Re-review; no remote call |
-| Reserved, GitHub returns verified draft | published | Reuse local receipt |
-| Remote call times out or throws | uncertain | Read-only remote reconciliation |
-| Remote response fails identity check | uncertain | Manual investigation |
-| Crash after reservation | reserved on disk | Startup marks uncertain |
-| Incomplete/failed remote listing | uncertain | No retry; investigate |
-| One verified matching open draft | published after reconciliation | Reuse receipt |
-| Two matching PRs or no matching PR | uncertain | Manual resolution |
-| Conflicting workspace operation key | unchanged | Re-review and investigate |
+| Situation                               | Durable state                  | Safe next action                |
+| --------------------------------------- | ------------------------------ | ------------------------------- |
+| No reservation; plan stale under lease  | absent                         | Re-review; no remote call       |
+| Reserved, GitHub returns verified draft | published                      | Reuse local receipt             |
+| Remote call times out or throws         | uncertain                      | Read-only remote reconciliation |
+| Remote response fails identity check    | uncertain                      | Manual investigation            |
+| Crash after reservation                 | reserved on disk               | Startup marks uncertain         |
+| Incomplete/failed remote listing        | uncertain                      | No retry; investigate           |
+| One verified matching open draft        | published after reconciliation | Reuse receipt                   |
+| Two matching PRs or no matching PR      | uncertain                      | Manual resolution               |
+| Conflicting workspace operation key     | unchanged                      | Re-review and investigate       |
 
 The startup path must call `journal.recoverInterrupted()` **once before
 accepting new publication work**. Do not call it per request: it would

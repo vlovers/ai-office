@@ -59,10 +59,13 @@ describe('complete read-only GitHub PR pagination', () => {
 
   it('refuses malformed remote responses', async () => {
     await expect(
-      collectRemotePullRequests(async () => ({
-        candidates: null,
-        nextPage: null,
-      }) as never),
+      collectRemotePullRequests(
+        async () =>
+          ({
+            candidates: null,
+            nextPage: null,
+          }) as never,
+      ),
     ).rejects.toThrow('invalid page');
   });
 

@@ -27,8 +27,7 @@ const candidate = {
   head: { ref: plan.branch, repo },
   base: { ref: 'main', repo },
 };
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status });
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 function context(journal: DeliveryJournal) {
   return {
@@ -121,16 +120,16 @@ describe('lease-protected GitHub GET reconciliation', () => {
     try {
       const journal = uncertainJournal(db);
       const fetcher = vi.fn(async () => json([]));
-      await expect(
-        reconcileUncertainDraftViaGitHub(context(journal), { fetcher }),
-      ).rejects.toThrow('absence does not authorize retry');
+      await expect(reconcileUncertainDraftViaGitHub(context(journal), { fetcher })).rejects.toThrow(
+        'absence does not authorize retry',
+      );
       expect(journal.get('workspace-1')?.state).toBe('uncertain');
       fetcher.mockImplementation(async () =>
         json([{ ...candidate, head: { ref: plan.branch, repo: { full_name: 'evil/fork' } } }]),
       );
-      await expect(
-        reconcileUncertainDraftViaGitHub(context(journal), { fetcher }),
-      ).rejects.toThrow('identity verification');
+      await expect(reconcileUncertainDraftViaGitHub(context(journal), { fetcher })).rejects.toThrow(
+        'identity verification',
+      );
       expect(journal.get('workspace-1')?.state).toBe('uncertain');
     } finally {
       db.close();

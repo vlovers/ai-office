@@ -37,7 +37,10 @@ describe('read-only GitHub PR discovery', () => {
       expect(parsed.searchParams.get('per_page')).toBe('2');
       const page = Number(parsed.searchParams.get('page'));
       return page === 1
-        ? json([candidate, { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }])
+        ? json([
+            candidate,
+            { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+          ])
         : json([{ ...candidate, state: 'closed' }]);
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 2 });
@@ -78,9 +81,9 @@ describe('read-only GitHub PR discovery', () => {
       const page = new URL(url).searchParams.get('page');
       return page === '1' ? json([candidate, candidate]) : json({ incomplete: true });
     });
-    await expect(
-      listAllGitHubPullRequests(plan, { fetcher, perPage: 2 }),
-    ).rejects.toThrow('Invalid GitHub PR listing page');
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 2 })).rejects.toThrow(
+      'Invalid GitHub PR listing page',
+    );
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
@@ -117,9 +120,9 @@ describe('read-only GitHub PR discovery', () => {
 
   it('rejects invalid page sizes and credentials before any request', async () => {
     const fetcher = vi.fn();
-    await expect(
-      listAllGitHubPullRequests(plan, { fetcher, perPage: 101 }),
-    ).rejects.toThrow('page size');
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 101 })).rejects.toThrow(
+      'page size',
+    );
     await expect(
       listAllGitHubPullRequests(plan, { fetcher, token: 'bad\ncredential' }),
     ).rejects.toThrow('credential');

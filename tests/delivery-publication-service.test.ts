@@ -94,9 +94,9 @@ describe('lease-protected delivery publication pipeline', () => {
         ...candidate,
         head: { ref: plan.branch, repo: { full_name: 'attacker/fork' } },
       }));
-      await expect(
-        publishApprovedDraft({ ...context(journal), createDraft }),
-      ).rejects.toThrow('does not match');
+      await expect(publishApprovedDraft({ ...context(journal), createDraft })).rejects.toThrow(
+        'does not match',
+      );
       expect(journal.get('workspace-1')?.state).toBe('uncertain');
     } finally {
       db.close();
@@ -128,9 +128,9 @@ describe('lease-protected delivery publication pipeline', () => {
       const journal = new DeliveryJournal(db);
       journal.reserve('workspace-1', 'other-operation');
       const createDraft = vi.fn(async () => candidate);
-      await expect(
-        publishApprovedDraft({ ...context(journal), createDraft }),
-      ).rejects.toThrow('different publication operation');
+      await expect(publishApprovedDraft({ ...context(journal), createDraft })).rejects.toThrow(
+        'different publication operation',
+      );
       expect(createDraft).not.toHaveBeenCalled();
     } finally {
       db.close();
@@ -174,9 +174,9 @@ describe('lease-protected delivery publication pipeline', () => {
     try {
       const journal = new DeliveryJournal(db);
       const createDraft = vi.fn().mockRejectedValue(new Error('timeout'));
-      await expect(
-        publishApprovedDraft({ ...context(journal), createDraft }),
-      ).rejects.toThrow('timeout');
+      await expect(publishApprovedDraft({ ...context(journal), createDraft })).rejects.toThrow(
+        'timeout',
+      );
       const listAllRemoteDrafts = vi.fn(async () => ({
         complete: true,
         candidates: [candidate],
@@ -242,9 +242,7 @@ describe('lease-protected delivery publication pipeline', () => {
     try {
       const firstDb = new DatabaseSync(file);
       const firstJournal = new DeliveryJournal(firstDb);
-      const { publicationKey } = await import(
-        '../src/server/delivery-publication-idempotency.js'
-      );
+      const { publicationKey } = await import('../src/server/delivery-publication-idempotency.js');
       firstJournal.reserve('workspace-1', publicationKey(plan));
       firstDb.close();
 

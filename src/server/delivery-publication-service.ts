@@ -74,12 +74,8 @@ export async function publishApprovedDraft(
         }
         return existing;
       }
-      return executeReservedPublication(
-        context.journal,
-        context.workspaceId,
-        readiness,
-        async () =>
-          validatePublicationReceipt(currentPlan, await context.createDraft(currentPlan)),
+      return executeReservedPublication(context.journal, context.workspaceId, readiness, async () =>
+        validatePublicationReceipt(currentPlan, await context.createDraft(currentPlan)),
       );
     },
   );
