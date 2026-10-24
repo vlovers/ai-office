@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 import { withPublicationLease } from '../src/server/delivery-publication-lease.js';
 
 const { acquireLocks, repositoryLeaseDirectories } = vi.hoisted(() => ({
@@ -32,8 +34,10 @@ describe('publication lease entrypoint', () => {
         action,
       ),
     ).toBe('published');
+    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+    const lockName = createHash('sha256').update('/repo/.git').digest('hex');
     expect(acquireLocks).toHaveBeenCalledWith(
-      ['/repo/.git/ai-office-publication.lock'],
+      [join(lockRoot, lockName)],
       'AI Office delivery publication',
     );
     expect(action).toHaveBeenCalledOnce();
