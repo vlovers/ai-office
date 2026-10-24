@@ -69,17 +69,20 @@ function nextGitHubPage(
   fullPage: boolean,
 ): number | null {
   if (link === null) return fullPage ? page + 1 : null;
-  let hasNext = false;
+  const seen = new Set<string>();
+  let next: number | null = null;
+  let last: number | null = null;
   for (const segment of link.split(',')) {
     const match = /^<([^<>]+)>;\s*rel="(next|prev|first|last)"$/.exec(segment.trim());
     if (!match) throw new Error('Invalid GitHub PR pagination Link header.');
-    if (match[2] !== 'next') continue;
-    if (hasNext) throw new Error('Duplicate GitHub PR pagination next link.');
+    const relation = match[2]!;
+    if (seen.has(relation)) throw new Error('Duplicate GitHub PR pagination relation.');
+    seen.add(relation);
     let target: URL;
     try {
       target = new URL(match[1]!);
     } catch {
-      throw new Error('Invalid GitHub PR pagination next URL.');
+      throw new Error('Invalid GitHub PR pagination URL.');
     }
     if (
       target.origin !== requestedUrl.origin ||
@@ -89,14 +92,33 @@ function nextGitHubPage(
       target.password !== '' ||
       target.searchParams.size !== 3 ||
       target.searchParams.get('state') !== 'all' ||
-      target.searchParams.get('per_page') !== requestedUrl.searchParams.get('per_page') ||
-      target.searchParams.get('page') !== String(page + 1)
+      target.searchParams.get('per_page') !== requestedUrl.searchParams.get('per_page')
     ) {
-      throw new Error('GitHub PR pagination escaped the approved repository or skipped a page.');
+      throw new Error('GitHub PR pagination escaped the approved repository.');
     }
-    hasNext = true;
+    const targetPage = Number(target.searchParams.get('page'));
+    if (
+      !Number.isSafeInteger(targetPage) ||
+      targetPage < 1 ||
+      (relation === 'next' && targetPage !== page + 1) ||
+      (relation === 'prev' && targetPage !== page - 1) ||
+      (relation === 'first' && targetPage !== 1) ||
+      (relation === 'last' && targetPage < page)
+    ) {
+      throw new Error('GitHub PR pagination returned an inconsistent page.');
+    }
+    if (relation === 'next') next = targetPage;
+    if (relation === 'last') last = targetPage;
   }
-  return hasNext ? page + 1 : null;
+  // A last-page hint beyond the current page without a next link would
+  // silently truncate the remote inventory and could hide duplicate PRs.
+  if (last !== null && ((last > page) !== (next !== null))) {
+    throw new Error('GitHub PR pagination Link header is incomplete.');
+  }
+  if (next !== null && last !== null && last < next) {
+    throw new Error('GitHub PR pagination Link header is inconsistent.');
+  }
+  return next;
 }
 
 /**
