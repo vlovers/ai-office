@@ -68,6 +68,7 @@ function setup() {
     journal,
     identity,
     plan,
+    refreshPlan: vi.fn(async () => plan),
     repository,
     worktree: repository,
     authorize,
@@ -359,6 +360,176 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect((await reconcileGitTransferReceipts(t.context)).status).toBe('commit-confirmed');
     } finally {
       release();
+      t.close();
+    }
+  });
+
+  it('rejects a changed registry operation under the lease without touching the journal', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      const refreshPlan = vi.fn(async () => ({ ...plan, revision: 'b'.repeat(64) }));
+      await expect(
+        reconcileGitTransferReceipts({ ...t.context, refreshPlan }),
+      ).rejects.toThrow('plan changed');
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+      expect(refreshPlan).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a commit if the reviewed registry changes during local Git reads', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      let checks = 0;
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshPlan: async () =>
+          ++checks === 1 ? plan : { ...plan, revision: 'b'.repeat(64) },
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'commit' });
+      expect(checks).toBe(2);
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('uncertain');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a push if the reviewed registry changes during remote GETs', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      let checks = 0;
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshPlan: async () =>
+          ++checks <= 2 ? plan : { ...plan, revision: 'b'.repeat(64) },
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(checks).toBe(3);
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('confirmed');
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('refuses a push intent whose commit receipt was invalidated without repairing it', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.db
+        .prepare(
+          "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE workspace_id=? AND stage='commit'",
+        )
+        .run(t.identity.workspaceId);
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
+        'independently confirmed commit receipt',
+      );
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('intent');
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('uncertain');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects a corrupted confirmed commit SHA before recovery or GitHub reads', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.db
+        .prepare(
+          "UPDATE delivery_git_transfers SET receipt_sha=? WHERE workspace_id=? AND stage='commit'",
+        )
+        .run('f'.repeat(40), t.identity.workspaceId);
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
+        'Confirmed commit receipt conflicts',
+      );
+      expect(t.journal.get('workspace-1', 'commit')?.receiptSha).toBe('f'.repeat(40));
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects a corrupted confirmed push SHA before any recovery mutation', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.journal.confirmVerified('push', t.identity, t.identity.headSha);
+      t.db
+        .prepare(
+          "UPDATE delivery_git_transfers SET receipt_sha=? WHERE workspace_id=? AND stage='push'",
+        )
+        .run('f'.repeat(40), t.identity.workspaceId);
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
+        'Confirmed push receipt conflicts',
+      );
+      expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBe('f'.repeat(40));
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks a moved remote base and preserves the uncertain push intent', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async (url, init) => {
+        expect(init.method).toBe('GET');
+        const base = url.endsWith('/main');
+        return new Response(
+          JSON.stringify({
+            ref: 'refs/heads/' + (base ? 'main' : branch),
+            object: {
+              type: 'commit',
+              sha: base ? 'f'.repeat(40) : t.identity.headSha,
+            },
+          }),
+          { status: 200 },
+        );
+      });
+      expect(await reconcileGitTransferReceipts(t.context)).toMatchObject({
+        status: 'blocked',
+        stage: 'push',
+      });
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks malformed remote JSON without treating it as an absent ref', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async () => new Response('{broken', { status: 200 }));
+      expect(await reconcileGitTransferReceipts(t.context)).toMatchObject({
+        status: 'blocked',
+        stage: 'push',
+      });
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.fetcher).toHaveBeenCalledOnce();
+    } finally {
       t.close();
     }
   });
