@@ -2,18 +2,18 @@
 
 This checklist describes **required evidence**, not a claim that the tests have passed. Keep release claims separate from merged implementation.
 
-## Current baseline (2026-10-23)
+## Current baseline (2026-10-24)
 
 - [x] Workflow Operations PR #25 merged into `main`; latest PR-head validation #327 succeeded before merge.
 - [x] v0.7 Workflow Engine merged via PR #24; this is implementation integration, not a tagged release.
 - [x] Office Experience V2 PR #27 merged at `b3f7ee9`; confirmed from current main history.
-- [ ] Office Experience V4 is implemented in PR #31; final PR CI/review remains separate from release approval. See [sprint evidence](OFFICE_V4.md).
+- [x] Office Experience V4 integrated into `main` through [PR #36](https://github.com/vlovers/ai-office/pull/36); PR #31 was superseded. This proves integration only, not release acceptance. See [sprint evidence](OFFICE_V4.md).
 - [x] Documentation synchronization PR #28 merged at `5e160bd`; confirmed from current main history.
 
-## Gate A — Office Experience V2
+## Gate A — Office Experience V4
 
 - [x] Integrate [PR #27](https://github.com/vlovers/ai-office/pull/27) against main.
-- [ ] Review and integrate [Office V4 PR #31](https://github.com/vlovers/ai-office/pull/31) after final CI.
+- [x] Integrate [Office V4 PR #36](https://github.com/vlovers/ai-office/pull/36) against `main` (supersedes PR #31). Reconfirm tests on the exact release candidate SHA; merged CI is not acceptance evidence.
 - [ ] Run the repository's exact Prettier version with `npm run format:check`.
 - [ ] Run `npm run check`, `npm run test:sandbox`, and all relevant browser suites on the final commit.
 - [ ] Verify agent selection, occupied/idle seats, overflow roster, persisted history, responsive viewport, keyboard focus, reduced motion and error/empty states in a real browser.
@@ -42,6 +42,10 @@ This checklist describes **required evidence**, not a claim that the tests have 
 - [ ] Align README, CHANGELOG, ROADMAP, architecture, validation, release notes and package version with that decision.
 - [ ] Capture final commit SHA, CI URLs, native test environment and known limitations.
 - [ ] Create tag/release only after Gates A–C pass and release approval is explicit.
+
+## Delivery activation is a separate gate
+
+The current local-first MVP does **not** require enabling Delivery remote writes. For a future GitHub Draft PR release, keep commit/push/publication routes disabled until [#58](https://github.com/vlovers/ai-office/issues/58), [#68](https://github.com/vlovers/ai-office/issues/68) and [#70](https://github.com/vlovers/ai-office/issues/70) are independently validated. See [Delivery production checklist](DELIVERY_PRODUCTION_CHECKLIST.md) and [MVP evidence and activation gates](MVP_EVIDENCE_AND_ACTIVATION_GATES.md). Never conflate the dedicated Delivery API with the local dashboard.
 
 ## Explicitly deferred
 
