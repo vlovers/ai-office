@@ -112,10 +112,11 @@ refs, dirty worktrees, 403/429/5xx, malformed responses and timeouts leave the
 relevant stage blocked/uncertain. An absent intent is never created, and an
 absent remote ref never permits another push.
 
-The caller must supply `refreshPlan` from the trusted server registry, not
-browser input. Reconciliation rechecks that reviewed operation **inside the
-lease**, after local Git reads and after remote GETs, before confirming either
-receipt. If the registry changed, the stage remains blocked/uncertain. Existing
+The caller must supply `refreshReviewed` from the trusted server registry,
+not browser input. Reconciliation rechecks the **entire reviewed binding**
+(operation, workspace, repository/worktree paths and Git directories, head/base
+SHAs) inside the lease, after local Git reads and after remote GETs, before
+confirming either receipt. If the registry changed, the stage remains blocked/uncertain. Existing
 push intents require an already confirmed matching commit receipt; inconsistent
 or corrupted confirmed receipt SHAs are rejected before any journal mutation.
 These guards do not replace independent session/grant authorization or prove
