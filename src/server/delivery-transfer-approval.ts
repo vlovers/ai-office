@@ -188,8 +188,8 @@ export class DeliveryTransferApprovalLedger {
   revoke(approvalId: string, operator: TrustedDeliveryOperator): boolean {
     if (
       !operator ||
-      !IDENTIFIER.test(operator.operatorId) ||
-      !IDENTIFIER.test(operator.sessionId)
+      !validIdentifier(operator.operatorId) ||
+      !validIdentifier(operator.sessionId)
     ) {
       throw new Error('Invalid trusted operator.');
     }
