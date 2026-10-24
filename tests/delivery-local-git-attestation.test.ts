@@ -95,7 +95,7 @@ describe('lease-scoped local Git attestation', () => {
   it('accepts a canonical HTTPS origin without network or remote writes', async () => {
     replies.remote = plan.destination + '.git';
     await expect(attestLocalReviewedGitState(plan, review)).resolves.toBeDefined();
-    expect(calls.every((call) => !/^(push|fetch|commit|reset)\\b/.test(call))).toBe(true);
+    expect(calls.every((call) => !/^(push|fetch|commit|reset)\b/.test(call))).toBe(true);
   });
 
   it('rejects uncommitted and untracked changes before inspecting refs', async () => {
