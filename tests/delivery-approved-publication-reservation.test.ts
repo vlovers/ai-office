@@ -192,7 +192,9 @@ describe('atomic publication approval and journal reservation', () => {
     try {
       const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
       const id = approvals.issue(binding);
-      expect(new DeliveryPublicationApprovalLedger(second, () => 10_000).revoke(id, binding.operator)).toBe(true);
+      expect(
+        new DeliveryPublicationApprovalLedger(second, () => 10_000).revoke(id, binding.operator),
+      ).toBe(true);
       expect(() =>
         reserveApprovedPublicationAtomically(first, id, binding, () => {}, () => 10_000),
       ).toThrow();
