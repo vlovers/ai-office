@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, realpath } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { DeliveryJournal } from './delivery-journal.js';
@@ -41,6 +41,23 @@ export async function readDeliverySecurityConfig(path: string) {
 
 export async function openDeliveryDatabase(directory: string) {
   const path = resolve(directory);
+  // Before recursive mkdir, reject aliases in the nearest existing ancestor.
+  // Otherwise mkdir could create children through an attacker-supplied symlink
+  // and mutate the target before the final realpath check denies startup.
+  let existingAncestor = path;
+  for (;;) {
+    try {
+      if ((await realpath(existingAncestor)) !== existingAncestor) {
+        throw new DeliverySecurityError(503);
+      }
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      const parent = dirname(existingAncestor);
+      if (parent === existingAncestor) throw new DeliverySecurityError(503);
+      existingAncestor = parent;
+    }
+  }
   await mkdir(path, { recursive: true, mode: 0o700 });
   // Never silently repair an unexpected directory or an existing database.
   // A misconfigured path must not chmod or open another application's files.
