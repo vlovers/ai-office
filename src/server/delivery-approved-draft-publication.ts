@@ -43,16 +43,19 @@ export async function createApprovedDraftPublication(
   context: ApprovedDraftPublicationContext,
 ): Promise<DraftPublicationResult> {
   const { db, binding, workspaceId, initialPlan } = context;
+  if (!binding.plan.allowed) {
+    throw new Error('Publication approval differs from the reviewed workspace.');
+  }
+  const approvedKey = publicationKey(binding.plan);
   if (
-    !binding.plan.allowed ||
     binding.workspaceId !== workspaceId ||
-    binding.commits.operationKey !== publicationKey(initialPlan) ||
-    publicationKey(binding.plan) !== publicationKey(initialPlan)
+    binding.commits.operationKey !== approvedKey ||
+    approvedKey !== publicationKey(initialPlan)
   ) {
     throw new Error('Publication approval differs from the reviewed workspace.');
   }
   const assertBinding = (plan: AllowedPlan): void => {
-    if (publicationKey(plan) !== publicationKey(binding.plan)) {
+    if (publicationKey(plan) !== approvedKey) {
       throw new Error('Refreshed publication plan differs from approved operation.');
     }
   };
