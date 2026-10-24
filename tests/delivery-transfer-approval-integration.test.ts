@@ -86,7 +86,16 @@ describe('durable Git transfer approval integration', () => {
     const consumeInChild = () =>
       spawnSync(
         process.execPath,
-        ['--import', 'tsx', '--input-type=module', '-e', script, path, approvalId, JSON.stringify(binding)],
+        [
+          '--import',
+          'tsx',
+          '--input-type=module',
+          '-e',
+          script,
+          path,
+          approvalId,
+          JSON.stringify(binding),
+        ],
         { cwd: process.cwd(), encoding: 'utf8', timeout: 15_000 },
       );
     try {
@@ -101,7 +110,11 @@ describe('durable Git transfer approval integration', () => {
       const verify = new DatabaseSync(path);
       try {
         expect(
-          verify.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals WHERE consumed_at IS NOT NULL').get()?.n,
+          verify
+            .prepare(
+              'SELECT count(*) AS n FROM delivery_transfer_approvals WHERE consumed_at IS NOT NULL',
+            )
+            .get()?.n,
         ).toBe(1);
       } finally {
         verify.close();
