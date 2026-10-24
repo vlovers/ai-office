@@ -1,6 +1,6 @@
 # Contributing to AI Office
 
-AI Office is an experimental, local-first coding-agent workspace. It is intended for one operator on a trusted machine; neither the UI nor the agent sandbox is a multi-user security boundary. See [SECURITY.md](SECURITY.md) and the [runtime threat model](docs/SECURITY.md) before changing permissions or execution paths.
+AI Office is an experimental, local-first coding-agent workspace. The dashboard is intended for one operator on a trusted machine; neither its UI nor its agent sandbox is a multi-user security boundary. The separate, unreleased Delivery authorization API is not a production-enabled GitHub writer. See [SECURITY.md](SECURITY.md), the [runtime threat model](docs/SECURITY.md) and the [Delivery security model](docs/DELIVERY_PRODUCTION_SECURITY.md) before changing permissions or execution paths.
 
 ## Before opening an issue or PR
 
@@ -20,11 +20,13 @@ Filesystem permission changes also require `npm run test:sandbox` on supported m
 
 Read-only agent execution is the default. **Opt-in isolated writes already exist**: they require configured authorized roots, a dedicated worktree, pinned session/workspace ownership and explicit operator confirmation. Do not silently broaden roots, reuse read-only sessions for writes, permit unsandboxed fallbacks, or add automatic merges, pushes or destructive cleanup.
 
-Reviewer and QA stages have separate, explicit approval gates. QA runs only an operator-configured command in the native read-only sandbox; it must not be redirected to host verification. Host verification is a **separate, disabled-by-default opt-in** that executes trusted project code with the operator's OS permissions, outside the Codex sandbox. Never enable it to make a failing test pass. Changes to leases, recovery, Git metadata, command provenance, credential handling or sandbox policies require threat-model updates and independent review. Delivery publication and Git transfer additionally require review of approval scope, remote ref attestation, journal/receipt reconciliation, idempotent retries and recovery after ambiguous remote writes; mocked GitHub responses alone are insufficient release evidence.
+Reviewer and QA stages have separate, explicit approval gates. QA runs only an operator-configured command in the native read-only sandbox; it must not be redirected to host verification. Host verification is a **separate, disabled-by-default opt-in** that executes trusted project code with the operator's OS permissions, outside the Codex sandbox. Never enable it to make a failing test pass. Changes to leases, recovery, Git metadata, command provenance, credential handling or sandbox policies require threat-model updates and independent review. The dedicated Delivery API currently has no HTTP commit, push, publication, merge, deployment or retry endpoint. Its existing approval and transfer-intent records do not authorize external writes. Delivery-related changes require review of live operator grants, session expiry/revocation, HTTPS Origin/Host, CSRF, registry and Git ref attestation, one-use approvals, journal/receipt reconciliation, and recovery after ambiguous remote outcomes. Do not mount legacy or new remote-write executors without a separate security review and explicit activation approval; mocked GitHub responses alone are insufficient release evidence.
 
 ## Project conventions and review evidence
 
 The codebase uses TypeScript, React, Fastify, SQLite, Vitest and Playwright. Task, workflow and agent progress must reflect persisted runtime events, not invented completion. Keep the UI keyboard-accessible and respect reduced motion. Document new environment variables, schema migrations, supported platforms and recovery limitations.
+
+For Delivery authorization changes, run `npm run check` and relevant isolated HTTP/SQLite/Git integration tests; distinguish these from unperformed target-TLS/browser and real credential checks. Do not expose the local dashboard as part of a Delivery test. See the [Delivery activation checklist](docs/DELIVERY_PRODUCTION_CHECKLIST.md).
 
 PR descriptions should include a reproduction or design rationale, tests actually run (with failures and skipped coverage), security impact, reviewer findings, migration/rollback guidance and remaining uncertainty. Release and publication are separately authorized operations, not consequences of CI success.
 
