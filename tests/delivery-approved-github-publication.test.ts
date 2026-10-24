@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -260,6 +260,19 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       try {
         const restoredSessions = new DeliverySessions(reopened, () => 10_000);
         expect(new DeliveryJournal(reopened).get('workspace-1')?.state).toBe('uncertain');
+        // A separate Node process must observe the journal, not only another
+        // SQLite connection sharing this Vitest worker's memory.
+        const independent = spawnSync(
+          process.execPath,
+          [
+            '-e',
+            "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync(process.argv[1]); try {const row=db.prepare('SELECT state FROM delivery_journal WHERE workspace_id=?').get('workspace-1'); process.stdout.write(String(row?.state ?? 'missing'));} finally {db.close();}",
+            t.dbPath,
+          ],
+          { encoding: 'utf8', timeout: 5000 },
+        );
+        expect(independent.status).toBe(0);
+        expect(independent.stdout).toBe('uncertain');
         t.fetcher.mockImplementation(async (url, init) => {
           if (url.includes('/pulls?')) return json([receipt]);
           return original(url, init);
