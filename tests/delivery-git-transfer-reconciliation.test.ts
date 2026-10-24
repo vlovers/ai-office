@@ -374,9 +374,9 @@ describe('read-only commit/push receipt reconciliation', () => {
         repository: t.context.repository,
         worktree: t.context.worktree,
       }));
-      await expect(
-        reconcileGitTransferReceipts({ ...t.context, refreshReviewed }),
-      ).rejects.toThrow('binding changed');
+      await expect(reconcileGitTransferReceipts({ ...t.context, refreshReviewed })).rejects.toThrow(
+        'binding changed',
+      );
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
       expect(t.fetcher).not.toHaveBeenCalled();
       expect(refreshReviewed).toHaveBeenCalledOnce();
