@@ -7,7 +7,11 @@ const preflight: DeliveryPreflight = {
   revision: 'revision-123',
   branch: 'office/workspace-1',
   remote: { owner: 'vlovers', repository: 'ai-office' },
-  checks: [{ id: 'review', ok: true, message: 'Review current.' }],
+  checks: ['task', 'identity', 'kept', 'review', 'remote-format'].map((id) => ({
+    id,
+    ok: true,
+    message: 'Verified.',
+  })),
 };
 const confirmation = {
   revision: 'revision-123',
@@ -54,6 +58,18 @@ describe('delivery confirmation contract', () => {
     ).toBe(false);
     expect(
       validateDeliveryConfirmation({ ...preflight, checks: [] }, confirmation).valid,
+    ).toBe(false);
+    expect(
+      validateDeliveryConfirmation(
+        { ...preflight, checks: preflight.checks.filter((check) => check.id !== 'identity') },
+        confirmation,
+      ).valid,
+    ).toBe(false);
+    expect(
+      validateDeliveryConfirmation(
+        { ...preflight, checks: [...preflight.checks, preflight.checks[0]!] },
+        confirmation,
+      ).valid,
     ).toBe(false);
     expect(
       validateDeliveryConfirmation({ ...preflight, revision: null }, confirmation).valid,
