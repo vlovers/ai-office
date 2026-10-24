@@ -68,7 +68,7 @@ function setup() {
     journal,
     identity,
     plan,
-    refreshPlan: vi.fn(async () => plan),
+    refreshReviewed: vi.fn(async () => ({ plan, identity, repository, worktree: repository })),
     repository,
     worktree: repository,
     authorize,
@@ -368,13 +368,18 @@ describe('read-only commit/push receipt reconciliation', () => {
     const t = setup();
     try {
       t.journal.begin('commit', t.identity);
-      const refreshPlan = vi.fn(async () => ({ ...plan, revision: 'b'.repeat(64) }));
+      const refreshReviewed = vi.fn(async () => ({
+        plan: { ...plan, revision: 'b'.repeat(64) },
+        identity: t.identity,
+        repository: t.context.repository,
+        worktree: t.context.worktree,
+      }));
       await expect(
-        reconcileGitTransferReceipts({ ...t.context, refreshPlan }),
-      ).rejects.toThrow('plan changed');
+        reconcileGitTransferReceipts({ ...t.context, refreshReviewed }),
+      ).rejects.toThrow('binding changed');
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
       expect(t.fetcher).not.toHaveBeenCalled();
-      expect(refreshPlan).toHaveBeenCalledOnce();
+      expect(refreshReviewed).toHaveBeenCalledOnce();
     } finally {
       t.close();
     }
@@ -387,8 +392,12 @@ describe('read-only commit/push receipt reconciliation', () => {
       let checks = 0;
       const result = await reconcileGitTransferReceipts({
         ...t.context,
-        refreshPlan: async () =>
-          ++checks === 1 ? plan : { ...plan, revision: 'b'.repeat(64) },
+        refreshReviewed: async () => ({
+          plan: ++checks === 1 ? plan : { ...plan, revision: 'b'.repeat(64) },
+          identity: t.identity,
+          repository: t.context.repository,
+          worktree: t.context.worktree,
+        }),
       });
       expect(result).toMatchObject({ status: 'blocked', stage: 'commit' });
       expect(checks).toBe(2);
@@ -408,8 +417,12 @@ describe('read-only commit/push receipt reconciliation', () => {
       let checks = 0;
       const result = await reconcileGitTransferReceipts({
         ...t.context,
-        refreshPlan: async () =>
-          ++checks <= 2 ? plan : { ...plan, revision: 'b'.repeat(64) },
+        refreshReviewed: async () => ({
+          plan: ++checks <= 2 ? plan : { ...plan, revision: 'b'.repeat(64) },
+          identity: t.identity,
+          repository: t.context.repository,
+          worktree: t.context.worktree,
+        }),
       });
       expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
       expect(checks).toBe(3);
@@ -529,6 +542,53 @@ describe('read-only commit/push receipt reconciliation', () => {
       });
       expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
       expect(t.fetcher).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects a swapped worktree registry binding before touching an intent', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      await expect(
+        reconcileGitTransferReceipts({
+          ...t.context,
+          refreshReviewed: async () => ({
+            plan,
+            identity: t.identity,
+            repository: t.context.repository,
+            worktree: { ...t.context.worktree, gitDir: t.context.worktree.gitDir + '-other' },
+          }),
+        }),
+      ).rejects.toThrow('binding changed');
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a push when reviewed head SHA changes during remote reads', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      let checks = 0;
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshReviewed: async () => ({
+          plan,
+          identity: ++checks <= 2 ? t.identity : { ...t.identity, headSha: 'f'.repeat(40) },
+          repository: t.context.repository,
+          worktree: t.context.worktree,
+        }),
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(checks).toBe(3);
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
     } finally {
       t.close();
     }
