@@ -26,7 +26,7 @@ export async function collectRemotePullRequests(
     }
     const currentPage: number = page;
     const result: RemotePullRequestPage = await fetchPage(currentPage);
-    if (!result || !Array.isArray(result.candidates)) {
+    if (!result || !Array.isArray(result.candidates) || result.candidates.length > 100) {
       throw new Error('GitHub PR listing returned an invalid page.');
     }
     if (
