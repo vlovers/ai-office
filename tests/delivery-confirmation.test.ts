@@ -71,11 +71,11 @@ describe('delivery confirmation contract', () => {
         confirmation,
       ).valid,
     ).toBe(false);
-    expect(
-      validateDeliveryConfirmation({ ...preflight, revision: null }, confirmation).valid,
-    ).toBe(false);
-    expect(
-      validateDeliveryConfirmation({ ...preflight, remote: null }, confirmation).valid,
-    ).toBe(false);
+    expect(validateDeliveryConfirmation({ ...preflight, revision: null }, confirmation).valid).toBe(
+      false,
+    );
+    expect(validateDeliveryConfirmation({ ...preflight, remote: null }, confirmation).valid).toBe(
+      false,
+    );
   });
 });
