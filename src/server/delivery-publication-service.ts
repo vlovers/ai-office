@@ -1,4 +1,11 @@
 import type { DeliveryJournal, DeliveryJournalEntry } from './delivery-journal.js';
+import {
+  attestGitHubCommitRefs,
+  validateAttestedDraftReceipt,
+  type ApprovedCommitSnapshot,
+  type GitHubCommitReceipt,
+  type GitHubRefOptions,
+} from './delivery-github-ref-attestation.js';
 import { publicationReadiness } from './delivery-publication-coordinator.js';
 import { executeReservedPublication } from './delivery-publication-execution.js';
 import { decidePublication } from './delivery-publication-idempotency.js';
@@ -76,6 +83,72 @@ export async function publishApprovedDraft(
       }
       return executeReservedPublication(context.journal, context.workspaceId, readiness, async () =>
         validatePublicationReceipt(currentPlan, await context.createDraft(currentPlan)),
+      );
+    },
+  );
+}
+
+/**
+ * Commit-pinned publication variant. The remote head and base Git refs are
+ * fetched under the SAME shared lease as the durable reservation and POST.
+ * The returned PR must still name those exact commits after the POST.
+ *
+ * This is an injected boundary, not a live endpoint. The approval snapshot
+ * must come from independently verified local Git state and operator review.
+ */
+export async function publishCommitAttestedDraft(
+  context: DeliveryPublicationContext & {
+    approval: ApprovedCommitSnapshot;
+    gitHubRefOptions?: GitHubRefOptions;
+    createDraft: (plan: AllowedPlan) => Promise<GitHubCommitReceipt>;
+  },
+): Promise<DeliveryJournalEntry> {
+  const readiness = requireNewPublication(context.plan);
+  if (context.approval.operationKey !== readiness.operationKey) {
+    throw new Error('Approved commit snapshot does not match the publication operation.');
+  }
+  return withPublicationLease(
+    context.repository,
+    context.workspaceGitDir,
+    readiness,
+    context.refreshPlan,
+    async (currentPlan) => {
+      const existing = context.journal.get(context.workspaceId);
+      if (existing) {
+        if (existing.operationKey !== readiness.operationKey) {
+          throw new Error('Workspace already has a different publication operation.');
+        }
+        if (existing.state !== 'published') {
+          throw new Error('Publication outcome is uncertain; reconcile before retrying.');
+        }
+        const decision = decidePublication(currentPlan, {
+          revision: currentPlan.revision,
+          branch: currentPlan.branch,
+          destination: currentPlan.destination,
+          baseBranch: currentPlan.baseBranch,
+          draft: true,
+          pullRequestUrl: existing.pullRequestUrl ?? '',
+        });
+        if (decision.action !== 'reuse') {
+          throw new Error('Stored publication receipt failed validation.');
+        }
+        return existing;
+      }
+      const attestation = await attestGitHubCommitRefs(
+        currentPlan,
+        context.approval,
+        context.gitHubRefOptions,
+      );
+      return executeReservedPublication(
+        context.journal,
+        context.workspaceId,
+        readiness,
+        async () =>
+          validateAttestedDraftReceipt(
+            currentPlan,
+            attestation,
+            await context.createDraft(currentPlan),
+          ),
       );
     },
   );
