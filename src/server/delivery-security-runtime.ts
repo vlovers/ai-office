@@ -54,6 +54,24 @@ export async function openDeliveryDatabase(directory: string) {
     throw new DeliverySecurityError(503);
 
   const databasePath = join(path, 'delivery.sqlite');
+  // SQLite may also open existing WAL/shared-memory companions by pathname.
+  // Refuse unsafe companions before handing the database to SQLite.
+  for (const suffix of ['-wal', '-shm']) {
+    let info;
+    try {
+      info = await lstat(databasePath + suffix);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+    if (
+      !info.isFile() ||
+      info.nlink !== 1 ||
+      (info.mode & 0o077) !== 0 ||
+      (process.getuid && info.uid !== process.getuid())
+    )
+      throw new DeliverySecurityError(503);
+  }
   const file = await open(
     databasePath,
     constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW,
