@@ -22,7 +22,11 @@ export function validateDeliveryConfirmation(
   preflight: DeliveryPreflight,
   confirmation: DeliveryConfirmation,
 ): DeliveryConfirmationResult {
-  if (preflight.status !== 'manual-review' || preflight.checks.some((check) => !check.ok)) {
+  if (
+    preflight.status !== 'manual-review' ||
+    preflight.checks.length === 0 ||
+    preflight.checks.some((check) => !check.ok)
+  ) {
     return { valid: false, reason: 'Delivery preflight is blocked.' };
   }
   if (!preflight.revision || !preflight.remote) {
