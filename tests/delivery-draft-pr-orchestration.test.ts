@@ -107,6 +107,34 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
+  it('blocks failed remote preflight without reserving or publishing', async () => {
+    const t = setup();
+    try {
+      t.listRemote.mockRejectedValueOnce(new Error('GitHub 502: internal details'));
+      await expect(createDraftPublication(t.context)).rejects.toThrow(
+        'Remote PR inventory failed',
+      );
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps uncertain state on incomplete recovery and never recreates the PR', async () => {
+    const t = setup();
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('connection reset'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValueOnce({ complete: false, reason: 'page 3 timed out' });
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('blocks changed review snapshots before touching the journal or remote API', async () => {
     const t = setup();
     try {
