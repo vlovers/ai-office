@@ -110,3 +110,81 @@ describe('commit-pinned GitHub publication adapter', () => {
     }
   });
 });
+
+
+describe('ambiguous GitHub publication outcomes', () => {
+  it('preserves uncertainty after timeout and recovers using GET-only evidence', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = mockGitHub();
+      const original = fetcher.getMockImplementation()!;
+      fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') throw new Error('network timeout');
+        return original(url, init);
+      });
+      const ctx = context(journal);
+      await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
+        'network timeout',
+      );
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
+        'uncertain',
+      );
+      expect(fetcher).toHaveBeenCalledTimes(3);
+      const recovered = await reconcileCommitAttestedDraftViaGitHub(ctx, {
+        fetcher,
+        token: 'test-token',
+      });
+      expect(recovered.state).toBe('published');
+      expect(recovered.pullRequestUrl).toBe(receipt.html_url);
+      expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual([
+        'GET',
+        'GET',
+        'POST',
+        'GET',
+        'GET',
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('leaves uncertain state on a stale GitHub commit receipt', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = mockGitHub();
+      const original = fetcher.getMockImplementation()!;
+      fetcher.mockImplementation(async (url, init) =>
+        init.method === 'POST'
+          ? json({ ...receipt, head: { ...receipt.head, sha: '3'.repeat(40) } }, 201)
+          : original(url, init),
+      );
+      await expect(publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher))).rejects.toThrow(
+        'commit identity changed',
+      );
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(fetcher).toHaveBeenCalledTimes(3);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('refuses partial recovery and never issues a second POST', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      journal.reserve('workspace-1', publicationKey(plan));
+      journal.markUncertain('workspace-1', publicationKey(plan));
+      const fetcher = vi.fn(async () => json({ message: 'rate limited' }, 429));
+      await expect(
+        reconcileCommitAttestedDraftViaGitHub(context(journal), { fetcher }),
+      ).rejects.toThrow('HTTP 429');
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      db.close();
+    }
+  });
+});
