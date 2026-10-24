@@ -40,6 +40,20 @@ merge, branch deletion or deployment is enabled.
   malformed pages and page-limit exhaustion fail closed without returning a
   partial result. Credentials are accepted only as server-owned options;
   callers must never source them from a browser request.
+- `delivery-github-ref-attestation.ts` performs two independent GitHub
+  **GET-only** ref lookups under the publication lease and compares the exact
+  reviewed Git head/base commit SHAs. It rejects moved refs, malformed
+  responses, unexpected redirects and API failures. A second receipt check
+  ensures the created PR still points to those same commits, preventing a
+  branch-movement TOCTOU gap.
+- `publishCommitAttestedDraft` is the commit-pinned service variant. It
+  combines the same SQLite journal and shared repository lease with immutable
+  Git ref attestation **before** the remote CREATE attempt, then verifies
+  the GitHub response's head/base commit SHAs **after** the attempt. A failed
+  preflight leaves the journal empty; a failed post-write check marks the
+  result uncertain. The original `publishApprovedDraft` remains for
+  compatibility but does not attest remote Git commits and must not be
+  exposed as a production endpoint.
 - `delivery-publication-github-recovery.ts` composes the concrete GET-only
   adapter with the lease-protected uncertain-journal recovery service. It
   verifies the snapshot and journal state before any GitHub request, and it
@@ -78,7 +92,11 @@ reservation, one-shot remote calls, idempotent reuse, stale snapshots,
 competing operations, concurrent callers, ambiguous failures, fork rejection,
 complete/incomplete remote listings, duplicate results and an actual SQLite
 close/reopen recovery path. Receipt/reconciliation tests cover additional
-hostile remote responses. Run `npm run check` and `npm run format:check`,
+hostile remote responses. Git ref-attestation tests additionally cover
+moved head/base commits, hostile GitHub responses, invalid credentials and
+post-creation SHA changes; service integration tests verify that attestation
+happens under the lease before reservation and prevents blind retries.
+Run `npm run check` and `npm run format:check`,
 plus the native sandbox and browser approval CI jobs.
 
 ## Production activation blockers
@@ -93,9 +111,11 @@ production endpoint:
 2. Build separate, operator-confirmed **commit**, **push** and **draft PR**
    transitions. Persist each step's intent and receipt independently; do not
    collapse an ambiguous push into a retryable PR step.
-3. Pin and revalidate the actual head/base Git commit SHAs, worktree ownership,
-   and approved revision immediately before each write. Current review
-   fingerprints are not remote commit SHA attestations.
+3. Capture approved head/base Git commit SHAs from an independently verified
+   local worktree, bind them to the operator's review and verify worktree
+   ownership. The new read-only remote ref attestation can then compare those
+   SHAs under the lease; it does **not** independently establish that the
+   supplied SHA pair was reviewed or that the local worktree is trustworthy.
 4. Implement complete paginated remote discovery, with retryable read errors
    that never become a write retry. Validate immutable GitHub repository IDs,
    head commit SHA and exact PR ownership against an approved target.
