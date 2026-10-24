@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
+import { reserveApprovedPublicationAtomically } from '../src/server/delivery-approved-publication-reservation.js';
+import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import {
   createDraftPublication,
@@ -66,6 +68,64 @@ function setup() {
 }
 
 describe('Draft PR publication orchestration', () => {
+  it('integrates a real one-use SQLite approval with the draft orchestrator', async () => {
+    const t = setup();
+    try {
+      const binding = {
+        workspaceId: 'workspace-1',
+        operator: { operatorId: 'operator-1', sessionId: 'session-1' },
+        plan,
+        commits: {
+          operationKey: publicationKey(plan),
+          headCommitSha: '1'.repeat(40),
+          baseCommitSha: '2'.repeat(40),
+        },
+      };
+      const approvals = new DeliveryPublicationApprovalLedger(t.db, () => 10_000);
+      const approvalId = approvals.issue(binding);
+      const reserveApproved = vi.fn(() =>
+        reserveApprovedPublicationAtomically(t.db, approvalId, binding, () => {}, () => 10_000),
+      );
+      const context = { ...t.context, reserveApproved };
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(reserveApproved).toHaveBeenCalledTimes(1);
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+      expect(() => approvals.assertPending(approvalId, binding)).toThrow();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks a revoked exact publication approval before remote creation', async () => {
+    const t = setup();
+    try {
+      const binding = {
+        workspaceId: 'workspace-1',
+        operator: { operatorId: 'operator-1', sessionId: 'session-1' },
+        plan,
+        commits: {
+          operationKey: publicationKey(plan),
+          headCommitSha: '1'.repeat(40),
+          baseCommitSha: '2'.repeat(40),
+        },
+      };
+      const approvals = new DeliveryPublicationApprovalLedger(t.db, () => 10_000);
+      const approvalId = approvals.issue(binding);
+      expect(approvals.revoke(approvalId, binding.operator)).toBe(true);
+      const context = {
+        ...t.context,
+        reserveApproved: () =>
+          reserveApprovedPublicationAtomically(t.db, approvalId, binding, () => {}, () => 10_000),
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(t.journal.get('workspace-1')).toBeNull();
+    } finally {
+      t.close();
+    }
+  });
+
   it('refuses a reserved journal record with an unexpected PR URL', async () => {
     const t = setup();
     try {
