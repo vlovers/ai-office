@@ -38,6 +38,35 @@ export type DraftPublicationContext = {
 };
 
 /**
+ * Treat the GitHub inventory adapter as a runtime trust boundary, even though
+ * its TypeScript interface is typed. Malformed or truncated responses must
+ * never be interpreted as an empty repository.
+ */
+function isValidCompleteInventory(
+  inventory: CompleteRemotePrInventory,
+): inventory is Extract<CompleteRemotePrInventory, { complete: true }> {
+  return (
+    inventory?.complete === true &&
+    Array.isArray(inventory.candidates) &&
+    inventory.candidates.length <= 100_000 &&
+    inventory.candidates.every(
+      (candidate) =>
+        candidate !== null &&
+        typeof candidate === 'object' &&
+        typeof candidate.html_url === 'string' &&
+        typeof candidate.draft === 'boolean' &&
+        typeof candidate.state === 'string' &&
+        typeof candidate.head?.ref === 'string' &&
+        typeof candidate.base?.ref === 'string' &&
+        (candidate.head.repo === null ||
+          typeof candidate.head.repo?.full_name === 'string') &&
+        (candidate.base.repo === null ||
+          typeof candidate.base.repo?.full_name === 'string'),
+    )
+  );
+}
+
+/**
  * A single fail-closed Draft PR publication boundary. Never retries ambiguous
  * remote writes. All journal transitions occur under the shared Git lease.
  * Caller must authenticate and authorize the operator before invoking.
@@ -76,8 +105,8 @@ export async function createDraftPublication(
       } catch {
         throw new Error('Remote PR inventory failed; publication blocked.');
       }
-      if (!inventory.complete) {
-        throw new Error('Remote PR inventory is incomplete; publication blocked.');
+      if (!isValidCompleteInventory(inventory)) {
+        throw new Error('Remote PR inventory is incomplete or invalid; publication blocked.');
       }
       const preflight = reconcilePublicationCandidates(plan, inventory.candidates);
       if (preflight.status === 'confirmed') {
@@ -87,10 +116,10 @@ export async function createDraftPublication(
       if (
         inventory.candidates.some(
           (candidate) =>
-            candidate.head.ref === plan.branch && candidate.base.ref === plan.baseBranch,
+            candidate.head.ref === plan.branch,
         )
       ) {
-        throw new Error('Remote PR identity conflict requires manual reconciliation.');
+        throw new Error('Remote PR head branch conflict requires manual reconciliation.');
       }
 
       journal.reserve(workspaceId, operationKey);
@@ -138,11 +167,11 @@ async function reconcileOnly(
       reason: 'Remote inventory request failed; no write was retried.',
     };
   }
-  if (!inventory.complete) {
+  if (!isValidCompleteInventory(inventory)) {
     return {
       status: 'uncertain',
       entry: context.journal.get(context.workspaceId)!,
-      reason: 'Remote PR inventory is incomplete; no write was retried.',
+      reason: 'Remote PR inventory is incomplete or invalid; no write was retried.',
     };
   }
   const result = reconcilePublicationCandidates(plan, inventory.candidates);
