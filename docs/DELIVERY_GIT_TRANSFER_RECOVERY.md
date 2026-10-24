@@ -4,6 +4,11 @@ Status: **unreleased server-only foundation**. This code does not commit, push,
 create a GitHub PR from an HTTP request, authenticate an operator or enable
 automatic remote writes. No migration deletes existing journal data.
 
+The separate [Delivery security runtime](DELIVERY_PRODUCTION_SECURITY.md) now
+authenticates operators and runs registered-workspace recovery before listening.
+It does not change these low-level journal APIs or enable remote writes. Its
+trusted static registry and remaining deployment gates are documented separately.
+
 ## Durable state and identity
 
 `DeliveryGitTransferJournal` creates a separate SQLite table for the local

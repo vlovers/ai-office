@@ -8,11 +8,14 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@babel/eslint-parser": "^8.0.7",
+    "@babel/plugin-syntax-typescript": "^8.0.3",
     "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.13.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
@@ -28,6 +31,10 @@
     "node": ">=24.0.0 <25"
   },
   "scripts": {
+    "dev:delivery": "node --import tsx src/server/delivery-security-index.ts",
+    "start:delivery": "node dist/server/delivery-security-index.js",
+    "delivery:admin": "node --import tsx scripts/delivery-admin.ts",
+    "lint": "eslint src/server/delivery-*.ts scripts/delivery-admin.ts tests/delivery-*.ts tests/fixtures/delivery-security.ts --max-warnings=0",
     "dev": "node --import tsx src/server/index.ts",
     "dev:web": "vite",
     "typecheck": "tsc --noEmit",
@@ -35,7 +42,7 @@
     "start": "node dist/server/index.js",
     "test": "vitest run --exclude tests/smoke.test.ts",
     "test:smoke": "vitest run tests/smoke.test.ts",
-    "check": "npm run typecheck && npm test && npm run test:smoke && npm run build",
+    "check": "npm run lint && npm run typecheck && npm test && npm run test:smoke && npm run build",
     "test:sandbox": "node --import tsx tests/native-sandbox.ts",
     "test:browser": "node --import tsx tests/browser-smoke.ts",
     "format": "prettier --write .",

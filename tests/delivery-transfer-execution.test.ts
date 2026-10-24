@@ -72,6 +72,44 @@ beforeEach(() => {
 });
 
 describe('leased one-use Git transfer execution', () => {
+  it('rolls back approval/intent when final live authorization rejects', async () => {
+    const t = setup();
+    try {
+      await expect(
+        executeAuthorizedTransferStage({
+          ...t.context,
+          authorizeBeforeReserve: () => {
+            throw new Error('session revoked');
+          },
+        }),
+      ).rejects.toThrow('session revoked');
+      t.approvalLedger.assertPending(t.context.approvalId, t.context.binding);
+      expect(t.transferJournal.get(identity.workspaceId, 'commit')).toBeNull();
+      expect(t.performOnce).not.toHaveBeenCalled();
+    } finally {
+      t.db.close();
+    }
+  });
+
+  it('fails closed on accidentally asynchronous final authorization', async () => {
+    const t = setup();
+    try {
+      await expect(
+        executeAuthorizedTransferStage({
+          ...t.context,
+          authorizeBeforeReserve: async () => {
+            throw new Error('revoked after await');
+          },
+        }),
+      ).rejects.toThrow('must be synchronous');
+      t.approvalLedger.assertPending(t.context.approvalId, t.context.binding);
+      expect(t.transferJournal.get(identity.workspaceId, 'commit')).toBeNull();
+      expect(t.performOnce).not.toHaveBeenCalled();
+    } finally {
+      t.db.close();
+    }
+  });
+
   it('attests, consumes, reserves, performs once and independently confirms a commit', async () => {
     const t = setup();
     try {

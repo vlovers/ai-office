@@ -22,7 +22,7 @@ const identity: DeliveryGitTransferIdentity = {
 };
 
 function gitRepo() {
-  const path = mkdtempSync(join(tmpdir(), 'ai-office-recovery-'));
+  const path = realpathSync(mkdtempSync(join(tmpdir(), 'ai-office-recovery-')));
   execFileSync('/usr/bin/git', ['init', '-q', '-b', 'main', path]);
   execFileSync('/usr/bin/git', ['-C', path, 'config', 'user.name', 'AI Office Test']);
   execFileSync('/usr/bin/git', ['-C', path, 'config', 'user.email', 'test@example.invalid']);

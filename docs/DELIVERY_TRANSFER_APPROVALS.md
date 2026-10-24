@@ -3,6 +3,11 @@
 Status: **unreleased foundation**. This module is not an HTTP authorization
 mechanism and does not enable Git commit, Git push or Draft PR creation.
 
+The [dedicated Delivery security service](DELIVERY_PRODUCTION_SECURITY.md) now
+composes this ledger with verified sessions, live workspace grants, CSRF/Origin
+and leased Git review. It reserves intents only; it does not expose an executor.
+Legacy server-only consumers still must provide their own trusted authorization.
+
 ## Approval contract
 
 `DeliveryTransferApprovalLedger` stores an independent, one-use approval for
