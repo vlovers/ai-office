@@ -39,6 +39,12 @@ jobs:
         run: npm run build
       - name: Formatting
         run: npm run format:check
+      - name: Diagnostic issue template formatting (temporary)
+        if: failure()
+        run: |
+          echo '=== TEMPLATE BEGIN ==='
+          npx prettier .github/ISSUE_TEMPLATE/engineering_task.md
+          echo '=== TEMPLATE END ==='
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
