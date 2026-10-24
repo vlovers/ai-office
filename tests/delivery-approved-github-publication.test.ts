@@ -224,6 +224,28 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+
+  it('refuses the POST when operator permission is revoked at the final adapter gate', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        write: {
+          ...original.write,
+          authorizeBeforePost: () => {
+            t.sessions.setGrant('operator-1', 'workspace-1', 'approve:draft-pr', false);
+          },
+        },
+      });
+      expect(result.status).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+    } finally {
+      t.close();
+    }
+  });
+
   it('treats invalid post-write PR detail as uncertain, not published', async () => {
     const t = setup();
     try {
