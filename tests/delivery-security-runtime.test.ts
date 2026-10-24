@@ -1,4 +1,4 @@
-import { mkdtemp, chmod, rm, stat, symlink, writeFile, realpath } from 'node:fs/promises';
+import { mkdtemp, chmod, rm, stat, symlink, link, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -81,4 +81,50 @@ it('never restores outstanding enrollment tickets when a disabled operator is re
   } finally {
     db.close();
   }
+});
+
+it('refuses public pre-existing database without changing its mode or bytes', async () => {
+  const directory = await root();
+  const database = join(directory, 'delivery.sqlite');
+  await writeFile(database, 'do not modify', { mode: 0o644 });
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+  expect((await stat(database)).mode & 0o777).toBe(0o644);
+  expect(await (await import('node:fs/promises')).readFile(database, 'utf8')).toBe(
+    'do not modify',
+  );
+});
+
+it('refuses unsafe existing data directories rather than chmod-repairing them', async () => {
+  const directory = await root();
+  await chmod(directory, 0o755);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+  expect((await stat(directory)).mode & 0o777).toBe(0o755);
+});
+
+it('refuses SQLite symlinks, hardlinks and non-regular files before SQLite opens', async () => {
+  const directory = await root();
+  const source = join(directory, 'source.db');
+  const database = join(directory, 'delivery.sqlite');
+  await writeFile(source, 'external content', { mode: 0o600 });
+  await symlink(source, database);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow();
+  await rm(database);
+  await link(source, database);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+  expect((await stat(source)).nlink).toBe(2);
+  await rm(database);
+  await rm(source);
+  await (await import('node:fs/promises')).mkdir(database);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow();
+});
+
+it('does not relax private database permissions across a successful restart', async () => {
+  const directory = await root();
+  const first = await openDeliveryDatabase(directory);
+  first.close();
+  const database = join(directory, 'delivery.sqlite');
+  expect((await stat(database)).mode & 0o077).toBe(0);
+  const second = await openDeliveryDatabase(directory);
+  second.close();
+  expect((await stat(database)).mode & 0o077).toBe(0);
 });
