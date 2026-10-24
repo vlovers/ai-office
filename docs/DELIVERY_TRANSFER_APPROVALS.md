@@ -61,8 +61,7 @@ and calls `reserveApprovedTransferIntentAtomically` under the held lease.
 `reserveApprovedDeliveryGitTransfer` is a separate, server-only leased
 reservation primitive with real worktree ownership checks; it does **not**
 perform a Git operation and must not be used to execute one after its lease
-has been released. A confirmed
-receipt requires the exact reviewed SHA. A push cannot start until the matching
+has been released. A confirmed receipt requires the exact reviewed SHA. A push cannot start until the matching
 commit receipt is confirmed. Duplicate requests, changed snapshots, expired
 approvals, ambiguous HTTP responses and invalid receipts fail closed.
 
@@ -84,7 +83,7 @@ invoke an external operation after the shared lease has been released.
 | Approval expired, revoked or already consumed         | Reject; no replay                                  |
 | Clock moves backwards across restart                  | Reject until trusted clock catches up              |
 | Another process consumed approval                     | Atomic SQL update rejects second caller            |
-| Crash during approval/intent transaction               | Both roll back; no external write                  |
+| Crash during approval/intent transaction              | Both roll back; no external write                  |
 | Crash after intent, before or during external write   | Preserve uncertain state; read-only reconciliation |
 | GitHub timeout, rate limit, 5xx or malformed response | Do not infer success or retry blindly              |
 | Remote ref does not match reviewed SHA                | Do not confirm receipt                             |
