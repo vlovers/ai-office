@@ -19,22 +19,36 @@ export function auditWorkflowText(source, filename = 'workflow') {
 
     const reference = match[1];
     const location = `${filename}:${index + 1}`;
-    if (!reference.startsWith('./') && !SHA_ACTION.test(reference) && !SHA_DOCKER.test(reference)) {
-      findings.push(`${location}: external action must use an immutable commit SHA or Docker digest (${reference})`);
+    if (
+      !reference.startsWith('./') &&
+      !SHA_ACTION.test(reference) &&
+      !SHA_DOCKER.test(reference)
+    ) {
+      findings.push(
+        `${location}: external action must use an immutable commit SHA or Docker digest (${reference})`,
+      );
     }
 
     if (!reference.startsWith('actions/checkout@')) continue;
 
     const stepIndent = indentation(lines[index]);
     let end = index + 1;
-    while (end < lines.length && (!lines[end].trim() || indentation(lines[end]) > stepIndent ||
-      (indentation(lines[end]) === stepIndent && !/^\s*-\s/.test(lines[end])))) {
+    while (
+      end < lines.length &&
+      (!lines[end].trim() ||
+        indentation(lines[end]) > stepIndent ||
+        (indentation(lines[end]) === stepIndent && !/^\s*-\s/.test(lines[end])))
+    ) {
       end += 1;
     }
 
-    const withIndex = lines.findIndex((line, offset) =>
-      offset > index && offset < end && indentation(line) === stepIndent &&
-      /^\s*with:\s*(?:#.*)?$/.test(line));
+    const withIndex = lines.findIndex(
+      (line, offset) =>
+        offset > index &&
+        offset < end &&
+        indentation(line) === stepIndent &&
+        /^\s*with:\s*(?:#.*)?$/.test(line),
+    );
     let safe = false;
     if (withIndex !== -1) {
       const withIndent = indentation(lines[withIndex]);
@@ -48,12 +62,19 @@ export function auditWorkflowText(source, filename = 'workflow') {
   return findings;
 }
 
-export function auditWorkflowDirectory(directory = join(dirname(fileURLToPath(import.meta.url)), '..', '.github', 'workflows')) {
-  const files = readdirSync(directory).filter((name) => /\.ya?ml$/.test(name)).sort();
+export function auditWorkflowDirectory(
+  directory = join(dirname(fileURLToPath(import.meta.url)), '..', '.github', 'workflows'),
+) {
+  const files = readdirSync(directory)
+    .filter((name) => /\.ya?ml$/.test(name))
+    .sort();
   if (files.length === 0) throw new Error(`No GitHub Actions workflows in ${directory}`);
   const findings = files.flatMap((name) =>
-    auditWorkflowText(readFileSync(join(directory, name), 'utf8'), name));
-  if (findings.length > 0) throw new Error(`Workflow security check failed:\n${findings.join('\n')}`);
+    auditWorkflowText(readFileSync(join(directory, name), 'utf8'), name),
+  );
+  if (findings.length > 0) {
+    throw new Error(`Workflow security check failed:\n${findings.join('\n')}`);
+  }
   return files.length;
 }
 
