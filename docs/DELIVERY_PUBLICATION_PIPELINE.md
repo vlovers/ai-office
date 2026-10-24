@@ -33,6 +33,13 @@ merge, branch deletion or deployment is enabled.
 - `delivery-publication-pagination.ts` gathers every page from a trusted
   read-only adapter and rejects malformed, looping, oversized or incomplete
   listings. It returns `complete: true` only after the final page succeeds.
+- `delivery-github-readonly.ts` provides a concrete server-side GitHub REST
+  **GET-only** adapter. It pins requests to the reviewed repository, uses
+  `state=all` (open and closed PRs), exhausts every page and validates the
+  shape of branch/repository identities. Redirects, 403/429 responses,
+  malformed pages and page-limit exhaustion fail closed without returning a
+  partial result. Credentials are accepted only as server-owned options;
+  callers must never source them from a browser request.
 
 ## Failure and restart matrix
 
@@ -53,9 +60,10 @@ accepting new publication work**. Do not call it per request: it would
 incorrectly mark another active operation uncertain. Recovery is a read-only
 GitHub inspection plus a conditional SQLite transition, never a second POST.
 
-The injected remote-list adapter must exhaust **all pages of open and closed
-PRs** for the exact repository and set `complete: true` only after successful
-pagination. A partial list is not evidence of absence. Both publication and
+The read-only GitHub adapter exhausts **all pages of open and closed PRs**
+for the exact repository and returns `complete: true` only after successful
+pagination. It can be passed to the injected reconciliation callback under the
+repository lease; it is not yet wired into a production HTTP endpoint. A partial list is not evidence of absence. Both publication and
 reconciliation hold the shared Git lease while checking journal state and
 current review snapshot.
 
