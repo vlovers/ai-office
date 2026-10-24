@@ -35,7 +35,7 @@
     "start": "node dist/server/index.js",
     "test": "vitest run --exclude tests/smoke.test.ts",
     "test:smoke": "vitest run tests/smoke.test.ts",
-    "check": "npm run typecheck && npm test && npm run test:smoke && npm run build",
+    "check": "npm run check:workflows && npm run test:workflow-pins && npm run typecheck && npm test && npm run test:smoke && npm run build",
     "test:sandbox": "node --import tsx tests/native-sandbox.ts",
     "test:browser": "node --import tsx tests/browser-smoke.ts",
     "format": "prettier --write .",
@@ -49,6 +49,8 @@
     "test:workflow:native": "vitest run tests/workflow-execution.test.ts tests/qa-runner.test.ts",
     "test:browser:workflow": "node --import tsx tests/browser-workflow-smoke.ts",
     "test:real:workflow": "node --import tsx scripts/real-workflow-smoke.ts --run",
-    "test:browser:office": "node --import tsx tests/browser-office-smoke.ts"
+    "test:browser:office": "node --import tsx tests/browser-office-smoke.ts",
+    "check:workflows": "node scripts/check-workflow-action-pins.mjs",
+    "test:workflow-pins": "node --test tests/workflow-action-pins.test.mjs"
   }
 }
