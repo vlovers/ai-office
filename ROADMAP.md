@@ -157,3 +157,13 @@ and [issue #58](https://github.com/vlovers/ai-office/issues/58).
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
+
+### v0.8 scoped startup transfer recovery (unreleased)
+
+Server-only startup composition now validates the registered repository,
+worktree, publication operation and any commit/push receipt identities under
+one shared lease before changing journal states. Interrupted intents become
+uncertain without replaying remote writes; confirmed receipts and unrelated
+workspaces remain intact. This does not implement a production startup scanner,
+operator session/CSRF approval or actual commit/push execution. See
+[transfer recovery contract](docs/DELIVERY_GIT_TRANSFER_RECOVERY.md).

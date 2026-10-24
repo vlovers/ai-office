@@ -177,6 +177,11 @@ export class DeliveryGitTransferJournal {
     return entry;
   }
 
+  /** Check ownership of a pending or confirmed stage without changing it. */
+  assertOwned(stage: DeliveryGitStage, identity: DeliveryGitTransferIdentity) {
+    return this.requireMatching(stage, identity);
+  }
+
   /** Both independent receipts are required before a Draft PR is eligible. */
   assertReadyForDraft(identity: DeliveryGitTransferIdentity) {
     this.assertConfirmed('commit', identity);
