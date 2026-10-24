@@ -48,7 +48,9 @@ function mockRefs(
   const fetcher = vi.fn(async (input: string, init: RequestInit) => {
     expect(init.method).toBe('GET');
     expect(init.redirect).toBe('error');
-    expect(input).toMatch(/^https:\/\/api\.github\.com\/repos\/vlovers\/ai-office\/git\/ref\/heads\//);
+    expect(input).toMatch(
+      /^https:\/\/api\.github\.com\/repos\/vlovers\/ai-office\/git\/ref\/heads\//,
+    );
     if (input.endsWith('/main')) return jsonResponse(base);
     return jsonResponse(head);
   });
@@ -93,7 +95,10 @@ describe('GitHub immutable ref attestation', () => {
 
   it.each([
     ['wrong branch ref', refBody('other', headCommitSha)],
-    ['tag object', { ref: `refs/heads/${plan.branch}`, object: { type: 'tag', sha: headCommitSha } }],
+    [
+      'tag object',
+      { ref: `refs/heads/${plan.branch}`, object: { type: 'tag', sha: headCommitSha } },
+    ],
     ['missing object', { ref: `refs/heads/${plan.branch}` }],
     ['invalid SHA', refBody(plan.branch, 'not-a-commit')],
     ['array payload', []],
@@ -119,9 +124,7 @@ describe('GitHub immutable ref attestation', () => {
       Object.defineProperty(response, 'url', { value: 'https://evil.example/refs' });
       return response;
     });
-    await expect(attestGitHubCommitRefs(plan, approval, { fetcher })).rejects.toThrow(
-      'redirected',
-    );
+    await expect(attestGitHubCommitRefs(plan, approval, { fetcher })).rejects.toThrow('redirected');
   });
 
   it('blocks an unapproved operation before any remote read', async () => {
@@ -142,8 +145,9 @@ describe('GitHub immutable ref attestation', () => {
         'Invalid approved Git commit SHA',
       );
     }
-    await expect(attestGitHubCommitRefs(plan, approval, { fetcher, token: 'has spaces' }))
-      .rejects.toThrow('Invalid server-side GitHub credential');
+    await expect(
+      attestGitHubCommitRefs(plan, approval, { fetcher, token: 'has spaces' }),
+    ).rejects.toThrow('Invalid server-side GitHub credential');
     expect(fetcher).not.toHaveBeenCalled();
   });
 

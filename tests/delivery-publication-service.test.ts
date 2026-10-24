@@ -48,10 +48,7 @@ const commitReceipt = {
   base: { ...candidate.base, sha: baseCommitSha },
 };
 
-function remoteRefs(
-  headSha: string = headCommitSha,
-  baseSha: string = baseCommitSha,
-) {
+function remoteRefs(headSha: string = headCommitSha, baseSha: string = baseCommitSha) {
   return vi.fn(async (input: string, init: RequestInit) => {
     expect(init.method).toBe('GET');
     expect(init.redirect).toBe('error');
@@ -446,5 +443,4 @@ describe('lease-protected delivery publication pipeline', () => {
       db.close();
     }
   });
-
 });

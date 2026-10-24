@@ -139,16 +139,12 @@ export async function publishCommitAttestedDraft(
         context.approval,
         context.gitHubRefOptions,
       );
-      return executeReservedPublication(
-        context.journal,
-        context.workspaceId,
-        readiness,
-        async () =>
-          validateAttestedDraftReceipt(
-            currentPlan,
-            attestation,
-            await context.createDraft(currentPlan),
-          ),
+      return executeReservedPublication(context.journal, context.workspaceId, readiness, async () =>
+        validateAttestedDraftReceipt(
+          currentPlan,
+          attestation,
+          await context.createDraft(currentPlan),
+        ),
       );
     },
   );
