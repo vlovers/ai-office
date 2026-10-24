@@ -108,6 +108,32 @@ describe('durable single-use publication approval ledger', () => {
     }
   });
 
+  it('persists the clock watermark across process restarts', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ai-office-approval-clock-'));
+    const file = join(dir, 'approval.sqlite');
+    try {
+      const first = new DatabaseSync(file);
+      let id: string;
+      try {
+        const ledger = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+        id = ledger.issue(binding, 1000);
+      } finally {
+        first.close();
+      }
+      const reopened = new DatabaseSync(file);
+      try {
+        const backwards = new DeliveryPublicationApprovalLedger(reopened, () => 9_999);
+        expect(() => backwards.assertPending(id!, binding)).toThrow('clock moved backwards');
+        const expired = new DeliveryPublicationApprovalLedger(reopened, () => 11_000);
+        expect(() => expired.consume(id!, binding)).toThrow('expired');
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('survives restart and prevents replay across separate SQLite connections', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ai-office-approval-'));
     const file = join(dir, 'approval.sqlite');
