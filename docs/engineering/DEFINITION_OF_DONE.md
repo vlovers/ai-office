@@ -17,7 +17,9 @@ The states below are distinct:
 - Check read-only defaults, write approval, sandbox, redaction, task lifecycle,
   queue idempotency, session snapshots, worktrees and migration integrity.
 - Have an independent reviewer inspect the base-to-head diff and tests.
-  Resolve blocking findings and rerun checks affected by fixes.
+  Record the reviewed head SHA, reviewer identity and disposition of findings;
+  reassess material changes after review. An AI assessment is not an authorized
+  GitHub approval. Resolve blocking findings and rerun checks affected by fixes.
 - Keep documentation, UI states and release notes aligned with actual behavior.
 - Verify real Codex and native sandbox behavior in supported environments
   before claiming release acceptance.
