@@ -32,10 +32,12 @@ authorization endpoints and must not be wired to a browser.
 
 `verifyDeliveryGitTransfer` acquires the same common-repository/worktree lease
 as publication and runs an injected **read-only** verification callback before
-persisting the exact SHA. The callback must be trusted server code: for a commit,
-check the local commit object and reviewed worktree; for a push, fetch the exact
-GitHub ref and validate the repository/branch/object type and SHA. A callback
-returning an arbitrary SHA is **not** proof of authenticity. GitHub 403, 429,
+persisting the exact SHA. Use the concrete `verifyDeliveryCommitReceiptLocally` and
+`verifyDeliveryPushReceiptViaGitHub` wrappers: they independently re-attest
+the reviewed local Git state or fetch the exact GitHub head and base refs,
+checking repository, branch, object type and SHA. The generic callback API is
+for trusted server composition only; an arbitrary returned SHA is **not**
+proof of authenticity. GitHub 403, 429,
 5xx, incomplete pages, malformed responses, timeouts and mismatched refs must
 leave the stage unconfirmed. Never infer remote success from a timeout.
 
@@ -61,8 +63,9 @@ activation. Before any authenticated UI action can initiate commit/push:
 
 1. Bind separate one-use commit/push approvals to trusted server sessions and
    reviewed tree/head/base SHAs, not client-provided identity.
-2. Implement a concrete least-privilege read-only GitHub push-ref verifier with
-   strict response validation and ambiguity handling; no token in logs.
+2. Bind the existing GET-only GitHub push-ref verifier to least-privilege
+   production credentials and an independently authenticated operator session;
+   never accept browser-supplied tokens.
 3. Serialize *all* startup transfer/publication recovery per workspace and
    verify multi-process SQLite behavior across actual independent processes.
 4. Establish Origin/CSRF/session authorization, credential boundaries, and
