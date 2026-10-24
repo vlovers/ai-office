@@ -102,6 +102,8 @@ export async function publishCommitAttestedDraft(
   context: DeliveryPublicationContext & {
     approval: ApprovedCommitSnapshot;
     gitHubRefOptions?: GitHubRefOptions;
+    /** Optional local gate; the production adapter must provide it. */
+    verifyLocalGitState?: (plan: AllowedPlan) => Promise<void>;
     createDraft: (plan: AllowedPlan, attestation: AttestedGitRefs) => Promise<GitHubCommitReceipt>;
   },
 ): Promise<DeliveryJournalEntry> {
@@ -135,6 +137,9 @@ export async function publishCommitAttestedDraft(
           throw new Error('Stored publication receipt failed validation.');
         }
         return existing;
+      }
+      if (context.verifyLocalGitState) {
+        await context.verifyLocalGitState(currentPlan);
       }
       const attestation = await attestGitHubCommitRefs(
         currentPlan,
