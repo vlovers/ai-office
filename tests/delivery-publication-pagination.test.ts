@@ -42,6 +42,12 @@ describe('complete read-only GitHub PR pagination', () => {
     ).rejects.toThrow('invalid next page');
   });
 
+  it('rejects a skipped page rather than declaring a truncated listing complete', async () => {
+    const fetchPage = vi.fn(async () => ({ candidates: [candidate], nextPage: 3 }));
+    await expect(collectRemotePullRequests(fetchPage)).rejects.toThrow('invalid next page');
+    expect(fetchPage).toHaveBeenCalledOnce();
+  });
+
   it('refuses a listing that exceeds the configured safe page limit', async () => {
     await expect(
       collectRemotePullRequests(
