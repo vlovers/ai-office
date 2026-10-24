@@ -5,11 +5,13 @@ import {
   type LocalGitReview,
 } from '../src/server/delivery-local-git-attestation.js';
 
-const { git, revalidateRepository } = vi.hoisted(() => ({
+const { git, revalidateRepository, realpath } = vi.hoisted(() => ({
   git: vi.fn(),
   revalidateRepository: vi.fn(),
+  realpath: vi.fn(),
 }));
 vi.mock('../src/server/repositories.js', () => ({ git, revalidateRepository }));
+vi.mock('node:fs/promises', () => ({ realpath }));
 
 const plan = {
   allowed: true as const,
@@ -20,7 +22,9 @@ const plan = {
   draft: true as const,
 };
 const worktree = { path: '/repo/worktree', gitDir: '/repo/.git/worktrees/office' };
+const repository = { path: '/repo', gitDir: '/repo/.git' };
 const review: LocalGitReview = {
+  repository,
   worktree,
   workspaceGitDir: worktree.gitDir,
   commits: {
@@ -51,13 +55,15 @@ beforeEach(() => {
     base: review.commits.baseCommitSha,
     remote: 'git@github.com:vlovers/ai-office.git',
   };
-  revalidateRepository.mockResolvedValue({
-    ...worktree,
+  revalidateRepository.mockImplementation(async (input: typeof worktree) => ({
+    ...input,
     name: 'worktree',
-  });
+  }));
+  realpath.mockImplementation(async (input: string) => input);
   git.mockImplementation(async (_path: string, args: string[]) => {
     const command = args.join(' ');
     calls.push(command);
+    if (args[1] === '--path-format=absolute') return '/repo/.git';
     if (args[0] === 'status') return replies.status;
     if (args[0] === 'symbolic-ref') return replies.branch + '\n';
     if (args[0] === 'remote') return replies.remote + '\n';
@@ -98,7 +104,7 @@ describe('lease-scoped local Git attestation', () => {
       await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
         'not clean',
       );
-      expect(calls).toHaveLength(1);
+      expect(calls).toHaveLength(3);
       calls = [];
     }
   });
@@ -138,6 +144,9 @@ describe('lease-scoped local Git attestation', () => {
 
   it('rejects changed workspace Git directory identity', async () => {
     revalidateRepository.mockResolvedValueOnce({
+      ...repository,
+    });
+    revalidateRepository.mockResolvedValueOnce({
       ...worktree,
       gitDir: '/other/.git',
     });
@@ -145,6 +154,21 @@ describe('lease-scoped local Git attestation', () => {
       'identity changed',
     );
     expect(git).not.toHaveBeenCalled();
+  });
+
+  it('rejects a worktree from a different common Git repository', async () => {
+    let count = 0;
+    git.mockImplementation(async (_path: string, args: string[]) => {
+      if (args[1] === '--path-format=absolute') {
+        count++;
+        return count === 1 ? '/repo/.git' : '/foreign/.git';
+      }
+      throw new Error('No further Git reads should occur.');
+    });
+    await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
+      'different repository',
+    );
+    expect(git).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a foreign workspace Git directory before any Git command', async () => {
@@ -180,6 +204,7 @@ describe('lease-scoped local Git attestation', () => {
   it('rejects an external branch mutation detected on the second pass', async () => {
     let count = 0;
     git.mockImplementation(async (_path: string, args: string[]) => {
+      if (args[1] === '--path-format=absolute') return '/repo/.git';
       if (args[0] === 'status') return '';
       if (args[0] === 'symbolic-ref') {
         count++;
@@ -197,7 +222,7 @@ describe('lease-scoped local Git attestation', () => {
   it('fails closed and does not leak Git stderr', async () => {
     git.mockRejectedValueOnce(new Error('fatal: token=super-secret'));
     await expect(attestLocalReviewedGitState(plan, review)).rejects.toThrow(
-      'Local Git attestation command failed.',
+      'Local Git common directory could not be verified.',
     );
   });
 });
