@@ -17,6 +17,7 @@ body:
         - Reviewer, QA or approval workflow
         - Workspace ownership, cleanup or restart recovery
         - HTTP, SSE or persistence
+        - Delivery publication, Git transfer or recovery
         - Other or uncertain
     validations:
       required: true
