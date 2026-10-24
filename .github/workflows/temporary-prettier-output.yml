@@ -1,0 +1,26 @@
+name: Temporary read-only Prettier output
+on:
+  push:
+    branches:
+      - feat/delivery-session-bound-draft-executor-20261024
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Print formatted files (no writes)
+        run: |
+          npx prettier --write src/server/delivery-approved-github-publication.ts tests/delivery-approved-github-publication.test.ts tests/delivery-github-readonly.test.ts
+          for file in src/server/delivery-approved-github-publication.ts tests/delivery-approved-github-publication.test.ts tests/delivery-github-readonly.test.ts; do
+            echo "BEGIN_FORMATTED_FILE:$file"
+            base64 -w0 "$file"
+            echo
+            echo "END_FORMATTED_FILE:$file"
+          done
