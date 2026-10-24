@@ -128,9 +128,10 @@ export async function createDraftPublication(
         // No durable local reservation exists. Do not adopt an unowned remote PR.
         throw new Error('Matching remote PR exists without local journal ownership.');
       }
-      if (
-        inventory.candidates.some((candidate) => candidate.head.ref === plan.branch)
-      ) {
+      const branchConflict = inventory.candidates.some(
+        (candidate) => candidate.head.ref === plan.branch,
+      );
+      if (branchConflict) {
         throw new Error('Remote PR head branch conflict requires manual reconciliation.');
       }
 
