@@ -139,7 +139,7 @@ it('does not relax private database permissions across a successful restart', as
 });
 
 it('refuses unsafe WAL and SHM sidecars without mutating their targets', async () => {
-  for (const suffix of ['-wal', '-shm']) {
+  for (const suffix of ['-journal', '-wal', '-shm']) {
     const directory = await root();
     const external = join(directory, 'external');
     const sidecar = join(directory, 'delivery.sqlite' + suffix);
@@ -190,7 +190,7 @@ it('reopens a populated WAL-mode SQLite database without losing session state', 
 });
 
 it('rejects hardlinked and directory SQLite sidecars without changing their sources', async () => {
-  for (const suffix of ['-wal', '-shm']) {
+  for (const suffix of ['-journal', '-wal', '-shm']) {
     const directory = await root();
     const source = join(directory, 'protected-source');
     const sidecar = join(directory, 'delivery.sqlite' + suffix);
