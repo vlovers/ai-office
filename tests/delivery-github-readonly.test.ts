@@ -84,6 +84,12 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('refuses partial HTTP 206 responses even when the body looks valid', async () => {
+    const fetcher = vi.fn(async () => json([candidate], 206));
+    await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow('HTTP 206');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('rejects redirects to an unexpected endpoint', async () => {
     const fetcher = vi.fn(async () => {
       const response = json([candidate]);
