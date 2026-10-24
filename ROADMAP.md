@@ -2,6 +2,28 @@
 
 > Planning document, not a release promise. The source of truth for shipped functionality is tagged releases and their validation evidence. Security boundaries must never be inferred from a UI setting alone.
 
+## v0.8 Delivery authorization foundation (unreleased)
+
+- [x] Dedicated Delivery API with administrator-mediated opaque sessions,
+      expiry/revocation, persistent clock and live workspace/operation grants.
+- [x] Exact HTTPS Origin/Host, session CSRF, secure host cookies, bounded strict
+      requests and safe errors. The dashboard retains its local-only model.
+- [x] Fresh shared-lease Git attestation and existing one-use approval ledgers;
+      live authorization inside atomic transfer intent reservation.
+- [x] GET-only server credential boundary with expiry/durable 401/403 quarantine;
+      registered-workspace startup recovery before listening.
+- [x] Real SQLite/Git/HTTP, concurrent-server and independent-process restart tests.
+- [ ] Deployment TLS/browser validation, trusted enrollment/registry provisioning,
+      actual least-privilege credential audit, operational limits and review.
+- [ ] Authenticated UI and separately reviewed native remote executor wiring.
+      Commit/push/publication/merge routes and automatic retries remain disabled.
+
+See [security runbook](docs/DELIVERY_PRODUCTION_SECURITY.md),
+[threat model](docs/DELIVERY_THREAT_MODEL.md) and
+[production checklist](docs/DELIVERY_PRODUCTION_CHECKLIST.md). Earlier increment
+notes below describe their implementation-time scope; this foundation supplies
+the session/CSRF boundary for the dedicated API only.
+
 ## Shipped
 
 - **v0.3.0:** Two fixed Codex slots, persistent queues, read-only sessions, PHOSPHOR OS.
@@ -69,6 +91,132 @@ Integrated via [PR #24](https://github.com/vlovers/ai-office/pull/24): Coder →
 
 Verification dashboard and explicitly authorized GitHub PR preparation/publishing, minimal GitHub permissions, revision-pinned checks, manual confirmation for push/PR actions. The [GitHub Delivery Center contract](docs/GITHUB_DELIVERY_CENTER.md) defines server-side revision checks, explicit commit/push/PR approvals, fail-closed recovery and acceptance tests. **This is a specification, not a shipped integration.**
 
+### v0.8 publication foundation (unreleased)
+
+The delivery publication boundary now combines the shared Git lease, refreshed
+review snapshot, durable SQLite operation reservation, strict GitHub draft PR
+receipt verification and read-only uncertain-result reconciliation. SQLite
+integration tests cover duplicate requests, concurrent callers, timeouts,
+forked PRs and restart recovery. A new commit-pinned variant also performs
+read-only GitHub head/base ref SHA attestation under the same lease and
+verifies both PR commit SHAs after creation. Its recovery path requires
+complete PR discovery plus a separate fresh PR detail GET before resolving
+an uncertain write. Tests cover moved refs, hostile API responses, stale
+post-write commits and recovery without duplicate POSTs.
+
+This is **not** a connected GitHub publisher: independently approved local
+commit identities, explicit commit/push approvals, real least-privilege
+GitHub authentication, HTTP authorization, operator confirmation UI and
+end-to-end production activation remain outstanding. The server-only,
+GET-only GitHub REST adapter provides bounded, fully paginated discovery
+for reconciliation, but it is not connected to a production endpoint.
+See [pipeline safety and activation gates](docs/DELIVERY_PUBLICATION_PIPELINE.md).
+
+### v0.8 server-only GitHub draft adapter (unreleased)
+
+A concrete, **single-attempt** authenticated Draft PR POST adapter and
+commit-attested read-only recovery wrapper are implemented behind injected
+server-only functions. The adapter requires an exact server-issued confirmation
+and verified GitHub head/base SHAs; it checks the returned PR's repository,
+branch, draft state and commit identities before persisting a receipt.
+The public HTTP API and UI still do **not** expose publication. Outstanding
+gates include trusted operator identity, durable confirmation binding,
+independently verified local Git worktree and commit/push approval, credential
+provisioning, startup recovery serialization and native end-to-end tests.
+See [delivery publication pipeline](docs/DELIVERY_PUBLICATION_PIPELINE.md).
+
+### v0.8 durable operator approval boundary (unreleased)
+
+Server-only, SQLite-backed one-use confirmation records bind a trusted operator
+session to an exact workspace, reviewed publication operation and immutable
+head/base commit pair. Approvals expire after at most 15 minutes, are
+revocable, survive restart and are consumed atomically under the Git lease
+after remote SHA attestation but before journal reservation or POST. A
+persisted monotonic clock watermark prevents expired approvals from being
+revived by a backwards clock jump. Tests cover replay, identity mismatch,
+expiry, restart, stale reviews, GitHub errors and ambiguous POST results.
+**Not an authenticated endpoint:** verified local Git state, operator
+authentication, CSRF protection and independent commit/push approvals remain
+required before production activation.
+
+### v0.8 local Git worktree attestation (unreleased)
+
+A server-only, read-only local Git gate verifies the selected worktree
+identity, clean index and files, managed branch, exact reviewed head/base
+commit SHAs and credential-free GitHub origin. The commit-pinned publisher
+can now execute this gate inside the shared repository lease **before**
+remote ref GET, SQLite reservation or Draft PR POST. Integration tests
+cover ordering and fail-closed local errors. See
+[local attestation contract](docs/DELIVERY_LOCAL_GIT_ATTESTATION.md).
+
+This does not authorize a commit or push and does not expose an HTTP
+publication route. Trusted operator identity, cross-worktree common-repo
+ownership revalidation, separate commit/push receipts, CSRF protection, credential
+provisioning and native end-to-end activation remain required.
+
+### v0.8 durable transfer receipts and scoped recovery (unreleased, partial #58)
+
+A separate SQLite commit/push intent journal now stores exact operation,
+workspace, GitHub destination, managed branch and reviewed head/base SHA
+identities. Commit receipts must be confirmed before push intent; both
+receipts must be independently confirmed before the stronger server-only
+Draft PR composition can proceed. Unknown outcomes stay blocked, and
+duplicate intents cannot authorize a second write.
+
+Per-workspace publication recovery now runs under the same common-repository
+lease as publishing, revalidates Git worktree ownership and changes only the
+matching operation from reserved to uncertain. The global legacy recovery
+method remains unsafe under concurrent publishers and must not be used for
+multi-process startup. Tests cover SQLite restart, replay, wrong identity,
+shared-lease contention and foreign worktrees.
+
+This does **not** implement authenticated commit/push operations, a concrete
+remote push receipt verifier, complete multi-process startup orchestration
+or browser authorization. See
+[transfer recovery safety contract](docs/DELIVERY_GIT_TRANSFER_RECOVERY.md)
+and [issue #58](https://github.com/vlovers/ai-office/issues/58).
+
+### v0.8 atomic approved transfer reservation (unreleased, PR #64)
+
+The server-only commit/push executor now requires one explicit SQLite connection
+for the stage-specific approval and durable transfer journal. Under the shared
+repository lease, it refreshes the reviewed publication snapshot and local
+attestation, then atomically consumes the one-use approval and reserves the
+intent with `BEGIN IMMEDIATE` **before** any trusted external operation.
+Duplicate intents, failed reservations and crashes cannot leave a consumed
+approval without its matching durable intent. Ambiguous results still require
+independent read-only receipt reconciliation and never authorize blind replay.
+
+Real temporary Git/SQLite tests exercise dirty reviews, foreign worktrees,
+lease contention, stage ordering, transaction rollback and restart recovery.
+This does **not** enable remote writes or a browser endpoint. Production gates
+remain authenticated operator sessions, Origin/CSRF, least-privilege GitHub
+credentials, real independent-process tests and startup registration.
+
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
+
+### v0.8 scoped startup transfer recovery (unreleased)
+
+Server-only startup composition now validates the registered repository,
+worktree, publication operation and any commit/push receipt identities under
+one shared lease before changing journal states. Interrupted intents become
+uncertain without replaying remote writes; confirmed receipts and unrelated
+workspaces remain intact. This does not implement a production startup scanner,
+operator session/CSRF approval or actual commit/push execution. See
+[transfer recovery contract](docs/DELIVERY_GIT_TRANSFER_RECOVERY.md).
+
+### v0.8 trusted startup recovery inventory (unreleased)
+
+A server-only coordinator now enumerates unresolved publication and transfer
+journal rows and validates the complete batch against trusted registered
+workspace/operation identities before changing any state. It then recovers
+each workspace under the existing common-repository lease, preserving
+confirmed receipts and failing closed on missing registrations, duplicate
+identities, foreign worktrees and lease contention. SQLite restart and
+multi-workspace integration fixtures are included. This is **not** wired to
+production startup and does not authorize GitHub writes. Independent-process
+tests, stable persisted registration discovery, authenticated commit/push
+approvals and HTTP/session/CSRF gates remain outstanding. See
+[trusted startup coordinator](docs/DELIVERY_STARTUP_COORDINATOR.md).
