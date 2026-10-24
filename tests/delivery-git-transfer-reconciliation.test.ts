@@ -233,7 +233,7 @@ describe('read-only commit/push receipt reconciliation', () => {
           ...t.context,
           identity: { ...t.identity, headSha: 'f'.repeat(40) },
         }),
-      ).rejects.toThrow('missing or belongs');
+      ).rejects.toThrow('registry binding changed');
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
       expect(t.fetcher).not.toHaveBeenCalled();
     } finally {
