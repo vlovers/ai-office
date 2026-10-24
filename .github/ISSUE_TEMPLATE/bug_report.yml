@@ -5,7 +5,7 @@ labels: ['bug']
 body:
   - type: markdown
     attributes:
-      value: 'For potential vulnerabilities, use private reporting in SECURITY.md, not a public issue. Never include credentials, tokens, native thread/session IDs, private paths, prompts, transcripts, local databases or repository contents. Reproduce with a disposable repository and synthetic fixtures.'
+      value: 'For potential vulnerabilities, use private reporting in SECURITY.md, not a public issue. Never include credentials, enrollment tickets, session cookies, CSRF tokens, native thread/session IDs, private paths, prompts, transcripts, local databases or repository contents. The local dashboard must not be publicly exposed. The unreleased Delivery API has no active HTTP remote-write endpoint. Reproduce with a disposable repository and synthetic fixtures.'
   - type: dropdown
     id: area
     attributes:
@@ -17,7 +17,7 @@ body:
         - Reviewer, QA or approval workflow
         - Workspace ownership, cleanup or restart recovery
         - HTTP, SSE or persistence
-        - Delivery publication, Git transfer or recovery
+        - Delivery operator sessions, grants, CSRF or remote-status reads
         - Other or uncertain
     validations:
       required: true
@@ -56,7 +56,7 @@ body:
     id: boundaries
     attributes:
       label: Permission boundary and recovery state (if relevant)
-      description: State read-only versus explicitly authorized isolated-write mode, whether the operation was confirmed, and whether recovery/leases remain uncertain. Do not include raw paths or session IDs.
+      description: State read-only versus explicitly authorized isolated-write mode, or the separate Delivery ingress, whether an operation was confirmed, and whether recovery/leases remain uncertain. Do not include raw paths, session IDs or credentials.
   - type: textarea
     id: evidence
     attributes:
@@ -67,5 +67,5 @@ body:
     attributes:
       label: Public disclosure safety
       options:
-        - label: I removed secrets, private content, credentials, session identifiers and exploitable vulnerability details. I will use private reporting for security vulnerabilities.
+        - label: I removed secrets, enrollment tickets, cookies, CSRF tokens, private content, credentials, session identifiers and exploitable vulnerability details. I will use private reporting for security vulnerabilities.
           required: true
