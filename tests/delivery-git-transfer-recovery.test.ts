@@ -33,6 +33,28 @@ function gitRepo() {
 }
 
 describe('durable commit/push transfer receipts', () => {
+  it('rejects malformed managed branch identities before persisting an intent', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryGitTransferJournal(db);
+      const invalidBranches = [
+        'ai-office/12345678-1234-1234-1234-123456789ab-',
+        'ai-office/12345678---------------------------',
+        'ai-office/12345678123412341234123456789abc',
+        'ai-office/12345678-1234-1234-1234-123456789abg',
+      ];
+      for (const branch of invalidBranches) {
+        expect(() => journal.begin('commit', { ...identity, branch })).toThrow(
+          'Invalid Git transfer identity.',
+        );
+      }
+      expect(journal.get(identity.workspaceId, 'commit')).toBeNull();
+      expect(journal.begin('commit', identity).state).toBe('intent');
+    } finally {
+      db.close();
+    }
+  });
+
   it('requires confirmed commit before push, and both receipts before Draft PR', () => {
     const db = new DatabaseSync(':memory:');
     try {
