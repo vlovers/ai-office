@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { reserveApprovedPublicationAtomically } from '../src/server/delivery-approved-publication-reservation.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
@@ -256,13 +256,7 @@ describe('atomic publication approval and journal reservation', () => {
         'if (changed.changes !== 0) process.exit(3);',
         'db.close();',
       ].join('\n');
-      execFileSync(process.execPath, [
-        '-e',
-        childScript,
-        filename,
-        approvalId,
-        binding.workspaceId,
-      ]);
+      execFileSync(process.execPath, ['-e', childScript, filename, approvalId, binding.workspaceId]);
       const reopened = new DatabaseSync(filename);
       try {
         expect(new DeliveryJournal(reopened).listUnresolved()).toHaveLength(1);
