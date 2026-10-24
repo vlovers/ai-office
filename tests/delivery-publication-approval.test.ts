@@ -62,13 +62,12 @@ describe('durable single-use publication approval ledger', () => {
       const ledger = new DeliveryPublicationApprovalLedger(db, () => now);
       const id = ledger.issue(binding, 1000);
       now = 9_999;
-      expect(() => ledger.consume(id, binding)).toThrow();
+      expect(() => ledger.consume(id, binding)).toThrow('clock moved backwards');
       now = 11_000;
       expect(() => ledger.assertPending(id, binding)).toThrow();
       expect(() => ledger.consume(id, binding)).toThrow();
       now = 10_500;
-      ledger.assertPending(id, binding);
-      ledger.consume(id, binding);
+      expect(() => ledger.assertPending(id, binding)).toThrow('clock moved backwards');
     } finally {
       db.close();
     }
