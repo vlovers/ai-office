@@ -151,15 +151,16 @@ describe('lease-protected delivery publication pipeline', () => {
       });
       const args = { ...context(journal), createDraft };
       const first = publishApprovedDraft(args);
-      const second = publishApprovedDraft(args);
-      // Keep the remote POST unresolved until both callers have entered the
-      // publication pipeline. A late replay may legitimately reuse a receipt.
+      // Wait for the durable reservation and the in-flight remote POST.
       await vi.waitFor(() => expect(createDraft).toHaveBeenCalledOnce());
-      release();
-      const results = await Promise.allSettled([first, second]);
-      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(journal.get('workspace-1')?.state).toBe('reserved');
+      // The second caller must be refused while the first POST is unresolved.
+      const second = publishApprovedDraft(args);
+      await expect(second).rejects.toThrow('reconcile before retrying');
       expect(createDraft).toHaveBeenCalledOnce();
+      release();
+      const published = await first;
+      expect(published.state).toBe('published');
       const reused = await publishApprovedDraft(args);
       expect(reused.pullRequestUrl).toBe(candidate.html_url);
       expect(createDraft).toHaveBeenCalledOnce();
