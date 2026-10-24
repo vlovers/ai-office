@@ -82,6 +82,54 @@ describe('Git transfer operator approvals', () => {
     }
   });
 
+  it('rejects runtime-coerced browser identities and approval IDs', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const ledger = new DeliveryTransferApprovalLedger(db, () => 1000);
+      const forgedBindings: DeliveryTransferApprovalBinding[] = [
+        {
+          ...binding,
+          operator: { ...binding.operator, operatorId: 123 as unknown as string },
+        },
+        {
+          ...binding,
+          operator: { ...binding.operator, sessionId: 123 as unknown as string },
+        },
+        {
+          ...binding,
+          identity: { ...binding.identity, workspaceId: 123 as unknown as string },
+        },
+        {
+          ...binding,
+          identity: {
+            ...binding.identity,
+            destination: {
+              toString: () => binding.identity.destination,
+            } as unknown as string,
+          },
+        },
+        {
+          ...binding,
+          identity: { ...binding.identity, headSha: 123 as unknown as string },
+        },
+      ];
+      for (const forged of forgedBindings) {
+        expect(() => ledger.issue(forged)).toThrow('Invalid trusted');
+      }
+      const id = ledger.issue(binding);
+      expect(() => ledger.consume(123 as unknown as string, binding)).toThrow(
+        'Invalid Git transfer approval identifier.',
+      );
+      expect(() =>
+        ledger.revoke(id, { operatorId: 123 as unknown as string, sessionId: 'session-1' }),
+      ).toThrow('Invalid trusted operator.');
+      ledger.consume(id, binding);
+      expect(db.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals').get()?.n).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
   it('rejects invalid identity and excessive lifetimes before inserting rows', () => {
     const db = new DatabaseSync(':memory:');
     try {
