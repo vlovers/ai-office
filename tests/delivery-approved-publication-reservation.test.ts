@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -202,6 +203,41 @@ describe('atomic publication approval and journal reservation', () => {
     } finally {
       first.close();
       second.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('prevents a second process from replaying a committed publication approval', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-process-'));
+    const filename = join(directory, 'journal.sqlite');
+    try {
+      const first = new DatabaseSync(filename);
+      let approvalId: string;
+      try {
+        const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+        approvalId = approvals.issue(binding);
+        reserveApprovedPublicationAtomically(first, approvalId, binding, () => {}, () => 10_000);
+      } finally {
+        first.close();
+      }
+      const childScript = [
+        "const { DatabaseSync } = require('node:sqlite');",
+        'const db = new DatabaseSync(process.argv[1]);',
+        "const approval = db.prepare('SELECT consumed_at FROM delivery_publication_approvals WHERE approval_id=?').get(process.argv[2]);",
+        "const journal = db.prepare('SELECT state, operation_key FROM delivery_journal WHERE workspace_id=?').get(process.argv[3]);",
+        "if (!approval || approval.consumed_at === null || !journal || journal.state !== 'reserved') process.exit(2);",
+        "const changed = db.prepare('UPDATE delivery_publication_approvals SET consumed_at=12345 WHERE approval_id=? AND consumed_at IS NULL').run(process.argv[2]);",
+        'if (changed.changes !== 0) process.exit(3);',
+        'db.close();',
+      ].join('\n');
+      execFileSync(process.execPath, ['-e', childScript, filename, approvalId, binding.workspaceId]);
+      const reopened = new DatabaseSync(filename);
+      try {
+        expect(new DeliveryJournal(reopened).listUnresolved()).toHaveLength(1);
+      } finally {
+        reopened.close();
+      }
+    } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });
