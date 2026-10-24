@@ -87,6 +87,13 @@ separate read-only PR-detail SHA verification. A stored or recovered receipt
 is never accepted solely from a branch name or PR URL. Uncertain outcomes do
 not authorize retries, even when a remote PR cannot be found.
 
+All GitHub GET/POST requests and response-body parsing have a bounded
+15-second default deadline (trusted server configuration: 100 ms to 60 s).
+Aborted or hanging adapters cannot indefinitely hold the repository lease.
+A timed-out POST is **always ambiguous**: its SQLite reservation remains
+uncertain and a subsequent invocation performs only read-only reconciliation.
+This bound is not a cancellation guarantee for a remote request already sent.
+
 This adapter accepts only trusted server-side configuration and is **not**
 registered as an HTTP endpoint. It is not permission to enable production
 GitHub write credentials. Real target-host crash/credential tests, independently
