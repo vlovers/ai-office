@@ -1,3 +1,4 @@
+import { parseGitHubPullRequest } from './delivery-github-readonly.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import {
@@ -145,6 +146,68 @@ export async function attestGitHubCommitRefs(
     branch: plan.branch,
     baseBranch: plan.baseBranch,
   };
+}
+
+/**
+ * Re-read a reconciled PR by its canonical number and obtain immutable commit
+ * identities from a fresh GitHub GET. A PR list entry alone is insufficient
+ * to recover a commit-pinned ambiguous write.
+ */
+export async function readGitHubDraftCommitReceipt(
+  plan: DeliveryPublicationPlan,
+  pullRequestUrl: string,
+  options: GitHubRefOptions = {},
+): Promise<GitHubCommitReceipt> {
+  if (!plan.allowed) throw new Error('Publication plan is blocked.');
+  const repository = expectedRepository(plan);
+  const match = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)\/pull\/([1-9]\d*)$/.exec(
+    pullRequestUrl,
+  );
+  if (!match || `${match[1]}/${match[2]}` !== repository) {
+    throw new Error('Untrusted GitHub draft PR detail URL.');
+  }
+  if (options.token !== undefined && (!options.token || /\s/.test(options.token))) {
+    throw new Error('Invalid server-side GitHub credential.');
+  }
+  const url = new URL(`https://api.github.com/repos/${repository}/pulls/${match[3]}`);
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
+    method: 'GET',
+    redirect: 'error',
+    headers,
+    signal: options.signal,
+  });
+  if (response.redirected || (response.url && response.url !== url.toString())) {
+    throw new Error('GitHub draft PR detail request was redirected.');
+  }
+  if (response.status !== 200) {
+    throw new Error(`GitHub draft PR detail request failed with HTTP ${response.status}.`);
+  }
+  const body: unknown = await response.json();
+  if (
+    !isRecord(body) ||
+    body.number !== Number(match[3]) ||
+    !isRecord(body.head) ||
+    !isRecord(body.base) ||
+    typeof body.head.sha !== 'string' ||
+    typeof body.base.sha !== 'string' ||
+    !validCommitSha(body.head.sha) ||
+    !validCommitSha(body.base.sha)
+  ) {
+    throw new Error('Invalid GitHub draft PR commit details.');
+  }
+  const parsed = parseGitHubPullRequest(body);
+  const receipt: GitHubCommitReceipt = {
+    ...parsed,
+    head: { ...parsed.head, sha: body.head.sha },
+    base: { ...parsed.base, sha: body.base.sha },
+  };
+  validatePublicationReceipt(plan, receipt);
+  return receipt;
 }
 
 /**
