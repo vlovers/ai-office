@@ -94,7 +94,6 @@ See [pipeline safety and activation gates](docs/DELIVERY_PUBLICATION_PIPELINE.md
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
 
-
 ### v0.8 server-only GitHub draft adapter (unreleased)
 
 A concrete, **single-attempt** authenticated Draft PR POST adapter and
