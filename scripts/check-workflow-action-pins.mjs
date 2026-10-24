@@ -19,11 +19,7 @@ export function auditWorkflowText(source, filename = 'workflow') {
 
     const reference = match[1];
     const location = `${filename}:${index + 1}`;
-    if (
-      !reference.startsWith('./') &&
-      !SHA_ACTION.test(reference) &&
-      !SHA_DOCKER.test(reference)
-    ) {
+    if (!reference.startsWith('./') && !SHA_ACTION.test(reference) && !SHA_DOCKER.test(reference)) {
       findings.push(
         `${location}: external action must use an immutable commit SHA or Docker digest (${reference})`,
       );
