@@ -90,9 +90,7 @@ describe('Git transfer operator approvals', () => {
         ledger.issue({ ...binding, identity: { ...binding.identity, branch: 'main' } }),
       ).toThrow();
       expect(() => ledger.issue(binding, 900_001)).toThrow();
-      expect(db.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals').get()?.n).toBe(
-        0,
-      );
+      expect(db.prepare('SELECT count(*) AS n FROM delivery_transfer_approvals').get()?.n).toBe(0);
     } finally {
       db.close();
     }
