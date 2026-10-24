@@ -37,11 +37,8 @@ describe('delivery publication policy', () => {
 
   it('rejects a stale review and blocked gates', () => {
     expect(
-      planDeliveryPublication(
-        { ...preflight, revision: 'b'.repeat(64) },
-        confirmation,
-        'main',
-      ).allowed,
+      planDeliveryPublication({ ...preflight, revision: 'b'.repeat(64) }, confirmation, 'main')
+        .allowed,
     ).toBe(false);
     expect(
       planDeliveryPublication({ ...preflight, status: 'blocked' }, confirmation, 'main').allowed,
