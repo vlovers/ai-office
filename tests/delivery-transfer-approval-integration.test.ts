@@ -82,7 +82,7 @@ describe('durable Git transfer approval integration', () => {
       "  process.stdout.write('rejected');",
       '  process.exitCode = 2;',
       '} finally { db.close(); }',
-    ].join('\\n');
+    ].join('\n');
     const consumeInChild = () =>
       spawnSync(
         process.execPath,
