@@ -1,0 +1,368 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  reconcileGitTransferReceipts,
+  type GitTransferReconciliationContext,
+} from '../src/server/delivery-git-transfer-reconciliation.js';
+import { DeliveryGitTransferJournal } from '../src/server/delivery-git-transfer-journal.js';
+import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
+import { withDeliveryRepositoryLease } from '../src/server/delivery-publication-lease.js';
+
+const branch = 'ai-office/12345678-1234-1234-1234-123456789abc';
+const plan = {
+  allowed: true as const,
+  destination: 'https://github.com/vlovers/ai-office',
+  branch,
+  baseBranch: 'main' as const,
+  revision: 'a'.repeat(64),
+  draft: true as const,
+};
+
+function setup() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'ai-office-transfer-reconcile-')));
+  const path = join(root, 'repo');
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-C', path, ...args], { encoding: 'utf8' }).trim();
+  execFileSync('git', ['init', '-q', '-b', 'main', path]);
+  git('config', 'user.name', 'AI Office Test');
+  git('config', 'user.email', 'test@example.invalid');
+  writeFileSync(join(path, 'README.md'), 'base\n');
+  git('add', 'README.md');
+  git('commit', '-qm', 'base');
+  const baseSha = git('rev-parse', 'HEAD');
+  git('switch', '-q', '-c', branch);
+  writeFileSync(join(path, 'README.md'), 'reviewed\n');
+  git('add', 'README.md');
+  git('commit', '-qm', 'reviewed');
+  const headSha = git('rev-parse', 'HEAD');
+  git('remote', 'add', 'origin', 'git@github.com:vlovers/ai-office.git');
+  const repository = { path, gitDir: realpathSync(join(path, '.git')) };
+  const dbPath = join(root, 'state.sqlite');
+  const db = new DatabaseSync(dbPath);
+  const journal = new DeliveryGitTransferJournal(db);
+  const identity = {
+    workspaceId: 'workspace-1',
+    operationKey: publicationKey(plan),
+    destination: plan.destination,
+    branch,
+    headSha,
+    baseSha,
+  };
+  const fetcher = vi.fn(async (url: string, init: RequestInit): Promise<Response> => {
+    if (init.method !== 'GET') throw new Error('No remote write is permitted.');
+    const ref = url.endsWith('/main') ? 'main' : branch;
+    return new Response(
+      JSON.stringify({
+        ref: 'refs/heads/' + ref,
+        object: { type: 'commit', sha: ref === 'main' ? baseSha : headSha },
+      }),
+      { status: 200 },
+    );
+  });
+  const authorize = vi.fn(() => {});
+  const context: GitTransferReconciliationContext = {
+    journal,
+    identity,
+    plan,
+    repository,
+    worktree: repository,
+    authorize,
+    remote: { fetcher },
+  };
+  return {
+    root,
+    db,
+    dbPath,
+    git,
+    journal,
+    identity,
+    fetcher,
+    authorize,
+    context,
+    close: () => {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    },
+  };
+}
+
+describe('read-only commit/push receipt reconciliation', () => {
+  it('never creates a missing intent, even when the reviewed Git state exists', async () => {
+    const t = setup();
+    try {
+      const result = await reconcileGitTransferReceipts(t.context);
+      expect(result.status).toBe('no-intent');
+      expect(result.commit).toBeNull();
+      expect(result.push).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('confirms a durable commit intent from real Git without inventing a push', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      const result = await reconcileGitTransferReceipts(t.context);
+      expect(result.status).toBe('commit-confirmed');
+      expect(result.commit?.receiptSha).toBe(t.identity.headSha);
+      expect(result.push).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+      expect(() => t.journal.begin('commit', t.identity)).toThrow('already exists');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('recovers both stages only after exact local and remote SHA verification', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      const result = await reconcileGitTransferReceipts(t.context);
+      expect(result.status).toBe('ready');
+      expect(result.commit?.state).toBe('confirmed');
+      expect(result.push?.receiptSha).toBe(t.identity.headSha);
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('ready');
+      expect(() => t.journal.begin('push', t.identity)).toThrow('already exists');
+    } finally {
+      t.close();
+    }
+  });
+
+  it.each([403, 429, 500])(
+    'leaves an ambiguous push uncertain on GitHub HTTP %i',
+    async (status) => {
+      const t = setup();
+      try {
+        t.journal.begin('commit', t.identity);
+        t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+        t.journal.begin('push', t.identity);
+        t.fetcher.mockImplementation(async () => new Response('{}', { status }));
+        const result = await reconcileGitTransferReceipts(t.context);
+        expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+        expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+        expect(t.fetcher).toHaveBeenCalledOnce();
+      } finally {
+        t.close();
+      }
+    },
+  );
+
+  it('rejects a moved remote head without confirming the push', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async () =>
+        new Response(
+          JSON.stringify({
+            ref: 'refs/heads/' + branch,
+            object: { type: 'commit', sha: 'f'.repeat(40) },
+          }),
+          { status: 200 },
+        ),
+      );
+      expect(await reconcileGitTransferReceipts(t.context)).toMatchObject({
+        status: 'blocked',
+        stage: 'push',
+      });
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.fetcher).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('bounds a hung remote GET and never retries or fabricates a receipt', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async () => new Promise<Response>(() => undefined));
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        remoteDeadlineMs: 100,
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.fetcher).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a commit when the local worktree is dirty or origin changed', async () => {
+    for (const mutate of [
+      (t: ReturnType<typeof setup>) => writeFileSync(join(t.context.worktree.path, 'dirty'), 'x'),
+      (t: ReturnType<typeof setup>) =>
+        t.git('remote', 'set-url', 'origin', 'git@github.com:foreign/repo.git'),
+    ]) {
+      const t = setup();
+      try {
+        t.journal.begin('commit', t.identity);
+        mutate(t);
+        const result = await reconcileGitTransferReceipts(t.context);
+        expect(result).toMatchObject({ status: 'blocked', stage: 'commit' });
+        expect(t.journal.get('workspace-1', 'commit')?.state).toBe('uncertain');
+        expect(t.fetcher).not.toHaveBeenCalled();
+      } finally {
+        t.close();
+      }
+    }
+  });
+
+  it('rejects a foreign transfer identity before changing any durable row', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      await expect(
+        reconcileGitTransferReceipts({
+          ...t.context,
+          identity: { ...t.identity, workspaceId: 'workspace-foreign' },
+        }),
+      ).rejects.toThrow('missing or belongs');
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks an asynchronous or revoked authorization before journal mutation', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      await expect(
+        reconcileGitTransferReceipts({
+          ...t.context,
+          authorize: (() => Promise.resolve()) as unknown as () => void,
+        }),
+      ).rejects.toThrow('synchronous');
+      await expect(
+        reconcileGitTransferReceipts({
+          ...t.context,
+          authorize: () => {
+            throw new Error('revoked');
+          },
+        }),
+      ).rejects.toThrow('revoked');
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('fails closed when authorization is revoked during remote reads', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      let authorized = true;
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (url, init) => {
+        authorized = false;
+        return original(url, init);
+      });
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        authorize: () => {
+          if (!authorized) throw new Error('revoked');
+        },
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('preserves unresolved receipts across SQLite close/reopen without another push', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async () => new Response('{}', { status: 429 }));
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('blocked');
+      const db2 = new DatabaseSync(t.dbPath);
+      try {
+        const restored = new DeliveryGitTransferJournal(db2);
+        expect(restored.get('workspace-1', 'push')?.state).toBe('uncertain');
+        const result = await reconcileGitTransferReceipts({
+          ...t.context,
+          journal: restored,
+          remote: {
+            fetcher: async (url, init) => {
+              const ref = url.endsWith('/main') ? 'main' : branch;
+              expect(init.method).toBe('GET');
+              return new Response(
+                JSON.stringify({
+                  ref: 'refs/heads/' + ref,
+                  object: {
+                    type: 'commit',
+                    sha: ref === 'main' ? t.identity.baseSha : t.identity.headSha,
+                  },
+                }),
+                { status: 200 },
+              );
+            },
+          },
+        });
+        expect(result.status).toBe('ready');
+        expect(restored.get('workspace-1', 'push')?.state).toBe('confirmed');
+      } finally {
+        db2.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
+  it('cannot reconcile while the shared repository lease is held', async () => {
+    const t = setup();
+    let release!: () => void;
+    let acquired!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
+    try {
+      t.journal.begin('commit', t.identity);
+      const holder = withDeliveryRepositoryLease(
+        t.context.repository,
+        t.context.worktree.gitDir,
+        async () => {
+          acquired();
+          await gate;
+        },
+      );
+      await ready;
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
+        'Resource is locked',
+      );
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      release();
+      await holder;
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe(
+        'commit-confirmed',
+      );
+    } finally {
+      release();
+      t.close();
+    }
+  });
+});
