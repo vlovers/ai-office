@@ -97,12 +97,12 @@ describe('commit-pinned GitHub publication adapter', () => {
     try {
       const journal = new DeliveryJournal(db);
       const fetcher = mockGitHub();
-      await expect(
+      expect(() =>
         publishCommitAttestedDraftViaGitHub(context(journal), {
           ...options(fetcher),
           confirmation: { ...confirmation, operationKey: 'stale' },
         }),
-      ).rejects.toThrow('confirmation');
+      ).toThrow('confirmation');
       expect(fetcher).not.toHaveBeenCalled();
       expect(journal.get('workspace-1')).toBeNull();
     } finally {
