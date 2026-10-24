@@ -124,12 +124,14 @@ export async function attestLocalReviewedGitState(
 
   // Detect cooperative or incidental mutation during the read-only checks.
   // These final checks are still protected by the caller's shared Git lease.
+  const finalOrigin = parseGitHubRemote(await remote());
   if (
     (await status()) ||
     (await branch()) !== plan.branch ||
     (await head()) !== review.commits.headCommitSha ||
     (await base()) !== review.commits.baseCommitSha ||
-    (await remote()) !== origin.url && (await remote()) !== `git@github.com:${origin.owner}/${origin.repository}.git`
+    !finalOrigin ||
+    finalOrigin.url !== origin.url
   ) {
     throw new Error('Local Git state changed during attestation.');
   }
