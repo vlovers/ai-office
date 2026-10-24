@@ -28,6 +28,8 @@ export type GitHubDraftWriteOptions = {
   confirmation: ConfirmedDraftWrite;
   fetcher?: Fetcher;
   signal?: AbortSignal;
+  /** Synchronous live authorization immediately before the single POST. */
+  authorizeBeforePost?: () => void;
 };
 
 function expectedRepository(plan: AllowedPlan): string {
@@ -111,6 +113,7 @@ export async function createCommitAttestedGitHubDraft(
     throw new Error('GitHub draft publication attestation does not match the destination.');
   }
   const url = `https://api.github.com/repos/${repository}/pulls`;
+  options.authorizeBeforePost?.();
   const response = await (options.fetcher ?? globalThis.fetch)(url, {
     method: 'POST',
     redirect: 'error',
