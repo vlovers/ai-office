@@ -1,11 +1,14 @@
-import { DatabaseSync } from 'node:sqlite';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
-import { createDraftPublication } from '../src/server/delivery-draft-pr-orchestration.js';
+import {
+  createDraftPublication,
+  type CompleteRemotePrInventory,
+} from '../src/server/delivery-draft-pr-orchestration.js';
 import type { GitHubDraftReceipt } from '../src/server/delivery-publication-receipt.js';
 
 const plan = {
@@ -31,7 +34,10 @@ function setup() {
   const repository = { path: root, gitDir: realpathSync(join(root, '.git')) };
   const journal = new DeliveryJournal(db);
   const createDraft = vi.fn(async () => receipt);
-  const listRemote = vi.fn(async () => ({ complete: true as const, candidates: [] as GitHubDraftReceipt[] }));
+  const listRemote = vi.fn(async (): Promise<CompleteRemotePrInventory> => ({
+    complete: true,
+    candidates: [],
+  }));
   const verifySnapshot = vi.fn(async () => {});
   const context = {
     workspaceId: 'workspace-1',
@@ -44,7 +50,18 @@ function setup() {
     listRemote,
     createDraft,
   };
-  return { db, journal, context, createDraft, listRemote, verifySnapshot, close: () => { db.close(); rmSync(root, { recursive: true, force: true }); } };
+  return {
+    db,
+    journal,
+    context,
+    createDraft,
+    listRemote,
+    verifySnapshot,
+    close: () => {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    },
+  };
 }
 
 describe('Draft PR publication orchestration', () => {
