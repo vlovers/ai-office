@@ -31,7 +31,9 @@ function validIdentity(input: DeliveryGitTransferIdentity): boolean {
     input.operationKey.length > 0 &&
     input.operationKey.length <= 300 &&
     /^https:\/\/github\.com\/[\w-]+\/[\w.-]+$/.test(input.destination) &&
-    /^ai-office\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(input.branch) &&
+    /^ai-office\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      input.branch,
+    ) &&
     sha.test(input.headSha) &&
     sha.test(input.baseSha) &&
     input.headSha.length === input.baseSha.length
