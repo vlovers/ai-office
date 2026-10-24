@@ -87,12 +87,7 @@ export async function executeAuthorizedTransferStage(context: AuthorizedTransfer
       // Consume approval and reserve the intent in one BEGIN IMMEDIATE
       // transaction on the same SQLite connection. A crash can no longer
       // persist only the consumed approval without its durable intent.
-      reserveApprovedTransferIntentAtomically(
-        context.db,
-        context.approvalId,
-        binding,
-        context.now,
-      );
+      reserveApprovedTransferIntentAtomically(context.db, context.approvalId, binding, context.now);
       try {
         await context.performOnce();
         const verifiedSha = await context.verifyReceiptReadOnly();
