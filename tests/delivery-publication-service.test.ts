@@ -498,8 +498,8 @@ describe('lease-protected delivery publication pipeline', () => {
         { ...candidate, number: 123 },
         { ...commitReceipt, number: 124 },
       ]) {
-        const detailFetcher = vi.fn(async () =>
-          new Response(JSON.stringify(detail), { status: 200 }),
+        const detailFetcher = vi.fn(
+          async () => new Response(JSON.stringify(detail), { status: 200 }),
         );
         await expect(
           reconcileCommitAttestedDraft({
@@ -551,5 +551,4 @@ describe('lease-protected delivery publication pipeline', () => {
       db.close();
     }
   });
-
 });

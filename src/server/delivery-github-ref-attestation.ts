@@ -160,9 +160,10 @@ export async function readGitHubDraftCommitReceipt(
 ): Promise<GitHubCommitReceipt> {
   if (!plan.allowed) throw new Error('Publication plan is blocked.');
   const repository = expectedRepository(plan);
-  const match = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)\/pull\/([1-9]\d*)$/.exec(
-    pullRequestUrl,
-  );
+  const match =
+    /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)\/pull\/([1-9]\d*)$/.exec(
+      pullRequestUrl,
+    );
   if (!match || `${match[1]}/${match[2]}` !== repository) {
     throw new Error('Untrusted GitHub draft PR detail URL.');
   }

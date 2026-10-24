@@ -207,7 +207,10 @@ describe('GitHub immutable ref attestation', () => {
   it.each([
     ['missing head SHA', { ...receipt, number: 123, head: { ref: plan.branch, repo } }],
     ['wrong PR number', { ...receipt, number: 124 }],
-    ['wrong repository', { ...receipt, number: 123, base: { ...receipt.base, repo: { full_name: 'other/repo' } } }],
+    [
+      'wrong repository',
+      { ...receipt, number: 123, base: { ...receipt.base, repo: { full_name: 'other/repo' } } },
+    ],
     ['closed PR', { ...receipt, number: 123, state: 'closed' }],
     ['non-draft PR', { ...receipt, number: 123, draft: false }],
     ['invalid SHA', { ...receipt, number: 123, head: { ...receipt.head, sha: 'bad' } }],
@@ -220,9 +223,9 @@ describe('GitHub immutable ref attestation', () => {
 
   it.each([401, 403, 404, 429, 500])('blocks PR detail HTTP %i', async (status) => {
     const fetcher = vi.fn(async () => jsonResponse({ message: 'unavailable' }, status));
-    await expect(
-      readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher }),
-    ).rejects.toThrow(`HTTP ${status}`);
+    await expect(readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher })).rejects.toThrow(
+      `HTTP ${status}`,
+    );
   });
 
   it('rejects untrusted PR detail URLs and credentials before any GET', async () => {
@@ -247,9 +250,8 @@ describe('GitHub immutable ref attestation', () => {
       Object.defineProperty(response, 'url', { value: 'https://evil.example/pull/123' });
       return response;
     });
-    await expect(
-      readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher }),
-    ).rejects.toThrow('redirected');
+    await expect(readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher })).rejects.toThrow(
+      'redirected',
+    );
   });
-
 });
