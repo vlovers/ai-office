@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
-import { createApprovedDraftPublication } from '../src/server/delivery-approved-draft-publication.js';
+import {
+  createApprovedDraftPublication,
+} from '../src/server/delivery-approved-draft-publication.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
@@ -108,9 +110,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
   it('rejects asynchronous authorization before any remote inventory request', async () => {
     const t = setup();
     try {
-      t.authorizeBeforeReserve.mockImplementationOnce(
-        (() => Promise.resolve()) as () => void,
-      );
+      t.authorizeBeforeReserve.mockImplementationOnce((() => Promise.resolve()) as () => void);
       await expect(createApprovedDraftPublication(t.context())).rejects.toThrow('synchronous');
       expect(t.listRemote).not.toHaveBeenCalled();
       expect(t.createDraft).not.toHaveBeenCalled();
@@ -135,7 +135,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
     }
   });
 
-  it('never replays an ambiguous GitHub write after restart; reconciles a complete receipt', async () => {
+  it('reconciles an ambiguous GitHub write after restart without replay', async () => {
     const t = setup();
     try {
       t.createDraft.mockRejectedValueOnce(new Error('GitHub response lost'));
@@ -168,7 +168,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
     }
   });
 
-  it('rejects stale plan, foreign binding and failed snapshot without consuming approval', async () => {
+  it('rejects stale plan, foreign binding and failed snapshot', async () => {
     const t = setup();
     try {
       await expect(
@@ -241,7 +241,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
     }
   });
 
-  it('persists uncertain state for a malformed GitHub receipt and never retries creation', async () => {
+  it('keeps uncertain state for malformed GitHub receipts without retry', async () => {
     const t = setup();
     try {
       t.createDraft.mockResolvedValueOnce({ ...receipt, draft: false });
