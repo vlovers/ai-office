@@ -48,7 +48,9 @@ export class DeliveryJournal {
       throw new Error('Workspace already has a different publication operation.');
     }
     if (inserted.changes !== 1) {
-      throw new Error('Publication reservation already exists; inspect its outcome before retrying.');
+      throw new Error(
+        'Publication reservation already exists; inspect its outcome before retrying.',
+      );
     }
     return entry;
   }
