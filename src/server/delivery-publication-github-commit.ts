@@ -13,6 +13,10 @@ import {
 } from './delivery-publication-approval.js';
 import type { ApprovedCommitSnapshot } from './delivery-github-ref-attestation.js';
 import {
+  attestLocalReviewedGitState,
+  type LocalGitReview,
+} from './delivery-local-git-attestation.js';
+import {
   publishCommitAttestedDraft,
   reconcileCommitAttestedDraft,
   type DeliveryPublicationContext,
@@ -106,5 +110,45 @@ export function publishOperatorAuthorizedDraftViaGitHub(
         }),
     },
     options,
+  );
+}
+
+/**
+ * Complete server-only review composition: one-use operator approval,
+ * independently verified local worktree, remote commit SHA attestation,
+ * durable journal reservation and exactly one Draft PR POST.
+ *
+ * Authentication and commit/push approvals must still be established by a
+ * separate trusted server layer. This function is NOT an HTTP endpoint.
+ */
+export function publishLocallyAttestedOperatorDraftViaGitHub(
+  context: DeliveryPublicationContext & {
+    approval: ApprovedCommitSnapshot;
+    localReview: Omit<LocalGitReview, 'commits' | 'repository'>;
+  },
+  options: GitHubDraftWriteOptions,
+  authorization: {
+    ledger: DeliveryPublicationApprovalLedger;
+    approvalId: string;
+    operator: TrustedDeliveryOperator;
+  },
+) {
+  validateGitHubDraftWrite(context.plan, context.approval, options);
+  if (context.localReview.workspaceGitDir !== context.workspaceGitDir) {
+    throw new Error('Local review workspace identity does not match the publication lease.');
+  }
+  return publishOperatorAuthorizedDraftViaGitHub(
+    {
+      ...context,
+      verifyLocalGitState: async (plan) => {
+        await attestLocalReviewedGitState(plan, {
+          ...context.localReview,
+          repository: context.repository,
+          commits: context.approval,
+        });
+      },
+    },
+    options,
+    authorization,
   );
 }
