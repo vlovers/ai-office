@@ -129,14 +129,15 @@ describe('read-only commit and push receipt verification', () => {
       t.journal.begin('commit', identity);
       t.journal.confirmVerified('commit', identity, identity.headSha);
       t.journal.begin('push', identity);
-      const badRef = vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            ref: `refs/heads/${plan.branch}`,
-            object: { type: 'commit', sha: '3'.repeat(40) },
-          }),
-          { status: 200 },
-        ),
+      const badRef = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ref: `refs/heads/${plan.branch}`,
+              object: { type: 'commit', sha: '3'.repeat(40) },
+            }),
+            { status: 200 },
+          ),
       );
       await expect(
         verifyDeliveryPushReceiptViaGitHub(t.context, { fetcher: badRef }),

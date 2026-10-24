@@ -54,17 +54,14 @@ export async function verifyDeliveryCommitReceiptLocally(
   if (context.localReview.workspaceGitDir !== context.workspaceGitDir) {
     throw new Error('Commit receipt worktree differs from the workspace lease.');
   }
-  return verifyDeliveryGitTransfer(
-    { ...context, stage: 'commit' },
-    async () => {
-      const verified = await attestLocalReviewedGitState(context.plan, {
-        ...context.localReview,
-        repository: context.repository,
-        commits: context.approval,
-      });
-      return verified.headCommitSha;
-    },
-  );
+  return verifyDeliveryGitTransfer({ ...context, stage: 'commit' }, async () => {
+    const verified = await attestLocalReviewedGitState(context.plan, {
+      ...context.localReview,
+      repository: context.repository,
+      commits: context.approval,
+    });
+    return verified.headCommitSha;
+  });
 }
 
 /**
@@ -77,11 +74,8 @@ export async function verifyDeliveryPushReceiptViaGitHub(
   options: GitHubRefOptions = {},
 ) {
   assertReviewedIdentity(context);
-  return verifyDeliveryGitTransfer(
-    { ...context, stage: 'push' },
-    async () => {
-      const attested = await attestGitHubCommitRefs(context.plan, context.approval, options);
-      return attested.headCommitSha;
-    },
-  );
+  return verifyDeliveryGitTransfer({ ...context, stage: 'push' }, async () => {
+    const attested = await attestGitHubCommitRefs(context.plan, context.approval, options);
+    return attested.headCommitSha;
+  });
 }

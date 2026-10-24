@@ -93,8 +93,9 @@ describe('durable commit/push transfer receipts', () => {
         { workspaceId: 'workspace-2' },
         { operationKey: 'replayed' },
       ]) {
-        expect(() => journal.confirmVerified('commit', { ...identity, ...changed }, identity.headSha))
-          .toThrow('missing or belongs');
+        expect(() =>
+          journal.confirmVerified('commit', { ...identity, ...changed }, identity.headSha),
+        ).toThrow('missing or belongs');
       }
       expect(journal.get(identity.workspaceId, 'commit')?.state).toBe('intent');
     } finally {

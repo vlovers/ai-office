@@ -66,7 +66,7 @@ activation. Before any authenticated UI action can initiate commit/push:
 2. Bind the existing GET-only GitHub push-ref verifier to least-privilege
    production credentials and an independently authenticated operator session;
    never accept browser-supplied tokens.
-3. Serialize *all* startup transfer/publication recovery per workspace and
+3. Serialize _all_ startup transfer/publication recovery per workspace and
    verify multi-process SQLite behavior across actual independent processes.
 4. Establish Origin/CSRF/session authorization, credential boundaries, and
    independent end-to-end browser/native tests.

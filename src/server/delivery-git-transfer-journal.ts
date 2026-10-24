@@ -75,9 +75,7 @@ export class DeliveryGitTransferJournal {
 
   get(workspaceId: string, stage: DeliveryGitStage): DeliveryGitTransferEntry | null {
     const row = this.db
-      .prepare(
-        'SELECT * FROM delivery_git_transfers WHERE workspace_id=? AND stage=?',
-      )
+      .prepare('SELECT * FROM delivery_git_transfers WHERE workspace_id=? AND stage=?')
       .get(workspaceId, stage);
     if (!row) return null;
     return {
@@ -210,14 +208,10 @@ export async function verifyDeliveryGitTransfer(
   },
   verifyReadOnly: () => Promise<string>,
 ): Promise<DeliveryGitTransferEntry> {
-  return withDeliveryRepositoryLease(
-    context.repository,
-    context.workspaceGitDir,
-    async () => {
-      const entry = context.journal.get(context.identity.workspaceId, context.stage);
-      if (!entry) throw new Error('Git transfer has no durable intent.');
-      const verifiedSha = await verifyReadOnly();
-      return context.journal.confirmVerified(context.stage, context.identity, verifiedSha);
-    },
-  );
+  return withDeliveryRepositoryLease(context.repository, context.workspaceGitDir, async () => {
+    const entry = context.journal.get(context.identity.workspaceId, context.stage);
+    if (!entry) throw new Error('Git transfer has no durable intent.');
+    const verifiedSha = await verifyReadOnly();
+    return context.journal.confirmVerified(context.stage, context.identity, verifiedSha);
+  });
 }
