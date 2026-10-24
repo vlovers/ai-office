@@ -1,7 +1,7 @@
 ---
 name: Engineering task
 about: Propose a scoped engineering, maintenance or quality task
-title: "task: "
+title: 'task: '
 ---
 
 ## Desired outcome
