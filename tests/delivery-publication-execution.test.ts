@@ -60,7 +60,12 @@ describe('reserved publication execution', () => {
     try {
       const publish = vi.fn();
       await expect(
-        executeReservedPublication(journal, 'workspace', { status: 'blocked', reason: 'stale' }, publish),
+        executeReservedPublication(
+          journal,
+          'workspace',
+          { status: 'blocked', reason: 'stale' },
+          publish,
+        ),
       ).rejects.toThrow('blocked or already completed');
       expect(publish).not.toHaveBeenCalled();
       expect(journal.get('workspace')).toBeNull();
