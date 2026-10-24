@@ -100,7 +100,7 @@ export async function listAllGitHubPullRequests(
     if (response.redirected || (response.url && response.url !== url.toString())) {
       throw new Error('GitHub PR listing redirected outside the approved request.');
     }
-    if (!response.ok) {
+    if (response.status !== 200) {
       // Never include response body or credential in thrown errors.
       throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
     }
