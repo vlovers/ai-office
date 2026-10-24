@@ -155,4 +155,53 @@ describe('atomic publication approval and journal reservation', () => {
       db.close();
     }
   });
+  it('serializes independent SQLite connections and leaves a single durable reservation', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-contention-'));
+    const filename = join(directory, 'journal.sqlite');
+    const first = new DatabaseSync(filename);
+    const second = new DatabaseSync(filename);
+    try {
+      const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+      const journal = new DeliveryJournal(first);
+      const id = approvals.issue(binding);
+      const reserved = reserveApprovedPublicationAtomically(
+        first,
+        id,
+        binding,
+        () => {},
+        () => 10_000,
+      );
+      expect(reserved.state).toBe('reserved');
+      expect(() =>
+        reserveApprovedPublicationAtomically(second, id, binding, () => {}, () => 10_000),
+      ).toThrow();
+      expect(new DeliveryJournal(second).listUnresolved()).toHaveLength(1);
+      expect(journal.get(binding.workspaceId)?.operationKey).toBe(publicationKey(plan));
+    } finally {
+      first.close();
+      second.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rolls back a revoked authorization on a separate SQLite connection', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-revoke-'));
+    const filename = join(directory, 'journal.sqlite');
+    const first = new DatabaseSync(filename);
+    const second = new DatabaseSync(filename);
+    try {
+      const approvals = new DeliveryPublicationApprovalLedger(first, () => 10_000);
+      const id = approvals.issue(binding);
+      expect(new DeliveryPublicationApprovalLedger(second, () => 10_000).revoke(id, binding.operator)).toBe(true);
+      expect(() =>
+        reserveApprovedPublicationAtomically(first, id, binding, () => {}, () => 10_000),
+      ).toThrow();
+      expect(new DeliveryJournal(second).get(binding.workspaceId)).toBeNull();
+    } finally {
+      first.close();
+      second.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
 });
