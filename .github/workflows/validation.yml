@@ -29,6 +29,10 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Verify immutable Actions and checkout token handling
+        run: |
+          npm run check:workflows
+          npm run test:workflow-pins
       - name: Install dependencies
         run: npm ci
       - name: TypeScript
@@ -53,7 +57,7 @@ jobs:
 
       - name: Upload office screenshots
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: office-v4-browser
           path: ${{ runner.temp }}/office-v4
@@ -96,7 +100,7 @@ jobs:
           AI_OFFICE_BROWSER_ARTIFACTS: ${{ runner.temp }}/workflow-browser
       - name: Upload workflow browser evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: workflow-browser
           path: ${{ runner.temp }}/workflow-browser
