@@ -66,6 +66,56 @@ function setup() {
 }
 
 describe('Draft PR publication orchestration', () => {
+  it('uses the trusted atomic reservation adapter once and never reauthorizes a published PR', async () => {
+    const t = setup();
+    try {
+      const reserveApproved = vi.fn(() => t.journal.reserve('workspace-1', publicationKey(plan)));
+      const context = { ...t.context, reserveApproved };
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(reserveApproved).toHaveBeenCalledTimes(1);
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks remote creation when atomic approval reservation fails', async () => {
+    const t = setup();
+    try {
+      const context = {
+        ...t.context,
+        reserveApproved: () => {
+          throw new Error('approval revoked');
+        },
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow('approval revoked');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects an unpersisted reservation receipt without contacting GitHub', async () => {
+    const t = setup();
+    try {
+      const context = {
+        ...t.context,
+        reserveApproved: () => ({
+          workspaceId: 'workspace-1',
+          operationKey: publicationKey(plan),
+          state: 'reserved' as const,
+          pullRequestUrl: null,
+        }),
+      };
+      await expect(createDraftPublication(context)).rejects.toThrow('did not persist');
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
   it('publishes once, reuses durable receipt and never repeats remote creation', async () => {
     const t = setup();
     try {
