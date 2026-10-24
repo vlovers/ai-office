@@ -44,10 +44,12 @@ export class DeliveryJournal {
       )
       .run(workspaceId, operationKey);
     const entry = this.get(workspaceId)!;
-    if (entry.operationKey !== operationKey)
+    if (entry.operationKey !== operationKey) {
       throw new Error('Workspace already has a different publication operation.');
-    if (inserted.changes !== 1)
+    }
+    if (inserted.changes !== 1) {
       throw new Error('Publication reservation already exists; inspect its outcome before retrying.');
+    }
     return entry;
   }
 
@@ -56,12 +58,8 @@ export class DeliveryJournal {
    * A repeated completion with the same URL is harmless; conflicting URLs fail.
    */
   publish(workspaceId: string, operationKey: string, pullRequestUrl: string): DeliveryJournalEntry {
-    if (
-      !/^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/pull\/[1-9][0-9]*$/.test(
-        pullRequestUrl,
-      )
-    )
-      throw new Error('Invalid GitHub pull request URL.');
+    const validUrl = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/pull\/[1-9]\d*$/.test(pullRequestUrl);
+    if (!validUrl) throw new Error('Invalid GitHub pull request URL.');
     const updated = this.db
       .prepare(
         "UPDATE delivery_journal SET state='published', pull_request_url=? WHERE workspace_id=? AND operation_key=? AND state='reserved'",
@@ -73,8 +71,9 @@ export class DeliveryJournal {
       existing?.operationKey === operationKey &&
       existing.state === 'published' &&
       existing.pullRequestUrl === pullRequestUrl
-    )
+    ) {
       return existing;
+    }
     throw new Error('Publication state changed or requires manual recovery.');
   }
 
