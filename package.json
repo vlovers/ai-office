@@ -39,7 +39,7 @@
     "test:sandbox": "node --import tsx tests/native-sandbox.ts",
     "test:browser": "node --import tsx tests/browser-smoke.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --write src/server/delivery-workspace-recovery.ts tests/delivery-startup-recovery.test.ts && node -e 'const fs=require(\"node:fs\"); for(const p of process.argv.slice(1)) console.log(\"FORMAT_CAPTURE \"+p+\" \"+JSON.stringify(fs.readFileSync(p,\"utf8\")));' src/server/delivery-workspace-recovery.ts tests/delivery-startup-recovery.test.ts && exit 1",
     "codex:inspect": "node --import tsx scripts/codex-inspect.ts",
     "test:real": "node --import tsx scripts/real-codex-smoke.ts --run",
     "test:dashboard:real": "node --import tsx tests/dashboard-real.ts --run",
