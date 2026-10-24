@@ -31,7 +31,7 @@ export async function collectRemotePullRequests(
     }
     if (
       result.nextPage !== null &&
-      (!Number.isSafeInteger(result.nextPage) || result.nextPage <= currentPage)
+      (!Number.isSafeInteger(result.nextPage) || result.nextPage !== currentPage + 1)
     ) {
       throw new Error('GitHub PR listing returned an invalid next page.');
     }
