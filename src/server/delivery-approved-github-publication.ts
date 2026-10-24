@@ -12,7 +12,6 @@ import {
 import { listAllGitHubPullRequests } from './delivery-github-readonly.js';
 import { DeliveryGitTransferJournal } from './delivery-git-transfer-journal.js';
 import { attestLocalReviewedGitState } from './delivery-local-git-attestation.js';
-import { DeliveryPublicationApprovalLedger } from './delivery-publication-approval.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import {
   deliveryWorkspaceSchema,
@@ -34,7 +33,6 @@ export type SessionBoundDraftContext = {
   sessionToken: string;
   workspace: DeliverySecurityWorkspace;
   refreshWorkspace: () => Promise<DeliverySecurityWorkspace>;
-  transferJournal: DeliveryGitTransferJournal;
   approvalId: string;
   write: Omit<GitHubDraftWriteOptions, 'confirmation'>;
 };
@@ -55,7 +53,7 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
   };
   // Reject invalid write configuration before acquiring a lease or using GitHub.
   validateGitHubDraftWrite(plan, commits, write);
-  const approvals = new DeliveryPublicationApprovalLedger(context.sessions.db, context.sessions.now);
+  const transfers = new DeliveryGitTransferJournal(context.sessions.db);
   const authorize = (): void => {
     const current = context.sessions.authorize(
       context.sessionToken,
@@ -101,7 +99,7 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     },
     verifyApprovedSnapshot: async (currentPlan) => {
       authorize();
-      context.transferJournal.assertReadyForDraft(identity);
+      transfers.assertReadyForDraft(identity);
       await attestLocalReviewedGitState(currentPlan, {
         repository: workspace.repository,
         worktree: workspace.worktree,

@@ -103,7 +103,6 @@ function setup() {
     sessionToken: token,
     workspace,
     refreshWorkspace: async () => workspace,
-    transferJournal: transfers,
     approvalId,
     write: { token: 'server-owned-write-token', title: 'Reviewed draft', fetcher },
   });
