@@ -75,47 +75,93 @@ test('rejects Docker image tags without digest', () => {
   assert.match(auditWorkflowText('steps:\n  - uses: docker://alpine:3.20').join('\n'), /immutable/);
 });
 
+function expectFinding(source, pattern) {
+  assert.match(auditWorkflowText(source).join('\n'), pattern);
+}
+
 test('requires explicit read-only workflow token permissions', () => {
-  assert.match(auditWorkflowText(workflow().replace('permissions:\n  contents: read\n', '')).join('\n'), /missing top-level/);
-  assert.match(auditWorkflowText(workflow().replace('contents: read', 'contents: write')).join('\n'), /write token permissions/);
-  assert.match(auditWorkflowText(workflow().replace('permissions:\n  contents: read', 'permissions: write-all')).join('\n'), /explicit mapping/);
-  assert.match(auditWorkflowText(workflow().replace('contents: read', 'contents: \${{ inputs.scope }}')).join('\n'), /invalid or dynamic/);
+  expectFinding(
+    workflow().replace('permissions:\n  contents: read\n', ''),
+    /missing top-level/,
+  );
+  expectFinding(
+    workflow().replace('contents: read', 'contents: write'),
+    /write token permissions/,
+  );
+  expectFinding(
+    workflow().replace('permissions:\n  contents: read', 'permissions: write-all'),
+    /explicit mapping/,
+  );
+  expectFinding(
+    workflow().replace('contents: read', 'contents: ' + '$' + '{{ inputs.scope }}'),
+    /invalid or dynamic/,
+  );
 });
 
 test('rejects job-level write permission escalation', () => {
-  assert.match(auditWorkflowText(workflow().replace('    steps:', '    permissions:\n      issues: write\n    steps:')).join('\n'), /write token permissions/);
+  expectFinding(
+    workflow().replace('    steps:', '    permissions:\n      issues: write\n    steps:'),
+    /write token permissions/,
+  );
 });
 
 test('rejects empty uses and YAML-spaced uses keys', () => {
-  assert.match(auditWorkflowText(workflow().replace('uses: ' + artifact, 'uses:')).join('\n'), /action must use/);
-  assert.match(auditWorkflowText(workflow().replace('uses: ' + artifact, 'uses : ' + artifact.replace(/@[a-f0-9]{40}$/, '@v7'))).join('\n'), /action must use/);
+  expectFinding(workflow().replace('uses: ' + artifact, 'uses:'), /action must use/);
+  expectFinding(
+    workflow().replace('uses: ' + artifact, 'uses : actions/upload-artifact@v7'),
+    /action must use/,
+  );
 });
 
 test('rejects dynamic, traversing and malformed local action references', () => {
-  for (const reference of ['./../external/action', './local/../action', './local//action', './\${{ inputs.path }}', './']) {
-    assert.match(auditWorkflowText(workflow().replace(artifact, reference)).join('\n'), /action must use/, reference);
+  const badReferences = [
+    './../external/action',
+    './local/../action',
+    './local//action',
+    './' + '$' + '{{ inputs.path }}',
+    './',
+  ];
+  for (const reference of badReferences) {
+    expectFinding(workflow().replace(artifact, reference), /action must use/);
   }
 });
 
 test('rejects traversal and dynamic external references even when SHA-shaped', () => {
   const sha = 'a'.repeat(40);
-  for (const reference of ['example/../action@' + sha, 'example//action@' + sha, 'example/action@' + sha + '\${{ inputs.extra }}']) {
-    assert.match(auditWorkflowText(workflow().replace(artifact, reference)).join('\n'), /action must use/, reference);
+  const badReferences = [
+    'example/../action@' + sha,
+    'example//action@' + sha,
+    'example/action@' + sha + '$' + '{{ inputs.extra }}',
+  ];
+  for (const reference of badReferences) {
+    expectFinding(workflow().replace(artifact, reference), /action must use/);
   }
 });
 
 test('rejects dynamic Docker image names even with a digest', () => {
   const image = 'docker://$IMAGE@sha256:' + 'a'.repeat(64);
-  assert.match(auditWorkflowText(workflow().replace(artifact, image)).join('\n'), /action must use/);
+  expectFinding(workflow().replace(artifact, image), /action must use/);
 });
 
 test('rejects duplicate or nonliteral checkout credential settings', () => {
-  assert.match(auditWorkflowText(workflow().replace('persist-credentials: false', 'persist-credentials: false\n          persist-credentials: true')).join('\n'), /exactly one/);
-  assert.match(auditWorkflowText(workflow().replace('persist-credentials: false', "persist-credentials: 'false'")).join('\n'), /exactly one/);
+  expectFinding(
+    workflow().replace(
+      'persist-credentials: false',
+      'persist-credentials: false\n          persist-credentials: true',
+    ),
+    /exactly one/,
+  );
+  expectFinding(
+    workflow().replace('persist-credentials: false', "persist-credentials: 'false'"),
+    /exactly one/,
+  );
 });
 
 test('accepts static local reusable workflows and digest-pinned registry images', () => {
-  const input = workflow().replace(artifact, './.github/workflows/reusable.yml') +
-    '\n  - uses: docker://ghcr.io/example/image@sha256:' + 'a'.repeat(64) + '\n';
+  const input =
+    workflow().replace(artifact, './.github/workflows/reusable.yml') +
+    '\n  - uses: docker://ghcr.io/example/image@sha256:' +
+    'a'.repeat(64) +
+    '\n';
   assert.deepEqual(auditWorkflowText(input), []);
 });
