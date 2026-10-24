@@ -56,9 +56,9 @@ describe('delivery confirmation contract', () => {
         confirmation,
       ).valid,
     ).toBe(false);
-    expect(
-      validateDeliveryConfirmation({ ...preflight, checks: [] }, confirmation).valid,
-    ).toBe(false);
+    expect(validateDeliveryConfirmation({ ...preflight, checks: [] }, confirmation).valid).toBe(
+      false,
+    );
     expect(
       validateDeliveryConfirmation(
         { ...preflight, checks: preflight.checks.filter((check) => check.id !== 'identity') },
