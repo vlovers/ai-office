@@ -147,7 +147,7 @@ describe('commit and push receipt gate in Draft PR publication', () => {
       );
       expect(result.state).toBe('published');
       expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'POST']);
-      expect(attestLocalReviewedGitState).toHaveBeenCalledTimes(3);
+      expect(attestLocalReviewedGitState).toHaveBeenCalledTimes(2);
     } finally {
       t.db.close();
     }
