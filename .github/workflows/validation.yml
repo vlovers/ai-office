@@ -37,6 +37,8 @@ jobs:
         run: npm ci
       - name: TypeScript
         run: npm run typecheck
+      - name: Delivery security lint
+        run: npm run lint
       - name: Unit and integration tests
         run: npm test
       - name: HTTP/SSE smoke tests
