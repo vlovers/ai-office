@@ -33,6 +33,10 @@ import {
 export function publishCommitAttestedDraftViaGitHub(
   context: DeliveryPublicationContext & {
     approval: ApprovedCommitSnapshot;
+    /** Trusted local verification hook; never source it from HTTP JSON. */
+    verifyLocalGitState?: (
+      plan: Extract<DeliveryPublicationContext['plan'], { allowed: true }>,
+    ) => Promise<void>;
     /** Server-owned authorization hook; never bind to untrusted HTTP input. */
     authorizeBeforeReserve?: (
       plan: Extract<DeliveryPublicationContext['plan'], { allowed: true }>,
@@ -124,6 +128,10 @@ export function publishOperatorAuthorizedDraftViaGitHub(
 export function publishLocallyAttestedOperatorDraftViaGitHub(
   context: DeliveryPublicationContext & {
     approval: ApprovedCommitSnapshot;
+    /** Trusted local verification hook; never source it from HTTP JSON. */
+    verifyLocalGitState?: (
+      plan: Extract<DeliveryPublicationContext['plan'], { allowed: true }>,
+    ) => Promise<void>;
     localReview: Omit<LocalGitReview, 'commits' | 'repository'>;
   },
   options: GitHubDraftWriteOptions,
