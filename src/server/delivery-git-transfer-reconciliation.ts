@@ -19,8 +19,13 @@ export type GitTransferReconciliationContext = {
   journal: DeliveryGitTransferJournal;
   identity: DeliveryGitTransferIdentity;
   plan: AllowedPlan;
-  /** Re-read the trusted registry while holding the shared Git lease. */
-  refreshPlan: () => Promise<DeliveryPublicationPlan>;
+  /** Re-read the full trusted registry binding while holding the Git lease. */
+  refreshReviewed: () => Promise<{
+    plan: DeliveryPublicationPlan;
+    identity: DeliveryGitTransferIdentity;
+    repository: RepositoryIdentity;
+    worktree: RepositoryIdentity;
+  }>;
   repository: RepositoryIdentity;
   worktree: RepositoryIdentity;
   /** Trusted synchronous session/grant check, not browser-supplied code. */
@@ -115,9 +120,24 @@ export async function reconcileGitTransferReceipts(
     throw new Error('Invalid Git transfer reconciliation deadline.');
   }
   const assertFreshPlan = async (): Promise<void> => {
-    const refreshed = await context.refreshPlan();
-    if (!refreshed.allowed || publicationKey(refreshed) !== identity.operationKey) {
-      throw new Error('Reviewed Git transfer plan changed during reconciliation.');
+    const reviewed = await context.refreshReviewed();
+    const refreshed = reviewed.plan;
+    const owner = reviewed.identity;
+    if (
+      !refreshed.allowed ||
+      publicationKey(refreshed) !== identity.operationKey ||
+      owner.workspaceId !== identity.workspaceId ||
+      owner.operationKey !== identity.operationKey ||
+      owner.destination !== identity.destination ||
+      owner.branch !== identity.branch ||
+      owner.headSha !== identity.headSha ||
+      owner.baseSha !== identity.baseSha ||
+      reviewed.repository.path !== context.repository.path ||
+      reviewed.repository.gitDir !== context.repository.gitDir ||
+      reviewed.worktree.path !== context.worktree.path ||
+      reviewed.worktree.gitDir !== context.worktree.gitDir
+    ) {
+      throw new Error('Reviewed Git transfer registry binding changed during reconciliation.');
     }
   };
   assertSynchronousAuthorization(context.authorize);
