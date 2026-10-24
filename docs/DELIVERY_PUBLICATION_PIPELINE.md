@@ -54,6 +54,13 @@ merge, branch deletion or deployment is enabled.
   result uncertain. The original `publishApprovedDraft` remains for
   compatibility but does not attest remote Git commits and must not be
   exposed as a production endpoint.
+- `reconcileCommitAttestedDraft` extends uncertain-write recovery for
+  commit-pinned publications. A complete remote PR listing identifies a
+  unique candidate, then a separate **GET /pulls/:number** fetches the
+  current PR's head/base commit SHAs and repository identities. Only the
+  exact approved commit pair may move the SQLite journal from `uncertain`
+  to `published`; missing or stale details leave it uncertain. No second
+  remote POST is attempted.
 - `delivery-publication-github-recovery.ts` composes the concrete GET-only
   adapter with the lease-protected uncertain-journal recovery service. It
   verifies the snapshot and journal state before any GitHub request, and it
@@ -94,8 +101,10 @@ complete/incomplete remote listings, duplicate results and an actual SQLite
 close/reopen recovery path. Receipt/reconciliation tests cover additional
 hostile remote responses. Git ref-attestation tests additionally cover
 moved head/base commits, hostile GitHub responses, invalid credentials and
-post-creation SHA changes; service integration tests verify that attestation
-happens under the lease before reservation and prevents blind retries.
+post-creation SHA changes, malformed PR detail responses and GitHub API
+failures; service integration tests verify that attestation happens under
+the lease before reservation, commit-pinned recovery checks PR details,
+and neither path performs blind retries.
 Run `npm run check` and `npm run format:check`,
 plus the native sandbox and browser approval CI jobs.
 
