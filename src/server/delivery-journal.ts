@@ -115,9 +115,32 @@ export class DeliveryJournal {
   }
 
   /**
+   * Compare-and-set recovery for ONE workspace. The caller MUST hold the
+   * shared repository/worktree lease, including after a process restart.
+   * An unrelated operation must never be modified by this recovery.
+   */
+  recoverWorkspace(workspaceId: string, operationKey: string): DeliveryJournalEntry | null {
+    if (!workspaceId || !operationKey) throw new Error('Recovery identity is required.');
+    const existing = this.get(workspaceId);
+    if (!existing) return null;
+    if (existing.operationKey !== operationKey) {
+      throw new Error('Recovery operation does not own the workspace.');
+    }
+    if (existing.state === 'reserved') {
+      this.db
+        .prepare(
+          "UPDATE delivery_journal SET state='uncertain' WHERE workspace_id=? AND operation_key=? AND state='reserved'",
+        )
+        .run(workspaceId, operationKey);
+    }
+    return this.get(workspaceId);
+  }
+
+  /**
    * After restart, an in-flight reservation is uncertain. Never retry an
    * external GitHub operation until the remote outcome has been reconciled.
    */
+  /** Legacy single-process startup only; unsafe while any publisher is active. */
   recoverInterrupted() {
     this.db.exec("UPDATE delivery_journal SET state='uncertain' WHERE state='reserved'");
   }
