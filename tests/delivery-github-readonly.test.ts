@@ -170,6 +170,20 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('bounds a stalled GitHub listing body without returning partial inventory', async () => {
+    const fetcher = vi.fn(async () => {
+      const response = json([candidate]);
+      Object.defineProperty(response, 'json', {
+        value: () => new Promise<never>(() => undefined),
+      });
+      return response;
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, timeoutMs: 100 })).rejects.toThrow(
+      'GitHub request timed out',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('rejects untrusted destinations before any request', async () => {
     const fetcher = vi.fn();
     await expect(
