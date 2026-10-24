@@ -1,44 +1,47 @@
-## Outcome and issue
+## Objective
 
-**Goal / linked issue:**
+Describe the user-visible outcome.
 
-**Acceptance criteria:**
+## Related issue
 
-- [ ]
+Link the issue, if one exists.
 
-**Scope and non-goals:**
+## Scope
 
-## Verification evidence
+- Included:
+- Excluded:
 
-Report actual results, not assumptions.
+## Acceptance criteria
 
-| Check | Result | Command, evidence or N/A reason |
-| --- | --- | --- |
-| Static / lint / types | | |
-| Unit / integration | | |
-| Build | | |
-| Browser / workflow E2E | | |
-| Permissions / sandbox / migrations | | |
+- [ ] Requirements implemented
+- [ ] No blocking findings
+- [ ] Documentation updated
 
-## Risks and delivery
+## Verification
 
-- Compatibility and data safety:
-- Rollback and release implications:
-- Incomplete or unsupported behavior:
+Record actual results or explain why a check was not run.
+
+- Formatting:
+- TypeScript:
+- Tests:
+- Build:
+- Browser and workflow tests:
+- Sandbox and security checks:
+
+## Risks
+
+- Compatibility:
+- Permissions and data safety:
+- Release impact:
+- Rollback plan:
 
 ## Independent review
 
-- Reviewer and source diff:
-- Findings and resolution:
+- Reviewer:
+- Findings:
+- Resolutions:
 - Remaining blockers:
 
-## Acceptance
+## Release
 
-- [ ] Acceptance criteria satisfied
-- [ ] No unresolved blocking defects
-- [ ] Documentation matches actual behavior
-- [ ] Release approval tracked separately
-
-See [DoD](../docs/engineering/DEFINITION_OF_DONE.md),
-[review](../docs/engineering/REVIEW_POLICY.md) and
-[release](../docs/engineering/RELEASE_CHECKLIST.md).
+Release approval is separate from PR approval.
