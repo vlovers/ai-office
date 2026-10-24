@@ -4,9 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createApprovedDraftPublication,
-} from '../src/server/delivery-approved-draft-publication.js';
+import { createApprovedDraftPublication } from '../src/server/delivery-approved-draft-publication.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
