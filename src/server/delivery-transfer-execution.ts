@@ -91,11 +91,7 @@ export async function executeAuthorizedTransferStage(context: AuthorizedTransfer
       try {
         await context.performOnce();
         const verifiedSha = await context.verifyReceiptReadOnly();
-        return transferJournal.confirmVerified(
-          binding.stage,
-          binding.identity,
-          verifiedSha,
-        );
+        return transferJournal.confirmVerified(binding.stage, binding.identity, verifiedSha);
       } catch (error) {
         // A timeout or malformed receipt is never evidence of failure.
         transferJournal.markUncertain(binding.stage, binding.identity);
