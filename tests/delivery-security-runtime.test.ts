@@ -1,4 +1,15 @@
-import { mkdtemp, chmod, rm, stat, symlink, writeFile, realpath } from 'node:fs/promises';
+import {
+  mkdtemp,
+  chmod,
+  rm,
+  stat,
+  symlink,
+  link,
+  writeFile,
+  readFile,
+  mkdir,
+  realpath,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -81,4 +92,128 @@ it('never restores outstanding enrollment tickets when a disabled operator is re
   } finally {
     db.close();
   }
+});
+
+it('refuses public pre-existing database without changing its mode or bytes', async () => {
+  const directory = await root();
+  const database = join(directory, 'delivery.sqlite');
+  await writeFile(database, 'do not modify', { mode: 0o644 });
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+  expect((await stat(database)).mode & 0o777).toBe(0o644);
+  expect(await readFile(database, 'utf8')).toBe('do not modify');
+});
+
+it('refuses unsafe existing data directories rather than chmod-repairing them', async () => {
+  const directory = await root();
+  await chmod(directory, 0o755);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+  expect((await stat(directory)).mode & 0o777).toBe(0o755);
+});
+
+it('refuses SQLite symlinks, hardlinks and non-regular files before SQLite opens', async () => {
+  const directory = await root();
+  const source = join(directory, 'source.db');
+  const database = join(directory, 'delivery.sqlite');
+  await writeFile(source, 'external content', { mode: 0o600 });
+  await symlink(source, database);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow();
+  await rm(database);
+  await link(source, database);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+  expect((await stat(source)).nlink).toBe(2);
+  await rm(database);
+  await rm(source);
+  await mkdir(database);
+  await expect(openDeliveryDatabase(directory)).rejects.toThrow();
+});
+
+it('does not relax private database permissions across a successful restart', async () => {
+  const directory = await root();
+  const first = await openDeliveryDatabase(directory);
+  first.close();
+  const database = join(directory, 'delivery.sqlite');
+  expect((await stat(database)).mode & 0o077).toBe(0);
+  const second = await openDeliveryDatabase(directory);
+  second.close();
+  expect((await stat(database)).mode & 0o077).toBe(0);
+});
+
+it('refuses unsafe WAL and SHM sidecars without mutating their targets', async () => {
+  for (const suffix of ['-journal', '-wal', '-shm']) {
+    const directory = await root();
+    const external = join(directory, 'external');
+    const sidecar = join(directory, 'delivery.sqlite' + suffix);
+    await writeFile(external, 'private sentinel', { mode: 0o600 });
+    await symlink(external, sidecar);
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect(await readFile(external, 'utf8')).toBe('private sentinel');
+    await rm(sidecar);
+    await writeFile(sidecar, 'public sentinel', { mode: 0o644 });
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect((await stat(sidecar)).mode & 0o777).toBe(0o644);
+    expect(await readFile(sidecar, 'utf8')).toBe('public sentinel');
+  }
+});
+
+it('reopens a populated WAL-mode SQLite database without losing session state', async () => {
+  const directory = await root();
+  const first = await openDeliveryDatabase(directory);
+  try {
+    const sessions = new DeliverySessions(first);
+    sessions.setOperator('wal-operator', true);
+    sessions.setGrant('wal-operator', 'workspace', 'review', true);
+    expect(first.prepare('PRAGMA journal_mode').get()?.journal_mode).toBe('wal');
+    const wal = join(directory, 'delivery.sqlite-wal');
+    const shm = join(directory, 'delivery.sqlite-shm');
+    for (const name of [wal, shm]) {
+      expect((await stat(name)).mode & 0o077).toBe(0);
+    }
+    // A second independent connection must read durable state before the
+    // writer closes and SQLite checkpoints its WAL files.
+    const concurrent = await openDeliveryDatabase(directory);
+    try {
+      const restored = new DeliverySessions(concurrent);
+      expect(() => restored.issueEnrollment('wal-operator')).not.toThrow();
+    } finally {
+      concurrent.close();
+    }
+  } finally {
+    first.close();
+  }
+  const reopened = await openDeliveryDatabase(directory);
+  try {
+    const restored = new DeliverySessions(reopened);
+    expect(() => restored.issueEnrollment('wal-operator')).not.toThrow();
+  } finally {
+    reopened.close();
+  }
+});
+
+it('rejects hardlinked and directory SQLite sidecars without changing their sources', async () => {
+  for (const suffix of ['-journal', '-wal', '-shm']) {
+    const directory = await root();
+    const source = join(directory, 'protected-source');
+    const sidecar = join(directory, 'delivery.sqlite' + suffix);
+    await writeFile(source, 'keep source', { mode: 0o600 });
+    await link(source, sidecar);
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect(await readFile(source, 'utf8')).toBe('keep source');
+    expect((await stat(source)).nlink).toBe(2);
+    await rm(sidecar);
+    await mkdir(sidecar, { mode: 0o700 });
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect(await readFile(source, 'utf8')).toBe('keep source');
+  }
+});
+
+it('rejects a symlinked data-directory alias without modifying the target', async () => {
+  const target = await root();
+  const parent = await root();
+  const alias = join(parent, 'alias');
+  const database = join(target, 'delivery.sqlite');
+  await writeFile(database, 'unchanged target', { mode: 0o600 });
+  await symlink(target, alias, 'dir');
+  await expect(openDeliveryDatabase(alias)).rejects.toThrow('unavailable');
+  expect(await readFile(database, 'utf8')).toBe('unchanged target');
+  expect((await stat(database)).mode & 0o077).toBe(0);
 });
