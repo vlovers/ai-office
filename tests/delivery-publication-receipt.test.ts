@@ -9,11 +9,13 @@ const plan = {
   revision: 'a'.repeat(64),
   draft: true as const,
 };
+const repo = { full_name: 'vlovers/ai-office' };
 const receipt = {
   html_url: 'https://github.com/vlovers/ai-office/pull/123',
   draft: true,
-  head: { ref: plan.branch },
-  base: { ref: 'main' },
+  state: 'open',
+  head: { ref: plan.branch, repo },
+  base: { ref: 'main', repo },
 };
 
 describe('GitHub publication receipt verification', () => {
@@ -23,10 +25,26 @@ describe('GitHub publication receipt verification', () => {
 
   it.each([
     [{ ...receipt, draft: false }, 'does not match'],
-    [{ ...receipt, head: { ref: 'other-branch' } }, 'does not match'],
-    [{ ...receipt, base: { ref: 'develop' } }, 'does not match'],
-    [{ ...receipt, html_url: 'https://github.com/attacker/repo/pull/123' }, 'approved destination'],
-    [{ ...receipt, html_url: 'https://github.com/vlovers/ai-office/pull/123?redirect=1' }, 'approved destination'],
+    [{ ...receipt, state: 'closed' }, 'does not match'],
+    [{ ...receipt, head: { ref: 'other-branch', repo } }, 'does not match'],
+    [{ ...receipt, base: { ref: 'develop', repo } }, 'does not match'],
+    [
+      { ...receipt, head: { ref: plan.branch, repo: { full_name: 'evil/fork' } } },
+      'does not match',
+    ],
+    [
+      { ...receipt, base: { ref: 'main', repo: { full_name: 'evil/fork' } } },
+      'does not match',
+    ],
+    [{ ...receipt, head: { ref: plan.branch, repo: null } }, 'does not match'],
+    [
+      { ...receipt, html_url: 'https://github.com/attacker/repo/pull/123' },
+      'approved destination',
+    ],
+    [
+      { ...receipt, html_url: 'https://github.com/vlovers/ai-office/pull/123?x=1' },
+      'approved destination',
+    ],
   ])('rejects a mismatched remote receipt', (candidate, reason) => {
     expect(() => validatePublicationReceipt(plan, candidate)).toThrow(reason);
   });
