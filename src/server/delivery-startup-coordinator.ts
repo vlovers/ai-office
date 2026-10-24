@@ -1,4 +1,7 @@
-import type { DeliveryGitTransferIdentity, DeliveryGitTransferJournal } from './delivery-git-transfer-journal.js';
+import type {
+  DeliveryGitTransferIdentity,
+  DeliveryGitTransferJournal,
+} from './delivery-git-transfer-journal.js';
 import type { DeliveryJournal } from './delivery-journal.js';
 import {
   recoverDeliveryWorkspaceWithTransfers,
