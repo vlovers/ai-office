@@ -70,7 +70,12 @@ export async function createDraftPublication(
 
       // Preflight catches known duplicates. A failed or incomplete inventory
       // blocks creation; it must not be interpreted as an empty result.
-      const inventory = await context.listRemote(plan);
+      let inventory: CompleteRemotePrInventory;
+      try {
+        inventory = await context.listRemote(plan);
+      } catch {
+        throw new Error('Remote PR inventory failed; publication blocked.');
+      }
       if (!inventory.complete) {
         throw new Error('Remote PR inventory is incomplete; publication blocked.');
       }
