@@ -75,10 +75,18 @@ The delivery publication boundary now combines the shared Git lease, refreshed
 review snapshot, durable SQLite operation reservation, strict GitHub draft PR
 receipt verification and read-only uncertain-result reconciliation. SQLite
 integration tests cover duplicate requests, concurrent callers, timeouts,
-forked PRs and restart recovery. This is **not** a connected GitHub publisher:
-commit/push approvals, real GitHub authentication, immutable remote head SHA
-verification, HTTP authorization and UI remain outstanding. A server-only,
-GET-only GitHub REST adapter now provides bounded, fully paginated discovery
+forked PRs and restart recovery. A new commit-pinned variant also performs
+read-only GitHub head/base ref SHA attestation under the same lease and
+verifies both PR commit SHAs after creation. Its recovery path requires
+complete PR discovery plus a separate fresh PR detail GET before resolving
+an uncertain write. Tests cover moved refs, hostile API responses, stale
+post-write commits and recovery without duplicate POSTs.
+
+This is **not** a connected GitHub publisher: independently approved local
+commit identities, explicit commit/push approvals, real least-privilege
+GitHub authentication, HTTP authorization, operator confirmation UI and
+end-to-end production activation remain outstanding. The server-only,
+GET-only GitHub REST adapter provides bounded, fully paginated discovery
 for reconciliation, but it is not connected to a production endpoint.
 See [pipeline safety and activation gates](docs/DELIVERY_PUBLICATION_PIPELINE.md).
 
