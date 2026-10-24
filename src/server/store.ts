@@ -6,6 +6,7 @@ import {
 import type { ExecutionConfiguration } from '../shared/types.js';
 import { DatabaseSync } from 'node:sqlite';
 import { WorkflowStore } from './workflows.js';
+import { DeliveryJournal } from './delivery-journal.js';
 import { AppError } from './errors.js';
 import type { AgentSettings } from './agents.js';
 import type { AgentProfile } from '../shared/types.js';
@@ -28,6 +29,7 @@ import type { SessionBinding } from './providers/types.js';
 
 export class Store {
   readonly db: DatabaseSync;
+  readonly deliveryJournal: DeliveryJournal;
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
@@ -164,6 +166,8 @@ export class Store {
     }
     // Fail closed after schema migration and task recovery, before queue dispatch.
     new WorkflowStore(this.db).recoverInterrupted();
+    this.deliveryJournal = new DeliveryJournal(this.db);
+    this.deliveryJournal.recoverInterrupted();
   }
   taskConfiguration(id: string): ExecutionConfiguration | undefined {
     const row = this.db
