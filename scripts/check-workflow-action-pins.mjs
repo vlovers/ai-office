@@ -10,22 +10,19 @@ function indentation(line) {
   return /^\s*/.exec(line)[0].length;
 }
 
+function hasTraversal(path) {
+  return path.split('/').some((segment) => segment === '.' || segment === '..');
+}
+
 function isSafeReference(reference) {
   if (reference.startsWith('./')) {
-    return LOCAL_ACTION.test(reference) && reference.slice(2).split('/').every(
-      (segment) => segment !== '.' && segment !== '..',
-    );
+    return LOCAL_ACTION.test(reference) && !hasTraversal(reference.slice(2));
   }
   if (reference.startsWith('docker://')) {
-    return SHA_DOCKER.test(reference) &&
-      !reference.slice('docker://'.length).split('@')[0].split('/').some(
-        (segment) => segment === '.' || segment === '..',
-      );
+    const image = reference.slice('docker://'.length).split('@')[0];
+    return SHA_DOCKER.test(reference) && !hasTraversal(image);
   }
-  return SHA_ACTION.test(reference) &&
-    reference.split('@')[0].split('/').every(
-      (segment) => segment !== '.' && segment !== '..',
-    );
+  return SHA_ACTION.test(reference) && !hasTraversal(reference.split('@')[0]);
 }
 
 export function auditWorkflowText(source, filename = 'workflow') {
@@ -50,13 +47,19 @@ export function auditWorkflowText(source, filename = 'workflow') {
     for (let line = index + 1; line < lines.length; line += 1) {
       if (!lines[line].trim() || /^\s*#/.test(lines[line])) continue;
       if (indentation(lines[line]) <= depth) break;
-      const entry = /^\s*([a-z-]+)\s*:\s*(read|write|none)\s*(?:#.*)?$/.exec(lines[line]);
+      const entry = /^\s*([a-z-]+)\s*:\s*(read|write|none)\s*(?:#.*)?$/.exec(
+        lines[line],
+      );
       if (!entry) {
-        findings.push(filename + ':' + (line + 1) + ': invalid or dynamic token permission');
+        findings.push(
+          filename + ':' + (line + 1) + ': invalid or dynamic token permission',
+        );
         continue;
       }
       if (entry[2] === 'write') {
-        findings.push(filename + ':' + (line + 1) + ': write token permissions require separate review');
+        findings.push(
+          filename + ':' + (line + 1) + ': write token permissions require separate review',
+        );
       }
       if (depth === 0 && entry[1] === 'contents' && entry[2] === 'read') {
         hasContentsRead = true;
@@ -76,7 +79,12 @@ export function auditWorkflowText(source, filename = 'workflow') {
     const reference = match[1].trim();
     const location = filename + ':' + (index + 1);
     if (!reference || !isSafeReference(reference)) {
-      findings.push(location + ': action must use a static local path, immutable commit SHA or Docker digest (' + reference + ')');
+      findings.push(
+        location +
+          ': action must use a static local path, immutable commit SHA or Docker digest (' +
+          reference +
+          ')',
+      );
     }
     if (!reference.startsWith('actions/checkout@')) continue;
 
@@ -87,7 +95,7 @@ export function auditWorkflowText(source, filename = 'workflow') {
       end += 1;
     }
 
-    let credentialSettings = [];
+    const credentialSettings = [];
     for (let line = index + 1; line < end; line += 1) {
       if (!/^\s*with\s*:\s*(?:#.*)?$/.test(lines[line])) continue;
       const withIndent = indentation(lines[line]);
@@ -97,12 +105,16 @@ export function auditWorkflowText(source, filename = 'workflow') {
         const settingIndent = indentation(lines[setting]);
         if (settingIndent <= withIndent) break;
         if (settingIndent !== withIndent + 2) continue;
-        const key = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/.exec(lines[setting]);
+        const key = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/.exec(
+          lines[setting],
+        );
         if (key) credentialSettings.push(key[1].trim());
       }
     }
     if (credentialSettings.length !== 1 || credentialSettings[0] !== 'false') {
-      findings.push(location + ': checkout requires exactly one with.persist-credentials: false');
+      findings.push(
+        location + ': checkout requires exactly one with.persist-credentials: false',
+      );
     }
   }
   return findings;
