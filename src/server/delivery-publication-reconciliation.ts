@@ -19,10 +19,11 @@ export function reconcilePublicationCandidates(
   candidates: readonly RemoteDraftCandidate[],
 ): ReconciliationResult {
   if (!plan.allowed) return { status: 'unresolved', reason: plan.reason };
-  const matching = candidates.filter(
-    (candidate) =>
-      candidate.head.ref === plan.branch && candidate.base.ref === plan.baseBranch,
-  );
+  const matching = candidates.filter((candidate) => {
+    const sameHead = candidate.head.ref === plan.branch;
+    const sameBase = candidate.base.ref === plan.baseBranch;
+    return sameHead && sameBase;
+  });
   if (matching.length !== 1) {
     return {
       status: 'unresolved',
