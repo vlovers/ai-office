@@ -6,15 +6,15 @@ This document separates the existing **local-first, single-user coding workspace
 
 ## Product slices and evidence
 
-| Slice | Integrated baseline | Remaining acceptance evidence |
-| --- | --- | --- |
-| Local Codex task | Two workers, persistent FIFO queues and SSE | Fresh-install manual task, cancel, restart and resumed session on supported macOS |
-| Agent Studio | Persisted profiles, immutable execution snapshots | Migration of populated v0.5 data; archive/edit while sessions remain active |
-| Isolated editing | Approved worktree writes and revision-bound Keep/Reject | Dirty worktree, changed review revision, denied host escape and recovery |
-| Coder → Reviewer → QA | Stage-gated workflow and sandbox verification | Real-model end-to-end run; explicit operator checkpoint before each consequential stage |
-| Office V4 | Task/queue/profile projections | Mobile/keyboard/reduced motion and disconnected state against actual backend |
-| Delivery authorization | Dedicated HTTPS-oriented sessions, Origin/CSRF and live grants | Target TLS/browser deployment, operator enrollment, real grants and private audit |
-| GitHub publication | Server-only journal, leases, reconciliation and Draft PR primitives | #58, #68 and #70, independent audit and disposable-repo native crash testing |
+| Slice                  | Integrated baseline                                                 | Remaining acceptance evidence                                                           |
+| ---------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Local Codex task       | Two workers, persistent FIFO queues and SSE                         | Fresh-install manual task, cancel, restart and resumed session on supported macOS       |
+| Agent Studio           | Persisted profiles, immutable execution snapshots                   | Migration of populated v0.5 data; archive/edit while sessions remain active             |
+| Isolated editing       | Approved worktree writes and revision-bound Keep/Reject             | Dirty worktree, changed review revision, denied host escape and recovery                |
+| Coder → Reviewer → QA  | Stage-gated workflow and sandbox verification                       | Real-model end-to-end run; explicit operator checkpoint before each consequential stage |
+| Office V4              | Task/queue/profile projections                                      | Mobile/keyboard/reduced motion and disconnected state against actual backend            |
+| Delivery authorization | Dedicated HTTPS-oriented sessions, Origin/CSRF and live grants      | Target TLS/browser deployment, operator enrollment, real grants and private audit       |
+| GitHub publication     | Server-only journal, leases, reconciliation and Draft PR primitives | #58, #68 and #70, independent audit and disposable-repo native crash testing            |
 
 See `README.md`, `ROADMAP.md`, `docs/MVP_STABILIZATION_CHECKLIST.md` and `docs/DELIVERY_PRODUCTION_CHECKLIST.md` for detailed contracts. The local application and Delivery service are not interchangeable deployment surfaces.
 
@@ -41,17 +41,17 @@ None of these gates permits automatic merge, force push, reset, deletion, deploy
 
 ## Mandatory failure matrix for any proposed Delivery activation
 
-| Failure | Required outcome |
-| --- | --- |
-| Stale review, moved branch/head/base or foreign worktree | Fail closed before write; do not rebind approval |
-| Revoked/expired session or live grant | Fail closed within transactional decision |
-| Duplicate request across processes | One durable reservation; never duplicate POST |
-| Crash before/after SQLite commit | Deterministic recovery; no lost authorization ambiguity |
+| Failure                                                      | Required outcome                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Stale review, moved branch/head/base or foreign worktree     | Fail closed before write; do not rebind approval                   |
+| Revoked/expired session or live grant                        | Fail closed within transactional decision                          |
+| Duplicate request across processes                           | One durable reservation; never duplicate POST                      |
+| Crash before/after SQLite commit                             | Deterministic recovery; no lost authorization ambiguity            |
 | GitHub timeout, 403/429/5xx or malformed/paginated inventory | Keep unresolved/uncertain; GET-only reconciliation; no blind retry |
-| Different repo/fork, duplicate PR or unverifiable SHA | Reject receipt and keep publication blocked |
-| Crash during startup recovery with concurrent publisher | Shared lease prevents cross-process corruption |
-| Operator denied confirmation | Zero remote writes; preserve safe review state |
-| Secret/configuration leakage | Fail audit; scrub logs and artifacts, rotate affected credentials |
+| Different repo/fork, duplicate PR or unverifiable SHA        | Reject receipt and keep publication blocked                        |
+| Crash during startup recovery with concurrent publisher      | Shared lease prevents cross-process corruption                     |
+| Operator denied confirmation                                 | Zero remote writes; preserve safe review state                     |
+| Secret/configuration leakage                                 | Fail audit; scrub logs and artifacts, rotate affected credentials  |
 
 ## Acceptance log template
 
