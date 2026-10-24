@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { auditWorkflowText, auditWorkflowDirectory } from '../scripts/check-workflow-action-pins.mjs';
+import {
+  auditWorkflowText,
+  auditWorkflowDirectory,
+} from '../scripts/check-workflow-action-pins.mjs';
 
 const checkout = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const artifact = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9';
