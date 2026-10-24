@@ -12,6 +12,7 @@ import {
   type TrustedDeliveryOperator,
 } from './delivery-publication-approval.js';
 import type { ApprovedCommitSnapshot } from './delivery-github-ref-attestation.js';
+import { DeliveryGitTransferJournal } from './delivery-git-transfer-journal.js';
 import {
   attestLocalReviewedGitState,
   type LocalGitReview,
@@ -159,6 +160,41 @@ export function publishLocallyAttestedOperatorDraftViaGitHub(
           repository: context.repository,
           commits: context.approval,
         });
+        await context.verifyLocalGitState?.(plan);
+      },
+    },
+    options,
+    authorization,
+  );
+}
+
+/**
+ * Stronger server-only composition for the future authenticated delivery UI.
+ * Both independently verified commit and push receipts must match the
+ * immutable publication snapshot. The check runs inside the SAME Git lease
+ * as local/remote attestation, approval consumption and Draft PR creation.
+ * No commit, push, HTTP route or unattended write is enabled here.
+ */
+export function publishReceiptedLocallyAttestedOperatorDraftViaGitHub(
+  context: Parameters<typeof publishLocallyAttestedOperatorDraftViaGitHub>[0] & {
+    transferJournal: DeliveryGitTransferJournal;
+  },
+  options: GitHubDraftWriteOptions,
+  authorization: Parameters<typeof publishLocallyAttestedOperatorDraftViaGitHub>[2],
+) {
+  return publishLocallyAttestedOperatorDraftViaGitHub(
+    {
+      ...context,
+      verifyLocalGitState: async (plan) => {
+        context.transferJournal.assertReadyForDraft({
+          workspaceId: context.workspaceId,
+          operationKey: context.approval.operationKey,
+          destination: plan.destination,
+          branch: plan.branch,
+          headSha: context.approval.headCommitSha,
+          baseSha: context.approval.baseCommitSha,
+        });
+        await context.verifyLocalGitState?.(plan);
       },
     },
     options,
