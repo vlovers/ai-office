@@ -101,6 +101,7 @@ describe('atomic publication approval and journal reservation', () => {
       db.close();
     }
   });
+
   it('survives a restart and refuses replay through a second SQLite connection', () => {
     const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-reserve-'));
     const filename = join(directory, 'journal.sqlite');
@@ -154,5 +155,4 @@ describe('atomic publication approval and journal reservation', () => {
       db.close();
     }
   });
-
 });
