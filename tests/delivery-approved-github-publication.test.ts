@@ -294,6 +294,48 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('recovers a reservation left by a killed publisher process without creating a second PR', async () => {
+    const t = setup();
+    try {
+      // The publisher persists a reservation, then dies without cleanup.
+      // The next process must treat that reservation as a possibly completed POST.
+      const killed = spawnSync(
+        process.execPath,
+        [
+          '-e',
+          "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync(process.argv[1]); db.prepare(\"INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)\").run('workspace-1', process.argv[2]); process.kill(process.pid, 'SIGKILL');",
+          t.dbPath,
+          publicationKey(plan),
+        ],
+        { encoding: 'utf8', timeout: 5000 },
+      );
+      expect(killed.signal).toBe('SIGKILL');
+      expect(t.journal.get('workspace-1')?.state).toBe('reserved');
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') throw new Error('A recovered operation must not write.');
+        if (url.includes('/pulls?')) return json([receipt]);
+        return original(url, init);
+      });
+      const restoredDb = new DatabaseSync(t.dbPath);
+      try {
+        const result = await createSessionBoundGitHubDraft({
+          ...t.context(),
+          sessions: new DeliverySessions(restoredDb, () => 10_000),
+        });
+        expect(result.status).toBe('published');
+        expect(new DeliveryJournal(restoredDb).get('workspace-1')?.pullRequestUrl).toBe(
+          receipt.html_url,
+        );
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      } finally {
+        restoredDb.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
   it('treats invalid post-write PR detail as uncertain, not published', async () => {
     const t = setup();
     try {
