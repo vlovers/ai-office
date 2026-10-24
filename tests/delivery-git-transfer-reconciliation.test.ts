@@ -163,14 +163,15 @@ describe('read-only commit/push receipt reconciliation', () => {
       t.journal.begin('commit', t.identity);
       t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
       t.journal.begin('push', t.identity);
-      t.fetcher.mockImplementation(async () =>
-        new Response(
-          JSON.stringify({
-            ref: 'refs/heads/' + branch,
-            object: { type: 'commit', sha: 'f'.repeat(40) },
-          }),
-          { status: 200 },
-        ),
+      t.fetcher.mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ref: 'refs/heads/' + branch,
+              object: { type: 'commit', sha: 'f'.repeat(40) },
+            }),
+            { status: 200 },
+          ),
       );
       expect(await reconcileGitTransferReceipts(t.context)).toMatchObject({
         status: 'blocked',
@@ -351,15 +352,11 @@ describe('read-only commit/push receipt reconciliation', () => {
         },
       );
       await ready;
-      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
-        'Resource is locked',
-      );
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow('Resource is locked');
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
       release();
       await holder;
-      expect((await reconcileGitTransferReceipts(t.context)).status).toBe(
-        'commit-confirmed',
-      );
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('commit-confirmed');
     } finally {
       release();
       t.close();
