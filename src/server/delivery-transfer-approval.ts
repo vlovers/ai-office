@@ -107,9 +107,17 @@ export class DeliveryTransferApprovalLedger {
          destination, branch, head_sha, base_sha, issued_at, expires_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
-        approvalId, binding.stage, identity.workspaceId, operator.operatorId,
-        operator.sessionId, identity.operationKey, identity.destination,
-        identity.branch, identity.headSha, identity.baseSha, issuedAt,
+        approvalId,
+        binding.stage,
+        identity.workspaceId,
+        operator.operatorId,
+        operator.sessionId,
+        identity.operationKey,
+        identity.destination,
+        identity.branch,
+        identity.headSha,
+        identity.baseSha,
+        issuedAt,
         issuedAt + lifetimeMs,
       );
     return approvalId;
@@ -124,10 +132,19 @@ export class DeliveryTransferApprovalLedger {
     const timestamp = this.timestamp();
     return {
       args: [
-        approvalId, binding.stage, identity.workspaceId, operator.operatorId,
-        operator.sessionId, identity.operationKey, identity.destination,
-        identity.branch, identity.headSha, identity.baseSha,
-        timestamp, timestamp, timestamp,
+        approvalId,
+        binding.stage,
+        identity.workspaceId,
+        operator.operatorId,
+        operator.sessionId,
+        identity.operationKey,
+        identity.destination,
+        identity.branch,
+        identity.headSha,
+        identity.baseSha,
+        timestamp,
+        timestamp,
+        timestamp,
       ] as const,
       condition: `approval_id=? AND stage=? AND workspace_id=? AND operator_id=?
         AND session_id=? AND operation_key=? AND destination=? AND branch=?
@@ -157,13 +174,19 @@ export class DeliveryTransferApprovalLedger {
   }
 
   revoke(approvalId: string, operator: TrustedDeliveryOperator): boolean {
-    if (!operator || !IDENTIFIER.test(operator.operatorId) || !IDENTIFIER.test(operator.sessionId)) {
+    if (
+      !operator ||
+      !IDENTIFIER.test(operator.operatorId) ||
+      !IDENTIFIER.test(operator.sessionId)
+    ) {
       throw new Error('Invalid trusted operator.');
     }
-    return this.db
-      .prepare(`UPDATE delivery_transfer_approvals SET revoked_at=?
+    return (
+      this.db
+        .prepare(`UPDATE delivery_transfer_approvals SET revoked_at=?
         WHERE approval_id=? AND operator_id=? AND session_id=?
         AND consumed_at IS NULL AND revoked_at IS NULL`)
-      .run(this.timestamp(), approvalId, operator.operatorId, operator.sessionId).changes === 1;
+        .run(this.timestamp(), approvalId, operator.operatorId, operator.sessionId).changes === 1
+    );
   }
 }
