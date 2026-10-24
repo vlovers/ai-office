@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { chmod, mkdir, open, realpath } from 'node:fs/promises';
+import { lstat, mkdir, open, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
@@ -42,22 +42,48 @@ export async function readDeliverySecurityConfig(path: string) {
 export async function openDeliveryDatabase(directory: string) {
   const path = resolve(directory);
   await mkdir(path, { recursive: true, mode: 0o700 });
-  // Refuse aliases rather than changing permissions on an unexpected directory.
+  // Never silently repair an unexpected directory or an existing database.
+  // A misconfigured path must not chmod or open another application's files.
   if ((await realpath(path)) !== path) throw new DeliverySecurityError(503);
-  await chmod(path, 0o700);
+  const directoryInfo = await lstat(path);
+  if (
+    !directoryInfo.isDirectory() ||
+    (directoryInfo.mode & 0o077) !== 0 ||
+    (process.getuid && directoryInfo.uid !== process.getuid())
+  )
+    throw new DeliverySecurityError(503);
+
   const databasePath = join(path, 'delivery.sqlite');
   const file = await open(
     databasePath,
     constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW,
     0o600,
   );
-  await file.close();
-  await chmod(databasePath, 0o600);
+  try {
+    const info = await file.stat();
+    // In particular, reject a pre-existing hard link: chmod/opening it could
+    // affect unrelated data despite O_NOFOLLOW rejecting symbolic links.
+    if (
+      !info.isFile() ||
+      info.nlink !== 1 ||
+      (info.mode & 0o077) !== 0 ||
+      (process.getuid && info.uid !== process.getuid())
+    )
+      throw new DeliverySecurityError(503);
+  } finally {
+    await file.close();
+  }
+
   const db = new DatabaseSync(databasePath);
-  db.exec(
-    'PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000; PRAGMA synchronous=FULL;',
-  );
-  return db;
+  try {
+    db.exec(
+      'PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000; PRAGMA synchronous=FULL;',
+    );
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 /** Run before listen; the caller must hold the dedicated metadata startup lock. */
