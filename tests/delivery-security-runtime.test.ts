@@ -205,3 +205,15 @@ it('rejects hardlinked and directory SQLite sidecars without changing their sour
     expect(await readFile(source, 'utf8')).toBe('keep source');
   }
 });
+
+it('rejects a symlinked data-directory alias without modifying the target', async () => {
+  const target = await root();
+  const parent = await root();
+  const alias = join(parent, 'alias');
+  const database = join(target, 'delivery.sqlite');
+  await writeFile(database, 'unchanged target', { mode: 0o600 });
+  await symlink(target, alias, 'dir');
+  await expect(openDeliveryDatabase(alias)).rejects.toThrow('unavailable');
+  expect(await readFile(database, 'utf8')).toBe('unchanged target');
+  expect((await stat(database)).mode & 0o077).toBe(0);
+});
