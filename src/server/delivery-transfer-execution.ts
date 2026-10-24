@@ -1,4 +1,7 @@
-import type { DeliveryGitStage, DeliveryGitTransferIdentity, DeliveryGitTransferJournal } from './delivery-git-transfer-journal.js';
+import type {
+  DeliveryGitTransferIdentity,
+  DeliveryGitTransferJournal,
+} from './delivery-git-transfer-journal.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import { withPublicationLease } from './delivery-publication-lease.js';
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
