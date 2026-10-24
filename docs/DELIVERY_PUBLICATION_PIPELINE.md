@@ -165,3 +165,31 @@ credentials, ensure the approved commits have been pushed safely, and serialize
 multi-process startup recovery. A confirmation object supplied by an arbitrary
 HTTP client is **not** authorization. No automatic commit, push, merge or deploy
 is provided.
+
+## Durable operator confirmation binding (server-only, unreleased)
+
+The new `DeliveryPublicationApprovalLedger` persists one-use, short-lived
+publication approvals in SQLite. A trusted server-side operator confirmation
+must issue the record only after independent local worktree and commit review.
+Every record is bound to an exact workspace, operator identity, session,
+publication plan fingerprint and both reviewed Git commit SHAs. The default
+lifetime is five minutes, capped at fifteen minutes. Revoked, expired and
+consumed approvals cannot be reused. A persistent monotonic clock watermark
+prevents backwards wall-clock changes from reviving expired records.
+
+`publishOperatorAuthorizedDraftViaGitHub` is a server-only entrypoint that
+rejects missing or mismatched approval records **before any GitHub GET**.
+Inside the shared repository lease, the refreshed review and remote Git SHA
+attestation must succeed before the ledger atomically consumes the approval.
+Only then may the delivery journal reserve the operation and the adapter
+attempt one GitHub POST. A crash after consumption is intentionally fail-closed:
+it cannot authorize another write. The existing journal's uncertain-state
+reconciliation is still the only safe path after an ambiguous remote result.
+
+The lower-level draft adapter remains available for isolated integration tests
+and controlled server composition, **not** as a production HTTP handler.
+An operator ID or session ID supplied by a browser is not trusted identity;
+the new ledger does not authenticate users, check local Git worktrees or
+authorize commit/push actions. No HTTP route is registered. Remaining gates:
+verified session/CSRF/Origin handling, independent local Git review, separate
+commit/push approvals, least-privilege credentials and native end-to-end tests.

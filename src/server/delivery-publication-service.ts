@@ -103,6 +103,8 @@ export async function publishCommitAttestedDraft(
     approval: ApprovedCommitSnapshot;
     gitHubRefOptions?: GitHubRefOptions;
     createDraft: (plan: AllowedPlan, attestation: AttestedGitRefs) => Promise<GitHubCommitReceipt>;
+    /** Optional for legacy server-only callers; authenticated entrypoints must provide it. */
+    authorizeBeforeReserve?: (plan: AllowedPlan) => Promise<void> | void;
   },
 ): Promise<DeliveryJournalEntry> {
   const readiness = requireNewPublication(context.plan);
@@ -141,6 +143,9 @@ export async function publishCommitAttestedDraft(
         context.approval,
         context.gitHubRefOptions,
       );
+      // After remote SHA attestation but before the durable reservation and
+      // any POST. Authorization is consumed exactly once under the Git lease.
+      await context.authorizeBeforeReserve?.(currentPlan);
       return executeReservedPublication(context.journal, context.workspaceId, readiness, async () =>
         validateAttestedDraftReceipt(
           currentPlan,

@@ -103,6 +103,20 @@ independently verified local Git worktree and commit/push approval, credential
 provisioning, startup recovery serialization and native end-to-end tests.
 See [delivery publication pipeline](docs/DELIVERY_PUBLICATION_PIPELINE.md).
 
+### v0.8 durable operator approval boundary (unreleased)
+
+Server-only, SQLite-backed one-use confirmation records bind a trusted operator
+session to an exact workspace, reviewed publication operation and immutable
+head/base commit pair. Approvals expire after at most 15 minutes, are
+revocable, survive restart and are consumed atomically under the Git lease
+after remote SHA attestation but before journal reservation or POST. A
+persisted monotonic clock watermark prevents expired approvals from being
+revived by a backwards clock jump. Tests cover replay, identity mismatch,
+expiry, restart, stale reviews, GitHub errors and ambiguous POST results.
+**Not an authenticated endpoint:** verified local Git state, operator
+authentication, CSRF protection and independent commit/push approvals remain
+required before production activation.
+
 ## Non-goals for v0.6
 
 Autonomous agents managing each other, unlimited concurrent processes, external providers without verified adapters, shared/multi-user hosting, automatic merging or deployment, bypassing sandbox/host-verification controls, or fabricated model/tool capabilities.
