@@ -88,6 +88,38 @@ function setup() {
 }
 
 describe('approved Draft PR publication end-to-end boundary', () => {
+  it('requires fresh authorization before reusing an already published receipt', async () => {
+    const t = setup();
+    try {
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
+      t.authorizeBeforeReserve.mockImplementationOnce(() => {
+        throw new Error('session revoked after publication');
+      });
+      await expect(createApprovedDraftPublication(t.context())).rejects.toThrow(
+        'session revoked after publication',
+      );
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+      expect(t.journal().get(binding.workspaceId)?.state).toBe('published');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects asynchronous authorization before any remote inventory request', async () => {
+    const t = setup();
+    try {
+      t.authorizeBeforeReserve.mockImplementationOnce(
+        (() => Promise.resolve()) as () => void,
+      );
+      await expect(createApprovedDraftPublication(t.context())).rejects.toThrow('synchronous');
+      expect(t.listRemote).not.toHaveBeenCalled();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(t.journal().get(binding.workspaceId)).toBeNull();
+    } finally {
+      t.close();
+    }
+  });
+
   it('consumes one approval, publishes once and reuses the receipt after restart', async () => {
     const t = setup();
     try {
@@ -97,7 +129,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
       expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
       expect(t.journal().get(binding.workspaceId)?.pullRequestUrl).toBe(receipt.html_url);
-      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(1);
+      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(3);
     } finally {
       t.close();
     }
@@ -115,7 +147,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
       t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
       expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
-      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(1);
+      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(3);
     } finally {
       t.close();
     }
@@ -202,7 +234,7 @@ describe('approved Draft PR publication end-to-end boundary', () => {
       expect((await first).status).toBe('published');
       expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
-      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(1);
+      expect(t.authorizeBeforeReserve).toHaveBeenCalledTimes(3);
     } finally {
       releaseGate();
       t.close();
