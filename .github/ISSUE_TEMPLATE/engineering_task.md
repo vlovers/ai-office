@@ -23,6 +23,7 @@ Link relevant files, PRs, tests and prior issues. State the exact baseline commi
 - [ ] A concrete behavior or artifact can be verified.
 - [ ] Relevant unit, integration and end-to-end evidence is specified.
 - [ ] Read-only defaults, explicit isolated-write approval, workspace/lease ownership, Reviewer/QA gates and sandbox boundaries are evaluated where relevant.
+- [ ] For delivery publication or Git transfer: scoped approvals, local/remote ref attestation, immutable commit identity, journal/receipt consistency, retries, lease ownership, and interrupted or ambiguous remote-write recovery are evaluated.
 - [ ] Fixture/browser CI is distinguished from native sandbox and real Codex validation; unsupported or untested hosts are named.
 - [ ] Host verification remains separately opted in and never substitutes for native sandbox QA.
 - [ ] Security, compatibility and rollback implications are evaluated.
