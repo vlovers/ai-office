@@ -111,7 +111,6 @@ describe('commit-pinned GitHub publication adapter', () => {
   });
 });
 
-
 describe('ambiguous GitHub publication outcomes', () => {
   it('preserves uncertainty after timeout and recovers using GET-only evidence', async () => {
     const db = new DatabaseSync(':memory:');
