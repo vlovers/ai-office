@@ -100,3 +100,20 @@ independent security review. No unattended PR publication, merge or deploy.
 - [ ] Independent security review and all required CI green before activation.
       Keep [issue #58](https://github.com/vlovers/ai-office/issues/58) open until
       its remaining gates are proven. No unattended merge/deploy product feature.
+
+## Read-only commit/push receipt reconciliation (issue #58)
+
+The server-only `reconcileGitTransferReceipts` helper now reconciles **existing**
+commit/push intents under the same repository/worktree lease as publication.
+It validates the trusted reviewed operation, re-attests the real local Git
+worktree and exact head/base commits, then uses bounded GitHub GET requests to
+verify both remote refs before confirming a push receipt. Revocation, changed
+refs, dirty worktrees, 403/429/5xx, malformed responses and timeouts leave the
+relevant stage blocked/uncertain. An absent intent is never created, and an
+absent remote ref never permits another push.
+
+This is an additional **read-only recovery primitive**, not a startup hook,
+HTTP route or automatic Git executor. Existing startup recovery still only
+marks interrupted intents uncertain. A trusted operator-controlled recovery
+workflow, independent security review, real target-host concurrency/crash tests
+and all remaining issue #58 gates are required before production activation.
