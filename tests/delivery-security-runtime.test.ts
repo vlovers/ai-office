@@ -188,3 +188,20 @@ it('reopens a populated WAL-mode SQLite database without losing session state', 
     reopened.close();
   }
 });
+
+it('rejects hardlinked and directory SQLite sidecars without changing their sources', async () => {
+  for (const suffix of ['-wal', '-shm']) {
+    const directory = await root();
+    const source = join(directory, 'protected-source');
+    const sidecar = join(directory, 'delivery.sqlite' + suffix);
+    await writeFile(source, 'keep source', { mode: 0o600 });
+    await link(source, sidecar);
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect(await readFile(source, 'utf8')).toBe('keep source');
+    expect((await stat(source)).nlink).toBe(2);
+    await rm(sidecar);
+    await mkdir(sidecar, { mode: 0o700 });
+    await expect(openDeliveryDatabase(directory)).rejects.toThrow('unavailable');
+    expect(await readFile(source, 'utf8')).toBe('keep source');
+  }
+});
