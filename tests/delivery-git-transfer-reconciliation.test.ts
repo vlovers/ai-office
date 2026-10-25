@@ -593,4 +593,139 @@ describe('read-only commit/push receipt reconciliation', () => {
       t.close();
     }
   });
+  it('bounds a hung first registry refresh and releases the shared Git lease', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      await expect(
+        reconcileGitTransferReceipts({
+          ...t.context,
+          refreshDeadlineMs: 100,
+          refreshReviewed: async () => new Promise<never>(() => undefined),
+        }),
+      ).rejects.toThrow('registry refresh timed out');
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('commit-confirmed');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('leaves a commit uncertain if the registry hangs after local Git attestation', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      let refreshes = 0;
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshDeadlineMs: 100,
+        refreshReviewed: async () => {
+          if (++refreshes === 1) {
+            return {
+              plan,
+              identity: t.identity,
+              repository: t.context.repository,
+              worktree: t.context.worktree,
+            };
+          }
+          return new Promise<never>(() => undefined);
+        },
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'commit' });
+      expect(refreshes).toBe(2);
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('uncertain');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('never confirms a push if the final registry refresh stalls after GitHub GETs', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      let refreshes = 0;
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshDeadlineMs: 100,
+        refreshReviewed: async () => {
+          if (++refreshes <= 2) {
+            return {
+              plan,
+              identity: t.identity,
+              repository: t.context.repository,
+              worktree: t.context.worktree,
+            };
+          }
+          return new Promise<never>(() => undefined);
+        },
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(refreshes).toBe(3);
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('aborts a hung registry refresh and ignores a late successful result', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    let finish!: (value: Awaited<ReturnType<typeof t.context.refreshReviewed>>) => void;
+    const pending = new Promise<Awaited<ReturnType<typeof t.context.refreshReviewed>>>(
+      (resolve) => {
+        finish = resolve;
+      },
+    );
+    try {
+      t.journal.begin('commit', t.identity);
+      const attempt = reconcileGitTransferReceipts({
+        ...t.context,
+        remote: { ...t.context.remote, signal: controller.signal },
+        refreshDeadlineMs: 1000,
+        refreshReviewed: () => pending,
+      });
+      controller.abort();
+      await expect(attempt).rejects.toThrow('aborted');
+      finish({
+        plan,
+        identity: t.identity,
+        repository: t.context.repository,
+        worktree: t.context.worktree,
+      });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('commit-confirmed');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects invalid registry refresh deadlines before touching durable state', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      const refreshReviewed = vi.fn(t.context.refreshReviewed);
+      for (const refreshDeadlineMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
+        await expect(
+          reconcileGitTransferReceipts({
+            ...t.context,
+            refreshReviewed,
+            refreshDeadlineMs,
+          }),
+        ).rejects.toThrow('registry refresh deadline');
+      }
+      expect(refreshReviewed).not.toHaveBeenCalled();
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
 });
