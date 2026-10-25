@@ -138,21 +138,20 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
-  it('refuses a reserved journal record with an unexpected PR URL', async () => {
+  it('refuses a forged reservation adapter returning an unexpected PR URL', async () => {
     const t = setup();
     try {
       const context = {
         ...t.context,
-        reserveApproved: () => {
-          t.db
-            .prepare(
-              "INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', ?)",
-            )
-            .run('workspace-1', publicationKey(plan), receipt.html_url);
-          return t.journal.get('workspace-1')!;
-        },
+        reserveApproved: () => ({
+          workspaceId: 'workspace-1',
+          operationKey: publicationKey(plan),
+          state: 'reserved' as const,
+          pullRequestUrl: receipt.html_url,
+        }),
       };
       await expect(createDraftPublication(context)).rejects.toThrow('did not persist');
+      expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.createDraft).not.toHaveBeenCalled();
     } finally {
       t.close();
