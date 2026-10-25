@@ -20,6 +20,17 @@ export class DeliveryJournal {
     // Existing corrupt rows are not silently rewritten or deleted.
     this.db.exec(`CREATE INDEX IF NOT EXISTS delivery_journal_operation_key_idx
       ON delivery_journal(operation_key)`);
+    // SQLite's REPLACE conflict policy can delete a prior row without firing
+    // DELETE triggers when recursive_triggers is off. Reject replacement in
+    // BEFORE INSERT, including INSERT OR REPLACE against an existing owner.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_journal_no_replace_insert
+      BEFORE INSERT ON delivery_journal
+      WHEN EXISTS (
+        SELECT 1 FROM delivery_journal WHERE workspace_id = NEW.workspace_id
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Publication reservation already exists; reconcile before retry.');
+      END`);
     this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_journal_exclusive_operation_insert
       BEFORE INSERT ON delivery_journal
       WHEN EXISTS (
