@@ -292,9 +292,20 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         state: 'closed',
         base: { ...receipt.base, ref: 'release' },
       };
+      let postAttempted = false;
       t.fetcher.mockImplementation(async (url, init) => {
-        if (init.method === 'POST') throw new Error('GitHub accepted POST but reply was lost');
-        if (url.includes('/pulls?')) return json([receipt, conflicting]);
+        if (init.method === 'POST') {
+          postAttempted = true;
+          throw new Error('GitHub accepted POST but reply was lost');
+        }
+        if (url.includes('/pulls?') && postAttempted) {
+          if (url.includes('page=2')) return json([conflicting]);
+          const nextPage = url.replace('page=1', 'page=2');
+          return new Response(JSON.stringify([receipt]), {
+            status: 200,
+            headers: { Link: `<${nextPage}>; rel="next"` },
+          });
+        }
         return original(url, init);
       });
       expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
