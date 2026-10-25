@@ -143,7 +143,7 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
         method: 'POST',
         url,
         headers: { host: '127.0.0.1:4310', 'content-type': 'application/json' },
-        payload,
+        payload: JSON.stringify(payload),
       });
 
     const dashboard = await get('/api/dashboard');
