@@ -140,11 +140,14 @@ function interruptReservationTransaction(
     "if(process.argv[4]==='commit')db.exec('COMMIT');",
     "process.kill(process.pid,'SIGKILL');",
   ].join(' ');
-  return spawnSync(
-    process.execPath,
-    ['-e', script, dbPath, approvalId, operationKey, committed ? 'commit' : 'rollback'],
-    { encoding: 'utf8', timeout: 5000 },
-  );
+  const args = ['-e', script, dbPath, approvalId, operationKey, committed ? 'commit' : 'rollback'];
+  return spawnSync(process.execPath, args, { encoding: 'utf8', timeout: 5000 });
+}
+
+function approvalConsumedAt(db: DatabaseSync, approvalId: string) {
+  return db
+    .prepare('SELECT consumed_at FROM delivery_publication_approvals WHERE approval_id=?')
+    .get(approvalId)?.consumed_at;
 }
 
 describe('session-bound approved GitHub Draft PR executor (server only)', () => {
@@ -404,11 +407,7 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       );
       expect(killed.signal).toBe('SIGKILL');
       expect(t.journal.get('workspace-1')?.state).toBe('reserved');
-      expect(
-        t.db
-          .prepare('SELECT consumed_at FROM delivery_publication_approvals WHERE approval_id=?')
-          .get(t.context().approvalId)?.consumed_at,
-      ).toBe(10_000);
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBe(10_000);
       const original = t.fetcher.getMockImplementation()!;
       t.fetcher.mockImplementation(async (url, init) => {
         if (init.method === 'POST') throw new Error('Recovered operation must not write.');
@@ -445,11 +444,7 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       );
       expect(killed.signal).toBe('SIGKILL');
       expect(t.journal.get('workspace-1')).toBeNull();
-      expect(
-        t.db
-          .prepare('SELECT consumed_at FROM delivery_publication_approvals WHERE approval_id=?')
-          .get(t.context().approvalId)?.consumed_at,
-      ).toBeNull();
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBeNull();
       const result = await createSessionBoundGitHubDraft(t.context());
       expect(result.status).toBe('published');
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
