@@ -12,6 +12,7 @@ import {
 import { listAllGitHubPullRequests } from './delivery-github-readonly.js';
 import { DeliveryGitTransferJournal } from './delivery-git-transfer-journal.js';
 import { attestLocalReviewedGitState } from './delivery-local-git-attestation.js';
+import { reconcilePublicationCandidates } from './delivery-publication-reconciliation.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import {
   deliveryWorkspaceSchema,
@@ -189,7 +190,17 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     verifyRemoteReceipt: async (currentPlan, url) => {
       authorize();
       const detail = await readGitHubDraftCommitReceipt(currentPlan, url, refOptions);
-      // A registry replacement during a slow PR detail GET cannot turn a
+      // A successful POST is not proof that this managed head belongs to a
+      // unique PR. Another actor can publish between our preflight inventory
+      // and the write. Require a second complete open/closed inventory before
+      // persisting a receipt, even on the successful (non-recovery) path.
+      // Missing/ambiguous results are uncertain, never permission to POST again.
+      const inventory = await listAllGitHubPullRequests(currentPlan, refOptions);
+      const ownership = reconcilePublicationCandidates(currentPlan, inventory.candidates);
+      if (ownership.status !== 'confirmed' || ownership.pullRequestUrl !== url) {
+        throw new Error('Draft PR managed-head ownership is not uniquely verified.');
+      }
+      // A registry replacement during a slow PR detail GET or inventory cannot turn a
       // stale or revoked review into a durable confirmed publication receipt.
       await refreshReviewedWorkspace();
       authorize();
