@@ -54,13 +54,13 @@ function oversizedStream(size: number, cancel?: () => Promise<void>): Response {
 }
 
 describe('credential-scoped GitHub response boundary', () => {
-  it('accepts a complete listing above the old 1 MiB cap but below the 8 MiB page limit', async () => {
+  it('accepts complete PR listings larger than 1 MiB', async () => {
     const payload = [{ description: 'x'.repeat(1_200_000) }];
     const response = await request(listUrl, async () => Response.json(payload));
     expect(await response.json()).toEqual(payload);
   });
 
-  it('passes a large authenticated PR page through complete downstream inventory validation', async () => {
+  it('validates a large authenticated PR inventory end to end', async () => {
     const plan = {
       allowed: true as const,
       destination: `https://github.com/${repository}`,
@@ -128,9 +128,7 @@ describe('credential-scoped GitHub response boundary', () => {
     const response = new Response('{}', {
       headers: { 'Content-Length': String(GITHUB_JSON_LIMITS.refs + 1) },
     });
-    await expect(request(refUrl, async () => response)).rejects.toMatchObject({
-      statusCode: 503,
-    });
+    await expect(request(refUrl, async () => response)).rejects.toMatchObject({ statusCode: 503 });
     expect(response.bodyUsed).toBe(false);
   });
 
