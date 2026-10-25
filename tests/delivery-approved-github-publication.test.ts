@@ -293,7 +293,7 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     let checks = 0;
     const readiness = vi
       .spyOn(DeliveryGitTransferJournal.prototype, 'assertReadyForDraft')
-      .mockImplementation(function (identity) {
+      .mockImplementation(function (this: DeliveryGitTransferJournal, identity) {
         if (++checks === 4) throw new Error('Journal readiness unavailable.');
         return originalAssert.call(this, identity);
       });
