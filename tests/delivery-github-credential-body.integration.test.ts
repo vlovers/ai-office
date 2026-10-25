@@ -162,9 +162,9 @@ describe('credential-scoped GitHub response boundary', () => {
         async () => credential(),
         async () => {
           calls++;
-          const foreign = 'https://api.github.com/repos/attacker/repo/pulls?state=all&per_page=100&page=2';
+          const foreign = 'https://api.github.com/repos/attacker/repo/pulls';
           return Response.json([], {
-            headers: { Link: `<${foreign}>; rel="next"` },
+            headers: { Link: `<${foreign}?state=all&per_page=100&page=2>; rel="next"` },
           });
         },
         () => 1000,
