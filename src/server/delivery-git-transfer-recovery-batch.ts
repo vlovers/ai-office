@@ -16,6 +16,30 @@ export type GitTransferRecoveryBatch = {
 };
 
 /**
+ * A registry lookup is read-only and runs before the Git lease. Unlike the
+ * reconciliation itself, it can safely be abandoned when its resolver stalls:
+ * a late resolver result is never allowed to start a Git or journal operation.
+ */
+async function resolveWithinDeadline(
+  workspaceId: string,
+  resolveWorkspace: (workspaceId: string) => Promise<GitTransferReconciliationContext | null>,
+  timeoutMs: number,
+): Promise<GitTransferReconciliationContext | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('Git transfer registry lookup timed out.')), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => resolveWorkspace(workspaceId)),
+      deadline,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
  * A bounded, operator-initiated recovery sweep. Discovery is read-only; each
  * individual reconciliation acquires the same Git lease as publication.
  *
@@ -29,9 +53,17 @@ export type GitTransferRecoveryBatch = {
 export async function recoverUnresolvedGitTransfers(
   journal: DeliveryGitTransferJournal,
   resolveWorkspace: (workspaceId: string) => Promise<GitTransferReconciliationContext | null>,
-  options: { limit?: number; afterWorkspaceId?: string } = {},
+  options: { limit?: number; afterWorkspaceId?: string; resolveTimeoutMs?: number } = {},
 ): Promise<GitTransferRecoveryBatch> {
   const limit = options.limit ?? 50;
+  const resolveTimeoutMs = options.resolveTimeoutMs ?? 10_000;
+  if (
+    !Number.isSafeInteger(resolveTimeoutMs) ||
+    resolveTimeoutMs < 100 ||
+    resolveTimeoutMs > 60_000
+  ) {
+    throw new Error('Invalid Git transfer registry lookup deadline.');
+  }
   // Validate before any resolver or journal mutation.
   const page = journal.listUnresolvedWorkspaces(limit, options.afterWorkspaceId);
   const outcomes: GitTransferRecoveryOutcome[] = [];
@@ -39,7 +71,7 @@ export async function recoverUnresolvedGitTransfers(
   for (const workspaceId of page.workspaceIds) {
     let context: GitTransferReconciliationContext | null;
     try {
-      context = await resolveWorkspace(workspaceId);
+      context = await resolveWithinDeadline(workspaceId, resolveWorkspace, resolveTimeoutMs);
     } catch {
       // Registry outages must not erase durable intents or stop other workspaces.
       outcomes.push({ workspaceId, status: 'blocked' });
