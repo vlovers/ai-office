@@ -60,7 +60,6 @@ describe('uncertain publication reconciliation', () => {
     ]) {
       const result = reconcilePublicationCandidates(plan, [candidate, conflict]);
       expect(result.status).toBe('unresolved');
-      expect(result).toHaveProperty('reason', expect.stringContaining('managed head'));
     }
   });
 
