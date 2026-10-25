@@ -114,6 +114,12 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
 
     const reviewerQueued = startStage('reviewer', 'queued');
     store.enqueue(reviewerQueued.task.id, 'local-cli-chatgpt');
+    const reviewerRunning = startStage('reviewer', 'running');
+    store.updateTask(reviewerRunning.task.id, { state: 'running' });
+    const qaQueued = startStage('qa', 'queued');
+    store.enqueue(qaQueued.task.id, 'local-cli-chatgpt');
+    const qaRunning = startStage('qa', 'running');
+    store.updateTask(qaRunning.task.id, { state: 'running' });
     const ordinary = store.createTask({
       repositoryId: repository.id,
       title: 'Ordinary queued work',
@@ -203,6 +209,9 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
       view.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
     );
     expect(tasks.get(reviewerQueued.task.id)).toBe('interrupted');
+    expect(tasks.get(reviewerRunning.task.id)).toBe('interrupted');
+    expect(tasks.get(qaQueued.task.id)).toBe('interrupted');
+    expect(tasks.get(qaRunning.task.id)).toBe('interrupted');
     expect(tasks.get(qaFailed.task.id)).toBe('failed');
     expect(tasks.get(qaStopped.task.id)).toBe('stopped');
     expect(tasks.get(qaCompleted.task.id)).toBe('completed');
@@ -216,6 +225,14 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
         status: 'interrupted',
         code: 'execution-interrupted',
       },
+      {
+        id: reviewerRunning.workflowId,
+        stage: 1,
+        status: 'interrupted',
+        code: 'execution-interrupted',
+      },
+      { id: qaQueued.workflowId, stage: 2, status: 'interrupted', code: 'execution-interrupted' },
+      { id: qaRunning.workflowId, stage: 2, status: 'interrupted', code: 'execution-interrupted' },
       { id: qaFailed.workflowId, stage: 2, status: 'failed', code: 'execution-failed' },
       { id: qaStopped.workflowId, stage: 2, status: 'failed', code: 'execution-failed' },
       { id: qaCompleted.workflowId, stage: 2, status: 'blocked', code: 'stage-blocked' },
@@ -247,7 +264,7 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(listed.statusCode).toBe(200);
     expect(
       listed.json().filter((workflow: { state: string }) => workflow.state === 'blocked'),
-    ).toHaveLength(4);
+    ).toHaveLength(8);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id, ordinaryAfter.id]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
 
