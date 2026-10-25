@@ -127,6 +127,29 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       await attestGitHubCommitRefs(currentPlan, commits, refOptions);
       authorize();
     },
+    // Re-attest the local snapshot after the asynchronous PR inventory but
+    // before consuming the operator's one-use approval in SQLite.
+    verifyBeforeReserve: async (currentPlan) => {
+      authorize();
+      transfers.assertReadyForDraft(identity);
+      await attestLocalReviewedGitState(currentPlan, {
+        repository: workspace.repository,
+        worktree: workspace.worktree,
+        workspaceGitDir: workspace.worktree.gitDir,
+        commits,
+      });
+      await refreshReviewedWorkspace();
+      authorize();
+      // The registry refresh itself yields to other local Git processes.
+      await attestLocalReviewedGitState(currentPlan, {
+        repository: workspace.repository,
+        worktree: workspace.worktree,
+        workspaceGitDir: workspace.worktree.gitDir,
+        commits,
+      });
+      authorize();
+      transfers.assertReadyForDraft(identity);
+    },
     listRemote: async (currentPlan) => {
       authorize();
       return listAllGitHubPullRequests(currentPlan, refOptions);
