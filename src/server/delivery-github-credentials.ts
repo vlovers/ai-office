@@ -72,9 +72,14 @@ export class DeliveryGitHubCredentials {
               /^[1-9]\d{0,3}$/.test(url.searchParams.get('page') ?? '') &&
               /^(?:[1-9]\d?|100)$/.test(url.searchParams.get('per_page') ?? '') &&
               [...url.searchParams.keys()].sort().join(',') === 'page,per_page,state';
+            const detailPrefix = `${prefix}/pulls/`;
             const pullDetail =
-              input.startsWith(`${prefix}/pulls/`) &&
-              /^[1-9]\d*$/.test(input.slice(`${prefix}/pulls/`.length));
+              url.origin === 'https://api.github.com' &&
+              url.pathname.startsWith(`/repos/${repository}/pulls/`) &&
+              /^[1-9]\d*$/.test(url.pathname.slice(`/repos/${repository}/pulls/`.length)) &&
+              url.search === '' &&
+              input === url.href &&
+              input.startsWith(detailPrefix);
             if (
               init.method !== 'GET' ||
               init.body ||
