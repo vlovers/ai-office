@@ -83,14 +83,13 @@ export async function recoverUnresolvedGitTransfers(
       continue;
     }
 
-    // The journal and identity must be exactly those discovered by the server.
-    // A resolver cannot swap in another database or reconcile another workspace.
-    if (context.journal !== journal || context.identity.workspaceId !== workspaceId) {
-      outcomes.push({ workspaceId, status: 'blocked' });
-      continue;
-    }
-
     try {
+      // Treat registry results as a runtime trust boundary, not just a TS type.
+      // A malformed or throwing identity must not abort the entire sweep.
+      // The journal and workspace must match the server-discovered entry.
+      if (context.journal !== journal || context.identity?.workspaceId !== workspaceId) {
+        throw new Error('Recovery resolver returned a foreign workspace or journal.');
+      }
       const result = await reconcileGitTransferReceipts(context);
       outcomes.push({ workspaceId, status: 'reconciled', result });
     } catch {
