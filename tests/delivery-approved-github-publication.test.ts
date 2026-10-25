@@ -245,6 +245,37 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     },
   );
 
+  it('refuses to confirm a POST after grant revocation during the post-write inventory', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    let posted = false;
+    let revoked = false;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          posted = true;
+          return original(url, init);
+        }
+        if (url.includes('/pulls?') && posted && !revoked) {
+          revoked = true;
+          t.sessions.setGrant('operator-1', 'workspace-1', 'approve:draft-pr', false);
+        }
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(revoked).toBe(true);
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      t.sessions.setGrant('operator-1', 'workspace-1', 'approve:draft-pr', true);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('keeps confirmed Git transfers immutable across Draft publication and receipt reuse', async () => {
     const t = setup();
     try {
