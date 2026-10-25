@@ -13,58 +13,87 @@ import {
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
 import { withDeliveryRepositoryLease } from '../src/server/delivery-publication-lease.js';
 
-const branch = 'ai-office/12345678-1234-1234-1234-123456789abc';
-const plan = {
-  allowed: true as const,
-  destination: 'https://github.com/vlovers/ai-office',
-  branch,
-  baseBranch: 'main' as const,
-  revision: 'a'.repeat(64),
-  draft: true as const,
-};
-
 function setup() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'ai-office-recovery-batch-')));
-  const path = join(root, 'repo');
-  const git = (...args: string[]) =>
-    execFileSync('git', ['-C', path, ...args], { encoding: 'utf8' }).trim();
-  execFileSync('git', ['init', '-q', '-b', 'main', path]);
-  git('config', 'user.name', 'AI Office Test');
-  git('config', 'user.email', 'test@example.invalid');
-  writeFileSync(join(path, 'README.md'), 'base\n');
-  git('add', 'README.md');
-  git('commit', '-qm', 'base');
-  const baseSha = git('rev-parse', 'HEAD');
-  git('switch', '-q', '-c', branch);
-  writeFileSync(join(path, 'README.md'), 'reviewed\n');
-  git('add', 'README.md');
-  git('commit', '-qm', 'reviewed');
-  const headSha = git('rev-parse', 'HEAD');
-  git('remote', 'add', 'origin', 'git@github.com:vlovers/ai-office.git');
-  const repository = { path, gitDir: realpathSync(join(path, '.git')) };
   const dbPath = join(root, 'state.sqlite');
   const db = new DatabaseSync(dbPath);
   const journal = new DeliveryGitTransferJournal(db);
-  // Legacy recovery fixture: intentionally preserve multiple old workspaces
-  // claiming one branch, as could exist before atomic ownership reservations.
-  // New reservations are covered by delivery-git-transfer-ownership.test.ts.
-  db.exec('DROP TRIGGER delivery_git_transfers_exclusive_insert');
-  db.exec('DROP TRIGGER delivery_git_transfers_exclusive_update');
-  const identity = (workspaceId: string): DeliveryGitTransferIdentity => ({
-    workspaceId,
-    operationKey: publicationKey(plan),
-    destination: plan.destination,
-    branch,
-    headSha,
-    baseSha,
-  });
+  type WorkspaceFixture = {
+    identity: DeliveryGitTransferIdentity;
+    plan: {
+      allowed: true;
+      destination: string;
+      branch: string;
+      baseBranch: 'main';
+      revision: string;
+      draft: true;
+    };
+    repository: { path: string; gitDir: string };
+    baseSha: string;
+    headSha: string;
+  };
+  const workspaces = new Map<string, WorkspaceFixture>();
+
+  // Separate workspaces own distinct reviewed branches and Git repositories.
+  // Reusing a single destination/branch would violate the durable ownership
+  // invariant and must be tested explicitly as a legacy conflict instead.
+  const workspace = (workspaceId: string): WorkspaceFixture => {
+    const existing = workspaces.get(workspaceId);
+    if (existing) return existing;
+    const path = join(root, `repo-${workspaceId}`);
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-C', path, ...args], { encoding: 'utf8' }).trim();
+    const branch = `ai-office/${workspaceId.charCodeAt(0).toString(16).padStart(8, '0')}-1234-1234-1234-123456789abc`;
+    const destination = `https://github.com/vlovers/ai-office-${workspaceId}`;
+    const plan = {
+      allowed: true as const,
+      destination,
+      branch,
+      baseBranch: 'main' as const,
+      revision: 'a'.repeat(64),
+      draft: true as const,
+    };
+    execFileSync('git', ['init', '-q', '-b', 'main', path]);
+    git('config', 'user.name', 'AI Office Test');
+    git('config', 'user.email', 'test@example.invalid');
+    writeFileSync(join(path, 'README.md'), 'base\\n');
+    git('add', 'README.md');
+    git('commit', '-qm', 'base');
+    const baseSha = git('rev-parse', 'HEAD');
+    git('switch', '-q', '-c', branch);
+    writeFileSync(join(path, 'README.md'), 'reviewed\\n');
+    git('add', 'README.md');
+    git('commit', '-qm', 'reviewed');
+    const headSha = git('rev-parse', 'HEAD');
+    git('remote', 'add', 'origin', `git@github.com:vlovers/ai-office-${workspaceId}.git`);
+    const repository = { path, gitDir: realpathSync(join(path, '.git')) };
+    const identity = {
+      workspaceId,
+      operationKey: publicationKey(plan),
+      destination,
+      branch,
+      headSha,
+      baseSha,
+    };
+    const fixture = { identity, plan, repository, baseSha, headSha };
+    workspaces.set(workspaceId, fixture);
+    return fixture;
+  };
+  const identity = (workspaceId: string): DeliveryGitTransferIdentity =>
+    workspace(workspaceId).identity;
   const fetcher = vi.fn(async (url: string, init: RequestInit): Promise<Response> => {
     if (init.method !== 'GET') throw new Error('Remote writes are forbidden.');
+    const target = [...workspaces.values()].find((item) =>
+      url.startsWith(
+        `https://api.github.com/repos/vlovers/ai-office-${item.identity.workspaceId}/git/ref/heads/`,
+      ),
+    );
+    if (!target) throw new Error('Unknown test GitHub destination.');
     const isBase = url.endsWith('/main');
     return new Response(
       JSON.stringify({
-        ref: 'refs/heads/' + (isBase ? 'main' : branch),
-        object: { type: 'commit', sha: isBase ? baseSha : headSha },
+        ref: 'refs/heads/' + (isBase ? 'main' : target.identity.branch),
+        object: { type: 'commit', sha: isBase ? target.baseSha : target.headSha },
       }),
       { status: 200 },
     );
@@ -73,19 +102,19 @@ function setup() {
     workspaceId: string,
     targetJournal = journal,
   ): GitTransferReconciliationContext => {
-    const owner = identity(workspaceId);
+    const target = workspace(workspaceId);
     return {
       journal: targetJournal,
-      identity: owner,
-      plan,
+      identity: target.identity,
+      plan: target.plan,
       refreshReviewed: async () => ({
-        plan,
-        identity: owner,
-        repository,
-        worktree: repository,
+        plan: target.plan,
+        identity: target.identity,
+        repository: target.repository,
+        worktree: target.repository,
       }),
-      repository,
-      worktree: repository,
+      repository: target.repository,
+      worktree: target.repository,
       authorize: () => {},
       remote: { fetcher },
     };
@@ -97,7 +126,7 @@ function setup() {
     journal,
     identity,
     fetcher,
-    repository,
+    repository: workspace('a').repository,
     contextFor,
     close: () => {
       db.close();
@@ -134,6 +163,34 @@ describe('bounded Git transfer recovery across workspaces', () => {
       expect(second.nextCursor).toBeNull();
       expect(t.journal.get('a', 'commit')?.state).toBe('intent');
       expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+      expect(t.journal.get('c', 'commit')?.state).toBe('confirmed');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('isolates legacy branch collisions without starving independent workspaces', async () => {
+    const t = setup();
+    try {
+      const owner = t.identity('a');
+      t.journal.begin('commit', owner);
+      // Simulate a pre-trigger database. Keep both conflicting rows intact.
+      t.db.exec('DROP TRIGGER delivery_git_transfers_exclusive_insert');
+      t.journal.begin('commit', { ...owner, workspaceId: 'b' });
+      t.journal.begin('commit', t.identity('c'));
+
+      const result = await recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+      );
+      expect(result.outcomes).toMatchObject([
+        { workspaceId: 'a', status: 'blocked' },
+        { workspaceId: 'b', status: 'blocked' },
+        { workspaceId: 'c', status: 'reconciled', result: { status: 'commit-confirmed' } },
+      ]);
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+      expect(t.journal.get('b', 'commit')?.state).toBe('intent');
       expect(t.journal.get('c', 'commit')?.state).toBe('confirmed');
       expect(t.fetcher).not.toHaveBeenCalled();
     } finally {

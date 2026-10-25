@@ -739,9 +739,7 @@ describe('read-only commit/push receipt reconciliation', () => {
         operationKey: 'independent-reviewed-operation',
       });
 
-      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
-        'another workspace',
-      );
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow('another workspace');
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
       expect(t.fetcher).not.toHaveBeenCalled();
     } finally {
@@ -761,9 +759,7 @@ describe('read-only commit/push receipt reconciliation', () => {
         branch: 'ai-office/22345678-1234-1234-1234-123456789abc',
       });
 
-      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
-        'another workspace',
-      );
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow('another workspace');
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
       expect(t.fetcher).not.toHaveBeenCalled();
     } finally {
@@ -838,5 +834,4 @@ describe('read-only commit/push receipt reconciliation', () => {
       t.close();
     }
   });
-
 });
