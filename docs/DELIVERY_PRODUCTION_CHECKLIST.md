@@ -359,7 +359,6 @@ allowing a future authorization decision to race with a network request.
 401/403 responses received within the deadline still durably quarantine the
 credential version; errors never include upstream bodies or tokens.
 
-
 The credential facade must forward GitHub's `Link` header for authenticated
 PR inventory responses. The downstream parser validates its exact repository,
 query, page sequence and completeness; stripping the header can incorrectly
