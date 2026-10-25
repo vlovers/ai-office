@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { reconcileGitTransferReceipts } from '../src/server/delivery-git-transfer-reconciliation.js';
 import { DeliveryGitTransferJournal } from '../src/server/delivery-git-transfer-journal.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
+import { withDeliveryRepositoryLease } from '../src/server/delivery-publication-lease.js';
 
 const branch = 'ai-office/12345678-1234-1234-1234-123456789abc';
 const plan = {
@@ -82,6 +83,7 @@ function setup() {
     journal,
     identity,
     context,
+    repository,
     args,
     fetcher,
     close: () => {
@@ -199,6 +201,35 @@ describe('multi-process durable Git transfer crash boundaries', () => {
       expect(t.fetcher).not.toHaveBeenCalled();
     } finally {
       if (t.db.isTransaction) t.db.exec('ROLLBACK');
+      t.close();
+    }
+  });
+
+
+  it('serializes independent Node processes through the real repository lease', async () => {
+    const t = setup();
+    const script = [
+      "import { withDeliveryRepositoryLease } from './src/server/delivery-publication-lease.ts';",
+      'const repo={path:process.argv[1],gitDir:process.argv[2]};',
+      'try { await withDeliveryRepositoryLease(repo,repo.gitDir,async()=>{}); process.exit(0); }',
+      "catch(error) { process.exit(String(error).includes('Resource is locked') ? 42 : 43); }",
+    ].join(' ');
+    const contender = () =>
+      spawnSync(
+        process.execPath,
+        ['--import', 'tsx', '--input-type=module', '-e', script, t.repository.path, t.repository.gitDir],
+        { encoding: 'utf8', timeout: 5000 },
+      );
+    try {
+      await withDeliveryRepositoryLease(t.repository, t.repository.gitDir, async () => {
+        const blocked = contender();
+        expect(blocked.status).toBe(42);
+        expect(t.journal.get(t.identity.workspaceId, 'commit')).toBeNull();
+      });
+      const released = contender();
+      expect(released.status).toBe(0);
+      expect(t.journal.get(t.identity.workspaceId, 'commit')).toBeNull();
+    } finally {
       t.close();
     }
   });
