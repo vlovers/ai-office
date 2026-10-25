@@ -182,7 +182,9 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       ).toThrow();
       expect(() =>
         t.db
-          .prepare("DELETE FROM delivery_git_transfers WHERE workspace_id='workspace-1' AND stage='commit'")
+          .prepare(
+            "DELETE FROM delivery_git_transfers WHERE workspace_id='workspace-1' AND stage='commit'",
+          )
           .run(),
       ).toThrow();
       expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
