@@ -172,6 +172,11 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
       t.journal.begin('commit', identity);
       expect(() =>
         t.db
+          .prepare("UPDATE delivery_git_transfers SET state='confirmed', receipt_sha=NULL")
+          .run(),
+      ).toThrow('monotonically');
+      expect(() =>
+        t.db
           .prepare("UPDATE delivery_git_transfers SET state='confirmed', receipt_sha=?")
           .run('f'.repeat(40)),
       ).toThrow('monotonically');
