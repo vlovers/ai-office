@@ -145,9 +145,12 @@ export class DeliveryGitHubCredentials {
             if (signal.aborted) throw new DeliverySecurityError(503);
             if (body.includes(credential.token)) throw new DeliverySecurityError(503);
             assertSynchronousAuthorization(authorize);
-            return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
+            return new Response(body, {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            });
           },
-          { signal: init.signal, timeoutMs: this.requestTimeoutMs },
+          { signal: init.signal ?? undefined, timeoutMs: this.requestTimeoutMs },
         );
       } catch (error) {
         if (
