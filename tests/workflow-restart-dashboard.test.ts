@@ -186,6 +186,7 @@ it('serves recovered Reviewer and QA checkpoints consistently through dashboard 
     ).toHaveLength(3);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
 
+    const versions = cases.map((entry) => new WorkflowStore(store.db).get(entry.id)!.version);
     await app.close();
     app = undefined;
     await manager.shutdown();
@@ -193,9 +194,7 @@ it('serves recovered Reviewer and QA checkpoints consistently through dashboard 
     store.close();
     store = new Store(path);
     const again = new WorkflowStore(store.db);
-    expect(again.get(reviewerQueued.workflowId)?.version).toBe(
-      (await getVersion(reviewerQueued.workflowId, again)),
-    );
+    expect(cases.map((entry) => again.get(entry.id)!.version)).toEqual(versions);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
   } finally {
     await app?.close();
@@ -205,6 +204,3 @@ it('serves recovered Reviewer and QA checkpoints consistently through dashboard 
   }
 });
 
-function getVersion(id: string, workflows: WorkflowStore): number {
-  return workflows.get(id)!.version;
-}
