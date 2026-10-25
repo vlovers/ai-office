@@ -204,6 +204,50 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
+  it('keeps a timed-out push uncertain after SQLite restart and recovers only by GET', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async () => new Promise<Response>(() => undefined));
+      expect(
+        await reconcileGitTransferReceipts({ ...t.context, remoteDeadlineMs: 100 }),
+      ).toMatchObject({ status: 'blocked', stage: 'push' });
+      const reopened = new DatabaseSync(t.dbPath);
+      try {
+        const journal = new DeliveryGitTransferJournal(reopened);
+        expect(journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+        const calls: string[] = [];
+        const result = await reconcileGitTransferReceipts({
+          ...t.context,
+          journal,
+          remote: {
+            fetcher: async (url, init) => {
+              calls.push(url);
+              expect(init.method).toBe('GET');
+              const ref = url.endsWith('/main') ? 'main' : branch;
+              return Response.json({
+                ref: 'refs/heads/' + ref,
+                object: {
+                  type: 'commit',
+                  sha: ref === 'main' ? t.identity.baseSha : t.identity.headSha,
+                },
+              });
+            },
+          },
+        });
+        expect(result.status).toBe('ready');
+        expect(journal.get('workspace-1', 'push')?.receiptSha).toBe(t.identity.headSha);
+        expect(calls).toHaveLength(2);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
   it('does not confirm a commit when the local worktree is dirty or origin changed', async () => {
     for (const mutate of [
       (t: ReturnType<typeof setup>) => writeFileSync(join(t.context.worktree.path, 'dirty'), 'x'),
