@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload office screenshots
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: office-v4-browser
           path: ${{ runner.temp }}/office-v4
@@ -102,7 +102,7 @@ jobs:
           AI_OFFICE_BROWSER_ARTIFACTS: ${{ runner.temp }}/workflow-browser
       - name: Upload workflow browser evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: workflow-browser
           path: ${{ runner.temp }}/workflow-browser
