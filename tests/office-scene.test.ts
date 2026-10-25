@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { PixelOffice, type OfficeAgent } from '../src/web/pixel-art.js';
 
 const agents: OfficeAgent[] = [
@@ -24,6 +24,17 @@ it('renders one original room with keyboard-accessible real workstations', () =>
   expect(markup).toContain('aria-label="Select Codex 01 workstation" aria-pressed="true"');
   expect(markup).toContain('Thinking · SDK reasoning item. No active access.');
   expect(markup.match(/class="office-environment"/g)).toHaveLength(1);
+});
+it('renders SVG workstation titles as single strings without React warnings', () => {
+  const warning = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const markup = render();
+    expect(markup).toContain('<title>Codex 01 · Thinking · SDK reasoning item</title>');
+    expect(markup).toContain('<title>Codex 02 · Selected task failed</title>');
+    expect(warning).not.toHaveBeenCalled();
+  } finally {
+    warning.mockRestore();
+  }
 });
 it('never invents characters when the runtime has no agents', () => {
   const markup = render([]);
