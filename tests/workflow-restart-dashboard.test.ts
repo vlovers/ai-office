@@ -184,15 +184,12 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
       expect(diagnostics.json().findings).toEqual(
         expect.arrayContaining([expect.objectContaining({ code: entry.code })]),
       );
-      expect(
-        (
-          await post(base + '/submit-initial', {
-            version: workflow.json().version,
-            confirmed: true,
-            confirmedWrite: true,
-          })
-        ).statusCode,
-      ).toBe(409);
+      const rejected = await post(base + '/submit-initial', {
+        version: workflow.json().version,
+        confirmed: true,
+        confirmedWrite: true,
+      });
+      expect(rejected.statusCode).toBe(409);
     }
     const listed = await get('/api/workflows');
     expect(listed.statusCode).toBe(200);
