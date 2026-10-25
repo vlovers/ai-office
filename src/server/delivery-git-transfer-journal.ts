@@ -238,10 +238,34 @@ export class DeliveryGitTransferJournal {
     return this.requireMatching(stage, identity);
   }
 
-  /** Both independent receipts are required before a Draft PR is eligible. */
+  /**
+   * A reviewed branch and publication operation have one durable owner across
+   * all workspaces, including interrupted and uncertain attempts. Older
+   * journals may predate this invariant: refuse Draft PR eligibility rather
+   * than silently adopting, deleting, or replaying a foreign intent.
+   *
+   * This is a read-only final gate. The trusted executor must still hold the
+   * shared repository lease, refresh the registry and attest both Git refs.
+   */
+  private assertExclusiveDraftOwnership(identity: DeliveryGitTransferIdentity): void {
+    const competing = this.db
+      .prepare(
+        `SELECT 1 FROM delivery_git_transfers
+         WHERE workspace_id != ?
+           AND (operation_key = ? OR (destination = ? AND branch = ?))
+         LIMIT 1`,
+      )
+      .get(identity.workspaceId, identity.operationKey, identity.destination, identity.branch);
+    if (competing) {
+      throw new Error('Git transfer operation or branch belongs to another workspace.');
+    }
+  }
+
+  /** Both independent receipts and exclusive ownership are required for Draft PR. */
   assertReadyForDraft(identity: DeliveryGitTransferIdentity) {
     this.assertConfirmed('commit', identity);
     this.assertConfirmed('push', identity);
+    this.assertExclusiveDraftOwnership(identity);
   }
 
   private requireMatching(stage: DeliveryGitStage, identity: DeliveryGitTransferIdentity) {
