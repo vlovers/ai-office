@@ -180,6 +180,25 @@ workspaces were recovered. Per-workspace outcomes must be audited without
 logging tokens. A failed or ambiguous GitHub GET cannot authorize a new
 commit, push or PR POST.
 
+### Cross-workspace Draft PR ownership guard (2026-10-25)
+
+The final `DeliveryGitTransferJournal.assertReadyForDraft` gate now refuses
+publication when **any** other workspace has an existing commit or push record
+for the same immutable operation key **or** the same GitHub destination and
+managed branch. This includes `intent`, `uncertain` and `confirmed` records:
+a crash, abandoned workspace, or competing operator cannot silently adopt the
+same branch by supplying a different workspace ID or review fingerprint.
+The check is read-only and does not delete or rewrite conflicting journal rows.
+A conflict requires trusted operator investigation, not automatic cleanup.
+
+This is a **final Draft PR eligibility defense**, not a substitute for
+per-workspace Git lease serialization or a unique constraint on future transfer
+intent creation. Existing recovery fixtures intentionally exercise multiple
+unresolved workspaces; commit/push execution remains disabled pending an
+independent review of cross-workspace ownership at *intent reservation time*.
+The final guard must be invoked under the shared repository lease by the
+trusted session-bound Draft PR executor; it is not a browser-accessible API.
+
 Still required before activation: actual multi-process target-host crash
 tests, a trusted registry/startup integration, independent receipt/security
 review, and separate least-privilege write authorization. Do not treat
