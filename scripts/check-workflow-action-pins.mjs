@@ -11,6 +11,7 @@ const USES_DECLARATION = /^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*(?:#.*)?$/;
 const CREDENTIAL_SETTING = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/;
 const UNSUPPORTED_QUOTED_KEY =
   /^\s*(?:-\s*)?["'](?:uses|permissions|with|persist-credentials|jobs|steps)["']\s*:/;
+const UNSUPPORTED_ESCAPED_YAML_KEY = /^\s*(?:-\s*)?"(?:[^"\\]|\\.)*\\(?:u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|x[0-9a-fA-F]{2}|.)[^"\n]*"\s*:/;
 const UNSUPPORTED_COMPLEX_KEY = /^\s*(?:-\s*)?\?\s+\S/;
 const UNSUPPORTED_FLOW_MAPPING =
   /^\s*(?:-\s*)?(?:"[^"]+"|'[^']+'|[A-Za-z0-9_.-]+)\s*:\s*(?:&[A-Za-z0-9_-]+\s*)?\{/;
@@ -54,6 +55,7 @@ export function auditWorkflowText(source, filename = 'workflow') {
     const location = filename + ':' + (index + 1);
     if (
       UNSUPPORTED_QUOTED_KEY.test(line) ||
+      UNSUPPORTED_ESCAPED_YAML_KEY.test(line) ||
       UNSUPPORTED_COMPLEX_KEY.test(line) ||
       YAML_MERGE_KEY.test(line) ||
       FLOW_MAPPING_ITEM.test(line) ||
