@@ -242,7 +242,7 @@ export class DeliveryGitTransferJournal {
    * A reviewed branch and publication operation have one durable owner across
    * all workspaces, including interrupted and uncertain attempts. Older
    * journals may predate this invariant: refuse Draft PR eligibility rather
-   * than silently adopting, deleting, or replaying a foreign intent.
+   * than silently adopting, deleting, or replaying a foreign intent. GitHub\n   * repository names are case-insensitive, while Git branch names are not.
    *
    * This is a read-only final gate. The trusted executor must still hold the
    * shared repository lease, refresh the registry and attest both Git refs.
@@ -252,7 +252,7 @@ export class DeliveryGitTransferJournal {
       .prepare(
         `SELECT 1 FROM delivery_git_transfers
          WHERE workspace_id != ?
-           AND (operation_key = ? OR (destination = ? AND branch = ?))
+           AND (operation_key = ? OR (destination COLLATE NOCASE = ? AND branch = ?))
          LIMIT 1`,
       )
       .get(identity.workspaceId, identity.operationKey, identity.destination, identity.branch);
