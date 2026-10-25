@@ -36,7 +36,9 @@ export function reconcilePublicationCandidates(
   // repository, is an ownership conflict. Preflight refuses this shape before
   // the POST; recovery must not silently adopt one receipt while ignoring the
   // other. Closed PRs count too: inventory is deliberately state=all.
-  if (candidates.some((candidate) => candidate !== matching[0] && candidate.head.ref === plan.branch)) {
+  if (
+    candidates.some((candidate) => candidate !== matching[0] && candidate.head.ref === plan.branch)
+  ) {
     return {
       status: 'unresolved',
       reason: 'Conflicting remote PRs reuse the managed head; manual reconciliation required.',
