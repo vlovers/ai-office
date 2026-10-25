@@ -131,6 +131,8 @@ describe('real Git Draft PR late-mutation integration', () => {
       const t = setup();
       const original = t.fetcher.getMockImplementation()!;
       const dirtyPath = join(t.path, 'inventory-untracked.txt');
+      const setOrigin = (remote: string) =>
+        execFileSync('git', ['-C', t.path, 'remote', 'set-url', 'origin', remote]);
       let inventoryReads = 0;
       try {
         t.fetcher.mockImplementation(async (url, init) => {
@@ -138,14 +140,7 @@ describe('real Git Draft PR late-mutation integration', () => {
             if (mutation === 'worktree') {
               writeFileSync(dirtyPath, 'external process changed the worktree\\n');
             } else {
-              execFileSync('git', [
-                '-C',
-                t.path,
-                'remote',
-                'set-url',
-                'origin',
-                'git@github.com:foreign/repo.git',
-              ]);
+              setOrigin('git@github.com:foreign/repo.git');
             }
           }
           return original(url, init);
@@ -156,14 +151,7 @@ describe('real Git Draft PR late-mutation integration', () => {
         if (mutation === 'worktree') {
           rmSync(dirtyPath);
         } else {
-          execFileSync('git', [
-            '-C',
-            t.path,
-            'remote',
-            'set-url',
-            'origin',
-            'git@github.com:vlovers/ai-office.git',
-          ]);
+          setOrigin('git@github.com:vlovers/ai-office.git');
         }
         expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
         expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
@@ -182,12 +170,11 @@ describe('real Git Draft PR late-mutation integration', () => {
         if (url.includes('/pulls?')) drift = true;
         return original(url, init);
       });
+      const reviewedWorkspace = t.context().workspace;
       const context = () => ({
         ...t.context(),
         refreshWorkspace: async () =>
-          drift
-            ? { ...t.context().workspace, headSha: 'f'.repeat(40) }
-            : t.context().workspace,
+          drift ? { ...reviewedWorkspace, headSha: 'f'.repeat(40) } : reviewedWorkspace,
       });
       await expect(createSessionBoundGitHubDraft(context())).rejects.toThrow();
       expect(t.journal.get('workspace-1')).toBeNull();
