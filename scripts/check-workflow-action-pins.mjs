@@ -11,8 +11,10 @@ const USES_DECLARATION = /^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*(?:#.*)?$/;
 const CREDENTIAL_SETTING = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/;
 const UNSUPPORTED_QUOTED_KEY =
   /^\s*(?:-\s*)?["'](?:uses|permissions|with|persist-credentials|jobs|steps)["']\s*:/;
-const UNSUPPORTED_COMPLEX_KEY =
-  /^\s*(?:-\s*)?\?\s+(?:uses|permissions|with|persist-credentials|jobs|steps)\s*(?::.*)?$/;
+const UNSUPPORTED_COMPLEX_KEY = /^\s*(?:-\s*)?\?\s+\S/;
+const UNSUPPORTED_FLOW_MAPPING =
+  /^\s*(?:-\s*)?(?:"[^"]+"|'[^']+'|[A-Za-z0-9_.-]+)\s*:\s*(?:&[A-Za-z0-9_-]+\s*)?\{/;
+const UNSUPPORTED_STANDALONE_FLOW_MAPPING = /^\s*\{/;
 const YAML_MERGE_KEY = /^\s*(?:-\s*)?(?:<<|["']<<["'])\s*:/;
 const STRUCTURAL_DECLARATION = /^\s*(?:jobs|steps)\s*:\s*(.*?)\s*(?:#.*)?$/;
 const FLOW_MAPPING_ITEM = /^\s*-\s*\{/;
@@ -49,7 +51,9 @@ export function auditWorkflowText(source, filename = 'workflow') {
       UNSUPPORTED_QUOTED_KEY.test(line) ||
       UNSUPPORTED_COMPLEX_KEY.test(line) ||
       YAML_MERGE_KEY.test(line) ||
-      FLOW_MAPPING_ITEM.test(line)
+      FLOW_MAPPING_ITEM.test(line) ||
+      UNSUPPORTED_FLOW_MAPPING.test(line) ||
+      UNSUPPORTED_STANDALONE_FLOW_MAPPING.test(line)
     ) {
       findings.push(location + ': unsupported YAML syntax for security-sensitive workflow keys');
     }
@@ -65,7 +69,6 @@ export function auditWorkflowText(source, filename = 'workflow') {
     const match = PERMISSIONS_DECLARATION.exec(lines[index]);
     if (!match) continue;
     const depth = indentation(lines[index]);
-    if (depth !== 0 && depth !== 4) continue;
     const location = filename + ':' + (index + 1);
     if (depth === 0) topLevelPermissions = true;
     if (match[2]) {
