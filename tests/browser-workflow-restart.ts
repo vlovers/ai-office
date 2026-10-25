@@ -319,12 +319,7 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(taskStates.get(failed.task.id), 'failed');
     assert.equal(taskStates.get(stopped.task.id), 'stopped');
     assert.equal(taskStates.get(blocked.task.id), 'completed');
-    const ids = [
-      interrupted.workflowId,
-      failed.workflowId,
-      stopped.workflowId,
-      blocked.workflowId,
-    ];
+    const ids = [interrupted.workflowId, failed.workflowId, stopped.workflowId, blocked.workflowId];
     const activePage = page;
     const versions = await Promise.all(
       ids.map(async (id) => {
@@ -356,14 +351,10 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await expect(board.getByRole('alert')).toHaveCount(0);
     for (const [index, id] of ids.entries()) {
-      const response: APIResponse = await activePage.request.get(
-        address + '/api/workflows/' + id,
-      );
+      const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
       assert.equal((await response.json()).version, versions[index]);
-      const timeline = await activePage.request.get(
-        address + '/api/workflows/' + id + '/timeline',
-      );
+      const timeline = await activePage.request.get(address + '/api/workflows/' + id + '/timeline');
       assert.equal(timeline.status(), 200);
       const view = await timeline.json();
       assert.equal(view.state, 'blocked');
