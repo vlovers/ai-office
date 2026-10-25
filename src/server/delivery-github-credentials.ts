@@ -144,10 +144,37 @@ export class DeliveryGitHubCredentials {
             const body = await readBoundedGitHubText(response, limit);
             if (signal.aborted) throw new DeliverySecurityError(503);
             if (body.includes(credential.token)) throw new DeliverySecurityError(503);
+            // A credential can be revoked or expire while an upstream GET or
+            // response stream is pending. Never return its result after that.
+            const completedAt = this.now();
+            const clockAtCompletion = this.db
+              .prepare('SELECT last_seen_at FROM delivery_credential_clock WHERE id=1')
+              .get() as { last_seen_at: number } | undefined;
+            if (
+              !Number.isSafeInteger(completedAt) ||
+              completedAt < now ||
+              completedAt >= credential.expiresAt - 5000 ||
+              !clockAtCompletion ||
+              completedAt < clockAtCompletion.last_seen_at ||
+              this.db
+                .prepare('SELECT 1 FROM delivery_revoked_credentials WHERE credential_id_hash=?')
+                .get(credentialHash(credential.id))
+            )
+              throw new DeliverySecurityError(503);
+            // Preserve pagination evidence for the downstream fail-closed
+            // inventory validator. Without Link, a short page with a next
+            // relation is silently mistaken for a complete PR inventory.
+            const link = pullList ? response.headers.get('link') : null;
+            if (link !== null && (link.length > 8192 || link.includes(credential.token))) {
+              throw new DeliverySecurityError(503);
+            }
             assertSynchronousAuthorization(authorize);
             return new Response(body, {
               status: 200,
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(link !== null ? { Link: link } : {}),
+              },
             });
           },
           { signal: init.signal ?? undefined, timeoutMs: this.requestTimeoutMs },
