@@ -9,6 +9,13 @@ const PERMISSIONS_DECLARATION = /^(\s*)permissions\s*:\s*(.*?)\s*(?:#.*)?$/;
 const TOKEN_PERMISSION = /^\s*([a-z-]+)\s*:\s*(read|write|none)\s*(?:#.*)?$/;
 const USES_DECLARATION = /^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*(?:#.*)?$/;
 const CREDENTIAL_SETTING = /^\s*persist-credentials\s*:\s*(.*?)\s*(?:#.*)?$/;
+const UNSUPPORTED_QUOTED_KEY =
+  /^\s*(?:-\s*)?["'](?:uses|permissions|with|persist-credentials|jobs|steps)["']\s*:/;
+const UNSUPPORTED_COMPLEX_KEY =
+  /^\s*(?:-\s*)?\?\s+(?:uses|permissions|with|persist-credentials|jobs|steps)\s*(?::.*)?$/;
+const YAML_MERGE_KEY = /^\s*(?:-\s*)?(?:<<|["']<<["'])\s*:/;
+const STRUCTURAL_DECLARATION = /^\s*(?:jobs|steps)\s*:\s*(.*?)\s*(?:#.*)?$/;
+const FLOW_MAPPING_ITEM = /^\s*-\s*\{/;
 
 function indentation(line) {
   return /^\s*/.exec(line)[0].length;
@@ -33,6 +40,28 @@ export function auditWorkflowText(source, filename = 'workflow') {
   const findings = [];
   const lines = source.split(/\r?\n/);
   let topLevelPermissions = false;
+
+  // Fail closed on YAML forms this line-oriented scanner cannot safely inspect.
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const location = filename + ':' + (index + 1);
+    if (
+      UNSUPPORTED_QUOTED_KEY.test(line) ||
+      UNSUPPORTED_COMPLEX_KEY.test(line) ||
+      YAML_MERGE_KEY.test(line) ||
+      FLOW_MAPPING_ITEM.test(line)
+    ) {
+      findings.push(
+        location + ': unsupported YAML syntax for security-sensitive workflow keys',
+      );
+    }
+    const structure = STRUCTURAL_DECLARATION.exec(line);
+    if (structure && structure[1].trim()) {
+      findings.push(
+        location + ': jobs and steps must use explicit block mappings/sequences',
+      );
+    }
+  }
 
   // This intentionally accepts only explicit, static read-only token mappings.
   // It is a workflow guard, not a general-purpose YAML parser.
@@ -92,10 +121,12 @@ export function auditWorkflowText(source, filename = 'workflow') {
     }
 
     const credentialSettings = [];
+    let withMappings = 0;
     for (let line = index + 1; line < end; line += 1) {
       if (!/^\s*with\s*:\s*(?:#.*)?$/.test(lines[line])) continue;
       const withIndent = indentation(lines[line]);
       if (withIndent !== stepIndent && withIndent !== stepIndent + 2) continue;
+      withMappings += 1;
       for (let setting = line + 1; setting < end; setting += 1) {
         if (!lines[setting].trim() || /^\s*#/.test(lines[setting])) continue;
         const settingIndent = indentation(lines[setting]);
@@ -105,7 +136,11 @@ export function auditWorkflowText(source, filename = 'workflow') {
         if (key) credentialSettings.push(key[1].trim());
       }
     }
-    if (credentialSettings.length !== 1 || credentialSettings[0] !== 'false') {
+    if (
+      withMappings !== 1 ||
+      credentialSettings.length !== 1 ||
+      credentialSettings[0] !== 'false'
+    ) {
       findings.push(`${location}: checkout requires exactly one with.persist-credentials: false`);
     }
   }

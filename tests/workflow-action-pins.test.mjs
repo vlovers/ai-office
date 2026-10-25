@@ -159,3 +159,50 @@ test('accepts static local reusable workflows and digest-pinned registry images'
     '\n';
   assert.deepEqual(auditWorkflowText(input), []);
 });
+
+test('rejects quoted and explicit YAML security keys', () => {
+  expectFinding(
+    workflow().replace('uses: ' + artifact, '"uses": actions/upload-artifact@v7'),
+    /unsupported YAML syntax/,
+  );
+  expectFinding(
+    workflow().replace('permissions:', "'permissions':"),
+    /unsupported YAML syntax/,
+  );
+  expectFinding(
+    workflow().replace(
+      'uses: ' + artifact,
+      '? uses\n        : actions/upload-artifact@v7',
+    ),
+    /unsupported YAML syntax/,
+  );
+});
+
+test('rejects flow-form and aliased jobs or steps', () => {
+  expectFinding(
+    workflow().replace(
+      '      - name: Upload\n        uses: ' + artifact,
+      '      - { uses: actions/upload-artifact@v7 }',
+    ),
+    /unsupported YAML syntax/,
+  );
+  expectFinding(
+    workflow().replace('    steps:', '    steps: *shared'),
+    /block mappings/,
+  );
+  expectFinding(workflow().replace('jobs:', 'jobs: {'), /block mappings/);
+});
+
+test('rejects YAML merge keys that can override step security', () => {
+  expectFinding(workflow() + '      - <<: *shared\n', /unsupported YAML syntax/);
+});
+
+test('rejects duplicate checkout with mappings even when one disables credentials', () => {
+  expectFinding(
+    workflow().replace(
+      'persist-credentials: false',
+      'persist-credentials: false\n        with:\n          persist-credentials: true',
+    ),
+    /exactly one/,
+  );
+});
