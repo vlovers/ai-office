@@ -6,7 +6,7 @@ import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
 import { sandbox } from './helpers.js';
 
-it('serves recovered Reviewer and QA checkpoints consistently through dashboard and workflow APIs', async () => {
+it('serves recovered Reviewer and QA checkpoints through dashboard and workflow APIs', async () => {
   const env = await sandbox();
   const path = join(env.root, 'restart-dashboard.sqlite');
   let store = new Store(path);
@@ -39,7 +39,12 @@ it('serves recovered Reviewer and QA checkpoints consistently through dashboard 
             agentRevision: reviewer.revision,
             mode: 'read-only',
           },
-          { kind: 'qa', agentId: reviewer.id, agentRevision: reviewer.revision, mode: 'read-only' },
+          {
+            kind: 'qa',
+            agentId: reviewer.id,
+            agentRevision: reviewer.revision,
+            mode: 'read-only',
+          },
         ],
       });
       const approved = workflows.transition(created.id, created.version, {
@@ -115,7 +120,10 @@ it('serves recovered Reviewer and QA checkpoints consistently through dashboard 
     });
     store.enqueue(ordinary.id, 'local-cli-chatgpt');
     const qaFailed = startStage('qa', 'failed');
-    store.updateTask(qaFailed.task.id, { state: 'failed', error: 'QA failed before restart.' });
+    store.updateTask(qaFailed.task.id, {
+      state: 'failed',
+      error: 'QA failed before restart.',
+    });
     const qaCompleted = startStage('qa', 'completed');
     store.updateTask(qaCompleted.task.id, {
       state: 'completed',
@@ -151,7 +159,12 @@ it('serves recovered Reviewer and QA checkpoints consistently through dashboard 
     expect(tasks.get(ordinary.id)).toBe('queued');
 
     const cases = [
-      { id: reviewerQueued.workflowId, stage: 1, status: 'interrupted', code: 'execution-interrupted' },
+      {
+        id: reviewerQueued.workflowId,
+        stage: 1,
+        status: 'interrupted',
+        code: 'execution-interrupted',
+      },
       { id: qaFailed.workflowId, stage: 2, status: 'failed', code: 'execution-failed' },
       { id: qaCompleted.workflowId, stage: 2, status: 'blocked', code: 'stage-blocked' },
     ] as const;
@@ -172,11 +185,13 @@ it('serves recovered Reviewer and QA checkpoints consistently through dashboard 
         expect.arrayContaining([expect.objectContaining({ code: entry.code })]),
       );
       expect(
-        (await post(base + '/approve-qa-result', {
-          version: workflow.json().version,
-          confirmed: true,
-          digest: 'c'.repeat(64),
-        })).statusCode,
+        (
+          await post(base + '/submit-initial', {
+            version: workflow.json().version,
+            confirmed: true,
+            confirmedWrite: true,
+          })
+        ).statusCode,
       ).toBe(409);
     }
     const listed = await get('/api/workflows');
