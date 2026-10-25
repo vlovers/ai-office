@@ -259,8 +259,8 @@ export async function reconcileGitTransferReceipts(
       if (existing.commit) journal.recoverWorkspace('commit', identity);
       if (existing.push) journal.recoverWorkspace('push', identity);
 
-      try {
-        await attestLocalReviewedGitState(plan, {
+      const assertLocalSnapshot = () =>
+        attestLocalReviewedGitState(plan, {
           repository: context.repository,
           worktree: context.worktree,
           workspaceGitDir: context.worktree.gitDir,
@@ -270,8 +270,16 @@ export async function reconcileGitTransferReceipts(
             baseCommitSha: identity.baseSha,
           },
         });
+      try {
+        await assertLocalSnapshot();
         assertSynchronousAuthorization(context.authorize);
         await assertFreshPlan();
+        assertSynchronousAuthorization(context.authorize);
+        assertNotAborted();
+        // A non-cooperating Git process may mutate the worktree during the
+        // asynchronous registry refresh. Verify local state again immediately
+        // before recording the durable commit receipt.
+        await assertLocalSnapshot();
         assertSynchronousAuthorization(context.authorize);
         assertNotAborted();
         // Recheck after async Git and registry reads: a legacy conflict may
@@ -288,6 +296,11 @@ export async function reconcileGitTransferReceipts(
         await attestRemoteWithinDeadline(plan, identity, context.remote, deadlineMs);
         assertSynchronousAuthorization(context.authorize);
         await assertFreshPlan();
+        assertSynchronousAuthorization(context.authorize);
+        assertNotAborted();
+        // Remote GETs and the final registry refresh yield the event loop.
+        // Never confirm a push receipt using only a pre-GET local snapshot.
+        await assertLocalSnapshot();
         assertSynchronousAuthorization(context.authorize);
         assertNotAborted();
         journal.assertExclusiveOwnership(identity);
