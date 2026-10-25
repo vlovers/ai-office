@@ -116,10 +116,12 @@ describe('credential-scoped GitHub response boundary', () => {
 
   it('counts actual bytes even when Content-Length understates the body', async () => {
     await expect(
-      request(refUrl, async () =>
-        new Response('x'.repeat(GITHUB_JSON_LIMITS.refs + 1), {
-          headers: { 'Content-Length': '2' },
-        }),
+      request(
+        refUrl,
+        async () =>
+          new Response('x'.repeat(GITHUB_JSON_LIMITS.refs + 1), {
+            headers: { 'Content-Length': '2' },
+          }),
       ),
     ).rejects.toMatchObject({ statusCode: 503 });
   });
@@ -154,19 +156,21 @@ describe('credential-scoped GitHub response boundary', () => {
   it('does not await a hostile stream cancellation after HTTP 429', async () => {
     let cancelled = false;
     await expect(
-      request(refUrl, async () =>
-        new Response(
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(new Uint8Array([123, 125]));
-            },
-            cancel() {
-              cancelled = true;
-              return new Promise<void>(() => undefined);
-            },
-          }),
-          { status: 429 },
-        ),
+      request(
+        refUrl,
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(new Uint8Array([123, 125]));
+              },
+              cancel() {
+                cancelled = true;
+                return new Promise<void>(() => undefined);
+              },
+            }),
+            { status: 429 },
+          ),
       ),
     ).rejects.toMatchObject({ statusCode: 503 });
     expect(cancelled).toBe(true);
