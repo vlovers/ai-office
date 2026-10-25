@@ -133,7 +133,12 @@ async function refreshReviewedWithinDeadline(
       );
     });
     const reviewed = await Promise.race([
-      Promise.resolve().then(() => context.refreshReviewed()),
+      Promise.resolve().then(() => {
+        if (context.remote.signal?.aborted) {
+          throw new Error('Git transfer registry refresh aborted.');
+        }
+        return context.refreshReviewed();
+      }),
       deadline,
       aborted,
     ]);
