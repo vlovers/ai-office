@@ -248,10 +248,7 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(
       listed.json().filter((workflow: { state: string }) => workflow.state === 'blocked'),
     ).toHaveLength(4);
-    expect(store.queue().map((entry) => entry.taskId)).toEqual([
-      ordinary.id,
-      ordinaryAfter.id,
-    ]);
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id, ordinaryAfter.id]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
 
     const versions = cases.map((entry) => new WorkflowStore(store.db).get(entry.id)!.version);
@@ -263,10 +260,7 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     store = new Store(path);
     const again = new WorkflowStore(store.db);
     expect(cases.map((entry) => again.get(entry.id)!.version)).toEqual(versions);
-    expect(store.queue().map((entry) => entry.taskId)).toEqual([
-      ordinary.id,
-      ordinaryAfter.id,
-    ]);
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id, ordinaryAfter.id]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
     expect(store.session(ordinarySession.id)?.threadId).toBe('persisted-session-thread');
     expect(store.sessionConfiguration(ordinarySession.id)).toEqual(sessionConfiguration);
