@@ -33,6 +33,8 @@ export type DraftPublicationContext = {
   verifySnapshot: (plan: AllowedPlan) => Promise<void>;
   /** Must enumerate all open AND closed PR pages; never return a partial list as complete. */
   listRemote: (plan: AllowedPlan) => Promise<CompleteRemotePrInventory>;
+  /** Optional final local/registry attestation after remote inventory, before consuming approval. */
+  verifyBeforeReserve?: (plan: AllowedPlan) => Promise<void>;
   /** Trusted server-side adapter only. Must create a draft PR; no retries. */
   createDraft: (plan: AllowedPlan) => Promise<GitHubDraftReceipt>;
   /** Optional trusted atomic approval+reservation adapter; no external writes inside. */
@@ -139,6 +141,14 @@ export async function createDraftPublication(
       if (branchConflict) {
         throw new Error('Remote PR head branch conflict requires manual reconciliation.');
       }
+
+      // Inventory is asynchronous. Do not consume the one-use approval if the
+      // trusted review or local Git snapshot changed while listing PRs.
+      const preReservePlan = await context.refreshPlan();
+      if (!preReservePlan.allowed || publicationKey(preReservePlan) !== operationKey) {
+        throw new Error('Publication snapshot changed during remote inventory.');
+      }
+      await context.verifyBeforeReserve?.(preReservePlan);
 
       const reservation = context.reserveApproved
         ? context.reserveApproved(plan)
