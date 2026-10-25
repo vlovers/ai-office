@@ -287,3 +287,29 @@ This adapter accepts only trusted server-side configuration and is **not**
 registered as an HTTP endpoint. It is not permission to enable production
 GitHub write credentials. Real target-host crash/credential tests, independently
 reviewed operator ingress and issue #58 remain release blockers.
+
+## Publication Journal SQLite invariants (combined integration PR #79)
+
+The `DeliveryJournal` constructor now installs additive SQLite indexes/triggers
+without rewriting existing rows. Every SQLite connection, including a separate
+Node process, rejects publication intents inserted directly as `published` or
+`uncertain`, receipts attached to a new reservation, changes to a reserved
+workspace/operation identity, receipt downgrade or replacement, deletion, and
+a second workspace claiming the same publication operation key.
+
+Valid `reserved -> uncertain -> published` recovery remains supported, but
+an uncertain attempt **never authorizes another GitHub POST**. A pre-upgrade
+database containing multiple owners for the same operation is preserved
+verbatim and refused on read until a separately reviewed offline resolution.
+These SQL constraints protect durability; they do **not** prove that a GitHub
+receipt is genuine. The independent remote PR detail GET, exact commit SHA
+comparison, live session/grant checks and shared Git lease remain mandatory.
+
+Migration: stop all publishers, back up the private SQLite database together
+with its WAL/SHM files, deploy the new binary, and inspect legacy conflicts
+before any remote write. Never delete a journal row to unblock publication.
+Rollback must not restart an older writer that can bypass these new triggers
+until its safety is independently assessed. This change does not enable a
+production GitHub credential, browser write endpoint, auto-merge or deploy.
+Independent security review and target-host crash/restart tests are still
+required.
