@@ -178,7 +178,7 @@ async function killPublisherAtPost(
     "    const ref = url.endsWith('/main') ? 'main' : input.workspace.plan.branch;",
     '    return Response.json({',
     "      ref: 'refs/heads/' + ref,",
-    '      object: { type: \'commit\', sha: ref === \'main\' ? input.workspace.baseSha : input.workspace.headSha },',
+    "      object: { type: 'commit', sha: ref === 'main' ? input.workspace.baseSha : input.workspace.headSha },",
     '    });',
     '  }',
     "  if (url.includes('/pulls?')) return Response.json([]);",
@@ -189,7 +189,7 @@ async function killPublisherAtPost(
     '  refreshWorkspace: async () => input.workspace, approvalId: input.approvalId,',
     "  write: { token: 'server-owned-write-token', title: 'Reviewed draft', fetcher },",
     '});',
-    "process.exitCode = 12;",
+    'process.exitCode = 12;',
   ].join('\n');
   const child = spawnSync(
     process.execPath,
