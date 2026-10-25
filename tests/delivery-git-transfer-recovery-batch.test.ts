@@ -200,6 +200,40 @@ describe('bounded Git transfer recovery across workspaces', () => {
     }
   });
 
+  it('isolates malformed and throwing registry bindings without aborting later recovery', async () => {
+    const t = setup();
+    try {
+      for (const id of ['a', 'b', 'c', 'd']) {
+        t.journal.begin('commit', t.identity(id));
+      }
+      const throwingBinding = Object.defineProperty({}, 'journal', {
+        get: () => {
+          throw new Error('registry object corrupted');
+        },
+      });
+      const result = await recoverUnresolvedGitTransfers(t.journal, async (id) => {
+        if (id === 'a') return {} as GitTransferReconciliationContext;
+        if (id === 'b') {
+          return { journal: t.journal, identity: null } as unknown as GitTransferReconciliationContext;
+        }
+        if (id === 'c') return throwingBinding as GitTransferReconciliationContext;
+        return t.contextFor(id);
+      });
+      expect(result.outcomes).toMatchObject([
+        { workspaceId: 'a', status: 'blocked' },
+        { workspaceId: 'b', status: 'blocked' },
+        { workspaceId: 'c', status: 'blocked' },
+        { workspaceId: 'd', status: 'reconciled', result: { status: 'commit-confirmed' } },
+      ]);
+      for (const id of ['a', 'b', 'c']) {
+        expect(t.journal.get(id, 'commit')?.state).toBe('intent');
+      }
+      expect(t.journal.get('d', 'commit')?.state).toBe('confirmed');
+    } finally {
+      t.close();
+    }
+  });
+
   it('isolates authorization failures without stopping later workspaces', async () => {
     const t = setup();
     try {
