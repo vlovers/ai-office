@@ -210,6 +210,15 @@ commit, push or Draft PR POST; remote writes remain disabled. Independent
 security review of the triggers, database migration, multi-process races and
 the trusted session-bound executor is still required before activation.
 
+Pre-upgrade ownership conflicts are also rejected by read-only commit/push
+reconciliation **before** it changes an intent, and checked again after local
+Git attestation and after GitHub GETs, immediately before either receipt is
+confirmed. If a conflicting legacy row appears during an asynchronous read,
+the pending receipt stays uncertain and no further remote write is attempted.
+This closes a recovery-only gap without modifying legacy rows. The final Draft
+PR ownership check remains mandatory, and trusted operators must investigate
+collisions rather than replaying or deleting intents.
+
 Still required before activation: actual multi-process target-host crash
 tests, a trusted registry/startup integration, independent receipt/security
 review, and separate least-privilege write authorization. Do not treat

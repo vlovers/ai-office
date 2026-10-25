@@ -727,4 +727,116 @@ describe('read-only commit/push receipt reconciliation', () => {
       t.close();
     }
   });
+
+  it('rejects a pre-upgrade foreign branch owner before touching the pending intent', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.db.exec('DROP TRIGGER delivery_git_transfers_exclusive_insert');
+      t.journal.begin('commit', {
+        ...t.identity,
+        workspaceId: 'legacy-foreign',
+        operationKey: 'independent-reviewed-operation',
+      });
+
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
+        'another workspace',
+      );
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects a pre-upgrade operation-key collision across repositories and branches', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.db.exec('DROP TRIGGER delivery_git_transfers_exclusive_insert');
+      t.journal.begin('commit', {
+        ...t.identity,
+        workspaceId: 'legacy-foreign',
+        destination: 'https://github.com/foreign/repository',
+        branch: 'ai-office/22345678-1234-1234-1234-123456789abc',
+      });
+
+      await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow(
+        'another workspace',
+      );
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a commit if a legacy owner appears during local attestation', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      let refreshCount = 0;
+      const refreshReviewed = vi.fn(async () => {
+        refreshCount += 1;
+        if (refreshCount === 2) {
+          t.db.exec('DROP TRIGGER delivery_git_transfers_exclusive_insert');
+          t.journal.begin('commit', {
+            ...t.identity,
+            workspaceId: 'legacy-foreign',
+            operationKey: 'independent-reviewed-operation',
+          });
+        }
+        return {
+          plan,
+          identity: t.identity,
+          repository: t.context.repository,
+          worktree: t.context.worktree,
+        };
+      });
+
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshReviewed,
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'commit' });
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1', 'commit')?.receiptSha).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a push if a legacy owner appears during GitHub GETs', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      const original = t.fetcher.getMockImplementation()!;
+      let inserted = false;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (!inserted) {
+          inserted = true;
+          t.db.exec('DROP TRIGGER delivery_git_transfers_exclusive_insert');
+          t.journal.begin('commit', {
+            ...t.identity,
+            workspaceId: 'legacy-foreign',
+            operationKey: 'independent-reviewed-operation',
+          });
+        }
+        return original(url, init);
+      });
+
+      const result = await reconcileGitTransferReceipts(t.context);
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBeNull();
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      t.close();
+    }
+  });
+
 });

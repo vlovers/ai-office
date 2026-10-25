@@ -233,6 +233,10 @@ export async function reconcileGitTransferReceipts(
       }
       if (existing.commit) journal.assertOwned('commit', identity);
       if (existing.push) journal.assertOwned('push', identity);
+      // Legacy databases may contain conflicting owners from before the
+      // atomic SQLite triggers. Do not mutate or attest either owner until
+      // the conflict has been investigated.
+      journal.assertExclusiveOwnership(identity);
       if (
         existing.commit?.state === 'confirmed' &&
         existing.commit.receiptSha !== identity.headSha
@@ -270,6 +274,9 @@ export async function reconcileGitTransferReceipts(
         await assertFreshPlan();
         assertSynchronousAuthorization(context.authorize);
         assertNotAborted();
+        // Recheck after async Git and registry reads: a legacy conflict may
+        // have appeared while the lease was held by this process.
+        journal.assertExclusiveOwnership(identity);
         journal.confirmVerified('commit', identity, identity.headSha);
       } catch {
         return { status: 'blocked', stage: 'commit', ...current() };
@@ -283,6 +290,7 @@ export async function reconcileGitTransferReceipts(
         await assertFreshPlan();
         assertSynchronousAuthorization(context.authorize);
         assertNotAborted();
+        journal.assertExclusiveOwnership(identity);
         journal.confirmVerified('push', identity, identity.headSha);
       } catch {
         return { status: 'blocked', stage: 'push', ...current() };

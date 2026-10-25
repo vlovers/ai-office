@@ -276,10 +276,11 @@ export class DeliveryGitTransferJournal {
    * journals may predate this invariant: refuse Draft PR eligibility rather
    * than silently adopting, deleting, or replaying a foreign intent. GitHub\n   * repository names are case-insensitive, while Git branch names are not.
    *
-   * This is a read-only final gate. The trusted executor must still hold the
+   * This read-only gate also protects receipt reconciliation of pre-upgrade
+   * conflicting rows. The trusted executor must still hold the
    * shared repository lease, refresh the registry and attest both Git refs.
    */
-  private assertExclusiveDraftOwnership(identity: DeliveryGitTransferIdentity): void {
+  assertExclusiveOwnership(identity: DeliveryGitTransferIdentity): void {
     const competing = this.db
       .prepare(
         `SELECT 1 FROM delivery_git_transfers
@@ -297,7 +298,7 @@ export class DeliveryGitTransferJournal {
   assertReadyForDraft(identity: DeliveryGitTransferIdentity) {
     this.assertConfirmed('commit', identity);
     this.assertConfirmed('push', identity);
-    this.assertExclusiveDraftOwnership(identity);
+    this.assertExclusiveOwnership(identity);
   }
 
   private requireMatching(stage: DeliveryGitStage, identity: DeliveryGitTransferIdentity) {
