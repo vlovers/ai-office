@@ -281,6 +281,55 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('does not adopt a PR with conflicting managed-head ownership after restart', async () => {
+    const t = setup();
+    try {
+      const original = t.fetcher.getMockImplementation()!;
+      const conflicting = {
+        ...receipt,
+        number: 124,
+        html_url: 'https://github.com/vlovers/ai-office/pull/124',
+        state: 'closed',
+        base: { ...receipt.base, ref: 'release' },
+      };
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') throw new Error('GitHub accepted POST but reply was lost');
+        if (url.includes('/pulls?')) return json([receipt, conflicting]);
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBe(10_000);
+      const reopened = new DatabaseSync(t.dbPath);
+      try {
+        const recoveredContext = {
+          ...t.context(),
+          sessions: new DeliverySessions(reopened, () => 10_000),
+        };
+        const blocked = await createSessionBoundGitHubDraft(recoveredContext);
+        expect(blocked.status).toBe('uncertain');
+        expect(new DeliveryJournal(reopened).get('workspace-1')?.pullRequestUrl).toBeNull();
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+        // An independently complete inventory without the conflicting head
+        // can confirm the original attempt. Recovery still performs GET only.
+        t.fetcher.mockImplementation(async (url, init) => {
+          if (init.method === 'POST') throw new Error('Recovery must never POST');
+          if (url.includes('/pulls?')) return json([receipt]);
+          return original(url, init);
+        });
+        expect((await createSessionBoundGitHubDraft(recoveredContext)).status).toBe('published');
+        expect(new DeliveryJournal(reopened).get('workspace-1')?.pullRequestUrl).toBe(
+          receipt.html_url,
+        );
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
   it('re-attests local Git immediately before the single POST', async () => {
     const t = setup();
     try {
