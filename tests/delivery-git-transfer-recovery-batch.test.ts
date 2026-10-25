@@ -436,4 +436,59 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.close();
     }
   });
+  it('isolates a stalled in-lease registry refresh and recovers the next workspace', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      t.journal.begin('commit', t.identity('b'));
+      const result = await recoverUnresolvedGitTransfers(t.journal, async (id) => {
+        const context = t.contextFor(id);
+        return id === 'a'
+          ? {
+              ...context,
+              refreshDeadlineMs: 100,
+              refreshReviewed: async () => new Promise<never>(() => undefined),
+            }
+          : context;
+      });
+      expect(result.outcomes).toMatchObject([
+        { workspaceId: 'a', status: 'blocked' },
+        { workspaceId: 'b', status: 'reconciled', result: { status: 'commit-confirmed' } },
+      ]);
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+      expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not let a late registry refresh confirm an earlier timed-out workspace', async () => {
+    const t = setup();
+    let finish!: (value: Awaited<ReturnType<GitTransferReconciliationContext['refreshReviewed']>>) => void;
+    const pending = new Promise<Awaited<ReturnType<GitTransferReconciliationContext['refreshReviewed']>>>(
+      (resolve) => {
+        finish = resolve;
+      },
+    );
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      t.journal.begin('commit', t.identity('b'));
+      const result = await recoverUnresolvedGitTransfers(t.journal, async (id) => {
+        const context = t.contextFor(id);
+        return id === 'a'
+          ? { ...context, refreshDeadlineMs: 100, refreshReviewed: () => pending }
+          : context;
+      });
+      expect(result.outcomes.map((item) => item.status)).toEqual(['blocked', 'reconciled']);
+      const context = t.contextFor('a');
+      finish(await context.refreshReviewed());
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+      expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+    } finally {
+      t.close();
+    }
+  });
+
 });
