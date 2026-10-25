@@ -320,4 +320,86 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.close();
     }
   });
+  it('bounds a stalled registry resolver and still recovers the next workspace', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      t.journal.begin('commit', t.identity('b'));
+      const resolver = vi.fn(async (id: string) =>
+        id === 'a'
+          ? new Promise<GitTransferReconciliationContext | null>(() => undefined)
+          : t.contextFor(id),
+      );
+      const result = await recoverUnresolvedGitTransfers(t.journal, resolver, {
+        resolveTimeoutMs: 100,
+      });
+      expect(result.outcomes).toMatchObject([
+        { workspaceId: 'a', status: 'blocked' },
+        { workspaceId: 'b', status: 'reconciled', result: { status: 'commit-confirmed' } },
+      ]);
+      expect(resolver).toHaveBeenCalledTimes(2);
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+      expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not start reconciliation when a timed-out registry lookup resolves late', async () => {
+    const t = setup();
+    let complete!: (context: GitTransferReconciliationContext) => void;
+    const pending = new Promise<GitTransferReconciliationContext>((resolve) => {
+      complete = resolve;
+    });
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      const result = await recoverUnresolvedGitTransfers(t.journal, async () => pending, {
+        resolveTimeoutMs: 100,
+      });
+      expect(result.outcomes).toEqual([{ workspaceId: 'a', status: 'blocked' }]);
+      complete(t.contextFor('a'));
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects invalid registry deadlines before any lookup or journal mutation', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      const resolver = vi.fn(async (id: string) => t.contextFor(id));
+      for (const resolveTimeoutMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
+        await expect(
+          recoverUnresolvedGitTransfers(t.journal, resolver, { resolveTimeoutMs }),
+        ).rejects.toThrow('registry lookup deadline');
+      }
+      expect(resolver).not.toHaveBeenCalled();
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('accepts the maximum bounded resolver deadline without altering existing semantics', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      const result = await recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+        { resolveTimeoutMs: 60_000 },
+      );
+      expect(result.outcomes).toMatchObject([
+        { workspaceId: 'a', status: 'reconciled', result: { status: 'commit-confirmed' } },
+      ]);
+      expect(t.journal.get('a', 'commit')?.state).toBe('confirmed');
+    } finally {
+      t.close();
+    }
+  });
+
 });
