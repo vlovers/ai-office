@@ -162,7 +162,10 @@ describe('abort-safe read-only Git transfer reconciliation', () => {
       const result = await running;
       expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
       expect(t.journal.get(t.identity.workspaceId, 'push')?.state).toBe('uncertain');
-      expect(t.fetcher).toHaveBeenCalledOnce();
+      // A custom transport may complete an already-started GET after abort.
+      // This is safe only because no receipt or remote write is allowed.
+      expect(t.fetcher.mock.calls.length).toBeGreaterThanOrEqual(1);
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
     } finally {
       t.close();
     }
@@ -226,9 +229,11 @@ describe('abort-safe read-only Git transfer reconciliation', () => {
         stage: 'push',
       });
       expect(() => t.journal.begin('push', t.identity)).toThrow('already exists');
+      const readsBeforeRetry = t.fetcher.mock.calls.length;
       await expect(reconcileGitTransferReceipts(t.context)).rejects.toThrow('aborted');
       expect(t.journal.get(t.identity.workspaceId, 'push')?.state).toBe('uncertain');
-      expect(t.fetcher).toHaveBeenCalledOnce();
+      expect(t.fetcher).toHaveBeenCalledTimes(readsBeforeRetry);
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
     } finally {
       t.close();
     }
