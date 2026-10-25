@@ -295,7 +295,10 @@ without rewriting existing rows. Every SQLite connection, including a separate
 Node process, rejects publication intents inserted directly as `published` or
 `uncertain`, receipts attached to a new reservation, changes to a reserved
 workspace/operation identity, receipt downgrade or replacement, deletion, and
-a second workspace claiming the same publication operation key.
+a second workspace claiming the same publication operation key. Both publication
+and commit/push journals also reject SQLite `INSERT OR REPLACE` against an
+existing row: with default `recursive_triggers=OFF`, `REPLACE` can otherwise
+silently delete a durable receipt without firing a DELETE trigger.
 
 Valid `reserved -> uncertain -> published` recovery remains supported, but
 an uncertain attempt **never authorizes another GitHub POST**. A pre-upgrade
