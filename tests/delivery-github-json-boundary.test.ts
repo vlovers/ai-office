@@ -59,9 +59,9 @@ describe('bounded GitHub JSON response parsing', () => {
   });
 
   it('does not echo malformed JSON or invalid UTF-8 in errors', async () => {
-    await expect(
-      readBoundedGitHubJson(new Response(new Uint8Array([0xff])), 128),
-    ).rejects.toThrow('Invalid GitHub JSON response body');
+    await expect(readBoundedGitHubJson(new Response(new Uint8Array([0xff])), 128)).rejects.toThrow(
+      'Invalid GitHub JSON response body',
+    );
     let message = '';
     try {
       await readBoundedGitHubJson(new Response('{"secret":"server-secret",'), 128);
