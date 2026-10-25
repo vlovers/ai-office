@@ -92,6 +92,16 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     headSha: commits.headCommitSha,
     baseSha: commits.baseCommitSha,
   };
+  // The trusted registry may change while an asynchronous GitHub GET is in
+  // flight. Compare the entire reviewed workspace, not just the operation key,
+  // after each remote attestation and before a reserved Draft PR POST.
+  const refreshReviewedWorkspace = async (): Promise<DeliverySecurityWorkspace> => {
+    const refreshed = deliveryWorkspaceSchema.parse(await context.refreshWorkspace());
+    if (JSON.stringify(refreshed) !== JSON.stringify(workspace)) {
+      throw new Error('Trusted delivery workspace changed since operator review.');
+    }
+    return refreshed;
+  };
   const repository = plan.destination.slice('https://github.com/'.length);
   return createApprovedDraftPublication({
     db: context.sessions.db,
@@ -103,15 +113,7 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     initialPlan: plan,
     now: context.sessions.now,
     authorizeBeforeReserve: authorize,
-    refreshPlan: async () => {
-      const refreshed = deliveryWorkspaceSchema.parse(await context.refreshWorkspace());
-      // Include repository/worktree ownership and reviewed SHAs, not just the
-      // publicationKey: a registry swap must never authorize a stale review.
-      if (JSON.stringify(refreshed) !== JSON.stringify(workspace)) {
-        throw new Error('Trusted delivery workspace changed since operator review.');
-      }
-      return refreshed.plan;
-    },
+    refreshPlan: async () => (await refreshReviewedWorkspace()).plan,
     verifyApprovedSnapshot: async (currentPlan) => {
       authorize();
       transfers.assertReadyForDraft(identity);
@@ -142,6 +144,10 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       });
       authorize();
       const attestation = await attestGitHubCommitRefs(currentPlan, commits, refOptions);
+      authorize();
+      // Remote GETs yield the event loop: a trusted registry replacement after
+      // initial lease validation must fail closed before the only remote POST.
+      await refreshReviewedWorkspace();
       authorize();
       transfers.assertReadyForDraft(identity);
       return createCommitAttestedGitHubDraft(currentPlan, attestation, write);
