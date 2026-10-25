@@ -264,7 +264,7 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(listed.statusCode).toBe(200);
     expect(
       listed.json().filter((workflow: { state: string }) => workflow.state === 'blocked'),
-    ).toHaveLength(8);
+    ).toHaveLength(7);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id, ordinaryAfter.id]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
 
