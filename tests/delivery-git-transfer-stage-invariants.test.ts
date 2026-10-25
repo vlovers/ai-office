@@ -298,9 +298,7 @@ describe('SQLite cross-stage Git transfer invariants', () => {
       confirmCommit(t.journal);
       t.journal.begin('push', identity);
       t.journal.confirmVerified('push', identity, identity.headSha);
-      const before = t.db
-        .prepare('SELECT * FROM delivery_git_transfers ORDER BY stage')
-        .all();
+      const before = t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY stage').all();
       const attempts: Array<{ sql: string; values: string[] }> = [
         {
           sql:
@@ -317,7 +315,8 @@ describe('SQLite cross-stage Git transfer invariants', () => {
           ],
         },
         {
-          sql: "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE stage='push'",
+          sql:
+            "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE stage='push'",
           values: [],
         },
         {
