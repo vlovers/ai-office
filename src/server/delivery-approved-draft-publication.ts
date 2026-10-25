@@ -53,7 +53,9 @@ export async function createApprovedDraftPublication(
     typeof context.verifyBeforeReserve !== 'function' ||
     typeof context.verifyRemoteReceipt !== 'function'
   ) {
-    throw new Error('Approved Draft publication requires final snapshot and PR detail verification.');
+    throw new Error(
+      'Approved Draft publication requires final snapshot and PR detail verification.',
+    );
   }
   if (!binding.plan.allowed) {
     throw new Error('Publication approval differs from the reviewed workspace.');
