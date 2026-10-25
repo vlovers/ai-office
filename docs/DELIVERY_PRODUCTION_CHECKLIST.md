@@ -425,3 +425,28 @@ external Git mutation and remote HTTP writes atomic. This remains a
 server-only, unreleased boundary: production write routes, automatic retry,
 merge and deployment are disabled pending independent security review,
 target-host crash/race testing and least-privilege credential validation.
+
+## Draft PR inventory-to-reservation review gate (combined PR #79)
+
+A complete GitHub PR inventory is an asynchronous preflight, not an
+authorization to consume the operator's one-use approval. After enumerating
+and rejecting matching or conflicting PRs, the orchestrator refreshes the
+trusted publication plan again. The session-bound adapter additionally
+rechecks the actual local Git worktree, origin and reviewed commits, refreshes
+the full trusted workspace registry, and repeats local attestation before
+the SQLite approval consumption and publication reservation.
+
+If a non-cooperating Git process dirties the worktree or changes origin
+during PR inventory, or if the trusted registry changes, the operation fails
+*before* creating any journal reservation or consuming approval. After the
+operator restores the reviewed state, the same unused approval may be
+retried. Once a reservation has committed, the existing no-blind-retry and
+uncertain-outcome rules still apply; the pre-reservation gate does not turn
+ambiguous remote writes into retryable operations.
+
+The tests exercise both real Git mutations and registry drift injected
+during inventory, asserting zero POSTs, no durable reservation and a
+successful retry only after restoring the original reviewed state.
+External Git mutation is not atomically locked; the final pre-POST and
+post-detail attestations remain necessary. Production writes stay disabled
+until independent security review and target-host validation.
