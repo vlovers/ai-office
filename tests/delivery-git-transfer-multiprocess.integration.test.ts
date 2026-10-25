@@ -184,9 +184,7 @@ describe('multi-process durable Git transfer crash boundaries', () => {
       const killed = crashDuringPush(t.args, false);
       expect(killed.signal).toBe('SIGKILL');
       expect(t.journal.get(t.identity.workspaceId, 'push')).toBeNull();
-      expect(t.journal.assertConfirmed('commit', t.identity).receiptSha).toBe(
-        t.identity.headSha,
-      );
+      expect(t.journal.assertConfirmed('commit', t.identity).receiptSha).toBe(t.identity.headSha);
       expect(t.journal.listUnresolvedWorkspaces(10).workspaceIds).toEqual([]);
       expect(t.fetcher).not.toHaveBeenCalled();
     } finally {
