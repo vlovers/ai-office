@@ -234,7 +234,10 @@ test('rejects inline job mappings that hide permissions or actions', () => {
     '  test: &shared { permissions: write-all, runs-on: ubuntu-latest, steps: [] }',
     '  test:\n    { permissions: write-all, runs-on: ubuntu-latest, steps: [] }',
   ]) {
-    expectFinding('permissions:\n  contents: read\njobs:\n' + job + '\n', /unsupported YAML syntax/);
+    expectFinding(
+      'permissions:\n  contents: read\njobs:\n' + job + '\n',
+      /unsupported YAML syntax/,
+    );
   }
 });
 
