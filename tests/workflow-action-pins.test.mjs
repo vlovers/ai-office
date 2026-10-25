@@ -277,7 +277,7 @@ test('rejects escaped YAML mapping keys that disguise uses and permissions', () 
     '"\\u0075ses": actions/upload-artifact@v7',
   );
   expectFinding(escapedUses, /unsupported YAML syntax/);
-  const escapedPermissions = workflow() +
-    'jobs:\n  extra:\n    "per\\u006dissions":\n      contents: write\n';
+  const escapedPermissions =
+    workflow() + 'jobs:\n  extra:\n    "per\\u006dissions":\n      contents: write\n';
   expectFinding(escapedPermissions, /unsupported YAML syntax/);
 });
