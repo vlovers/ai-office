@@ -173,9 +173,7 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
     try {
       t.journal.begin('commit', identity);
       expect(() =>
-        t.db
-          .prepare("UPDATE delivery_git_transfers SET state='confirmed', receipt_sha=NULL")
-          .run(),
+        t.db.prepare("UPDATE delivery_git_transfers SET state='confirmed', receipt_sha=NULL").run(),
       ).toThrow('monotonically');
       expect(() =>
         t.db
@@ -184,14 +182,10 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
       ).toThrow('monotonically');
       t.journal.confirmVerified('commit', identity, identity.headSha);
       expect(() =>
-        t.db
-          .prepare("UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL")
-          .run(),
+        t.db.prepare("UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL").run(),
       ).toThrow('monotonically');
       expect(() =>
-        t.db
-          .prepare('UPDATE delivery_git_transfers SET receipt_sha=?')
-          .run('f'.repeat(40)),
+        t.db.prepare('UPDATE delivery_git_transfers SET receipt_sha=?').run('f'.repeat(40)),
       ).toThrow('monotonically');
       expect(t.journal.assertConfirmed('commit', identity).receiptSha).toBe(identity.headSha);
     } finally {
@@ -207,7 +201,7 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
       const script = [
         "const { DatabaseSync } = require('node:sqlite');",
         'const db = new DatabaseSync(process.argv[1]);',
-        "try { db.exec(\"UPDATE delivery_git_transfers SET state='intent', receipt_sha=NULL\"); process.exit(43); }",
+        'try { db.exec("UPDATE delivery_git_transfers SET state=\'intent\', receipt_sha=NULL"); process.exit(43); }',
         "catch (error) { process.exit(String(error).includes('monotonically') ? 42 : 44); }",
       ].join(' ');
       const child = spawnSync(process.execPath, ['-e', script, t.path], {
@@ -235,22 +229,3 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
     }
   });
 });
-
-/* FORMAT_DIAGNOSTIC_START */
-it('temporary formatting diagnostic', async () => {
-  const { format, resolveConfig } = await import('prettier');
-  const { readFileSync } = await import('node:fs');
-  const { fileURLToPath } = await import('node:url');
-  const filename = fileURLToPath(import.meta.url);
-  const source = readFileSync(filename, 'utf8');
-  const stripped = source.replace(
-    /\n\/\* FORMAT_DIAGNOSTIC_START \*\/[\s\S]*?\/\* FORMAT_DIAGNOSTIC_END \*\/\n/,
-    '\n',
-  );
-  const formatted = await format(stripped, {
-    ...(await resolveConfig(filename)),
-    filepath: filename,
-  });
-  console.log('FORMAT_BASE64:' + Buffer.from(formatted).toString('base64'));
-});
-/* FORMAT_DIAGNOSTIC_END */
