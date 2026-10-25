@@ -15,6 +15,53 @@ export class DeliveryJournal {
       state TEXT NOT NULL CHECK (state IN ('reserved', 'published', 'uncertain')),
       pull_request_url TEXT
     )`);
+    // Preserve legacy rows exactly as stored. These constraints apply to new
+    // writes on every SQLite connection, including independent Node processes.
+    // Existing corrupt rows are not silently rewritten or deleted.
+    this.db.exec(`CREATE INDEX IF NOT EXISTS delivery_journal_operation_key_idx
+      ON delivery_journal(operation_key)`);
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_journal_exclusive_operation_insert
+      BEFORE INSERT ON delivery_journal
+      WHEN EXISTS (
+        SELECT 1 FROM delivery_journal
+        WHERE workspace_id != NEW.workspace_id AND operation_key = NEW.operation_key
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Publication operation belongs to another workspace.');
+      END`);
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_journal_reserved_only_insert
+      BEFORE INSERT ON delivery_journal
+      WHEN NEW.state IS NOT 'reserved' OR NEW.pull_request_url IS NOT NULL
+      BEGIN
+        SELECT RAISE(ABORT, 'Publication insertion must reserve a receipt-free intent.');
+      END`);
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_journal_immutable_identity
+      BEFORE UPDATE ON delivery_journal
+      WHEN OLD.workspace_id IS NOT NEW.workspace_id
+        OR OLD.operation_key IS NOT NEW.operation_key
+      BEGIN
+        SELECT RAISE(ABORT, 'Publication journal identity is immutable.');
+      END`);
+    // A reserved attempt may become uncertain or confirmed. Only read-only
+    // reconciliation may confirm uncertainty. Neither path may replace a
+    // confirmed receipt or reset an uncertain attempt for another POST.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_journal_monotonic_receipt
+      BEFORE UPDATE OF state, pull_request_url ON delivery_journal
+      WHEN NOT (
+        (NEW.state IS OLD.state AND NEW.pull_request_url IS OLD.pull_request_url)
+        OR (OLD.state = 'reserved' AND NEW.state = 'uncertain'
+            AND NEW.pull_request_url IS NULL)
+        OR (OLD.state IN ('reserved', 'uncertain') AND NEW.state = 'published'
+            AND NEW.pull_request_url IS NOT NULL)
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Publication journal receipt must advance monotonically.');
+      END`);
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_journal_no_delete
+      BEFORE DELETE ON delivery_journal
+      BEGIN
+        SELECT RAISE(ABORT, 'Publication intents and receipts cannot be deleted.');
+      END`);
   }
 
   get(workspaceId: string): DeliveryJournalEntry | null {
