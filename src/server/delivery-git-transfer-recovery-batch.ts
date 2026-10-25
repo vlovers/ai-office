@@ -33,7 +33,10 @@ async function resolveWithinDeadline(
     );
   });
   try {
-    return await Promise.race([Promise.resolve().then(() => resolveWorkspace(workspaceId)), deadline]);
+    return await Promise.race([
+      Promise.resolve().then(() => resolveWorkspace(workspaceId)),
+      deadline,
+    ]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
