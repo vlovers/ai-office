@@ -680,3 +680,131 @@ it('a fresh TaskManager cannot dispatch a workflow queue left by a crashed proce
     await env.cleanup();
   }
 });
+
+it('recovers queued and completed Reviewer stages without replay while preserving ordinary FIFO work', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-workflow-restart-matrix-'));
+  const path = join(directory, 'metadata.sqlite');
+  let store = new Store(path);
+  try {
+    const repo = store.register({
+      path: '/disposable/restart-matrix',
+      gitDir: '/disposable/restart-matrix/.git',
+      name: 'restart-matrix',
+    });
+    const coder = store.agent('codex-1')!;
+    store.db
+      .prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
+      .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, coder.revision);
+    const reviewer = store.agent('codex-2')!;
+    const workflows = new WorkflowStore(store.db);
+    const baseline = 'a'.repeat(40);
+    const reviewedRevision = 'b'.repeat(40);
+    const startReviewer = (label: string) => {
+      const created = workflows.create({
+        repositoryId: repo.id,
+        baselineRevision: baseline,
+        stages: [
+          { kind: 'coder', agentId: coder.id, agentRevision: coder.revision, mode: 'write' },
+          {
+            kind: 'reviewer',
+            agentId: reviewer.id,
+            agentRevision: reviewer.revision,
+            mode: 'read-only',
+          },
+          { kind: 'qa', agentId: reviewer.id, agentRevision: reviewer.revision, mode: 'read-only' },
+        ],
+      });
+      const approved = workflows.transition(created.id, created.version, {
+        type: 'approve',
+        revision: baseline,
+      });
+      const coderRunning = workflows.transition(created.id, approved.version, {
+        type: 'start',
+        taskId: `coder-${label}`,
+        revision: baseline,
+      });
+      const coderFinished = workflows.transition(created.id, coderRunning.version, {
+        type: 'finish',
+        taskId: `coder-${label}`,
+        revision: reviewedRevision,
+        succeeded: true,
+      });
+      const reviewerApproved = workflows.transition(created.id, coderFinished.version, {
+        type: 'approve',
+        revision: reviewedRevision,
+      });
+      const task = store.createTask({
+        repositoryId: repo.id,
+        agentId: reviewer.id,
+        title: `Reviewer ${label}`,
+        prompt: 'Read-only review fixture',
+        executionMode: 'read-only',
+      });
+      const running = workflows.transition(created.id, reviewerApproved.version, {
+        type: 'start',
+        taskId: task.id,
+        revision: reviewedRevision,
+      });
+      return { task, running };
+    };
+
+    const queuedReviewer = startReviewer('queued');
+    store.enqueue(queuedReviewer.task.id, 'local-cli-chatgpt');
+    const completedReviewer = startReviewer('completed');
+    store.updateTask(completedReviewer.task.id, {
+      state: 'completed',
+      result: 'Unapproved reviewer output',
+    });
+    const ordinary = store.createTask({
+      repositoryId: repo.id,
+      title: 'Unrelated queued task',
+      prompt: 'Ordinary read-only task',
+    });
+    store.enqueue(ordinary.id, 'local-cli-chatgpt');
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([
+      queuedReviewer.task.id,
+      ordinary.id,
+    ]);
+
+    // Simulate an abrupt backend exit after SQLite persisted both workflow
+    // stages. A new Store must remove only the privileged workflow queue entry.
+    store.close();
+    store = new Store(path);
+    const recovered = new WorkflowStore(store.db);
+    const queuedState = recovered.get(queuedReviewer.running.id)!;
+    const completedState = recovered.get(completedReviewer.running.id)!;
+    expect(queuedState.state).toBe('blocked');
+    expect(queuedState.stages.map((stage) => stage.state)).toEqual([
+      'completed',
+      'interrupted',
+      'pending',
+    ]);
+    expect(store.task(queuedReviewer.task.id)?.state).toBe('interrupted');
+    expect(completedState.state).toBe('blocked');
+    expect(completedState.stages.map((stage) => stage.state)).toEqual([
+      'completed',
+      'blocked',
+      'pending',
+    ]);
+    expect(store.task(completedReviewer.task.id)?.state).toBe('completed');
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
+    expect(store.task(ordinary.id)?.state).toBe('queued');
+    expect(() =>
+      recovered.transition(queuedState.id, queuedState.version, {
+        type: 'approve',
+        revision: reviewedRevision,
+      }),
+    ).toThrow();
+
+    // Repeated startup recovery is idempotent and never requeues Reviewer/QA.
+    store.close();
+    store = new Store(path);
+    const again = new WorkflowStore(store.db);
+    expect(again.get(queuedState.id)?.version).toBe(queuedState.version);
+    expect(again.get(completedState.id)?.version).toBe(completedState.version);
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
