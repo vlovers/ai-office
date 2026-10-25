@@ -94,8 +94,8 @@ function setup() {
 }
 
 const insert = [
-  "INSERT INTO delivery_git_transfers",
-  "(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha)",
+  'INSERT INTO delivery_git_transfers',
+  '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha)',
   "VALUES (?, 'commit', ?, ?, ?, ?, ?, 'intent', NULL)",
 ].join(' ');
 
@@ -200,7 +200,7 @@ describe('multi-process durable Git transfer crash boundaries', () => {
         'const db=new DatabaseSync(process.argv[1]);',
         "db.exec('PRAGMA busy_timeout=50');",
         'try { db.prepare(process.argv[8]).run(...process.argv.slice(2,8)); process.exit(0); }',
-        "catch(error) { process.exit(/locked|busy/i.test(String(error)) ? 42 : 43); }",
+        'catch(error) { process.exit(/locked|busy/i.test(String(error)) ? 42 : 43); }',
       ].join(' ');
       const contender = spawnSync(process.execPath, ['-e', script, ...t.args, insert], {
         encoding: 'utf8',
