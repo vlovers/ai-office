@@ -73,6 +73,36 @@ export class DeliveryGitTransferJournal {
       receipt_sha TEXT,
       PRIMARY KEY (workspace_id, stage)
     )`);
+    // SQLite executes triggers inside the INSERT statement's writer lock.
+    // Unlike a SELECT-then-INSERT check, this excludes competing workspaces
+    // even when separate Node processes race to reserve the same branch.
+    // Creating the triggers does not rewrite or discard legacy conflicting
+    // rows: assertReadyForDraft still detects those during migration.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_exclusive_insert
+      BEFORE INSERT ON delivery_git_transfers
+      WHEN EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE workspace_id != NEW.workspace_id
+          AND (operation_key = NEW.operation_key OR
+            (destination COLLATE NOCASE = NEW.destination AND branch = NEW.branch))
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer operation or branch belongs to another workspace.');
+      END`);
+    // No production API changes identity columns, but reject accidental SQL
+    // identity reassignment without weakening the cross-workspace invariant.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_exclusive_update
+      BEFORE UPDATE OF workspace_id, operation_key, destination, branch
+      ON delivery_git_transfers
+      WHEN EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE rowid != OLD.rowid AND workspace_id != NEW.workspace_id
+          AND (operation_key = NEW.operation_key OR
+            (destination COLLATE NOCASE = NEW.destination AND branch = NEW.branch))
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer operation or branch belongs to another workspace.');
+      END`);
   }
 
   get(workspaceId: string, stage: DeliveryGitStage): DeliveryGitTransferEntry | null {
@@ -148,7 +178,9 @@ export class DeliveryGitTransferJournal {
   }
 
   /**
-   * One reservation per workspace/stage, including after restart.
+   * One reservation per workspace/stage, including after restart. SQLite
+   * triggers atomically exclude a foreign workspace claiming this operation
+   * key or destination/branch, even across independent writer processes.
    * A push intent requires an independently confirmed matching commit receipt.
    */
   begin(stage: DeliveryGitStage, identity: DeliveryGitTransferIdentity): DeliveryGitTransferEntry {
