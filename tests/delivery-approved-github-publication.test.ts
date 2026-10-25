@@ -39,7 +39,7 @@ const receipt = {
 };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 
-function setup() {
+function setup(options: { omitPush?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'ai-office-session-draft-'));
   const path = join(root, 'repo');
   execFileSync('git', ['init', '-q', path]);
@@ -82,6 +82,7 @@ function setup() {
     baseSha,
   };
   for (const stage of ['commit', 'push'] as const) {
+    if (options.omitPush && stage === 'push') continue;
     transfers.begin(stage, identity);
     transfers.confirmVerified(stage, identity, headSha);
   }
@@ -179,9 +180,8 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
   });
 
   it('requires verified commit and push receipts before any GitHub call', async () => {
-    const t = setup();
+    const t = setup({ omitPush: true });
     try {
-      t.db.prepare("DELETE FROM delivery_git_transfers WHERE stage='push'").run();
       await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow();
       expect(t.fetcher).not.toHaveBeenCalled();
       expect(t.journal.get('workspace-1')).toBeNull();
@@ -287,25 +287,24 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
-  it('blocks POST when a confirmed push receipt is invalidated at the final adapter gate', async () => {
+  it('blocks POST when the final journal readiness check fails closed', async () => {
     const t = setup();
-    try {
-      const original = t.context();
-      const result = await createSessionBoundGitHubDraft({
-        ...original,
-        write: {
-          ...original.write,
-          authorizeBeforePost: () => {
-            t.db
-              .prepare("UPDATE delivery_git_transfers SET state='uncertain' WHERE stage='push'")
-              .run();
-          },
-        },
+    const originalAssert = DeliveryGitTransferJournal.prototype.assertReadyForDraft;
+    let checks = 0;
+    const readiness = vi
+      .spyOn(DeliveryGitTransferJournal.prototype, 'assertReadyForDraft')
+      .mockImplementation(function (identity) {
+        if (++checks === 4) throw new Error('Journal readiness unavailable.');
+        return originalAssert.call(this, identity);
       });
+    try {
+      const result = await createSessionBoundGitHubDraft(t.context());
+      expect(checks).toBe(4);
       expect(result.status).toBe('uncertain');
       expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
     } finally {
+      readiness.mockRestore();
       t.close();
     }
   });
