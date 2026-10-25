@@ -359,7 +359,9 @@ if (process.argv.includes('--restart-server')) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
       assert.equal((await response.json()).version, versions[index]);
-      const timeline = await activePage.request.get(address + '/api/workflows/' + id + '/timeline');
+      const timeline = await activePage.request.get(
+        address + '/api/workflows/' + id + '/timeline',
+      );
       assert.equal(timeline.status(), 200);
       const view = await timeline.json();
       assert.equal(view.state, 'blocked');
