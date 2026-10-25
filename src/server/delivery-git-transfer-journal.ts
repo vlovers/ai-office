@@ -106,6 +106,48 @@ export class DeliveryGitTransferJournal {
   }
 
   /**
+   * Stable, bounded discovery of unresolved workspaces. A workspace with both
+   * commit and push intents appears once. Cursor pagination avoids repeatedly
+   * selecting the first blocked workspace during operator-driven recovery.
+   * This performs no recovery or journal mutation.
+   */
+  listUnresolvedWorkspaces(
+    limit: number,
+    afterWorkspaceId?: string,
+  ): { workspaceIds: string[]; nextCursor: string | null; hasMore: boolean } {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error('Invalid Git transfer recovery batch limit.');
+    }
+    if (
+      afterWorkspaceId !== undefined &&
+      (typeof afterWorkspaceId !== 'string' ||
+        afterWorkspaceId.length === 0 ||
+        afterWorkspaceId.length > 200)
+    ) {
+      throw new Error('Invalid Git transfer recovery cursor.');
+    }
+    const rows =
+      afterWorkspaceId === undefined
+        ? this.db
+            .prepare(
+              "SELECT DISTINCT workspace_id FROM delivery_git_transfers WHERE state != 'confirmed' ORDER BY workspace_id LIMIT ?",
+            )
+            .all(limit + 1)
+        : this.db
+            .prepare(
+              "SELECT DISTINCT workspace_id FROM delivery_git_transfers WHERE state != 'confirmed' AND workspace_id > ? ORDER BY workspace_id LIMIT ?",
+            )
+            .all(afterWorkspaceId, limit + 1);
+    const hasMore = rows.length > limit;
+    const workspaceIds = rows.slice(0, limit).map((row) => String(row.workspace_id));
+    return {
+      workspaceIds,
+      nextCursor: hasMore ? workspaceIds[workspaceIds.length - 1]! : null,
+      hasMore,
+    };
+  }
+
+  /**
    * One reservation per workspace/stage, including after restart.
    * A push intent requires an independently confirmed matching commit receipt.
    */
