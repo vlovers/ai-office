@@ -493,3 +493,41 @@ This does not make the generic `createDraftPublication` test harness a safe
 production writer: only the authenticated, server-owned composition may be
 considered for future activation, after independent review and target-host
 validation. No HTTP write route or production credential has been enabled.
+
+## Independent-process Draft PR POST crash boundary (combined PR #79)
+
+The real session-bound Draft PR composition is now exercised in an independent
+Node process against a real temporary Git repository and a file-backed SQLite
+database. The test worker authenticates with a persisted operator session,
+passes the verified commit/push transfer receipts, consumes its one-use
+approval, commits the publication reservation, enters the one-attempt GitHub
+POST adapter, and is forcibly terminated with `SIGKILL` before a local
+publication receipt can be written. A controlled fake GitHub transport records
+whether the remote side accepted the POST outside the Git worktree.
+
+A new SQLite connection and session service then recover the persisted
+`reserved` intent. The matrix covers:
+
+- Crash before remote acceptance: no matching PR exists, so recovery remains
+  `uncertain` and **never retries POST**.
+- Crash after remote acceptance: complete read-only PR inventory plus an
+  independent PR-detail GET verifies the exact head/base SHAs and records
+  `published`, without another POST.
+- Rate-limited first recovery inventory (HTTP 429): preserve uncertainty;
+  a subsequent authorized read-only reconciliation may confirm the receipt.
+- Two PRs reusing the managed head: refuse ambiguous ownership until the
+  inventory is independently resolved; do not fabricate or overwrite a URL.
+- Revoked operator grant or changed real Git worktree after restart: block
+  recovery before GitHub access or journal confirmation; allow a fresh
+  read-only reconciliation only after restoring authorization and Git state.
+
+These are **controlled fake-transport crash tests**, not a live GitHub
+failure-injection campaign. The test does not prove that a real remote service
+committed a POST just before a TCP disconnect, that all filesystem durability
+conditions hold on the deployment host, or that credential provisioning is
+production-safe. The SQLite intent and receipt remain non-deletable evidence;
+there is no automatic replay of an ambiguous remote write.
+
+Production GitHub writes, merge endpoints and automatic retries remain
+disabled pending independent security review, least-privilege credentials,
+target-host crash testing and operational sign-off.
