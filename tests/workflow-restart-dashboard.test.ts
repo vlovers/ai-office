@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { join } from 'node:path';
 import { createApp } from '../src/server/app.js';
+import { profileConfiguration } from '../src/server/execution-config.js';
 import { TaskManager } from '../src/server/manager.js';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
@@ -118,7 +119,26 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
       title: 'Ordinary queued work',
       prompt: 'Unrelated task',
     });
-    store.enqueue(ordinary.id, 'local-cli-chatgpt');
+    // An unrelated resumable session must retain its pinned execution identity
+    // and queue position while a crashed Workflow is quarantined.
+    const sessionBinding = {
+      mode: 'local-cli-chatgpt' as const,
+      contextId: 'private-restart-session-context',
+      model: null,
+      runtimeVersion: '0.162.1',
+    };
+    const sessionConfiguration = profileConfiguration(store.agent('codex-1')!, ordinary);
+    const ordinarySession = store.createSession(
+      repository.id,
+      sessionBinding,
+      'codex',
+      'codex-1',
+      'read-only',
+      undefined,
+      sessionConfiguration,
+    );
+    store.setThread(ordinarySession.id, 'persisted-session-thread');
+    store.enqueue(ordinary.id, 'local-cli-chatgpt', ordinarySession.id);
     const qaFailed = startStage('qa', 'failed');
     store.updateTask(qaFailed.task.id, {
       state: 'failed',
@@ -150,6 +170,20 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(dashboard.statusCode).toBe(200);
     const view = dashboard.json();
     expect(view.queue.map((entry: { taskId: string }) => entry.taskId)).toEqual([ordinary.id]);
+    expect(view.queue[0].resumeSessionId).toBe(ordinarySession.id);
+    expect(view.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: ordinarySession.id,
+          threadId: 'persisted-session-thread',
+          configuration: sessionConfiguration,
+        }),
+      ]),
+    );
+    // The connection binding is server-only; the dashboard must not expose it.
+    expect(JSON.stringify(view)).not.toContain(sessionBinding.contextId);
+    expect(store.sessionBinding(ordinarySession.id)).toEqual(sessionBinding);
+    expect(store.taskConfiguration(ordinary.id)).toEqual(sessionConfiguration);
     const tasks = new Map(
       view.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
     );
@@ -197,6 +231,7 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
       listed.json().filter((workflow: { state: string }) => workflow.state === 'blocked'),
     ).toHaveLength(3);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
+    expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
 
     const versions = cases.map((entry) => new WorkflowStore(store.db).get(entry.id)!.version);
     await app.close();
@@ -208,6 +243,11 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     const again = new WorkflowStore(store.db);
     expect(cases.map((entry) => again.get(entry.id)!.version)).toEqual(versions);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
+    expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
+    expect(store.session(ordinarySession.id)?.threadId).toBe('persisted-session-thread');
+    expect(store.sessionConfiguration(ordinarySession.id)).toEqual(sessionConfiguration);
+    expect(store.sessionBinding(ordinarySession.id)).toEqual(sessionBinding);
+    expect(store.taskConfiguration(ordinary.id)).toEqual(sessionConfiguration);
   } finally {
     await app?.close();
     await manager?.shutdown();
