@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { chromium, expect, type Page } from '@playwright/test';
+import { chromium, expect, type APIResponse, type Page } from '@playwright/test';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
 import { TaskManager } from '../src/server/manager.js';
@@ -283,9 +283,10 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(taskStates.get(failed.task.id), 'failed');
     assert.equal(taskStates.get(blocked.task.id), 'completed');
     const ids = [interrupted.workflowId, failed.workflowId, blocked.workflowId];
+    const activePage = page;
     const versions = await Promise.all(
       ids.map(async (id) => {
-        const response = await page.request.get(address + '/api/workflows/' + id);
+        const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
         assert.equal(response.status(), 200);
         return (await response.json()).version as number;
       }),
@@ -306,11 +307,12 @@ if (process.argv.includes('--restart-server')) {
     await reconnected;
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     for (const [index, id] of ids.entries()) {
-      const response = await page.request.get(address + '/api/workflows/' + id);
+      const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
       assert.equal((await response.json()).version, versions[index]);
     }
-    const after = await page.request.get(address + '/api/dashboard');
+    const after = await activePage.request.get(address + '/api/dashboard');
+    assert.equal(after.status(), 200);
     assert.deepEqual(
       (await after.json()).queue.map((item: { taskId: string }) => item.taskId),
       ordinary,
