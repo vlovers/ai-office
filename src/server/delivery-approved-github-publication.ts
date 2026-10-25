@@ -149,6 +149,17 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       // initial lease validation must fail closed before the only remote POST.
       await refreshReviewedWorkspace();
       authorize();
+      // Both the GitHub GETs and registry refresh yield the event loop. A
+      // non-cooperating Git process can change local refs or dirty the index
+      // after the first pre-POST attestation. Recheck the exact worktree just
+      // before entering the single-attempt remote write adapter.
+      await attestLocalReviewedGitState(currentPlan, {
+        repository: workspace.repository,
+        worktree: workspace.worktree,
+        workspaceGitDir: workspace.worktree.gitDir,
+        commits,
+      });
+      authorize();
       transfers.assertReadyForDraft(identity);
       return createCommitAttestedGitHubDraft(currentPlan, attestation, write);
     },
@@ -159,6 +170,18 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       // stale or revoked review into a durable confirmed publication receipt.
       await refreshReviewedWorkspace();
       authorize();
+      // A completed POST or a recovered remote PR is not enough to persist a
+      // local success receipt if Git changed while the detail GET was pending.
+      // Keep the durable journal uncertain until the reviewed local identity
+      // is still valid at the final confirmation boundary.
+      await attestLocalReviewedGitState(currentPlan, {
+        repository: workspace.repository,
+        worktree: workspace.worktree,
+        workspaceGitDir: workspace.worktree.gitDir,
+        commits,
+      });
+      authorize();
+      transfers.assertReadyForDraft(identity);
       validateAttestedDraftReceipt(
         currentPlan,
         {
