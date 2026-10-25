@@ -153,23 +153,25 @@ describe('multi-process durable Git transfer crash boundaries', () => {
     }
   });
 
-  it('does not let a second process reserve an already committed intent', () => {
+  it('rejects duplicate intents from independent processes through the real journal API', () => {
     const t = setup();
     try {
       expect(crashDuringIntent(t.args, true).signal).toBe('SIGKILL');
       const script = [
-        "const {DatabaseSync}=require('node:sqlite');",
+        "import { DatabaseSync } from 'node:sqlite';",
+        "import { DeliveryGitTransferJournal } from './src/server/delivery-git-transfer-journal.ts';",
         'const db=new DatabaseSync(process.argv[1]);',
-        'const changes=db.prepare(process.argv[8].replace("INSERT INTO","INSERT OR IGNORE INTO")).run(...process.argv.slice(2,8)).changes;',
-        'process.stdout.write(String(changes));',
+        'const identity=JSON.parse(process.argv[2]);',
+        "try { new DeliveryGitTransferJournal(db).begin('commit',identity); process.exit(0); }",
+        "catch(error) { process.exit(String(error).includes('already exists') ? 42 : 43); }",
       ].join(' ');
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const replay = spawnSync(process.execPath, ['-e', script, ...t.args, insert], {
-          encoding: 'utf8',
-          timeout: 5000,
-        });
-        expect(replay.status).toBe(0);
-        expect(replay.stdout).toBe('0');
+        const replay = spawnSync(
+          process.execPath,
+          ['--import', 'tsx', '--input-type=module', '-e', script, t.dbPath, JSON.stringify(t.identity)],
+          { encoding: 'utf8', timeout: 5000 },
+        );
+        expect(replay.status).toBe(42);
       }
       expect(t.journal.get(t.identity.workspaceId, 'commit')).toMatchObject({
         state: 'intent',
