@@ -358,7 +358,15 @@ describe('Draft PR transfer ownership and replay isolation', () => {
       ].join(' ');
       const child = spawnSync(
         process.execPath,
-        ['--import', 'tsx', '--input-type=module', '-e', script, t.dbPath, JSON.stringify(identity('foreign'))],
+        [
+          '--import',
+          'tsx',
+          '--input-type=module',
+          '-e',
+          script,
+          t.dbPath,
+          JSON.stringify(identity('foreign')),
+        ],
         { encoding: 'utf8', timeout: 5000 },
       );
       expect(child.status).toBe(42);
