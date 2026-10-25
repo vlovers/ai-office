@@ -109,7 +109,7 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
         ['branch', 'ai-office/22345678-1234-1234-1234-123456789abc'],
         ['head_sha', 'f'.repeat(40)],
         ['base_sha', 'f'.repeat(40)],
-      ]) {
+      ] as const) {
         expect(() =>
           t.db
             .prepare(`UPDATE delivery_git_transfers SET ${column}=? WHERE workspace_id=?`)
