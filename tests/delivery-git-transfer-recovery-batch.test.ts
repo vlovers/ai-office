@@ -43,7 +43,8 @@ function setup() {
     const path = join(root, `repo-${workspaceId}`);
     const git = (...args: string[]) =>
       execFileSync('git', ['-C', path, ...args], { encoding: 'utf8' }).trim();
-    const branch = `ai-office/${workspaceId.charCodeAt(0).toString(16).padStart(8, '0')}-1234-1234-1234-123456789abc`;
+    const uuidPrefix = workspaceId.charCodeAt(0).toString(16).padStart(8, '0');
+    const branch = `ai-office/${uuidPrefix}-1234-1234-1234-123456789abc`;
     const destination = `https://github.com/vlovers/ai-office-${workspaceId}`;
     const plan = {
       allowed: true as const,
@@ -56,12 +57,12 @@ function setup() {
     execFileSync('git', ['init', '-q', '-b', 'main', path]);
     git('config', 'user.name', 'AI Office Test');
     git('config', 'user.email', 'test@example.invalid');
-    writeFileSync(join(path, 'README.md'), 'base\\n');
+    writeFileSync(join(path, 'README.md'), 'base\n');
     git('add', 'README.md');
     git('commit', '-qm', 'base');
     const baseSha = git('rev-parse', 'HEAD');
     git('switch', '-q', '-c', branch);
-    writeFileSync(join(path, 'README.md'), 'reviewed\\n');
+    writeFileSync(join(path, 'README.md'), 'reviewed\n');
     git('add', 'README.md');
     git('commit', '-qm', 'reviewed');
     const headSha = git('rev-parse', 'HEAD');
@@ -180,10 +181,7 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.journal.begin('commit', { ...owner, workspaceId: 'b' });
       t.journal.begin('commit', t.identity('c'));
 
-      const result = await recoverUnresolvedGitTransfers(
-        t.journal,
-        async (id) => t.contextFor(id),
-      );
+      const result = await recoverUnresolvedGitTransfers(t.journal, async (id) => t.contextFor(id));
       expect(result.outcomes).toMatchObject([
         { workspaceId: 'a', status: 'blocked' },
         { workspaceId: 'b', status: 'blocked' },
