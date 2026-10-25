@@ -451,7 +451,10 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       t.fetcher.mockImplementation(async (url, init) => {
         if (url.includes('/pulls?')) return json([receipt]);
         if (url.endsWith('/pulls/123')) {
-          current = { ...current, repository: { ...current.repository, gitDir: current.repository.gitDir + '-changed' } };
+          current = {
+            ...current,
+            repository: { ...current.repository, gitDir: current.repository.gitDir + '-changed' },
+          };
         }
         return fetcher(url, init);
       });
