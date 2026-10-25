@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -961,6 +962,145 @@ it('recovers queued and failed QA without replay and preserves unrelated FIFO or
     expect(again.get(failed.id)?.version).toBe(failed.version);
     expect(again.get(stopped.id)?.version).toBe(stopped.version);
     expect(again.get(completed.id)?.version).toBe(completed.version);
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([
+      ordinaryBefore.id,
+      ordinaryAfter.id,
+    ]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('finishes Workflow recovery after a crash between Store and Workflow recovery commits', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-recovery-commit-gap-'));
+  const path = join(directory, 'metadata.sqlite');
+  let store = new Store(path);
+  try {
+    const repo = store.register({
+      path: '/disposable/recovery-commit-gap',
+      gitDir: '/disposable/recovery-commit-gap/.git',
+      name: 'recovery-commit-gap',
+    });
+    const coder = store.agent('codex-1')!;
+    store.db
+      .prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
+      .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, coder.revision);
+    const reviewer = store.agent('codex-2')!;
+    const workflows = new WorkflowStore(store.db);
+    const baseline = 'a'.repeat(40);
+    const revision = 'b'.repeat(40);
+    const created = workflows.create({
+      repositoryId: repo.id,
+      baselineRevision: baseline,
+      stages: [
+        { kind: 'coder', agentId: coder.id, agentRevision: coder.revision, mode: 'write' },
+        {
+          kind: 'reviewer',
+          agentId: reviewer.id,
+          agentRevision: reviewer.revision,
+          mode: 'read-only',
+        },
+      ],
+    });
+    const approved = workflows.transition(created.id, created.version, {
+      type: 'approve',
+      revision: baseline,
+    });
+    const coderRunning = workflows.transition(created.id, approved.version, {
+      type: 'start',
+      taskId: 'coder-commit-gap',
+      revision: baseline,
+    });
+    const coderFinished = workflows.transition(created.id, coderRunning.version, {
+      type: 'finish',
+      taskId: 'coder-commit-gap',
+      revision,
+      succeeded: true,
+    });
+    const reviewerApproved = workflows.transition(created.id, coderFinished.version, {
+      type: 'approve',
+      revision,
+    });
+    const reviewerTask = store.createTask({
+      repositoryId: repo.id,
+      agentId: reviewer.id,
+      title: 'Reviewer interrupted at recovery commit boundary',
+      prompt: 'Read-only recovery fixture',
+      executionMode: 'read-only',
+    });
+    const running = workflows.transition(created.id, reviewerApproved.version, {
+      type: 'start',
+      taskId: reviewerTask.id,
+      revision,
+    });
+    store.updateTask(reviewerTask.id, { state: 'running' });
+
+    const ordinaryBefore = store.createTask({
+      repositoryId: repo.id,
+      title: 'Ordinary before recovery',
+      prompt: 'Retain FIFO order',
+    });
+    store.enqueue(ordinaryBefore.id, 'local-cli-chatgpt');
+    const ordinaryAfter = store.createTask({
+      repositoryId: repo.id,
+      title: 'Ordinary after recovery',
+      prompt: 'Retain FIFO order',
+    });
+    store.enqueue(ordinaryAfter.id, 'local-cli-chatgpt');
+    store.close();
+
+    // Reproduce the durable state after Store's transaction commits but
+    // before WorkflowStore.recoverInterrupted() begins. No production
+    // fault-injection hook or actual provider execution is required.
+    const halfway = new DatabaseSync(path);
+    try {
+      const row = halfway.prepare('SELECT json FROM tasks WHERE id=?').get(reviewerTask.id);
+      expect(row).toBeDefined();
+      const interrupted = {
+        ...JSON.parse(String(row!.json)),
+        state: 'interrupted',
+        error: 'Server terminated before the task finished.',
+      };
+      halfway.exec('BEGIN IMMEDIATE');
+      try {
+        halfway
+          .prepare('UPDATE tasks SET state=?, json=? WHERE id=?')
+          .run('interrupted', JSON.stringify(interrupted), reviewerTask.id);
+        halfway.exec('COMMIT');
+      } catch (error) {
+        halfway.exec('ROLLBACK');
+        throw error;
+      }
+      const persisted = halfway.prepare('SELECT json FROM workflows WHERE id=?').get(running.id);
+      expect(JSON.parse(String(persisted!.json)).stages[1].state).toBe('running');
+      expect(halfway.prepare('SELECT state FROM tasks WHERE id=?').get(reviewerTask.id)?.state).toBe(
+        'interrupted',
+      );
+    } finally {
+      halfway.close();
+    }
+
+    store = new Store(path);
+    const recovered = new WorkflowStore(store.db).get(running.id)!;
+    expect(recovered.state).toBe('blocked');
+    expect(recovered.stages.map((stage) => stage.state)).toEqual(['completed', 'interrupted']);
+    expect(recovered.version).toBe(running.version + 1);
+    expect(store.task(reviewerTask.id)?.state).toBe('interrupted');
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([
+      ordinaryBefore.id,
+      ordinaryAfter.id,
+    ]);
+    expect(() =>
+      new WorkflowStore(store.db).transition(recovered.id, recovered.version, {
+        type: 'approve',
+        revision,
+      }),
+    ).toThrow();
+
+    store.close();
+    store = new Store(path);
+    expect(new WorkflowStore(store.db).get(running.id)?.version).toBe(recovered.version);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([
       ordinaryBefore.id,
       ordinaryAfter.id,
