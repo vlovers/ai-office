@@ -45,6 +45,11 @@ function setup() {
   const dbPath = join(root, 'state.sqlite');
   const db = new DatabaseSync(dbPath);
   const journal = new DeliveryGitTransferJournal(db);
+  // Legacy recovery fixture: intentionally preserve multiple old workspaces
+  // claiming one branch, as could exist before atomic ownership reservations.
+  // New reservations are covered by delivery-git-transfer-ownership.test.ts.
+  db.exec('DROP TRIGGER delivery_git_transfers_exclusive_insert');
+  db.exec('DROP TRIGGER delivery_git_transfers_exclusive_update');
   const identity = (workspaceId: string): DeliveryGitTransferIdentity => ({
     workspaceId,
     operationKey: publicationKey(plan),
