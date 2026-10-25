@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { DeliverySecurityError } from './delivery-sessions.js';
+import { GITHUB_JSON_LIMITS, readBoundedGitHubText } from './delivery-github-json-boundary.js';
 
 export type DeliveryReadCredential = {
   /** Stable vault/installation credential version; never the token itself. */
@@ -115,26 +116,19 @@ export class DeliveryGitHubCredentials {
           response.redirected ||
           (response.url && response.url !== input)
         ) {
-          await response.body?.cancel();
+          // A hostile stream may never settle cancellation; never wait on it.
+          if (response.body) void response.body.cancel().catch(() => undefined);
           throw new DeliverySecurityError(503);
         }
-        // Bound upstream bodies and strip headers before existing receipt parsers.
-        const reader = response.body?.getReader();
-        if (!reader) throw new DeliverySecurityError(503);
-        const chunks: Uint8Array[] = [];
-        let size = 0;
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            size += value.byteLength;
-            if (size > 1024 * 1024) throw new DeliverySecurityError(503);
-            chunks.push(value);
-          }
-        } finally {
-          await reader.cancel();
-        }
-        const body = Buffer.concat(chunks).toString('utf8');
+        // The same streaming UTF-8 boundary protects both credential-scoped
+        // reads and the downstream receipt parser. PR inventory pages need a
+        // larger cap than ref/detail responses; never trust Content-Length.
+        const limit = pullList
+          ? GITHUB_JSON_LIMITS.listing
+          : refs.includes(input)
+            ? GITHUB_JSON_LIMITS.refs
+            : GITHUB_JSON_LIMITS.detail;
+        const body = await readBoundedGitHubText(response, limit);
         if (body.includes(credential.token)) throw new DeliverySecurityError(503);
         return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
       } catch (error) {
