@@ -201,6 +201,18 @@ cross-workspace collisions. This is an additional durable database boundary,
 not a substitute for the shared repository/worktree Git lease, fresh registry
 attestation or independent session authorization.
 
+**Additional SQLite integrity triggers** now require a new transfer row to
+start as a receipt-free intent, freeze its workspace, stage, operation,
+destination, branch and reviewed head/base SHAs, and permit only monotonic
+intent → uncertain → confirmed receipt transitions. A confirmed receipt
+cannot be downgraded, replaced or silently reissued with another SHA, even
+through a separate SQLite connection or Node process. These triggers guard
+accidental direct-SQL writes as well as journal API calls; they are not proof
+that a receipt was independently attested. Existing malformed legacy rows
+remain intact and must fail closed during reconciliation. Test fixtures that
+model pre-upgrade corruption explicitly remove the new trigger before
+injecting an invalid row. Production migration must never do that.
+
 The triggers are additive and do not delete, rewrite or silently adopt legacy
 conflicting rows. On upgrade, the final `assertReadyForDraft` read-only gate
 still blocks any old collisions; an operator must investigate them without
