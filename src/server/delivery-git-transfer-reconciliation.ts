@@ -34,6 +34,8 @@ export type GitTransferReconciliationContext = {
   remote: GitHubRefOptions;
   /** Bounds both remote GETs, even when an injected transport ignores abort. */
   remoteDeadlineMs?: number;
+  /** Bounds each read-only registry refresh while the shared Git lease is held. */
+  refreshDeadlineMs?: number;
 };
 
 type Receipts = {
@@ -107,6 +109,45 @@ async function attestRemoteWithinDeadline(
 }
 
 /**
+ * A registry refresh is a read-only trust check. Bound it independently of
+ * GitHub GETs: a hung registry must not hold the shared Git lease forever.
+ * Late results are ignored and can never authorize a journal transition.
+ */
+async function refreshReviewedWithinDeadline(
+  context: GitTransferReconciliationContext,
+  deadlineMs: number,
+): Promise<Awaited<ReturnType<GitTransferReconciliationContext['refreshReviewed']>>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let rejectAbort: ((reason: Error) => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  const onAbort = () => rejectAbort?.(new Error('Git transfer registry refresh aborted.'));
+  context.remote.signal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    if (context.remote.signal?.aborted) onAbort();
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('Git transfer registry refresh timed out.')),
+        deadlineMs,
+      );
+    });
+    const reviewed = await Promise.race([
+      Promise.resolve().then(() => context.refreshReviewed()),
+      deadline,
+      aborted,
+    ]);
+    if (context.remote.signal?.aborted) {
+      throw new Error('Git transfer registry refresh aborted.');
+    }
+    return reviewed;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    context.remote.signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/**
  * Reconcile existing commit/push intents using only local Git reads and exact
  * remote ref GETs. No commit, push, PR POST, retry or new intent is possible.
  *
@@ -133,8 +174,16 @@ export async function reconcileGitTransferReceipts(
   if (!Number.isSafeInteger(deadlineMs) || deadlineMs < 100 || deadlineMs > 60_000) {
     throw new Error('Invalid Git transfer reconciliation deadline.');
   }
+  const refreshDeadlineMs = context.refreshDeadlineMs ?? 10_000;
+  if (
+    !Number.isSafeInteger(refreshDeadlineMs) ||
+    refreshDeadlineMs < 100 ||
+    refreshDeadlineMs > 60_000
+  ) {
+    throw new Error('Invalid Git transfer registry refresh deadline.');
+  }
   const assertFreshPlan = async (): Promise<void> => {
-    const reviewed = await context.refreshReviewed();
+    const reviewed = await refreshReviewedWithinDeadline(context, refreshDeadlineMs);
     const refreshed = reviewed.plan;
     const owner = reviewed.identity;
     if (
