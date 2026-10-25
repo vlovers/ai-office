@@ -96,6 +96,134 @@ describe('credential-scoped GitHub response boundary', () => {
     }
   });
 
+  it('preserves short-page Link pagination through the authenticated facade', async () => {
+    const plan = {
+      allowed: true as const,
+      destination: `https://github.com/${repository}`,
+      branch: 'ai-office/12345678-1234-1234-1234-123456789abc',
+      baseBranch: 'main',
+      revision: 'a'.repeat(64),
+      draft: true as const,
+    };
+    const candidate = {
+      html_url: `https://github.com/${repository}/pull/123`,
+      draft: true,
+      state: 'open',
+      head: { ref: plan.branch, repo: { full_name: repository } },
+      base: { ref: 'main', repo: { full_name: repository } },
+    };
+    let calls = 0;
+    const db = new DatabaseSync(':memory:');
+    try {
+      const manager = new DeliveryGitHubCredentials(
+        db,
+        async () => credential(),
+        async (url) => {
+          calls++;
+          const page = Number(new URL(url).searchParams.get('page'));
+          if (page === 1) {
+            const next = new URL(url);
+            next.searchParams.set('page', '2');
+            return Response.json([candidate], {
+              headers: { Link: `<${next.toString()}>; rel="next"` },
+            });
+          }
+          return Response.json([{ ...candidate, html_url: `https://github.com/${repository}/pull/124` }]);
+        },
+        () => 1000,
+      );
+      const result = await listAllGitHubPullRequests(plan, {
+        fetcher: manager.readOnlyFetcher(repository, ['main', plan.branch]),
+      });
+      expect(result.complete).toBe(true);
+      expect(result.candidates).toHaveLength(2);
+      expect(calls).toBe(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects a cross-repository pagination Link through the authenticated facade', async () => {
+    const plan = {
+      allowed: true as const,
+      destination: `https://github.com/${repository}`,
+      branch: 'ai-office/12345678-1234-1234-1234-123456789abc',
+      baseBranch: 'main',
+      revision: 'a'.repeat(64),
+      draft: true as const,
+    };
+    let calls = 0;
+    const db = new DatabaseSync(':memory:');
+    try {
+      const manager = new DeliveryGitHubCredentials(
+        db,
+        async () => credential(),
+        async () => {
+          calls++;
+          return Response.json([], {
+            headers: {
+              Link: '<https://api.github.com/repos/attacker/repo/pulls?state=all&per_page=100&page=2>; rel="next"',
+            },
+          });
+        },
+        () => 1000,
+      );
+      await expect(
+        listAllGitHubPullRequests(plan, {
+          fetcher: manager.readOnlyFetcher(repository, ['main', plan.branch]),
+        }),
+      ).rejects.toThrow('pagination');
+      expect(calls).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('fails closed if a linked second inventory page is rate limited', async () => {
+    const plan = {
+      allowed: true as const,
+      destination: `https://github.com/${repository}`,
+      branch: 'ai-office/12345678-1234-1234-1234-123456789abc',
+      baseBranch: 'main',
+      revision: 'a'.repeat(64),
+      draft: true as const,
+    };
+    let calls = 0;
+    const db = new DatabaseSync(':memory:');
+    try {
+      const manager = new DeliveryGitHubCredentials(
+        db,
+        async () => credential(),
+        async (url) => {
+          calls++;
+          if (new URL(url).searchParams.get('page') === '2') {
+            return new Response(null, { status: 429 });
+          }
+          const next = new URL(url);
+          next.searchParams.set('page', '2');
+          return Response.json([], { headers: { Link: `<${next.toString()}>; rel="next"` } });
+        },
+        () => 1000,
+      );
+      await expect(
+        listAllGitHubPullRequests(plan, {
+          fetcher: manager.readOnlyFetcher(repository, ['main', plan.branch]),
+        }),
+      ).rejects.toMatchObject({ statusCode: 503 });
+      expect(calls).toBe(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects oversized pagination metadata rather than losing its completeness evidence', async () => {
+    await expect(
+      request(listUrl, async () =>
+        Response.json([], { headers: { Link: 'x'.repeat(8193) } }),
+      ),
+    ).rejects.toMatchObject({ statusCode: 503 });
+  });
+
   it('rejects a listing larger than 8 MiB without returning partial inventory', async () => {
     await expect(
       request(listUrl, async () => oversizedStream(GITHUB_JSON_LIMITS.listing + 1)),
