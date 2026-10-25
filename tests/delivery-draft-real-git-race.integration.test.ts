@@ -338,6 +338,38 @@ describe('real Git Draft PR late-mutation integration', () => {
       t.close();
     }
   });
+  it('keeps a successful POST uncertain when Git changes during post-write ownership inventory', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    const dirtyPath = join(t.path, 'post-inventory-untracked.txt');
+    let posted = false;
+    let changed = false;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          posted = true;
+          return original(url, init);
+        }
+        if (url.includes('/pulls?') && posted && !changed) {
+          changed = true;
+          writeFileSync(dirtyPath, 'external Git mutation after remote acceptance\n');
+        }
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(changed).toBe(true);
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      rmSync(dirtyPath);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(t.receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it.each([
     { accepted: false, rateLimited: false, expected: 'uncertain' },
     { accepted: true, rateLimited: false, expected: 'published' },
