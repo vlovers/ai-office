@@ -37,7 +37,7 @@
     "lint": "eslint src/server/delivery-*.ts scripts/delivery-admin.ts tests/delivery-*.ts tests/fixtures/delivery-security.ts --max-warnings=0",
     "dev": "node --import tsx src/server/index.ts",
     "dev:web": "vite",
-    "typecheck": "prettier --write tests/delivery-github-credential-body.integration.test.ts && git diff -- tests/delivery-github-credential-body.integration.test.ts && exit 1",
+    "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.server.json && vite build",
     "start": "node dist/server/index.js",
     "test": "vitest run --exclude tests/smoke.test.ts",
