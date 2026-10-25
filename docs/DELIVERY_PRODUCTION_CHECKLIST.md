@@ -400,3 +400,28 @@ atomically exclude unrelated Git clients. Reattestation narrows the race but
 does not make filesystem reads and SQLite writes a single transaction.
 Native target-host crash and external-Git race testing, independent security
 review and separate authenticated remote-write approvals remain mandatory.
+
+## Draft PR final local-state revalidation (combined PR #79)
+
+The server-only session-bound Draft PR executor now reattests the reviewed
+local Git worktree **after** the final remote head/base ref GET and trusted
+registry refresh, immediately before the one-attempt POST adapter. This
+closes the asynchronous window in which a non-cooperating Git process could
+dirty the index, move a ref, or change origin after the earlier pre-POST check.
+A late failure leaves the already-reserved publication uncertain; it never
+triggers a second POST or releases consumed approval evidence.
+
+A second local attestation runs after the independent PR detail GET and
+registry refresh, before persisting a published receipt. The same check
+applies to read-only reconciliation of an ambiguous POST: matching GitHub
+PR metadata alone cannot confirm a local operation if its reviewed Git
+identity has drifted. Tests cover late drift during final ref GET, after a
+completed POST during detail GET, and during reconciliation of an ambiguous
+POST. Recovery requires restoration of the exact reviewed state and fresh
+read-only PR inventory/detail evidence; it must not replay the POST.
+
+These checks narrow time-of-check/time-of-use windows, but cannot make
+external Git mutation and remote HTTP writes atomic. This remains a
+server-only, unreleased boundary: production write routes, automatic retry,
+merge and deployment are disabled pending independent security review,
+target-host crash/race testing and least-privilege credential validation.
