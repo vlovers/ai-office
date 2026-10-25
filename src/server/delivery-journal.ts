@@ -116,6 +116,18 @@ export class DeliveryJournal {
    */
   reserve(workspaceId: string, operationKey: string): DeliveryJournalEntry {
     if (!workspaceId || !operationKey) throw new Error('Publication identity is required.');
+    // Preserve the existing API's distinct mismatch/replay errors. The
+    // SQLite BEFORE INSERT trigger remains the atomic cross-process guard
+    // if another connection reserves the row after this read.
+    const previous = this.get(workspaceId);
+    if (previous) {
+      if (previous.operationKey !== operationKey) {
+        throw new Error('Workspace already has a different publication operation.');
+      }
+      throw new Error(
+        'Publication reservation already exists; inspect its outcome before retrying.',
+      );
+    }
     const inserted = this.db
       .prepare(
         "INSERT OR IGNORE INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)",
