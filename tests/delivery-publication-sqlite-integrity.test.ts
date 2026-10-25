@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { DeliveryGitTransferJournal } from '../src/server/delivery-git-transfer-journal.js';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 
 const url = 'https://github.com/vlovers/ai-office/pull/123';
@@ -152,6 +153,59 @@ describe('durable publication SQLite invariants', () => {
       }
     } finally {
       rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('blocks INSERT OR REPLACE replay of confirmed publication and Git transfer receipts', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const publications = new DeliveryJournal(db);
+      const transfers = new DeliveryGitTransferJournal(db);
+      publications.reserve('workspace-a', 'op-a');
+      publications.publish('workspace-a', 'op-a', url);
+      const identity = {
+        workspaceId: 'workspace-a',
+        operationKey: 'op-a',
+        destination: 'https://github.com/vlovers/ai-office',
+        branch: 'ai-office/12345678-1234-1234-1234-123456789abc',
+        headSha: 'a'.repeat(40),
+        baseSha: 'b'.repeat(40),
+      };
+      transfers.begin('commit', identity);
+      transfers.confirmVerified('commit', identity, identity.headSha);
+      transfers.begin('push', identity);
+      transfers.confirmVerified('push', identity, identity.headSha);
+
+      // SQLite REPLACE otherwise deletes the old row without firing a
+      // DELETE trigger when recursive_triggers is disabled (the default).
+      expect(() =>
+        db.prepare(
+          "INSERT OR REPLACE INTO delivery_journal VALUES (?, ?, 'reserved', NULL)",
+        ).run('workspace-a', 'op-a'),
+      ).toThrow('already exists');
+      const replaceTransfer = db.prepare(
+        `INSERT OR REPLACE INTO delivery_git_transfers
+         (workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'intent', NULL)`,
+      );
+      for (const stage of ['commit', 'push']) {
+        expect(() =>
+          replaceTransfer.run(
+            identity.workspaceId,
+            stage,
+            identity.operationKey,
+            identity.destination,
+            identity.branch,
+            identity.headSha,
+            identity.baseSha,
+          ),
+        ).toThrow('already exists');
+      }
+      expect(publications.get('workspace-a')?.state).toBe('published');
+      expect(transfers.get('workspace-a', 'commit')?.state).toBe('confirmed');
+      expect(transfers.get('workspace-a', 'push')?.state).toBe('confirmed');
+    } finally {
+      db.close();
     }
   });
 
