@@ -276,6 +276,9 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect(t.fetcher).toHaveBeenCalledTimes(2);
       expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
       rmSync(join(t.context.worktree.path, 'late-untracked.txt'));
+      // Restore the normal transport: the injected callback would otherwise
+      // recreate the dirty worktree on every reconciliation attempt.
+      t.fetcher.mockImplementation(original);
       expect((await reconcileGitTransferReceipts(t.context)).status).toBe('ready');
       expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBe(t.identity.headSha);
     } finally {
