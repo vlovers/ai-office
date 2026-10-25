@@ -115,6 +115,29 @@ function crashDuringIntent(args: string[], commit: boolean) {
   );
 }
 
+const insertPush = [
+  'INSERT INTO delivery_git_transfers',
+  '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha)',
+  "VALUES (?, 'push', ?, ?, ?, ?, ?, 'intent', NULL)",
+].join(' ');
+
+/** Crash an independent SQLite writer at either side of the push-intent commit. */
+function crashDuringPush(args: string[], commit: boolean) {
+  const script = [
+    "const {DatabaseSync}=require('node:sqlite');",
+    'const db=new DatabaseSync(process.argv[1]);',
+    "db.exec('BEGIN IMMEDIATE');",
+    'db.prepare(process.argv[8]).run(...process.argv.slice(2,8));',
+    "if(process.argv[9]==='commit')db.exec('COMMIT');",
+    "process.kill(process.pid,'SIGKILL');",
+  ].join(' ');
+  return spawnSync(
+    process.execPath,
+    ['-e', script, ...args, insertPush, commit ? 'commit' : 'rollback'],
+    { encoding: 'utf8', timeout: 5000 },
+  );
+}
+
 describe('multi-process durable Git transfer crash boundaries', () => {
   it('rolls back a killed SQLite writer before COMMIT without fabricating a receipt', () => {
     const t = setup();
@@ -148,6 +171,118 @@ describe('multi-process durable Git transfer crash boundaries', () => {
       } finally {
         reopened.close();
       }
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rolls back an interrupted push reservation without damaging the confirmed commit', () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      const killed = crashDuringPush(t.args, false);
+      expect(killed.signal).toBe('SIGKILL');
+      expect(t.journal.get(t.identity.workspaceId, 'push')).toBeNull();
+      expect(t.journal.assertConfirmed('commit', t.identity).receiptSha).toBe(
+        t.identity.headSha,
+      );
+      expect(t.journal.listUnresolvedWorkspaces(10).workspaceIds).toEqual([]);
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('recovers a SIGKILL-persisted push intent using exact remote GETs without replay', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      const killed = crashDuringPush(t.args, true);
+      expect(killed.signal).toBe('SIGKILL');
+      expect(t.journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+        state: 'intent',
+        receiptSha: null,
+      });
+
+      const reopened = new DatabaseSync(t.dbPath);
+      try {
+        const journal = new DeliveryGitTransferJournal(reopened);
+        const remote = vi.fn(async (url: string, init: RequestInit) => {
+          expect(init.method).toBe('GET');
+          const isBase = url.endsWith('/main');
+          return Response.json({
+            ref: 'refs/heads/' + (isBase ? 'main' : t.identity.branch),
+            object: {
+              type: 'commit',
+              sha: isBase ? t.identity.baseSha : t.identity.headSha,
+            },
+          });
+        });
+        const context = { ...t.context, journal, remote: { fetcher: remote } };
+        expect((await reconcileGitTransferReceipts(context)).status).toBe('ready');
+        expect(journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+          state: 'confirmed',
+          receiptSha: t.identity.headSha,
+        });
+        expect(remote).toHaveBeenCalledTimes(2);
+        expect(() => journal.begin('push', t.identity)).toThrow('already exists');
+        expect((await reconcileGitTransferReceipts(context)).status).toBe('ready');
+        expect(remote).toHaveBeenCalledTimes(4);
+      } finally {
+        reopened.close();
+      }
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('preserves an uncertain crashed push on a moved GitHub head until verified', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      expect(crashDuringPush(t.args, true).signal).toBe('SIGKILL');
+      const reopened = new DatabaseSync(t.dbPath);
+      try {
+        const journal = new DeliveryGitTransferJournal(reopened);
+        let headSha = 'f'.repeat(40);
+        const remote = vi.fn(async (url: string, init: RequestInit) => {
+          expect(init.method).toBe('GET');
+          const isBase = url.endsWith('/main');
+          return Response.json({
+            ref: 'refs/heads/' + (isBase ? 'main' : t.identity.branch),
+            object: {
+              type: 'commit',
+              sha: isBase ? t.identity.baseSha : headSha,
+            },
+          });
+        });
+        const context = { ...t.context, journal, remote: { fetcher: remote } };
+        expect(await reconcileGitTransferReceipts(context)).toMatchObject({
+          status: 'blocked',
+          stage: 'push',
+        });
+        expect(journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+          state: 'uncertain',
+          receiptSha: null,
+        });
+        expect(remote).toHaveBeenCalledOnce();
+        expect(() => journal.begin('push', t.identity)).toThrow('already exists');
+
+        headSha = t.identity.headSha;
+        expect((await reconcileGitTransferReceipts(context)).status).toBe('ready');
+        expect(journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+          state: 'confirmed',
+          receiptSha: t.identity.headSha,
+        });
+        expect(remote).toHaveBeenCalledTimes(3);
+      } finally {
+        reopened.close();
+      }
+      expect(t.fetcher).not.toHaveBeenCalled();
     } finally {
       t.close();
     }
