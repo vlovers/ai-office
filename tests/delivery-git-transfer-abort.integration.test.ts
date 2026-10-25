@@ -112,7 +112,7 @@ describe('abort-safe read-only Git transfer reconciliation', () => {
     }
   });
 
-  it('blocks commit confirmation when cancellation occurs during local registry refresh', async () => {
+  it('blocks commit receipt when aborted during registry refresh', async () => {
     const t = setup();
     try {
       t.journal.begin('commit', t.identity);
@@ -158,7 +158,9 @@ describe('abort-safe read-only Git transfer reconciliation', () => {
       const running = reconcileGitTransferReceipts(t.context);
       await entered;
       t.controller.abort();
-      release(t.responseFor('https://api.github.com/repos/vlovers/ai-office/git/ref/heads/' + branch));
+      release(
+        t.responseFor('https://api.github.com/repos/vlovers/ai-office/git/ref/heads/' + branch),
+      );
       const result = await running;
       expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
       expect(t.journal.get(t.identity.workspaceId, 'push')?.state).toBe('uncertain');
@@ -171,7 +173,7 @@ describe('abort-safe read-only Git transfer reconciliation', () => {
     }
   });
 
-  it('rejects cancellation during the second GitHub GET even with valid SHA responses', async () => {
+  it('blocks cancellation during the second GitHub GET', async () => {
     const t = setup();
     try {
       t.beginPush();
@@ -189,7 +191,7 @@ describe('abort-safe read-only Git transfer reconciliation', () => {
     }
   });
 
-  it('does not persist a verified push when cancellation arrives during final registry refresh', async () => {
+  it('blocks push receipt when aborted during final registry refresh', async () => {
     const t = setup();
     try {
       t.beginPush();
