@@ -140,6 +140,17 @@ without deleting, replacing or fabricating any intent. One blocked workspace
 does not prevent inspection of subsequent workspaces; the cursor prevents
 permanent starvation of later entries.
 
+Registry lookups are bounded independently (default 10 seconds, configurable
+between 100 ms and 60 seconds). A stalled or throwing resolver is reported as
+blocked and cannot prevent later workspaces from being inspected. A lookup
+that finishes **after** its deadline cannot begin reconciliation or mutate the
+journal: the only operation raced against the timer is trusted registry
+resolution, which happens **outside** the Git lease. Never apply a promise
+timeout around lease-protected reconciliation itself: abandoning that promise
+would release the lease while background journal writes could still execute.
+A timed-out registry resolver may continue running in the background; it must
+remain side-effect-free and must never perform Git, journal or network writes.
+
 The coordinator is **not** an automatic startup task or HTTP endpoint.
 A privileged operator must supply a fresh, server-owned registry resolver,
 synchronous authorization, and read-only GitHub credentials. Cursor paging
