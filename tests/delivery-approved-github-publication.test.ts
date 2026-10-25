@@ -86,8 +86,12 @@ function setup(options: { omitPush?: boolean } = {}) {
     transfers.begin(stage, identity);
     transfers.confirmVerified(stage, identity, headSha);
   }
+  let posted = false;
   const fetcher = vi.fn(async (url: string, init: RequestInit): Promise<Response> => {
-    if (init.method === 'POST') return json(receipt, 201);
+    if (init.method === 'POST') {
+      posted = true;
+      return json(receipt, 201);
+    }
     if (url.includes('/git/ref/heads/')) {
       const branch = url.endsWith('/main') ? 'main' : plan.branch;
       return json({
@@ -95,7 +99,7 @@ function setup(options: { omitPush?: boolean } = {}) {
         object: { type: 'commit', sha: branch === 'main' ? baseSha : headSha },
       });
     }
-    if (url.includes('/pulls?')) return json([]);
+    if (url.includes('/pulls?')) return json(posted ? [receipt] : []);
     if (url.endsWith('/pulls/123')) return json(receipt);
     throw new Error('Unexpected GitHub request.');
   });
@@ -166,6 +170,74 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       t.close();
     }
   });
+
+  it('keeps a completed POST uncertain if another PR claims the managed head', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    let posted = false;
+    let conflicting = true;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          posted = true;
+          return original(url, init);
+        }
+        if (url.includes('/pulls?') && posted && conflicting) {
+          return json([
+            receipt,
+            {
+              ...receipt,
+              number: 456,
+              html_url: 'https://github.com/vlovers/ai-office/pull/456',
+              base: { ...receipt.base, ref: 'develop' },
+            },
+          ]);
+        }
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      conflicting = false;
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it.each(['rate-limit', 'not-yet-visible'] as const)(
+    'does not retry a completed POST when post-write inventory is %s',
+    async (failure) => {
+      const t = setup();
+      const original = t.fetcher.getMockImplementation()!;
+      let posted = false;
+      let failOnce = true;
+      try {
+        t.fetcher.mockImplementation(async (url, init) => {
+          if (init.method === 'POST') {
+            posted = true;
+            return original(url, init);
+          }
+          if (url.includes('/pulls?') && posted && failOnce) {
+            failOnce = false;
+            return failure === 'rate-limit' ? json({ message: 'rate limited' }, 429) : json([]);
+          }
+          return original(url, init);
+        });
+        expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+        expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+        expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+        expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+        expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      } finally {
+        t.close();
+      }
+    },
+  );
 
   it('keeps confirmed Git transfers immutable across Draft publication and receipt reuse', async () => {
     const t = setup();
