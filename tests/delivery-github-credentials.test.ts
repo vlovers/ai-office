@@ -214,6 +214,12 @@ describe('server-only least-privilege GitHub credential boundary', () => {
         endpoint.replace('https://', `https://${token}@`),
         `https://api.github.com/repos/${repository}/pulls?state=all&page=1&per_page=100&page=2`,
         `https://api.github.com/repos/${repository}/pulls/1/merge`,
+        `https://api.github.com/repos/${repository}/pulls/1?unexpected=1`,
+        `https://api.github.com/repos/${repository}/pulls/1#fragment`,
+        `https://api.github.com/repos/${repository}/pulls/1/`,
+        `https://api.github.com/repos/${repository}/pulls/1%2Fmerge`,
+        `https://api.github.com/repos/${repository}/pulls/01`,
+        `https://api.github.com/repos/${repository}/pulls/1?state=all`,
       ])
         await expect(fetcher(url, { method: 'GET' })).rejects.toThrow('unavailable');
       for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'])
