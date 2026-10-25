@@ -248,18 +248,15 @@ test('rejects quoted explicit complex YAML keys', () => {
   );
 });
 
-test(
-  'rejects YAML anchors that decorate an otherwise invisible action mapping',
-  () => {
-    const input = workflow().replace(
-      '      - name: Upload\n        uses: ' + artifact,
-      '      - &unreviewed uses: actions/upload-artifact@v7',
-    );
-    expectFinding(input, /unsupported YAML syntax/);
-  },
-);
+test('rejects anchored action mappings', () => {
+  const input = workflow().replace(
+    '      - name: Upload\n        uses: ' + artifact,
+    '      - &unreviewed uses: actions/upload-artifact@v7',
+  );
+  expectFinding(input, /unsupported YAML syntax/);
+});
 
-test('rejects explicit YAML mapping tags that hide mutable actions', () => {
+test('rejects tagged action mappings', () => {
   const input = workflow().replace(
     '      - name: Upload\n        uses: ' + artifact,
     '      - !!map uses: actions/upload-artifact@v7',
@@ -267,13 +264,9 @@ test('rejects explicit YAML mapping tags that hide mutable actions', () => {
   expectFinding(input, /unsupported YAML syntax/);
 });
 
-test('rejects aliased action steps and anchored job mappings', () => {
-  expectFinding(
-    workflow() + '      - *shared_step\n',
-    /unsupported YAML syntax/,
-  );
-  expectFinding(
-    workflow().replace('  test:', '  test: &shared_job'),
-    /unsupported YAML syntax/,
-  );
+test('rejects step aliases and job anchors', () => {
+  const alias = workflow() + '      - *shared_step\n';
+  expectFinding(alias, /unsupported YAML syntax/);
+  const anchored = workflow().replace('  test:', '  test: &shared_job');
+  expectFinding(anchored, /unsupported YAML syntax/);
 });
