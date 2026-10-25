@@ -18,6 +18,11 @@ const UNSUPPORTED_STANDALONE_FLOW_MAPPING = /^\s*\{/;
 const YAML_MERGE_KEY = /^\s*(?:-\s*)?(?:<<|["']<<["'])\s*:/;
 const STRUCTURAL_DECLARATION = /^\s*(?:jobs|steps)\s*:\s*(.*?)\s*(?:#.*)?$/;
 const FLOW_MAPPING_ITEM = /^\s*-\s*\{/;
+// YAML anchors, aliases and explicit tags can decorate mapping nodes and hide
+// action references from a line-oriented `uses:` scan (e.g. `- &step uses:`).
+// Reject node properties rather than treating an uninspected step as safe.
+const UNSUPPORTED_YAML_NODE_PROPERTIES =
+  /(?:^\s*(?:-\s*)?|:\s*)(?:&[A-Za-z0-9_-]+|\*[A-Za-z0-9_-]+|!![A-Za-z0-9_-]+)(?=\s|$)/;
 
 function indentation(line) {
   return /^\s*/.exec(line)[0].length;
@@ -53,7 +58,8 @@ export function auditWorkflowText(source, filename = 'workflow') {
       YAML_MERGE_KEY.test(line) ||
       FLOW_MAPPING_ITEM.test(line) ||
       UNSUPPORTED_FLOW_MAPPING.test(line) ||
-      UNSUPPORTED_STANDALONE_FLOW_MAPPING.test(line)
+      UNSUPPORTED_STANDALONE_FLOW_MAPPING.test(line) ||
+      UNSUPPORTED_YAML_NODE_PROPERTIES.test(line)
     ) {
       findings.push(location + ': unsupported YAML syntax for security-sensitive workflow keys');
     }
