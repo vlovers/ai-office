@@ -79,13 +79,10 @@ if (process.argv.includes('--restart-server')) {
       log.stderr = (log.stderr + chunk.toString()).slice(-65536);
     });
     return await new Promise<string>((resolveReady, rejectReady) => {
-      const timeout = setTimeout(
-        () => {
-          cleanup();
-          rejectReady(new Error('Backend startup timed out: ' + log.stderr));
-        },
-        20000,
-      );
+      const timeout = setTimeout(() => {
+        cleanup();
+        rejectReady(new Error('Backend startup timed out: ' + log.stderr));
+      }, 20000);
       const cleanup = () => {
         clearTimeout(timeout);
         proc.off('exit', exited);
@@ -308,9 +305,7 @@ if (process.argv.includes('--restart-server')) {
     await reconnected;
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     for (const [index, id] of ids.entries()) {
-      const response: APIResponse = await activePage.request.get(
-        address + '/api/workflows/' + id,
-      );
+      const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
       assert.equal((await response.json()).version, versions[index]);
     }
