@@ -286,7 +286,8 @@ if (process.argv.includes('--restart-server')) {
     const activePage = page;
     const versions = await Promise.all(
       ids.map(async (id) => {
-        const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
+        const url = address + '/api/workflows/' + id;
+        const response: APIResponse = await activePage.request.get(url);
         assert.equal(response.status(), 200);
         return (await response.json()).version as number;
       }),
