@@ -128,7 +128,6 @@ marks interrupted intents uncertain. A trusted operator-controlled recovery
 workflow, independent security review, real target-host concurrency/crash tests
 and all remaining issue #58 gates are required before production activation.
 
-
 ## Bounded, operator-controlled transfer recovery (issue #58)
 
 The server-only `recoverUnresolvedGitTransfers` coordinator enumerates **distinct**
