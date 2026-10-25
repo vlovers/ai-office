@@ -337,3 +337,29 @@ credential echoes still fail closed without exposing tokens. These are
 read-only transport safeguards, not permission to retry an ambiguous write.
 Target-host validation and independent security review are still required
 before enabling remote writes.
+
+## Credential-scoped GitHub GET lifecycle (combined PR #79)
+
+The server-only read credential facade now bounds the **entire** read lifecycle,
+including asynchronous credential resolution, the upstream fetch and streaming
+response-body parsing. A trusted server config sets a 10-second default
+deadline (100 ms–60 seconds); the caller's AbortSignal can stop the wait
+earlier. An injected provider or fetcher that ignores cancellation cannot hold
+a shared Git lease indefinitely. A result arriving after the deadline cannot
+advance the durable credential clock, quarantine a token, or return a response
+to the caller. The underlying JavaScript promise may still run: injected
+credential providers and transports must not perform unrelated writes.
+
+The live operator authorization callback is required to be **synchronous**.
+It is checked after vault resolution, immediately before GET, and again after
+the complete bounded response body, before the response is returned to the
+receipt parser. A grant revoked during transport or streaming therefore blocks
+the result. An async/thenable authorization hook fails closed instead of
+allowing a future authorization decision to race with a network request.
+401/403 responses received within the deadline still durably quarantine the
+credential version; errors never include upstream bodies or tokens.
+
+These tests use controlled hung vault, transport and streaming implementations,
+caller cancellation, late HTTP responses, and live-grant revocation. They are
+not substitutes for target-host credential/HTTP crash tests or an independent
+security review. Production remote writes remain disabled.
