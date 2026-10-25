@@ -155,6 +155,10 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     verifyRemoteReceipt: async (currentPlan, url) => {
       authorize();
       const detail = await readGitHubDraftCommitReceipt(currentPlan, url, refOptions);
+      // A registry replacement during a slow PR detail GET cannot turn a
+      // stale or revoked review into a durable confirmed publication receipt.
+      await refreshReviewedWorkspace();
+      authorize();
       validateAttestedDraftReceipt(
         currentPlan,
         {
