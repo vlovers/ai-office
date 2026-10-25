@@ -57,7 +57,9 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
   it('rejects a direct confirmed insert without a reserved intent', () => {
     const t = setup();
     try {
-      expect(() => insertDirect(t.db, 'confirmed', identity.headSha)).toThrow('receipt-free intent');
+      expect(() => insertDirect(t.db, 'confirmed', identity.headSha)).toThrow(
+        'receipt-free intent',
+      );
       expect(t.journal.get(identity.workspaceId, 'commit')).toBeNull();
     } finally {
       t.close();
