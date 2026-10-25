@@ -320,5 +320,4 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.close();
     }
   });
-
 });
