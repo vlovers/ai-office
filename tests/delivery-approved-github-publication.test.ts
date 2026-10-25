@@ -167,6 +167,31 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('keeps confirmed Git transfers immutable across Draft publication and receipt reuse', async () => {
+    const t = setup();
+    try {
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.transfers.get('workspace-1', 'commit')?.state).toBe('confirmed');
+      expect(t.transfers.get('workspace-1', 'push')?.state).toBe('confirmed');
+      expect(() =>
+        t.db
+          .prepare(
+            "UPDATE delivery_git_transfers SET state='uncertain' WHERE workspace_id='workspace-1' AND stage='push'",
+          )
+          .run(),
+      ).toThrow();
+      expect(() =>
+        t.db
+          .prepare("DELETE FROM delivery_git_transfers WHERE workspace_id='workspace-1' AND stage='commit'")
+          .run(),
+      ).toThrow();
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects revoked session/grant before GitHub access or reservation', async () => {
     const t = setup();
     try {
