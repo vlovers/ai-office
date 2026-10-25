@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { fork, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { chromium, expect } from '@playwright/test';
+import { chromium, expect, type Page } from '@playwright/test';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
 import { TaskManager } from '../src/server/manager.js';
@@ -50,10 +50,16 @@ if (process.argv.includes('--restart-server')) {
     throw new Error('Process restart fixture requires POSIX signals.');
   const root = await mkdtemp(join(tmpdir(), 'ai-office-browser-restart-'));
   const db = join(root, 'office.sqlite');
-  const artifacts = process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(root, 'screenshots');
+  const externalArtifacts = process.env.AI_OFFICE_BROWSER_ARTIFACTS;
+  const artifacts =
+    externalArtifacts ?? (await mkdtemp(join(tmpdir(), 'ai-office-browser-restart-evidence-')));
   await mkdir(artifacts, { recursive: true });
   let child: ChildProcess | undefined;
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  let page: Page | undefined;
+  let passed = false;
+  const pageErrors: string[] = [];
+  const serverLogs: Array<{ attempt: number; stderr: string }> = [];
 
   const start = async (port = 0): Promise<string> => {
     const proc = fork(resolve('tests/browser-workflow-restart.ts'), ['--restart-server'], {
@@ -67,23 +73,28 @@ if (process.argv.includes('--restart-server')) {
       },
     });
     child = proc;
-    let stderr = '';
+    const log = { attempt: serverLogs.length + 1, stderr: '' };
+    serverLogs.push(log);
     proc.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
+      log.stderr = (log.stderr + chunk.toString()).slice(-65536);
     });
     return await new Promise<string>((resolveReady, rejectReady) => {
       const timeout = setTimeout(
-        () => rejectReady(new Error('Backend startup timed out: ' + stderr)),
+        () => {
+          cleanup();
+          rejectReady(new Error('Backend startup timed out: ' + log.stderr));
+        },
         20000,
       );
       const cleanup = () => {
         clearTimeout(timeout);
         proc.off('exit', exited);
         proc.off('message', received);
+        proc.off('error', errored);
       };
       const exited = (code: number | null) => {
         cleanup();
-        rejectReady(new Error('Backend exited (' + code + '): ' + stderr));
+        rejectReady(new Error('Backend exited (' + code + '): ' + log.stderr));
       };
       const received = (message: unknown) => {
         if (!message || typeof message !== 'object' || !('type' in message)) return;
@@ -91,8 +102,13 @@ if (process.argv.includes('--restart-server')) {
         cleanup();
         resolveReady(String(message.address));
       };
+      const errored = (error: Error) => {
+        cleanup();
+        rejectReady(error);
+      };
       proc.on('exit', exited);
       proc.on('message', received);
+      proc.on('error', errored);
     });
   };
   const kill = async () => {
@@ -225,8 +241,7 @@ if (process.argv.includes('--restart-server')) {
     store.close();
 
     browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-    const pageErrors: string[] = [];
+    page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.goto(address);
     const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
@@ -281,7 +296,14 @@ if (process.argv.includes('--restart-server')) {
     });
 
     await kill();
+    // A previously rendered blocked state is not evidence of reconnect.
+    // Observe a fresh successful browser-originated API response after process death.
+    const reconnected = page.waitForResponse(
+      (response) => response.url().startsWith(address + '/api/') && response.ok(),
+      { timeout: 20000 },
+    );
     await start(port);
+    await reconnected;
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     for (const [index, id] of ids.entries()) {
       const response = await page.request.get(address + '/api/workflows/' + id);
@@ -294,12 +316,34 @@ if (process.argv.includes('--restart-server')) {
       ordinary,
     );
     assert.deepEqual(pageErrors, []);
+    passed = true;
     console.log(
       'Browser process-restart E2E passed: live reconnect, durable states, FIFO, no replay.',
     );
+  } catch (error) {
+    const evidence = [
+      'Failure: ' + String(error),
+      'Browser page errors: ' + JSON.stringify(pageErrors),
+      'Backend stderr (bounded per attempt): ' + JSON.stringify(serverLogs, null, 2),
+    ].join('\n\n');
+    await Promise.allSettled([
+      writeFile(join(artifacts, 'restart-failure.txt'), evidence),
+      ...(page
+        ? [
+            page.screenshot({
+              path: join(artifacts, 'workflow-restart-failure.png'),
+              fullPage: true,
+              timeout: 5000,
+            }),
+          ]
+        : []),
+    ]);
+    console.error('Browser restart failure evidence:', artifacts);
+    throw error;
   } finally {
     await browser?.close();
     await kill();
     await rm(root, { recursive: true, force: true });
+    if (passed && !externalArtifacts) await rm(artifacts, { recursive: true, force: true });
   }
 }
