@@ -191,13 +191,24 @@ same branch by supplying a different workspace ID or review fingerprint.
 The check is read-only and does not delete or rewrite conflicting journal rows.
 A conflict requires trusted operator investigation, not automatic cleanup.
 
-This is a **final Draft PR eligibility defense**, not a substitute for
-per-workspace Git lease serialization or a unique constraint on future transfer
-intent creation. Existing recovery fixtures intentionally exercise multiple
-unresolved workspaces; commit/push execution remains disabled pending an
-independent review of cross-workspace ownership at _intent reservation time_.
-The final guard must be invoked under the shared repository lease by the
-trusted session-bound Draft PR executor; it is not a browser-accessible API.
+**Intent-time ownership is now enforced atomically by SQLite triggers.**
+Before a new commit/push intent is inserted, SQLite rejects any other workspace
+that already owns the exact operation key or the same GitHub repository
+(case-insensitive) and managed branch (case-sensitive). The check and insertion
+execute inside SQLite's writer serialization, so independent Node processes
+cannot both reserve a colliding identity. Identity-column UPDATEs also reject
+cross-workspace collisions. This is an additional durable database boundary,
+not a substitute for the shared repository/worktree Git lease, fresh registry
+attestation or independent session authorization.
+
+The triggers are additive and do not delete, rewrite or silently adopt legacy
+conflicting rows. On upgrade, the final `assertReadyForDraft` read-only gate
+still blocks any old collisions; an operator must investigate them without
+automatic cleanup. Recovery fixtures intentionally retain pre-upgrade
+collisions to test that they remain discoverable. This does **not** authorize
+commit, push or Draft PR POST; remote writes remain disabled. Independent
+security review of the triggers, database migration, multi-process races and
+the trusted session-bound executor is still required before activation.
 
 Still required before activation: actual multi-process target-host crash
 tests, a trusted registry/startup integration, independent receipt/security
