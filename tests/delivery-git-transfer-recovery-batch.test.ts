@@ -214,7 +214,8 @@ describe('bounded Git transfer recovery across workspaces', () => {
       const result = await recoverUnresolvedGitTransfers(t.journal, async (id) => {
         if (id === 'a') return {} as GitTransferReconciliationContext;
         if (id === 'b') {
-          return { journal: t.journal, identity: null } as unknown as GitTransferReconciliationContext;
+          const invalid = { journal: t.journal, identity: null };
+          return invalid as unknown as GitTransferReconciliationContext;
         }
         if (id === 'c') return throwingBinding as GitTransferReconciliationContext;
         return t.contextFor(id);
