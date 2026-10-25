@@ -286,9 +286,108 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     try {
       const before = attestLocalReviewedGitState.mock.calls.length;
       expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
-      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(2);
+      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(4);
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
+      t.close();
+    }
+  });
+
+  it('blocks POST if local Git drifts during the final remote ref GET', async () => {
+    const t = setup();
+    let dirty = false;
+    try {
+      attestLocalReviewedGitState.mockImplementation(async () => {
+        if (dirty) throw new Error('Local Git changed after remote attestation.');
+        return {};
+      });
+      const original = t.fetcher.getMockImplementation()!;
+      let baseReads = 0;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.endsWith('/git/ref/heads/main') && ++baseReads === 2) dirty = true;
+        return original(url, init);
+      });
+      const result = await createSessionBoundGitHubDraft(t.context());
+      expect(baseReads).toBe(2);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      dirty = false;
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      attestLocalReviewedGitState.mockImplementation(async () => ({}));
+      t.close();
+    }
+  });
+
+  it('keeps a completed POST uncertain if local Git drifts during PR detail GET', async () => {
+    const t = setup();
+    let dirty = false;
+    let mutateOnDetail = true;
+    let posted = false;
+    try {
+      attestLocalReviewedGitState.mockImplementation(async () => {
+        if (dirty) throw new Error('Local Git changed during PR detail GET.');
+        return {};
+      });
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') posted = true;
+        if (url.includes('/pulls?') && posted) return json([receipt]);
+        if (url.endsWith('/pulls/123') && mutateOnDetail) {
+          dirty = true;
+          mutateOnDetail = false;
+        }
+        return original(url, init);
+      });
+      const first = await createSessionBoundGitHubDraft(t.context());
+      expect(first.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      dirty = false;
+      const recovered = await createSessionBoundGitHubDraft(t.context());
+      expect(recovered.status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      attestLocalReviewedGitState.mockImplementation(async () => ({}));
+      t.close();
+    }
+  });
+
+  it('does not confirm an ambiguous POST while Git drifts during recovery detail GET', async () => {
+    const t = setup();
+    let dirty = false;
+    let posted = false;
+    let mutateOnDetail = true;
+    try {
+      attestLocalReviewedGitState.mockImplementation(async () => {
+        if (dirty) throw new Error('Local Git changed during recovery.');
+        return {};
+      });
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          posted = true;
+          throw new Error('Remote result lost after GitHub accepted the POST.');
+        }
+        if (url.includes('/pulls?') && posted) return json([receipt]);
+        if (url.endsWith('/pulls/123') && mutateOnDetail) {
+          dirty = true;
+          mutateOnDetail = false;
+        }
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      dirty = false;
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      attestLocalReviewedGitState.mockImplementation(async () => ({}));
       t.close();
     }
   });
