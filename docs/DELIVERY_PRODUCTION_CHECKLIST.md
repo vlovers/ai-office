@@ -438,7 +438,7 @@ the SQLite approval consumption and publication reservation.
 
 If a non-cooperating Git process dirties the worktree or changes origin
 during PR inventory, or if the trusted registry changes, the operation fails
-*before* creating any journal reservation or consuming approval. After the
+**before** creating any journal reservation or consuming approval. After the
 operator restores the reviewed state, the same unused approval may be
 retried. Once a reservation has committed, the existing no-blind-retry and
 uncertain-outcome rules still apply; the pre-reservation gate does not turn
