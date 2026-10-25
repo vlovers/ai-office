@@ -1,6 +1,7 @@
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import type { GitHubDraftReceipt } from './delivery-publication-receipt.js';
 import { collectRemotePullRequests } from './delivery-publication-pagination.js';
+import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
 
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -12,6 +13,7 @@ export type ReadOnlyGitHubOptions = {
   perPage?: number;
   maxPages?: number;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -56,6 +58,70 @@ export function parseGitHubPullRequest(value: unknown): GitHubDraftReceipt {
 }
 
 /**
+ * Prefer GitHub's explicit pagination evidence over response length. A short
+ * page can still have a next link; ignoring it would silently omit PRs and
+ * could make a duplicate publication look safe.
+ */
+function nextGitHubPage(
+  link: string | null,
+  requestedUrl: URL,
+  page: number,
+  fullPage: boolean,
+): number | null {
+  if (link === null) return fullPage ? page + 1 : null;
+  const seen = new Set<string>();
+  let next: number | null = null;
+  let last: number | null = null;
+  for (const segment of link.split(',')) {
+    const match = /^<([^<>]+)>;\s*rel="(next|prev|first|last)"$/.exec(segment.trim());
+    if (!match) throw new Error('Invalid GitHub PR pagination Link header.');
+    const relation = match[2]!;
+    if (seen.has(relation)) throw new Error('Duplicate GitHub PR pagination relation.');
+    seen.add(relation);
+    let target: URL;
+    try {
+      target = new URL(match[1]!);
+    } catch {
+      throw new Error('Invalid GitHub PR pagination URL.');
+    }
+    if (
+      target.origin !== requestedUrl.origin ||
+      target.pathname !== requestedUrl.pathname ||
+      target.hash !== '' ||
+      target.username !== '' ||
+      target.password !== '' ||
+      target.searchParams.size !== 3 ||
+      target.searchParams.get('state') !== 'all' ||
+      target.searchParams.get('per_page') !== requestedUrl.searchParams.get('per_page')
+    ) {
+      throw new Error('GitHub PR pagination escaped the approved repository.');
+    }
+    const targetPage = Number(target.searchParams.get('page'));
+    if (
+      !Number.isSafeInteger(targetPage) ||
+      targetPage < 1 ||
+      (relation === 'next' && targetPage !== page + 1) ||
+      (relation === 'prev' && targetPage !== page - 1) ||
+      (relation === 'first' && targetPage !== 1) ||
+      (relation === 'last' && targetPage < page)
+    ) {
+      throw new Error('GitHub PR pagination returned an inconsistent page.');
+    }
+    if (relation === 'next') next = targetPage;
+    if (relation === 'last') last = targetPage;
+  }
+  // A last-page hint beyond the current page without a next link would
+  // silently truncate the remote inventory and could hide duplicate PRs.
+  if (last !== null && last > page !== (next !== null)) {
+    throw new Error('GitHub PR pagination Link header is incomplete.');
+  }
+  if (next !== null && last !== null && last < next) {
+    throw new Error('GitHub PR pagination Link header is inconsistent.');
+  }
+  return next;
+}
+
+/**
  * Read-only GitHub REST adapter. Requests the approved repository only,
  * includes open and closed PRs, exhausts pagination and fails closed on
  * redirects, rate limits, malformed JSON and interrupted responses.
@@ -91,27 +157,37 @@ export async function listAllGitHubPullRequests(
       'X-GitHub-Api-Version': '2022-11-28',
     };
     if (options.token) headers.Authorization = `Bearer ${options.token}`;
-    const response = await fetcher(url.toString(), {
-      method: 'GET',
-      redirect: 'error',
-      headers,
-      signal: options.signal,
-    });
-    if (response.redirected || (response.url && response.url !== url.toString())) {
-      throw new Error('GitHub PR listing redirected outside the approved request.');
-    }
-    if (response.status !== 200) {
-      // Never include response body or credential in thrown errors.
-      throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
-    }
-    const payload: unknown = await response.json();
+    const { response, payload } = await withGitHubRequestDeadline(
+      async (signal) => {
+        const response = await fetcher(url.toString(), {
+          method: 'GET',
+          redirect: 'error',
+          headers,
+          signal,
+        });
+        if (response.redirected || (response.url && response.url !== url.toString())) {
+          throw new Error('GitHub PR listing redirected outside the approved request.');
+        }
+        if (response.status !== 200) {
+          // Never include response body or credential in thrown errors.
+          throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
+        }
+        return { response, payload: (await response.json()) as unknown };
+      },
+      { signal: options.signal, timeoutMs: options.timeoutMs },
+    );
     if (!Array.isArray(payload) || payload.length > perPage) {
       throw new Error('Invalid GitHub PR listing page.');
     }
     const candidates = payload.map(parseGitHubPullRequest);
     return {
       candidates,
-      nextPage: candidates.length === perPage ? page + 1 : null,
+      nextPage: nextGitHubPage(
+        response.headers.get('link'),
+        url,
+        page,
+        candidates.length === perPage,
+      ),
     };
   }, options.maxPages);
 }

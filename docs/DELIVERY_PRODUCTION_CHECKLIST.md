@@ -60,7 +60,7 @@ concurrent path-replacement races. A dedicated service account and private,
 trusted parent directory remain deployment requirements. Remote GitHub writes
 stay disabled.
 
-## Draft PR approval integration (PR #69; not production-enabled)
+## Draft PR approval integration (PR #69 merged; not production-enabled)
 
 The server-only `createApprovedDraftPublication` composition now joins the
 shared Git lease, refreshed publication plan, independently supplied reviewed
@@ -247,3 +247,43 @@ Still required before activation: actual multi-process target-host crash
 tests, a trusted registry/startup integration, independent receipt/security
 review, and separate least-privilege write authorization. Do not treat
 read-only recovery as approval to retry any remote write.
+
+## Session-bound GitHub Draft adapter (issue #70; server-only)
+
+The new `createSessionBoundGitHubDraft` composes live `DeliverySessions` grants,
+trusted immutable workspace registry refresh, confirmed commit/push receipts,
+local Git attestation, exact GitHub head/base SHA attestation, complete remote PR
+inventory, atomic approval+journal reservation, one Draft-only POST, and a
+separate read-only PR-detail SHA verification. A stored or recovered receipt
+is never accepted solely from a branch name or PR URL. Uncertain outcomes do
+not authorize retries, even when a remote PR cannot be found.
+
+All GitHub GET/POST requests and response-body parsing have a bounded
+15-second default deadline (trusted server configuration: 100 ms to 60 s).
+Aborted or hanging adapters cannot indefinitely hold the repository lease.
+A timed-out POST is **always ambiguous**: its SQLite reservation remains
+uncertain and a subsequent invocation performs only read-only reconciliation.
+This bound is not a cancellation guarantee for a remote request already sent.
+
+The final Draft POST boundary synchronously rechecks the live operator grant
+and exact commit/push receipts after fresh local Git and remote SHA attestation.
+It also asynchronously refreshes the **entire trusted reviewed workspace**
+(including repository/worktree identity and head/base SHA) after the last remote
+ref GET and before dispatching the single POST. Independent PR-detail GETs
+likewise require a fresh matching registry snapshot before confirming either a
+new or recovered receipt. Registry errors and swaps after durable reservation
+remain uncertain, with no blind replay. A revoked grant, failed transfer check
+or asynchronous authorization hook blocks POST. This does not make a remote
+GitHub operation atomic with local revocation or registry replacement.
+
+The Draft executor integration tests no longer mutate or delete confirmed Git
+transfer receipts to simulate failures: PR #76's immutable SQLite triggers
+correctly reject those operations. Missing stages are constructed without an
+intent; late journal read failures are injected at the final gate. PR #73 and
+PR #76 still require combined branch validation, independent security review
+and target-host failure tests before any merge/production activation.
+
+This adapter accepts only trusted server-side configuration and is **not**
+registered as an HTTP endpoint. It is not permission to enable production
+GitHub write credentials. Real target-host crash/credential tests, independently
+reviewed operator ingress and issue #58 remain release blockers.

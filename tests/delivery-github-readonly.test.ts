@@ -110,6 +110,156 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('follows an explicit next Link even when GitHub returns a short page', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        const next = new URL(url);
+        next.searchParams.set('page', '2');
+        return new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: '<' + next.toString() + '>; rel="next"' },
+        });
+      }
+      return json([{ ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }]);
+    });
+    const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
+    expect(result.candidates).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['cross-origin', 'https://attacker.invalid/pulls?page=2'],
+    [
+      'skipped page',
+      'https://api.github.com/repos/vlovers/ai-office/pulls?state=all&per_page=5&page=3',
+    ],
+    [
+      'different repository',
+      'https://api.github.com/repos/foreign/repo/pulls?state=all&per_page=5&page=2',
+    ],
+  ])('rejects a malicious pagination next link: %s', async (_label, next) => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: '<' + next + '>; rel="next"' },
+        }),
+    );
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'pagination',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('honors consistent next/last and first/prev/last links across pages', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const current = new URL(url);
+      const page = Number(current.searchParams.get('page'));
+      const linked = (targetPage: number, relation: string) => {
+        const target = new URL(url);
+        target.searchParams.set('page', String(targetPage));
+        return `<${target.toString()}>; rel="${relation}"`;
+      };
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: {
+          link:
+            page === 1
+              ? [linked(2, 'next'), linked(2, 'last')].join(', ')
+              : [linked(1, 'first'), linked(1, 'prev'), linked(2, 'last')].join(', '),
+        },
+      });
+    });
+    const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
+    expect(result.candidates).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a last-page hint beyond the current page without a next link', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const last = new URL(url);
+      last.searchParams.set('page', '3');
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: `<${last.toString()}>; rel="last"` },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'pagination Link header is incomplete',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects duplicate pagination relations even when the links agree', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const next = new URL(url);
+      next.searchParams.set('page', '2');
+      const item = `<${next.toString()}>; rel="next"`;
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: [item, item].join(', ') },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'Duplicate GitHub PR pagination relation',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects inconsistent first, previous and last pagination relations', async () => {
+    for (const [relation, targetPage] of [
+      ['first', 2],
+      ['prev', 3],
+      ['last', 0],
+    ] as const) {
+      const fetcher = vi.fn(async (url: string) => {
+        const target = new URL(url);
+        target.searchParams.set('page', String(targetPage));
+        return new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: `<${target.toString()}>; rel="${relation}"` },
+        });
+      });
+      await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+        'inconsistent page',
+      );
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('fails closed when a short first page links to a rate-limited second page', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get('page') === '2') {
+        return json({ message: 'rate limited' }, 429);
+      }
+      const next = new URL(url);
+      next.searchParams.set('page', '2');
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: '<' + next.toString() + '>; rel="next"' },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'HTTP 429',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds a stalled GitHub listing body without returning partial inventory', async () => {
+    const fetcher = vi.fn(async () => {
+      const response = json([candidate]);
+      Object.defineProperty(response, 'json', {
+        value: () => new Promise<never>(() => undefined),
+      });
+      return response;
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, timeoutMs: 100 })).rejects.toThrow(
+      'GitHub request timed out',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('rejects untrusted destinations before any request', async () => {
     const fetcher = vi.fn();
     await expect(
