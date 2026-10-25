@@ -465,12 +465,14 @@ describe('bounded Git transfer recovery across workspaces', () => {
 
   it('does not let a late registry refresh confirm an earlier timed-out workspace', async () => {
     const t = setup();
-    let finish!: (value: Awaited<ReturnType<GitTransferReconciliationContext['refreshReviewed']>>) => void;
-    const pending = new Promise<Awaited<ReturnType<GitTransferReconciliationContext['refreshReviewed']>>>(
-      (resolve) => {
-        finish = resolve;
-      },
-    );
+    let finish!: (
+      value: Awaited<ReturnType<GitTransferReconciliationContext['refreshReviewed']>>,
+    ) => void;
+    const pending = new Promise<
+      Awaited<ReturnType<GitTransferReconciliationContext['refreshReviewed']>>
+    >((resolve) => {
+      finish = resolve;
+    });
     try {
       t.journal.begin('commit', t.identity('a'));
       t.journal.begin('commit', t.identity('b'));
