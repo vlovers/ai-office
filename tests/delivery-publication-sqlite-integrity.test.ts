@@ -38,12 +38,12 @@ describe('durable publication SQLite invariants', () => {
     try {
       const journal = new DeliveryJournal(db);
       journal.reserve('workspace-a', 'op-a');
-      expect(() =>
-        db.exec("UPDATE delivery_journal SET workspace_id='workspace-b'"),
-      ).toThrow('identity is immutable');
-      expect(() =>
-        db.exec("UPDATE delivery_journal SET operation_key='op-b'"),
-      ).toThrow('identity is immutable');
+      expect(() => db.exec("UPDATE delivery_journal SET workspace_id='workspace-b'")).toThrow(
+        'identity is immutable',
+      );
+      expect(() => db.exec("UPDATE delivery_journal SET operation_key='op-b'")).toThrow(
+        'identity is immutable',
+      );
       expect(journal.get('workspace-a')?.operationKey).toBe('op-a');
       expect(journal.get('workspace-b')).toBeNull();
     } finally {
@@ -179,9 +179,9 @@ describe('durable publication SQLite invariants', () => {
       // SQLite REPLACE otherwise deletes the old row without firing a
       // DELETE trigger when recursive_triggers is disabled (the default).
       expect(() =>
-        db.prepare(
-          "INSERT OR REPLACE INTO delivery_journal VALUES (?, ?, 'reserved', NULL)",
-        ).run('workspace-a', 'op-a'),
+        db
+          .prepare("INSERT OR REPLACE INTO delivery_journal VALUES (?, ?, 'reserved', NULL)")
+          .run('workspace-a', 'op-a'),
       ).toThrow('already exists');
       const replaceTransfer = db.prepare(
         `INSERT OR REPLACE INTO delivery_git_transfers
@@ -218,12 +218,14 @@ describe('durable publication SQLite invariants', () => {
         state TEXT NOT NULL,
         pull_request_url TEXT
       )`);
-      db.prepare(
-        "INSERT INTO delivery_journal VALUES (?, ?, 'reserved', NULL)",
-      ).run('workspace-a', 'legacy-operation');
-      db.prepare(
-        "INSERT INTO delivery_journal VALUES (?, ?, 'uncertain', NULL)",
-      ).run('workspace-b', 'legacy-operation');
+      db.prepare("INSERT INTO delivery_journal VALUES (?, ?, 'reserved', NULL)").run(
+        'workspace-a',
+        'legacy-operation',
+      );
+      db.prepare("INSERT INTO delivery_journal VALUES (?, ?, 'uncertain', NULL)").run(
+        'workspace-b',
+        'legacy-operation',
+      );
       const journal = new DeliveryJournal(db);
       expect(() => journal.get('workspace-a')).toThrow('belongs to another workspace');
       expect(() => journal.get('workspace-b')).toThrow('belongs to another workspace');
