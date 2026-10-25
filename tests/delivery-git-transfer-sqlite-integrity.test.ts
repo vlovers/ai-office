@@ -235,3 +235,22 @@ describe('durable Git transfer SQLite integrity boundaries', () => {
     }
   });
 });
+
+/* FORMAT_DIAGNOSTIC_START */
+it('temporary formatting diagnostic', async () => {
+  const { format, resolveConfig } = await import('prettier');
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const filename = fileURLToPath(import.meta.url);
+  const source = readFileSync(filename, 'utf8');
+  const stripped = source.replace(
+    /\n\/\* FORMAT_DIAGNOSTIC_START \*\/[\s\S]*?\/\* FORMAT_DIAGNOSTIC_END \*\/\n/,
+    '\n',
+  );
+  const formatted = await format(stripped, {
+    ...(await resolveConfig(filename)),
+    filepath: filename,
+  });
+  console.log('FORMAT_BASE64:' + Buffer.from(formatted).toString('base64'));
+});
+/* FORMAT_DIAGNOSTIC_END */
