@@ -154,9 +154,13 @@ describe('Draft PR transfer ownership and replay isolation', () => {
       const owner = identity();
       confirmBoth(t.journal, owner);
       t.journal.begin('commit', identity('foreign'));
-      const before = t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY workspace_id, stage').all();
+      const before = t.db
+        .prepare('SELECT * FROM delivery_git_transfers ORDER BY workspace_id, stage')
+        .all();
       expect(() => t.journal.assertReadyForDraft(owner)).toThrow('another workspace');
-      const after = t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY workspace_id, stage').all();
+      const after = t.db
+        .prepare('SELECT * FROM delivery_git_transfers ORDER BY workspace_id, stage')
+        .all();
       expect(after).toEqual(before);
     } finally {
       t.close();
