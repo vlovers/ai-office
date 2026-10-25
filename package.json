@@ -46,7 +46,7 @@
     "test:sandbox": "node --import tsx tests/native-sandbox.ts",
     "test:browser": "node --import tsx tests/browser-smoke.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check . || (prettier --write docs/DELIVERY_PRODUCTION_CHECKLIST.md tests/delivery-git-transfer-stage-invariants.test.ts && git diff -- docs/DELIVERY_PRODUCTION_CHECKLIST.md tests/delivery-git-transfer-stage-invariants.test.ts && exit 1)",
     "codex:inspect": "node --import tsx scripts/codex-inspect.ts",
     "test:real": "node --import tsx scripts/real-codex-smoke.ts --run",
     "test:dashboard:real": "node --import tsx tests/dashboard-real.ts --run",
