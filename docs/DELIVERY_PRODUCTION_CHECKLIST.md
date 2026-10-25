@@ -122,6 +122,14 @@ or corrupted confirmed receipt SHAs are rejected before any journal mutation.
 These guards do not replace independent session/grant authorization or prove
 that a previous remote write was initiated by this service.
 
+Cancellation of a read-only recovery is also fail-closed. An external
+`AbortSignal` rejects the remote attestation even when a custom GitHub
+transport ignores cancellation. The signal is checked again immediately before
+each durable receipt confirmation, including after asynchronous registry
+refresh. A cancelled recovery cannot confirm a commit or push, cannot start a
+second push, and does not imply that an in-flight remote GET stopped running.
+The transport must be server-owned and GET-only.
+
 This is an additional **read-only recovery primitive**, not a startup hook,
 HTTP route or automatic Git executor. Existing startup recovery still only
 marks interrupted intents uncertain. A trusted operator-controlled recovery
