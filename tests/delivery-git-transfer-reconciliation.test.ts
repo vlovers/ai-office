@@ -224,6 +224,98 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
+  it('does not confirm a commit if an external Git change occurs during final registry refresh', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      let refreshes = 0;
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshReviewed: async () => {
+          if (++refreshes === 2) {
+            writeFileSync(join(t.context.worktree.path, 'late-untracked.txt'), 'changed');
+          }
+          return {
+            plan,
+            identity: t.identity,
+            repository: t.context.repository,
+            worktree: t.context.worktree,
+          };
+        },
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'commit' });
+      expect(refreshes).toBe(2);
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1', 'commit')?.receiptSha).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+      rmSync(join(t.context.worktree.path, 'late-untracked.txt'));
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('commit-confirmed');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a push if an external Git change occurs during GitHub GET', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.endsWith('/main')) {
+          writeFileSync(join(t.context.worktree.path, 'late-untracked.txt'), 'changed');
+        }
+        return original(url, init);
+      });
+      const result = await reconcileGitTransferReceipts(t.context);
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(t.journal.get('workspace-1', 'commit')?.state).toBe('confirmed');
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBeNull();
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+      rmSync(join(t.context.worktree.path, 'late-untracked.txt'));
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('ready');
+      expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBe(t.identity.headSha);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm a push when Git origin changes during final registry refresh', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      let refreshes = 0;
+      const result = await reconcileGitTransferReceipts({
+        ...t.context,
+        refreshReviewed: async () => {
+          if (++refreshes === 3) {
+            t.git('remote', 'set-url', 'origin', 'git@github.com:foreign/repo.git');
+          }
+          return {
+            plan,
+            identity: t.identity,
+            repository: t.context.repository,
+            worktree: t.context.worktree,
+          };
+        },
+      });
+      expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(refreshes).toBe(3);
+      expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBeNull();
+      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      t.git('remote', 'set-url', 'origin', 'git@github.com:vlovers/ai-office.git');
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('ready');
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects a foreign transfer identity before changing any durable row', async () => {
     const t = setup();
     try {
