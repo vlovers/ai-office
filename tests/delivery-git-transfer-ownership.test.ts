@@ -100,6 +100,23 @@ describe('Draft PR transfer ownership and replay isolation', () => {
     }
   });
 
+  it('treats differently cased GitHub repository names as the same destination', () => {
+    const t = setup();
+    try {
+      const owner = identity();
+      confirmBoth(t.journal, owner);
+      const foreign = identity('foreign', {
+        destination: 'https://github.com/VLOVERS/AI-Office',
+        operationKey: 'independently-reviewed-operation',
+      });
+      t.journal.begin('commit', foreign);
+      expect(() => t.journal.assertReadyForDraft(owner)).toThrow('another workspace');
+      expect(t.journal.get('foreign', 'commit')?.state).toBe('intent');
+    } finally {
+      t.close();
+    }
+  });
+
   it('blocks a duplicate operation key even when its branch differs', () => {
     const t = setup();
     try {
