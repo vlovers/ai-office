@@ -85,9 +85,7 @@ export class DeliveryJournal {
     // Pre-upgrade databases may already contain duplicate operation owners.
     // Do not silently adopt or confirm either row during restart recovery.
     const competing = this.db
-      .prepare(
-        'SELECT 1 FROM delivery_journal WHERE operation_key=? AND workspace_id!=? LIMIT 1',
-      )
+      .prepare('SELECT 1 FROM delivery_journal WHERE operation_key=? AND workspace_id!=? LIMIT 1')
       .get(String(row.operation_key), workspaceId);
     if (competing) {
       throw new Error('Publication operation belongs to another workspace.');
