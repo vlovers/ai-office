@@ -12,6 +12,8 @@ This is a process gate, not release authorization.
 - [ ] Record which Delivery checks are fixture-only, which use actual HTTP/Git/SQLite processes, and which require real TLS/GitHub credentials. Missing deployment evidence is a blocker, not a pass.
 - [ ] Verify current tagged release separately from features merged into main; real Codex smoke and native sandbox environment must be evidenced, not inferred from mocked tests.
 - [ ] Confirm environment-specific smoke checks and documented mitigation/rollback, with secrets excluded from logs.
+- [ ] Before integrating this documentation-only foundation PR, compare its six added paths against the current `main` tree. If all six remain absent, preserve the additive diff and review the current `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/MVP_STABILIZATION_CHECKLIST.md`, and Delivery security/activation documents for contract drift. Do not mistake commit-graph divergence alone for a textual conflict; verify actual Git mergeability and CI on the eventual candidate.
+- [ ] Sequence the dependent security/issue-intake PR #48 and workflow SHA-pinning PR #49 only after the foundation PR is independently accepted. Recheck overlapping paths, new workflows on `main`, current-head CI and reviewer approval for each dependent PR; never reuse predecessor CI as evidence.
 - [ ] Check the target branch has not materially advanced beyond the reviewed base SHA. If it has, reconcile and rerun affected CI/review on the new integration candidate.
 - [ ] Obtain maintainer authorization and any required independent GitHub approval before merge/deploy/package publishing.
 - [ ] After release, verify real deployed origin or installed published artifact independently and record link/commit.
