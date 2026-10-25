@@ -128,7 +128,9 @@ describe('credential-scoped GitHub response boundary', () => {
               headers: { Link: `<${next.toString()}>; rel="next"` },
             });
           }
-          return Response.json([{ ...candidate, html_url: `https://github.com/${repository}/pull/124` }]);
+          return Response.json([
+            { ...candidate, html_url: `https://github.com/${repository}/pull/124` },
+          ]);
         },
         () => 1000,
       );
@@ -160,10 +162,9 @@ describe('credential-scoped GitHub response boundary', () => {
         async () => credential(),
         async () => {
           calls++;
+          const foreign = 'https://api.github.com/repos/attacker/repo/pulls?state=all&per_page=100&page=2';
           return Response.json([], {
-            headers: {
-              Link: '<https://api.github.com/repos/attacker/repo/pulls?state=all&per_page=100&page=2>; rel="next"',
-            },
+            headers: { Link: `<${foreign}>; rel="next"` },
           });
         },
         () => 1000,
@@ -216,11 +217,9 @@ describe('credential-scoped GitHub response boundary', () => {
     }
   });
 
-  it('rejects oversized pagination metadata rather than losing its completeness evidence', async () => {
+  it('rejects overlong pagination metadata', async () => {
     await expect(
-      request(listUrl, async () =>
-        Response.json([], { headers: { Link: 'x'.repeat(8193) } }),
-      ),
+      request(listUrl, async () => Response.json([], { headers: { Link: 'x'.repeat(8193) } })),
     ).rejects.toMatchObject({ statusCode: 503 });
   });
 
