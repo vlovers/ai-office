@@ -134,8 +134,9 @@ The server-only `recoverUnresolvedGitTransfers` coordinator enumerates **distinc
 unresolved workspace IDs using stable keyset pagination (maximum 100 per
 batch). It resolves each workspace through a trusted registry callback and
 calls the existing read-only reconciliation under the shared repository lease.
-Missing registry records, revoked sessions, foreign SQLite journals, mismatched
-workspace identities and lease contention are reported as blocked/unavailable
+Missing registry records, revoked sessions, foreign SQLite journals, malformed
+or throwing registry bindings, mismatched workspace identities and lease
+contention are reported as blocked/unavailable
 without deleting, replacing or fabricating any intent. One blocked workspace
 does not prevent inspection of subsequent workspaces; the cursor prevents
 permanent starvation of later entries.
