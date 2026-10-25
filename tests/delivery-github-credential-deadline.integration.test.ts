@@ -116,6 +116,8 @@ describe('credential-scoped GitHub deadline and live authorization', () => {
         method: 'GET',
         signal: controller.signal,
       });
+      // Allow the vault callback to begin before cancelling the in-flight read.
+      await Promise.resolve();
       controller.abort();
       await expect(pending).rejects.toMatchObject({ statusCode: 503 });
       finish(credential());
