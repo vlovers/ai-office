@@ -52,6 +52,20 @@ function insertPush(db: DatabaseSync, changes: Partial<DeliveryGitTransferIdenti
     );
 }
 
+/** Exercise SQLite guards from a process that does not import our journal class. */
+function externalSql(path: string, sql: string, values: string[] = []) {
+  const script = [
+    "const { DatabaseSync } = require('node:sqlite');",
+    'const db = new DatabaseSync(process.argv[1]);',
+    'try { db.prepare(process.argv[2]).run(...JSON.parse(process.argv[3])); process.exit(0); }',
+    'catch (error) { process.stderr.write(String(error)); process.exit(42); }',
+  ].join(' ');
+  return spawnSync(process.execPath, ['-e', script, path, sql, JSON.stringify(values)], {
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+}
+
 function confirmCommit(journal: DeliveryGitTransferJournal) {
   journal.begin('commit', identity);
   journal.confirmVerified('commit', identity, identity.headSha);
@@ -201,6 +215,147 @@ describe('SQLite cross-stage Git transfer invariants', () => {
       });
       expect(child.status).toBe(42);
       expect(t.journal.get(identity.workspaceId, 'commit')?.state).toBe('intent');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('atomically rejects competing operation and branch owners from independent processes', () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', identity);
+      const insert =
+        'INSERT INTO delivery_git_transfers ' +
+        '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) ' +
+        "VALUES (?, 'commit', ?, ?, ?, ?, ?, 'intent', NULL)";
+      const attempts = [
+        [
+          'foreign-workspace',
+          identity.operationKey,
+          identity.destination,
+          'ai-office/22345678-1234-1234-1234-123456789abc',
+          identity.headSha,
+          identity.baseSha,
+        ],
+        [
+          'foreign-workspace',
+          'foreign-operation',
+          'https://github.com/VLOVERS/AI-OFFICE',
+          identity.branch,
+          identity.headSha,
+          identity.baseSha,
+        ],
+      ];
+      for (const values of attempts) {
+        const contender = externalSql(t.path, insert, values);
+        expect(contender.status, contender.stderr).toBe(42);
+        expect(contender.stderr).toContain('belongs to another workspace');
+      }
+      expect(t.db.prepare('SELECT count(*) AS n FROM delivery_git_transfers').get()?.n).toBe(1);
+      expect(t.journal.get(identity.workspaceId, 'commit')?.state).toBe('intent');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('enforces push prerequisites and prevents replay across process boundaries', () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', identity);
+      const insert =
+        'INSERT INTO delivery_git_transfers ' +
+        '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) ' +
+        "VALUES (?, 'push', ?, ?, ?, ?, ?, 'intent', NULL)";
+      const values = [
+        identity.workspaceId,
+        identity.operationKey,
+        identity.destination,
+        identity.branch,
+        identity.headSha,
+        identity.baseSha,
+      ];
+      const premature = externalSql(t.path, insert, values);
+      expect(premature.status, premature.stderr).toBe(42);
+      expect(premature.stderr).toContain('matching confirmed commit');
+      t.journal.confirmVerified('commit', identity, identity.headSha);
+      const reserved = externalSql(t.path, insert, values);
+      expect(reserved.status, reserved.stderr).toBe(0);
+      const replay = externalSql(t.path, insert, values);
+      expect(replay.status, replay.stderr).toBe(42);
+      expect(replay.stderr).toContain('already exists');
+      expect(t.journal.get(identity.workspaceId, 'push')).toMatchObject({
+        state: 'intent',
+        receiptSha: null,
+      });
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects forged receipts, identity rewrites, REPLACE and deletion by raw external SQL', () => {
+    const t = setup();
+    try {
+      confirmCommit(t.journal);
+      t.journal.begin('push', identity);
+      t.journal.confirmVerified('push', identity, identity.headSha);
+      const before = t.db
+        .prepare('SELECT * FROM delivery_git_transfers ORDER BY stage')
+        .all();
+      const attempts: Array<{ sql: string; values: string[] }> = [
+        {
+          sql:
+            'INSERT OR REPLACE INTO delivery_git_transfers ' +
+            '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) ' +
+            "VALUES (?, 'commit', ?, ?, ?, ?, ?, 'intent', NULL)",
+          values: [
+            identity.workspaceId,
+            identity.operationKey,
+            identity.destination,
+            identity.branch,
+            identity.headSha,
+            identity.baseSha,
+          ],
+        },
+        {
+          sql: "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE stage='push'",
+          values: [],
+        },
+        {
+          sql: "UPDATE delivery_git_transfers SET receipt_sha=? WHERE stage='commit'",
+          values: ['f'.repeat(40)],
+        },
+        {
+          sql: 'UPDATE delivery_git_transfers SET head_sha=? WHERE stage=?',
+          values: ['f'.repeat(40), 'push'],
+        },
+        {
+          sql: 'DELETE FROM delivery_git_transfers WHERE stage=?',
+          values: ['commit'],
+        },
+        {
+          sql:
+            'INSERT INTO delivery_git_transfers ' +
+            '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) ' +
+            "VALUES (?, 'commit', ?, ?, ?, ?, ?, 'confirmed', ?)",
+          values: [
+            'forged-workspace',
+            'forged-operation',
+            identity.destination,
+            'ai-office/32345678-1234-1234-1234-123456789abc',
+            identity.headSha,
+            identity.baseSha,
+            identity.headSha,
+          ],
+        },
+      ];
+      for (const attempt of attempts) {
+        const child = externalSql(t.path, attempt.sql, attempt.values);
+        expect(child.status, child.stderr).toBe(42);
+        expect(t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY stage').all()).toEqual(
+          before,
+        );
+      }
+      expect(() => t.journal.assertReadyForDraft(identity)).not.toThrow();
     } finally {
       t.close();
     }
