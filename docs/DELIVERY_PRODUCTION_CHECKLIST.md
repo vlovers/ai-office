@@ -471,3 +471,25 @@ Regression coverage includes pure reconciliation for open, closed and forked
 conflicts; SQLite orchestration after an ambiguous POST; and the full
 session-bound GitHub adapter across a second SQLite connection/restart.
 This is defense in depth, not permission to enable remote write credentials.
+
+## Mandatory approved Draft publication gates (combined PR #79)
+
+The authenticated `createApprovedDraftPublication` composition now requires
+both `verifyBeforeReserve` and `verifyRemoteReceipt` callbacks at the
+TypeScript boundary **and** checks them at runtime before any authorization,
+inventory, journal mutation or remote call. This prevents a trusted but
+misconfigured caller from consuming one-use approval after asynchronous
+inventory without a final reviewed-snapshot check, or adopting a PR from
+inventory/POST metadata without an independent detail/commit-SHA check.
+
+A failed final snapshot check leaves approval unused and creates no journal
+reservation. Once a POST attempt is reserved, a failed independent PR-detail
+check leaves the operation uncertain and consumed; subsequent recovery is
+read-only and must pass the same independent verification. The session-bound
+GitHub adapter supplies real local/registry and remote SHA verifiers. Test
+stubs in the generic composition tests are not production attestation.
+
+This does not make the generic `createDraftPublication` test harness a safe
+production writer: only the authenticated, server-owned composition may be
+considered for future activation, after independent review and target-host
+validation. No HTTP write route or production credential has been enabled.
