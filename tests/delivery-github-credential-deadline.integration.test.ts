@@ -32,7 +32,7 @@ function count(db: DatabaseSync, table: string): number {
 }
 
 describe('credential-scoped GitHub deadline and live authorization', () => {
-  it('bounds a stalled credential provider and ignores its late result without changing SQLite', async () => {
+  it('ignores late vault resolution without advancing SQLite', async () => {
     const db = new DatabaseSync(':memory:');
     try {
       let resolveCredential!: (value: DeliveryReadCredential) => void;
@@ -48,9 +48,9 @@ describe('credential-scoped GitHub deadline and live authorization', () => {
           return Response.json({});
         },
       );
-      await expect(vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' })).rejects.toMatchObject({
-        statusCode: 503,
-      });
+      await expect(
+        vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' }),
+      ).rejects.toMatchObject({ statusCode: 503 });
       resolveCredential(credential());
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(transportCalls).toBe(0);
@@ -60,7 +60,7 @@ describe('credential-scoped GitHub deadline and live authorization', () => {
     }
   });
 
-  it('bounds a fetcher that ignores abort and discards a late HTTP 401 without a journal write', async () => {
+  it('ignores a late HTTP 401 from an abort-insensitive fetcher', async () => {
     const db = new DatabaseSync(':memory:');
     try {
       let finish!: (response: Response) => void;
@@ -72,9 +72,9 @@ describe('credential-scoped GitHub deadline and live authorization', () => {
             finish = resolve;
           }),
       );
-      await expect(vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' })).rejects.toMatchObject({
-        statusCode: 503,
-      });
+      await expect(
+        vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' }),
+      ).rejects.toMatchObject({ statusCode: 503 });
       finish(new Response(null, { status: 401 }));
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(count(db, 'delivery_revoked_credentials')).toBe(0);
@@ -83,7 +83,7 @@ describe('credential-scoped GitHub deadline and live authorization', () => {
     }
   });
 
-  it('bounds a response body that never finishes, even if the transport returns HTTP 200', async () => {
+  it('bounds a stalled HTTP 200 response body', async () => {
     const db = new DatabaseSync(':memory:');
     try {
       const vault = manager(
@@ -91,15 +91,15 @@ describe('credential-scoped GitHub deadline and live authorization', () => {
         async () => credential(),
         async () => new Response(new ReadableStream<Uint8Array>({ start() {} })),
       );
-      await expect(vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' })).rejects.toMatchObject({
-        statusCode: 503,
-      });
+      await expect(
+        vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' }),
+      ).rejects.toMatchObject({ statusCode: 503 });
     } finally {
       db.close();
     }
   });
 
-  it('honors caller cancellation while the vault ignores abort, without touching SQLite', async () => {
+  it('honors cancellation during a stalled vault lookup', async () => {
     const db = new DatabaseSync(':memory:');
     try {
       let finish!: (value: DeliveryReadCredential) => void;
