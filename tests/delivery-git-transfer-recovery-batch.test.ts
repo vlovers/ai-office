@@ -253,14 +253,10 @@ describe('bounded Git transfer recovery across workspaces', () => {
     });
     try {
       t.journal.begin('commit', t.identity('a'));
-      const holder = withDeliveryRepositoryLease(
-        t.repository,
-        t.repository.gitDir,
-        async () => {
-          acquired();
-          await gate;
-        },
-      );
+      const holder = withDeliveryRepositoryLease(t.repository, t.repository.gitDir, async () => {
+        acquired();
+        await gate;
+      });
       await ready;
       const result = await recoverUnresolvedGitTransfers(t.journal, async (id) => t.contextFor(id));
       expect(result.outcomes).toEqual([{ workspaceId: 'a', status: 'blocked' }]);
@@ -325,19 +321,4 @@ describe('bounded Git transfer recovery across workspaces', () => {
     }
   });
 
-  it('TEMPORARY: print Prettier patch for CI formatting repair', () => {
-    execFileSync('node', [
-      'node_modules/prettier/bin/prettier.cjs',
-      '--write',
-      'docs/DELIVERY_PRODUCTION_CHECKLIST.md',
-      'tests/delivery-git-transfer-recovery-batch.test.ts',
-    ]);
-    const diff = execFileSync('git', [
-      'diff',
-      '--',
-      'docs/DELIVERY_PRODUCTION_CHECKLIST.md',
-      'tests/delivery-git-transfer-recovery-batch.test.ts',
-    ], { encoding: 'utf8' });
-    throw new Error('TEMPORARY PRETTIER PATCH\\n' + diff);
-  });
 });
