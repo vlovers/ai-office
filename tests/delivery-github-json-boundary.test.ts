@@ -34,9 +34,8 @@ const attested = {
 describe('bounded GitHub JSON response parsing', () => {
   it('accepts a valid body at the exact byte limit', async () => {
     const body = JSON.stringify({ data: 'x'.repeat(200) });
-    await expect(readBoundedGitHubJson(new Response(body), Buffer.byteLength(body))).resolves.toEqual({
-      data: 'x'.repeat(200),
-    });
+    const result = await readBoundedGitHubJson(new Response(body), Buffer.byteLength(body));
+    expect(result).toEqual({ data: 'x'.repeat(200) });
   });
 
   it('rejects actual oversized bodies regardless of Content-Length', async () => {
@@ -95,15 +94,18 @@ describe('bounded GitHub JSON response parsing', () => {
 
   it('rejects oversized ref evidence before requesting the base branch', async () => {
     const fetcher = vi.fn(async () => new Response('x'.repeat(GITHUB_JSON_LIMITS.refs + 1)));
-    await expect(attestGitHubCommitRefs(plan, approved, { fetcher })).rejects.toThrow('safe size limit');
+    await expect(attestGitHubCommitRefs(plan, approved, { fetcher })).rejects.toThrow(
+      'safe size limit',
+    );
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it('rejects oversized PR details during read-only reconciliation', async () => {
     const fetcher = vi.fn(async () => new Response('x'.repeat(GITHUB_JSON_LIMITS.detail + 1)));
-    await expect(
-      readGitHubDraftCommitReceipt(plan, 'https://github.com/vlovers/ai-office/pull/123', { fetcher }),
-    ).rejects.toThrow('safe size limit');
+    const url = 'https://github.com/vlovers/ai-office/pull/123';
+    await expect(readGitHubDraftCommitReceipt(plan, url, { fetcher })).rejects.toThrow(
+      'safe size limit',
+    );
     expect(fetcher).toHaveBeenCalledOnce();
   });
 

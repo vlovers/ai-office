@@ -173,7 +173,10 @@ export async function listAllGitHubPullRequests(
           // Never include response body or credential in thrown errors.
           throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
         }
-        return { response, payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing) };
+        return {
+          response,
+          payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing),
+        };
       },
       { signal: options.signal, timeoutMs: options.timeoutMs },
     );
