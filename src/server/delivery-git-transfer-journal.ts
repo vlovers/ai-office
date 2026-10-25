@@ -133,7 +133,7 @@ export class DeliveryGitTransferJournal {
         (NEW.state = OLD.state AND NEW.receipt_sha IS OLD.receipt_sha)
         OR (OLD.state = 'intent' AND NEW.state = 'uncertain' AND NEW.receipt_sha IS NULL)
         OR (OLD.state IN ('intent', 'uncertain') AND NEW.state = 'confirmed'
-            AND NEW.receipt_sha = NEW.head_sha)
+            AND NEW.receipt_sha IS NOT NULL AND NEW.receipt_sha = NEW.head_sha)
       )
       BEGIN
         SELECT RAISE(ABORT, 'Git transfer receipt state must advance monotonically.');
