@@ -359,6 +359,22 @@ allowing a future authorization decision to race with a network request.
 401/403 responses received within the deadline still durably quarantine the
 credential version; errors never include upstream bodies or tokens.
 
+
+The credential facade must forward GitHub's `Link` header for authenticated
+PR inventory responses. The downstream parser validates its exact repository,
+query, page sequence and completeness; stripping the header can incorrectly
+treat a short page as the end of the inventory and miss an existing PR.
+Malformed, cross-repository, overlong or credential-echoing pagination metadata
+must fail closed. A linked second page returning 429/5xx is not a complete
+inventory and must never authorize a Draft POST.
+
+Read credential validity is checked again after the response stream completes:
+the credential must not have been revoked, its expiry must still exceed the
+five-second safety margin, and the observed clock must not roll back behind a
+concurrent request's durable clock. These postflight checks supplement (rather
+than replace) the synchronous operator grant check. In-flight revocation and
+expiry must not yield an accepted GitHub ref or PR receipt.
+
 These tests use controlled hung vault, transport and streaming implementations,
 caller cancellation, late HTTP responses, and live-grant revocation. They are
 not substitutes for target-host credential/HTTP crash tests or an independent
