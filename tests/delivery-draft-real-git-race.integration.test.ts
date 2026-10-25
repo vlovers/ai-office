@@ -385,9 +385,9 @@ describe('real Git Draft PR late-mutation integration', () => {
           accepted ? t.receipt.html_url : null,
         );
         expect(restartFetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
-        expect(
-          restartFetcher.mock.calls.filter((call) => call[1].method === 'POST'),
-        ).toHaveLength(0);
+        expect(restartFetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(
+          0,
+        );
         expect(t.fetcher).not.toHaveBeenCalled();
       } finally {
         restartedDb?.close();
