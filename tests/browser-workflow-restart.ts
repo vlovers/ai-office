@@ -356,7 +356,9 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await expect(board.getByRole('alert')).toHaveCount(0);
     for (const [index, id] of ids.entries()) {
-      const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
+      const response: APIResponse = await activePage.request.get(
+        address + '/api/workflows/' + id,
+      );
       assert.equal(response.status(), 200);
       assert.equal((await response.json()).version, versions[index]);
       const timeline = await activePage.request.get(
