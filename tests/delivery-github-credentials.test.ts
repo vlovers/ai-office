@@ -230,6 +230,31 @@ describe('server-only least-privilege GitHub credential boundary', () => {
     }
   });
 
+  it('permits canonical pull detail and bounded inventory reads with read-only credentials', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const calls: string[] = [];
+      const manager = new DeliveryGitHubCredentials(
+        db,
+        async () => credential(),
+        async (url, init) => {
+          calls.push(url);
+          expect(init.method).toBe('GET');
+          expect(init.redirect).toBe('error');
+          return Response.json({ number: 1 });
+        },
+      );
+      const fetcher = manager.readOnlyFetcher(repository, ['main']);
+      const detail = `https://api.github.com/repos/${repository}/pulls/1`;
+      const listing = `https://api.github.com/repos/${repository}/pulls?state=all&page=1&per_page=100`;
+      expect((await fetcher(detail, { method: 'GET' })).status).toBe(200);
+      expect((await fetcher(listing, { method: 'GET' })).status).toBe(200);
+      expect(calls).toEqual([detail, listing]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('sanitizes transport/provider failures, token echoes, excessive bodies, rate limits and redirects', async () => {
     const db = new DatabaseSync(':memory:');
     try {
