@@ -428,14 +428,11 @@ describe('Draft PR publication orchestration', () => {
       expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.createDraft).not.toHaveBeenCalled();
       revision = plan.revision;
-      expect(
-        (
-          await createDraftPublication({
-            ...t.context,
-            refreshPlan: async () => ({ ...plan, revision }),
-          })
-        ).status,
-      ).toBe('published');
+      const retried = await createDraftPublication({
+        ...t.context,
+        refreshPlan: async () => ({ ...plan, revision }),
+      });
+      expect(retried.status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
     } finally {
       t.close();
@@ -448,16 +445,16 @@ describe('Draft PR publication orchestration', () => {
       const verifyBeforeReserve = vi.fn(async () => {
         throw new Error('worktree drifted during inventory');
       });
-      await expect(
-        createDraftPublication({ ...t.context, verifyBeforeReserve }),
-      ).rejects.toThrow('worktree drifted during inventory');
+      const blocked = createDraftPublication({ ...t.context, verifyBeforeReserve });
+      await expect(blocked).rejects.toThrow('worktree drifted during inventory');
       expect(verifyBeforeReserve).toHaveBeenCalledOnce();
       expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.createDraft).not.toHaveBeenCalled();
-      expect(
-        (await createDraftPublication({ ...t.context, verifyBeforeReserve: async () => {} }))
-          .status,
-      ).toBe('published');
+      const recovered = await createDraftPublication({
+        ...t.context,
+        verifyBeforeReserve: async () => {},
+      });
+      expect(recovered.status).toBe('published');
     } finally {
       t.close();
     }
