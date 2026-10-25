@@ -132,10 +132,10 @@ function interruptReservationTransaction(
   // before or after COMMIT, then dies without running cleanup or GitHub I/O.
   const script = [
     "const {DatabaseSync}=require('node:sqlite');",
-    "const db=new DatabaseSync(process.argv[1]);",
+    'const db=new DatabaseSync(process.argv[1]);',
     "db.exec('BEGIN IMMEDIATE');",
     "const consumed=db.prepare('UPDATE delivery_publication_approvals SET consumed_at=10000 WHERE approval_id=? AND consumed_at IS NULL').run(process.argv[2]);",
-    "if(consumed.changes!==1)process.exit(3);",
+    'if(consumed.changes!==1)process.exit(3);',
     "db.prepare(\"INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)\").run('workspace-1', process.argv[3]);",
     "if(process.argv[4]==='commit')db.exec('COMMIT');",
     "process.kill(process.pid,'SIGKILL');",
