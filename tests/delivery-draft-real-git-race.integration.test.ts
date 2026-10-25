@@ -125,6 +125,82 @@ function setup() {
 }
 
 describe('real Git Draft PR late-mutation integration', () => {
+  it.each(['worktree', 'origin'] as const)(
+    'does not consume approval when %s changes during the remote PR inventory',
+    async (mutation) => {
+      const t = setup();
+      const original = t.fetcher.getMockImplementation()!;
+      const dirtyPath = join(t.path, 'inventory-untracked.txt');
+      let inventoryReads = 0;
+      try {
+        t.fetcher.mockImplementation(async (url, init) => {
+          if (url.includes('/pulls?') && ++inventoryReads === 1) {
+            if (mutation === 'worktree') {
+              writeFileSync(dirtyPath, 'external process changed the worktree\\n');
+            } else {
+              execFileSync('git', [
+                '-C',
+                t.path,
+                'remote',
+                'set-url',
+                'origin',
+                'git@github.com:foreign/repo.git',
+              ]);
+            }
+          }
+          return original(url, init);
+        });
+        await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow();
+        expect(t.journal.get('workspace-1')).toBeNull();
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+        if (mutation === 'worktree') {
+          rmSync(dirtyPath);
+        } else {
+          execFileSync('git', [
+            '-C',
+            t.path,
+            'remote',
+            'set-url',
+            'origin',
+            'git@github.com:vlovers/ai-office.git',
+          ]);
+        }
+        expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      } finally {
+        t.close();
+      }
+    },
+  );
+
+  it('does not consume approval when trusted registry changes during PR inventory', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    let drift = false;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.includes('/pulls?')) drift = true;
+        return original(url, init);
+      });
+      const context = () => ({
+        ...t.context(),
+        refreshWorkspace: async () =>
+          drift
+            ? { ...t.context().workspace, headSha: 'f'.repeat(40) }
+            : t.context().workspace,
+      });
+      await expect(createSessionBoundGitHubDraft(context())).rejects.toThrow();
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      drift = false;
+      t.fetcher.mockImplementation(original);
+      expect((await createSessionBoundGitHubDraft(context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('blocks the only POST after a non-cooperating Git write during final ref GET', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
