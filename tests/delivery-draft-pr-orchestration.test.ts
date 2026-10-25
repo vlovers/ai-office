@@ -411,6 +411,58 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
+  it('does not consume a reservation when the review changes during PR inventory', async () => {
+    const t = setup();
+    try {
+      let revision = plan.revision;
+      t.listRemote.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+        return { complete: true, candidates: [] };
+      });
+      await expect(
+        createDraftPublication({
+          ...t.context,
+          refreshPlan: async () => ({ ...plan, revision }),
+        }),
+      ).rejects.toThrow('snapshot changed during remote inventory');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      revision = plan.revision;
+      expect(
+        (
+          await createDraftPublication({
+            ...t.context,
+            refreshPlan: async () => ({ ...plan, revision }),
+          })
+        ).status,
+      ).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rechecks a final snapshot gate before any durable reservation or remote POST', async () => {
+    const t = setup();
+    try {
+      const verifyBeforeReserve = vi.fn(async () => {
+        throw new Error('worktree drifted during inventory');
+      });
+      await expect(
+        createDraftPublication({ ...t.context, verifyBeforeReserve }),
+      ).rejects.toThrow('worktree drifted during inventory');
+      expect(verifyBeforeReserve).toHaveBeenCalledOnce();
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(
+        (await createDraftPublication({ ...t.context, verifyBeforeReserve: async () => {} }))
+          .status,
+      ).toBe('published');
+    } finally {
+      t.close();
+    }
+  });
+
   it('blocks changed review snapshots before touching the journal or remote API', async () => {
     const t = setup();
     try {
