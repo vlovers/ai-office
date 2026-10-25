@@ -234,6 +234,36 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
+  it('keeps an ambiguous write uncertain when another PR reuses its managed head', async () => {
+    const t = setup();
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('POST accepted but response lost'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      const conflict = {
+        ...receipt,
+        html_url: 'https://github.com/vlovers/ai-office/pull/124',
+        base: { ...receipt.base, ref: 'release' },
+        state: 'closed',
+      };
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [receipt, conflict],
+      });
+      const ambiguous = await createDraftPublication(t.context);
+      expect(ambiguous.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+      // A later, independently complete inventory can establish uniqueness.
+      // Neither reconciliation attempt is permitted to create another PR.
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('fails closed on incomplete inventory, duplicate PR and mismatched receipt', async () => {
     const t = setup();
     try {
