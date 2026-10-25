@@ -1,6 +1,13 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -336,7 +343,7 @@ describe('real Git Draft PR late-mutation integration', () => {
     { accepted: true, rateLimited: false, expected: 'published' },
     { accepted: true, rateLimited: true, expected: 'published' },
   ] as const)(
-    'recovers a SIGKILL at POST (accepted=$accepted, first inventory 429=$rateLimited) without a second POST',
+    'recovers SIGKILL at POST (accepted=$accepted, HTTP 429=$rateLimited) without retry',
     async ({ accepted, rateLimited, expected }) => {
       const t = setup();
       let restartedDb: DatabaseSync | undefined;
@@ -378,7 +385,9 @@ describe('real Git Draft PR late-mutation integration', () => {
           accepted ? t.receipt.html_url : null,
         );
         expect(restartFetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
-        expect(restartFetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+        expect(
+          restartFetcher.mock.calls.filter((call) => call[1].method === 'POST'),
+        ).toHaveLength(0);
         expect(t.fetcher).not.toHaveBeenCalled();
       } finally {
         restartedDb?.close();
@@ -434,7 +443,7 @@ describe('real Git Draft PR late-mutation integration', () => {
     }
   });
 
-  it('requires a live operator grant and clean real Git after restarting a killed POST', async () => {
+  it('rejects revoked grants and dirty Git after killed POST', async () => {
     const t = setup();
     let restartedDb: DatabaseSync | undefined;
     const dirty = join(t.path, 'post-crash-untracked.txt');
