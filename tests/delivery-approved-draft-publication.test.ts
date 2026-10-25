@@ -128,6 +128,41 @@ describe('approved Draft PR publication end-to-end boundary', () => {
     }
   });
 
+  it('preserves unused approval when mandatory post-inventory snapshot verification fails', async () => {
+    const t = setup();
+    try {
+      t.verifyBeforeReserve.mockRejectedValueOnce(new Error('reviewed Git changed'));
+      await expect(createApprovedDraftPublication(t.context())).rejects.toThrow(
+        'reviewed Git changed',
+      );
+      t.approvals.assertPending(t.context().approvalId, binding);
+      expect(t.journal().get(binding.workspaceId)).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('leaves a completed POST uncertain until independent detail verification succeeds', async () => {
+    const t = setup();
+    try {
+      t.verifyRemoteReceipt.mockRejectedValueOnce(new Error('PR head SHA changed'));
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('uncertain');
+      expect(t.journal().get(binding.workspaceId)?.state).toBe('uncertain');
+      expect(t.journal().get(binding.workspaceId)?.pullRequestUrl).toBeNull();
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      expect(() => t.approvals.assertPending(t.context().approvalId, binding)).toThrow();
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
+      expect(t.verifyRemoteReceipt).toHaveBeenCalledTimes(2);
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('never consumes an approval when remote preflight fails after snapshot verification', async () => {
     const t = setup();
     try {
