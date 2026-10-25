@@ -254,11 +254,12 @@ describe('GitHub immutable ref attestation', () => {
 
   it('bounds PR detail response parsing after an ambiguous publication', async () => {
     const fetcher = vi.fn(async () => {
-      const response = jsonResponse({ ...receipt, number: 123 });
-      Object.defineProperty(response, 'json', {
-        value: () => new Promise<never>(() => undefined),
-      });
-      return response;
+      return new Response(
+        new ReadableStream({
+          pull: () => new Promise<void>(() => undefined),
+        }),
+        { status: 200 },
+      );
     });
     await expect(
       readGitHubDraftCommitReceipt(plan, receipt.html_url, { fetcher, timeoutMs: 100 }),

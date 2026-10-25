@@ -1,5 +1,6 @@
 import { parseGitHubPullRequest } from './delivery-github-readonly.js';
 import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
+import { GITHUB_JSON_LIMITS, readBoundedGitHubJson } from './delivery-github-json-boundary.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import {
@@ -103,7 +104,7 @@ async function fetchExactCommitRef(
       if (response.status !== 200) {
         throw new Error(`GitHub commit ref request failed with HTTP ${response.status}.`);
       }
-      return response.json();
+      return readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.refs);
     },
     { signal: options.signal, timeoutMs: options.timeoutMs },
   );
@@ -197,7 +198,7 @@ export async function readGitHubDraftCommitReceipt(
       if (response.status !== 200) {
         throw new Error(`GitHub draft PR detail request failed with HTTP ${response.status}.`);
       }
-      return response.json();
+      return readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.detail);
     },
     { signal: options.signal, timeoutMs: options.timeoutMs },
   );

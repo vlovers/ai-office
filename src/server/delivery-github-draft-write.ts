@@ -8,6 +8,7 @@ import {
 } from './delivery-github-ref-attestation.js';
 import { parseGitHubPullRequest } from './delivery-github-readonly.js';
 import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
+import { GITHUB_JSON_LIMITS, readBoundedGitHubJson } from './delivery-github-json-boundary.js';
 
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -150,7 +151,7 @@ export async function createCommitAttestedGitHubDraft(
           `GitHub draft publication returned HTTP ${response.status}; outcome uncertain.`,
         );
       }
-      return response.json();
+      return readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.draft);
     },
     { signal: options.signal, timeoutMs: options.timeoutMs },
   );

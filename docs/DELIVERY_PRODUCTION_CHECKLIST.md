@@ -316,3 +316,17 @@ until its safety is independently assessed. This change does not enable a
 production GitHub credential, browser write endpoint, auto-merge or deploy.
 Independent security review and target-host crash/restart tests are still
 required.
+
+## GitHub JSON response bounds (PR #79 hardening)
+
+The Draft PR adapter, exact ref attestation, PR detail reconciliation and
+complete open/closed PR inventory now parse upstream JSON through a shared
+streaming byte-limit boundary: 256 KiB per ref, 1 MiB per PR detail or Draft
+POST receipt, and 8 MiB per PR listing page. Limits apply to bytes actually
+received, not only untrusted Content-Length; malformed UTF-8, JSON, empty
+bodies, endless streams and oversized bodies fail closed. Existing request
+deadlines bound stalled reads. Parser errors never echo remote response text.
+An ambiguous POST response remains an uncertain journal entry; the size limit
+never authorizes a second POST. The separately scoped read-only credential
+adapter retains its stricter 1 MiB upstream cap. Target-host validation and
+independent security review are still required before enabling remote writes.

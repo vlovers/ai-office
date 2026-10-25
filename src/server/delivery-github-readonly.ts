@@ -2,6 +2,7 @@ import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import type { GitHubDraftReceipt } from './delivery-publication-receipt.js';
 import { collectRemotePullRequests } from './delivery-publication-pagination.js';
 import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
+import { GITHUB_JSON_LIMITS, readBoundedGitHubJson } from './delivery-github-json-boundary.js';
 
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -172,7 +173,7 @@ export async function listAllGitHubPullRequests(
           // Never include response body or credential in thrown errors.
           throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
         }
-        return { response, payload: (await response.json()) as unknown };
+        return { response, payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing) };
       },
       { signal: options.signal, timeoutMs: options.timeoutMs },
     );

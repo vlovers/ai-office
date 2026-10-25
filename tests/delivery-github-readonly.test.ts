@@ -248,11 +248,12 @@ describe('read-only GitHub PR discovery', () => {
 
   it('bounds a stalled GitHub listing body without returning partial inventory', async () => {
     const fetcher = vi.fn(async () => {
-      const response = json([candidate]);
-      Object.defineProperty(response, 'json', {
-        value: () => new Promise<never>(() => undefined),
-      });
-      return response;
+      return new Response(
+        new ReadableStream({
+          pull: () => new Promise<void>(() => undefined),
+        }),
+        { status: 200 },
+      );
     });
     await expect(listAllGitHubPullRequests(plan, { fetcher, timeoutMs: 100 })).rejects.toThrow(
       'GitHub request timed out',
