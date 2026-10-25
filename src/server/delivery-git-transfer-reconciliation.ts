@@ -64,10 +64,20 @@ async function attestRemoteWithinDeadline(
   }
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const abort = () => controller.abort();
+  let rejectExternalAbort: ((reason: Error) => void) | undefined;
+  // An injected fetcher may ignore AbortSignal. Cancellation must therefore
+  // reject the attestation race itself, not merely signal the transport.
+  const externalAbort = new Promise<never>((_resolve, reject) => {
+    rejectExternalAbort = reject;
+  });
+  const abort = () => {
+    controller.abort();
+    rejectExternalAbort?.(new Error('Git transfer reconciliation aborted.'));
+  };
   options.signal?.addEventListener('abort', abort, { once: true });
   try {
-    if (options.signal?.aborted) throw new Error('Git transfer reconciliation aborted.');
+    // Covers aborts that raced with listener registration.
+    if (options.signal?.aborted) abort();
     const deadline = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
         controller.abort();
@@ -85,7 +95,11 @@ async function attestRemoteWithinDeadline(
         { ...options, signal: controller.signal },
       ),
       deadline,
+      externalAbort,
     ]);
+    if (options.signal?.aborted || controller.signal.aborted) {
+      throw new Error('Git transfer reconciliation aborted.');
+    }
   } finally {
     if (timer !== undefined) clearTimeout(timer);
     options.signal?.removeEventListener('abort', abort);
@@ -140,7 +154,13 @@ export async function reconcileGitTransferReceipts(
       throw new Error('Reviewed Git transfer registry binding changed during reconciliation.');
     }
   };
+  const assertNotAborted = (): void => {
+    if (context.remote.signal?.aborted) {
+      throw new Error('Git transfer reconciliation aborted.');
+    }
+  };
   assertSynchronousAuthorization(context.authorize);
+  assertNotAborted();
   return withDeliveryRepositoryLease(
     context.repository,
     context.worktree.gitDir,
@@ -148,6 +168,7 @@ export async function reconcileGitTransferReceipts(
       assertSynchronousAuthorization(context.authorize);
       await assertFreshPlan();
       assertSynchronousAuthorization(context.authorize);
+      assertNotAborted();
       const current = (): Receipts => ({
         commit: journal.get(identity.workspaceId, 'commit'),
         push: journal.get(identity.workspaceId, 'push'),
@@ -194,6 +215,7 @@ export async function reconcileGitTransferReceipts(
         assertSynchronousAuthorization(context.authorize);
         await assertFreshPlan();
         assertSynchronousAuthorization(context.authorize);
+        assertNotAborted();
         journal.confirmVerified('commit', identity, identity.headSha);
       } catch {
         return { status: 'blocked', stage: 'commit', ...current() };
@@ -206,6 +228,7 @@ export async function reconcileGitTransferReceipts(
         assertSynchronousAuthorization(context.authorize);
         await assertFreshPlan();
         assertSynchronousAuthorization(context.authorize);
+        assertNotAborted();
         journal.confirmVerified('push', identity, identity.headSha);
       } catch {
         return { status: 'blocked', stage: 'push', ...current() };
