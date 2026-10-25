@@ -378,3 +378,25 @@ These tests use controlled hung vault, transport and streaming implementations,
 caller cancellation, late HTTP responses, and live-grant revocation. They are
 not substitutes for target-host credential/HTTP crash tests or an independent
 security review. Production remote writes remain disabled.
+
+## Transfer receipt local-state TOCTOU revalidation (combined PR #79)
+
+Read-only commit/push reconciliation now repeats the full local Git worktree
+attestation immediately before persisting each durable receipt. The first
+attestation verifies the reviewed branch, clean index/worktree, common Git
+repository, exact head/base commits and credential-free origin. The second
+attestation runs after the asynchronous trusted registry refresh for a commit,
+and after both GitHub ref GETs and the final registry refresh for a push.
+
+This closes a gap where a non-cooperating local Git process could dirty the
+worktree, change origin or move refs while a remote GET or registry lookup
+yielded the event loop. A late mutation leaves the corresponding intent
+uncertain, without a second commit, push, Draft PR POST or journal deletion.
+After an operator independently restores the exact reviewed local state,
+read-only reconciliation may confirm the original intent using fresh evidence.
+
+The shared lease serializes cooperating AI Office processes; it cannot
+atomically exclude unrelated Git clients. Reattestation narrows the race but
+does not make filesystem reads and SQLite writes a single transaction.
+Native target-host crash and external-Git race testing, independent security
+review and separate authenticated remote-write approvals remain mandatory.
