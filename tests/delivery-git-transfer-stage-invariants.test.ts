@@ -38,8 +38,8 @@ function insertPush(db: DatabaseSync, changes: Partial<DeliveryGitTransferIdenti
   const value = { ...identity, ...changes };
   return db
     .prepare(
-      "INSERT INTO delivery_git_transfers " +
-        "(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) " +
+      'INSERT INTO delivery_git_transfers ' +
+        '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) ' +
         "VALUES (?, 'push', ?, ?, ?, ?, ?, 'intent', NULL)",
     )
     .run(

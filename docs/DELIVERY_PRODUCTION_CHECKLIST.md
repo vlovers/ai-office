@@ -214,7 +214,7 @@ model pre-upgrade corruption explicitly remove the new trigger before
 injecting an invalid row. Production migration must never do that.
 
 **Cross-stage SQLite enforcement (2026-10-25):** new additive triggers
-require a confirmed, exact-identity commit receipt before *any* push intent
+require a confirmed, exact-identity commit receipt before _any_ push intent
 insertion or push receipt confirmation, including direct SQL from another
 process. Direct deletion of any commit/push intent or receipt is rejected to
 prevent an ambiguous operation being erased and replayed. The checks cover
