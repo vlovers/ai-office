@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -112,7 +112,9 @@ function setup() {
     write: { token: 'server-owned-write-token', title: 'Reviewed draft', fetcher },
   });
   return {
+    root,
     path,
+    dbPath: join(root, 'delivery.sqlite'),
     fetcher,
     context,
     journal: new DeliveryJournal(db),
@@ -122,6 +124,72 @@ function setup() {
       rmSync(root, { recursive: true, force: true });
     },
   };
+}
+
+/**
+ * Execute the real session-bound publisher in an independent Node process.
+ * The fake GitHub transport records that POST was entered, optionally records
+ * an accepted remote write outside the Git worktree, and SIGKILLs the worker
+ * before a response or local publication receipt can be persisted.
+ */
+function killPublisherAtPost(
+  t: ReturnType<typeof setup>,
+  accepted: boolean,
+): { entered: string; acceptedPath: string } {
+  const entered = join(t.root, 'post-entered');
+  const acceptedPath = join(t.root, 'remote-accepted');
+  const context = t.context();
+  const payload = JSON.stringify({
+    dbPath: t.dbPath,
+    workspace: context.workspace,
+    sessionToken: context.sessionToken,
+    approvalId: context.approvalId,
+    entered,
+    acceptedPath,
+    accepted,
+    receipt: t.receipt,
+  });
+  const script = [
+    "import { writeFileSync } from 'node:fs';",
+    "import { DatabaseSync } from 'node:sqlite';",
+    "import { DeliverySessions } from './src/server/delivery-sessions.ts';",
+    "import { createSessionBoundGitHubDraft } from './src/server/delivery-approved-github-publication.ts';",
+    'const input = JSON.parse(process.argv[1]);',
+    'const db = new DatabaseSync(input.dbPath);',
+    'const sessions = new DeliverySessions(db, () => 10_000);',
+    'const fetcher = async (url, init) => {',
+    "  if (init.method === 'POST') {",
+    "    writeFileSync(input.entered, 'entered');",
+    "    if (input.accepted) writeFileSync(input.acceptedPath, 'accepted');",
+    "    process.kill(process.pid, 'SIGKILL');",
+    "    throw new Error('Unreachable after SIGKILL');",
+    '  }',
+    "  if (url.includes('/git/ref/heads/')) {",
+    "    const ref = url.endsWith('/main') ? 'main' : input.workspace.plan.branch;",
+    '    return Response.json({',
+    "      ref: 'refs/heads/' + ref,",
+    '      object: { type: \'commit\', sha: ref === \'main\' ? input.workspace.baseSha : input.workspace.headSha },',
+    '    });',
+    '  }',
+    "  if (url.includes('/pulls?')) return Response.json([]);",
+    "  throw new Error('Unexpected pre-POST GitHub request');",
+    '};',
+    'await createSessionBoundGitHubDraft({',
+    '  sessions, sessionToken: input.sessionToken, workspace: input.workspace,',
+    '  refreshWorkspace: async () => input.workspace, approvalId: input.approvalId,',
+    "  write: { token: 'server-owned-write-token', title: 'Reviewed draft', fetcher },",
+    '});',
+    "process.exitCode = 12;",
+  ].join('\n');
+  const child = spawnSync(
+    process.execPath,
+    ['--import', 'tsx', '--input-type=module', '-e', script, payload],
+    { cwd: process.cwd(), encoding: 'utf8', timeout: 15_000 },
+  );
+  expect(child.signal, child.stderr).toBe('SIGKILL');
+  expect(existsSync(entered), child.stderr).toBe(true);
+  expect(existsSync(acceptedPath)).toBe(accepted);
+  return { entered, acceptedPath };
 }
 
 describe('real Git Draft PR late-mutation integration', () => {
@@ -236,4 +304,60 @@ describe('real Git Draft PR late-mutation integration', () => {
       t.close();
     }
   });
+  it.each([
+    { accepted: false, rateLimited: false, expected: 'uncertain' },
+    { accepted: true, rateLimited: false, expected: 'published' },
+    { accepted: true, rateLimited: true, expected: 'published' },
+  ] as const)(
+    'recovers a SIGKILL at POST (accepted=$accepted, first inventory 429=$rateLimited) without a second POST',
+    async ({ accepted, rateLimited, expected }) => {
+      const t = setup();
+      let restartedDb: DatabaseSync | undefined;
+      try {
+        killPublisherAtPost(t, accepted);
+        expect(t.journal.get('workspace-1')?.state).toBe('reserved');
+        // New SQLite connection and session service simulate a fresh server.
+        restartedDb = new DatabaseSync(t.dbPath);
+        const restartedJournal = new DeliveryJournal(restartedDb);
+        const restartedSessions = new DeliverySessions(restartedDb, () => 10_000);
+        expect(restartedJournal.get('workspace-1')?.state).toBe('reserved');
+        const original = t.fetcher.getMockImplementation()!;
+        let inventories = 0;
+        const restartFetcher = vi.fn(async (url: string, init: RequestInit) => {
+          if (init.method === 'POST') throw new Error('Restart must never POST.');
+          if (url.includes('/pulls?')) {
+            inventories++;
+            if (rateLimited && inventories === 1) {
+              return Response.json({ message: 'rate limited' }, { status: 429 });
+            }
+            return Response.json(accepted ? [t.receipt] : []);
+          }
+          return original(url, init);
+        });
+        const restartContext = () => ({
+          ...t.context(),
+          sessions: restartedSessions,
+          write: { ...t.context().write, fetcher: restartFetcher },
+        });
+        const first = await createSessionBoundGitHubDraft(restartContext());
+        expect(first.status).toBe(rateLimited ? 'uncertain' : expected);
+        expect(restartedJournal.get('workspace-1')?.state).toBe(
+          rateLimited ? 'uncertain' : expected,
+        );
+        const second = await createSessionBoundGitHubDraft(restartContext());
+        expect(second.status).toBe(expected);
+        expect(restartedJournal.get('workspace-1')?.state).toBe(expected);
+        expect(restartedJournal.get('workspace-1')?.pullRequestUrl).toBe(
+          accepted ? t.receipt.html_url : null,
+        );
+        expect(restartFetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+        expect(restartFetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+        expect(t.fetcher).not.toHaveBeenCalled();
+      } finally {
+        restartedDb?.close();
+        t.close();
+      }
+    },
+  );
+
 });
