@@ -165,15 +165,9 @@ test('rejects quoted and explicit YAML security keys', () => {
     workflow().replace('uses: ' + artifact, '"uses": actions/upload-artifact@v7'),
     /unsupported YAML syntax/,
   );
+  expectFinding(workflow().replace('permissions:', "'permissions':"), /unsupported YAML syntax/);
   expectFinding(
-    workflow().replace('permissions:', "'permissions':"),
-    /unsupported YAML syntax/,
-  );
-  expectFinding(
-    workflow().replace(
-      'uses: ' + artifact,
-      '? uses\n        : actions/upload-artifact@v7',
-    ),
+    workflow().replace('uses: ' + artifact, '? uses\n        : actions/upload-artifact@v7'),
     /unsupported YAML syntax/,
   );
 });
@@ -186,10 +180,7 @@ test('rejects flow-form and aliased jobs or steps', () => {
     ),
     /unsupported YAML syntax/,
   );
-  expectFinding(
-    workflow().replace('    steps:', '    steps: *shared'),
-    /block mappings/,
-  );
+  expectFinding(workflow().replace('    steps:', '    steps: *shared'), /block mappings/);
   expectFinding(workflow().replace('jobs:', 'jobs: {'), /block mappings/);
 });
 

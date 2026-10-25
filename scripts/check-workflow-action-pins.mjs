@@ -51,15 +51,11 @@ export function auditWorkflowText(source, filename = 'workflow') {
       YAML_MERGE_KEY.test(line) ||
       FLOW_MAPPING_ITEM.test(line)
     ) {
-      findings.push(
-        location + ': unsupported YAML syntax for security-sensitive workflow keys',
-      );
+      findings.push(location + ': unsupported YAML syntax for security-sensitive workflow keys');
     }
     const structure = STRUCTURAL_DECLARATION.exec(line);
     if (structure && structure[1].trim()) {
-      findings.push(
-        location + ': jobs and steps must use explicit block mappings/sequences',
-      );
+      findings.push(location + ': jobs and steps must use explicit block mappings/sequences');
     }
   }
 
