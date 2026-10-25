@@ -407,6 +407,66 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('keeps a completed POST uncertain when registry changes during independent PR detail GET', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const fetcher = t.fetcher.getMockImplementation()!;
+      let current = original.workspace;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.endsWith('/pulls/123')) {
+          current = { ...current, baseSha: '4'.repeat(40) };
+        }
+        return fetcher(url, init);
+      });
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        refreshWorkspace: async () => current,
+      });
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      expect(t.fetcher.mock.calls.some((call) => call[0].endsWith('/pulls/123'))).toBe(true);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not confirm ambiguous POST when registry changes during reconciliation detail GET', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const fetcher = t.fetcher.getMockImplementation()!;
+      let current = original.workspace;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') throw new Error('Lost GitHub response');
+        return fetcher(url, init);
+      });
+      expect(
+        (await createSessionBoundGitHubDraft({
+          ...original,
+          refreshWorkspace: async () => current,
+        })).status,
+      ).toBe('uncertain');
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.includes('/pulls?')) return json([receipt]);
+        if (url.endsWith('/pulls/123')) {
+          current = { ...current, repository: { ...current.repository, gitDir: current.repository.gitDir + '-changed' } };
+        }
+        return fetcher(url, init);
+      });
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        refreshWorkspace: async () => current,
+      });
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('times out a hung POST, preserves uncertain state and never blindly retries', async () => {
     const t = setup();
     try {
