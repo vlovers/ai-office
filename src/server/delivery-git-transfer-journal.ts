@@ -78,6 +78,18 @@ export class DeliveryGitTransferJournal {
     // even when separate Node processes race to reserve the same branch.
     // Creating the triggers does not rewrite or discard legacy conflicting
     // rows: assertReadyForDraft still detects those during migration.
+    // INSERT OR REPLACE can bypass DELETE triggers on default SQLite
+    // connections. A transfer attempt is never replaceable, even by raw SQL
+    // or another process using the same durable database.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_no_replace_insert
+      BEFORE INSERT ON delivery_git_transfers
+      WHEN EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE workspace_id = NEW.workspace_id AND stage = NEW.stage
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer intent already exists; reconcile before any retry.');
+      END`);
     this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_exclusive_insert
       BEFORE INSERT ON delivery_git_transfers
       WHEN EXISTS (
