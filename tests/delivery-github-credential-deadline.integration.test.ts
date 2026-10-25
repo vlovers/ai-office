@@ -204,6 +204,74 @@ describe('credential-scoped GitHub deadline and live authorization', () => {
     }
   });
 
+  it('rejects a credential revoked during the upstream GET', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      let vault!: DeliveryGitHubCredentials;
+      vault = manager(
+        db,
+        async () => credential(),
+        async () => {
+          vault.revoke(credential().id);
+          return Response.json({ ref: 'refs/heads/main' });
+        },
+      );
+      await expect(
+        vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' }),
+      ).rejects.toMatchObject({ statusCode: 503 });
+      expect(count(db, 'delivery_revoked_credentials')).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects a credential expiring while the response body is streamed', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      let currentTime = 1000;
+      const vault = new DeliveryGitHubCredentials(
+        db,
+        async () => credential(),
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              pull(controller) {
+                currentTime = 55_000;
+                controller.enqueue(new TextEncoder().encode('{}'));
+                controller.close();
+              },
+            }),
+          ),
+        () => currentTime,
+        100,
+      );
+      await expect(
+        vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' }),
+      ).rejects.toMatchObject({ statusCode: 503 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects a credential clock advanced by a concurrent request before completion', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const vault = manager(
+        db,
+        async () => credential(),
+        async () => {
+          db.prepare('UPDATE delivery_credential_clock SET last_seen_at=5000 WHERE id=1').run();
+          return Response.json({});
+        },
+      );
+      await expect(
+        vault.readOnlyFetcher(repository, ['main'])(endpoint, { method: 'GET' }),
+      ).rejects.toMatchObject({ statusCode: 503 });
+    } finally {
+      db.close();
+    }
+  });
+
   it('allows a valid response only after two synchronous live-grant checks', async () => {
     const db = new DatabaseSync(':memory:');
     try {
