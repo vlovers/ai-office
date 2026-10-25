@@ -197,3 +197,50 @@ test('rejects duplicate checkout with mappings even when one disables credential
     /exactly one/,
   );
 });
+
+test('rejects job-level write permissions at any valid YAML indentation', () => {
+  for (const depth of [4, 6, 8]) {
+    const indent = ' '.repeat(depth);
+    const input =
+      'permissions:\n  contents: read\njobs:\n  test:\n' +
+      indent +
+      'permissions:\n' +
+      indent +
+      '  issues: write\n' +
+      indent +
+      'steps:\n' +
+      indent +
+      '  - uses: ' +
+      artifact +
+      '\n';
+    expectFinding(input, /write token permissions/);
+  }
+});
+
+test('accepts explicitly read-only job permissions with nonstandard indentation', () => {
+  const input =
+    'permissions:\n  contents: read\njobs:\n  test:\n' +
+    '      permissions:\n        contents: read\n' +
+    '      steps:\n        - uses: ' +
+    artifact +
+    '\n';
+  assert.deepEqual(auditWorkflowText(input), []);
+});
+
+test('rejects inline job mappings that hide permissions or actions', () => {
+  for (const job of [
+    '  test: { permissions: write-all, runs-on: ubuntu-latest, steps: [] }',
+    '  "test": { permissions: write-all, runs-on: ubuntu-latest, steps: [] }',
+    '  test: &shared { permissions: write-all, runs-on: ubuntu-latest, steps: [] }',
+    '  test:\n    { permissions: write-all, runs-on: ubuntu-latest, steps: [] }',
+  ]) {
+    expectFinding('permissions:\n  contents: read\njobs:\n' + job + '\n', /unsupported YAML syntax/);
+  }
+});
+
+test('rejects quoted explicit complex YAML keys', () => {
+  expectFinding(
+    'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - ? "uses"\n        : actions/upload-artifact@v7\n',
+    /unsupported YAML syntax/,
+  );
+});
