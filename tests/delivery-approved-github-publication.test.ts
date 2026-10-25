@@ -329,6 +329,84 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('blocks POST when the trusted reviewed head changes during final GitHub ref GET', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const fetcher = t.fetcher.getMockImplementation()!;
+      let current = original.workspace;
+      let baseReads = 0;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.endsWith('/git/ref/heads/main') && ++baseReads === 2) {
+          current = { ...current, headSha: '3'.repeat(40) };
+        }
+        return fetcher(url, init);
+      });
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        refreshWorkspace: async () => current,
+      });
+      expect(baseReads).toBe(2);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBe(10_000);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('blocks POST when the trusted worktree identity changes during final GitHub ref GET', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const fetcher = t.fetcher.getMockImplementation()!;
+      let current = original.workspace;
+      let baseReads = 0;
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.endsWith('/git/ref/heads/main') && ++baseReads === 2) {
+          current = {
+            ...current,
+            worktree: { ...current.worktree, gitDir: current.worktree.gitDir + '-swapped' },
+          };
+        }
+        return fetcher(url, init);
+      });
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        refreshWorkspace: async () => current,
+      });
+      expect(baseReads).toBe(2);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('fails closed when the final trusted registry refresh rejects after reservation', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      let refreshes = 0;
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        refreshWorkspace: async () => {
+          if (++refreshes === 2) throw new Error('Trusted registry unavailable');
+          return original.workspace;
+        },
+      });
+      expect(refreshes).toBe(2);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBe(10_000);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
   it('times out a hung POST, preserves uncertain state and never blindly retries', async () => {
     const t = setup();
     try {
