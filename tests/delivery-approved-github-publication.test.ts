@@ -171,7 +171,7 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
-  it('keeps a completed POST uncertain if another PR claims the managed head', async () => {
+  it('keeps a completed POST uncertain when page two contains a competing managed head', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
     let posted = false;
@@ -183,15 +183,21 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
           return original(url, init);
         }
         if (url.includes('/pulls?') && posted && conflicting) {
-          return json([
-            receipt,
-            {
-              ...receipt,
-              number: 456,
-              html_url: 'https://github.com/vlovers/ai-office/pull/456',
-              base: { ...receipt.base, ref: 'develop' },
-            },
-          ]);
+          if (url.includes('page=2')) {
+            return json([
+              {
+                ...receipt,
+                number: 456,
+                html_url: 'https://github.com/vlovers/ai-office/pull/456',
+                base: { ...receipt.base, ref: 'develop' },
+              },
+            ]);
+          }
+          const nextPage = url.replace('page=1', 'page=2');
+          return new Response(JSON.stringify([receipt]), {
+            status: 200,
+            headers: { Link: `<${nextPage}>; rel="next"` },
+          });
         }
         return original(url, init);
       });
