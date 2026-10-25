@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -9,6 +10,8 @@ import { DeliveryGitTransferJournal } from '../src/server/delivery-git-transfer-
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 import { DeliveryPublicationApprovalLedger } from '../src/server/delivery-publication-approval.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
+import { withDeliveryRepositoryLease } from '../src/server/delivery-publication-lease.js';
+import { repositoryLeaseDirectories } from '../src/server/repositories.js';
 import { DeliverySessions } from '../src/server/delivery-sessions.js';
 
 const branch = 'ai-office/12345678-1234-1234-1234-123456789abc';
@@ -132,10 +135,10 @@ function setup() {
  * an accepted remote write outside the Git worktree, and SIGKILLs the worker
  * before a response or local publication receipt can be persisted.
  */
-function killPublisherAtPost(
+async function killPublisherAtPost(
   t: ReturnType<typeof setup>,
   accepted: boolean,
-): { entered: string; acceptedPath: string } {
+): Promise<{ entered: string; acceptedPath: string }> {
   const entered = join(t.root, 'post-entered');
   const acceptedPath = join(t.root, 'remote-accepted');
   const context = t.context();
@@ -189,6 +192,30 @@ function killPublisherAtPost(
   expect(child.signal, child.stderr).toBe('SIGKILL');
   expect(existsSync(entered), child.stderr).toBe(true);
   expect(existsSync(acceptedPath)).toBe(accepted);
+  // A killed worker deliberately leaves the shared OS-local Git lease behind.
+  // The real application MUST fail closed rather than steal a possibly live
+  // lock. Simulate explicit operator recovery only for this verified-dead
+  // test child and these unique temporary Git directories.
+  const repository = context.workspace.repository;
+  const workspaceGitDir = context.workspace.worktree.gitDir;
+  await expect(
+    withDeliveryRepositoryLease(repository, workspaceGitDir, async () => undefined),
+  ).rejects.toThrow('Resource is locked');
+  const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+  const directories = await repositoryLeaseDirectories(repository, workspaceGitDir);
+  const leases = directories.map((directory) =>
+    join(lockRoot, createHash('sha256').update(directory).digest('hex')),
+  );
+  // Validate every owner before removing any test-owned lease.
+  for (const lease of leases) {
+    const owner = JSON.parse(readFileSync(join(lease, 'owner.json'), 'utf8')) as {
+      pid: number;
+      detail: string;
+    };
+    expect(owner.pid).toBe(child.pid);
+    expect(owner.detail).toBe('AI Office delivery publication/recovery');
+  }
+  for (const lease of leases) rmSync(lease, { recursive: true, force: true });
   return { entered, acceptedPath };
 }
 
@@ -314,7 +341,7 @@ describe('real Git Draft PR late-mutation integration', () => {
       const t = setup();
       let restartedDb: DatabaseSync | undefined;
       try {
-        killPublisherAtPost(t, accepted);
+        await killPublisherAtPost(t, accepted);
         expect(t.journal.get('workspace-1')?.state).toBe('reserved');
         // New SQLite connection and session service simulate a fresh server.
         restartedDb = new DatabaseSync(t.dbPath);
@@ -364,7 +391,7 @@ describe('real Git Draft PR late-mutation integration', () => {
     const t = setup();
     let restartedDb: DatabaseSync | undefined;
     try {
-      killPublisherAtPost(t, true);
+      await killPublisherAtPost(t, true);
       restartedDb = new DatabaseSync(t.dbPath);
       const restartedJournal = new DeliveryJournal(restartedDb);
       const restartedSessions = new DeliverySessions(restartedDb, () => 10_000);
@@ -412,7 +439,7 @@ describe('real Git Draft PR late-mutation integration', () => {
     let restartedDb: DatabaseSync | undefined;
     const dirty = join(t.path, 'post-crash-untracked.txt');
     try {
-      killPublisherAtPost(t, true);
+      await killPublisherAtPost(t, true);
       restartedDb = new DatabaseSync(t.dbPath);
       const restartedJournal = new DeliveryJournal(restartedDb);
       const restartedSessions = new DeliverySessions(restartedDb, () => 10_000);
