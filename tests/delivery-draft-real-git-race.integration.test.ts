@@ -360,4 +360,90 @@ describe('real Git Draft PR late-mutation integration', () => {
     },
   );
 
+  it('does not adopt a recovered POST while another PR reuses its managed branch', async () => {
+    const t = setup();
+    let restartedDb: DatabaseSync | undefined;
+    try {
+      killPublisherAtPost(t, true);
+      restartedDb = new DatabaseSync(t.dbPath);
+      const restartedJournal = new DeliveryJournal(restartedDb);
+      const restartedSessions = new DeliverySessions(restartedDb, () => 10_000);
+      const original = t.fetcher.getMockImplementation()!;
+      let conflict = true;
+      const restartFetcher = vi.fn(async (url: string, init: RequestInit) => {
+        if (init.method === 'POST') throw new Error('Duplicate POST is forbidden.');
+        if (url.includes('/pulls?')) {
+          return Response.json(
+            conflict
+              ? [
+                  t.receipt,
+                  {
+                    ...t.receipt,
+                    number: 456,
+                    html_url: 'https://github.com/vlovers/ai-office/pull/456',
+                    base: { ...t.receipt.base, ref: 'develop' },
+                  },
+                ]
+              : [t.receipt],
+          );
+        }
+        return original(url, init);
+      });
+      const context = () => ({
+        ...t.context(),
+        sessions: restartedSessions,
+        write: { ...t.context().write, fetcher: restartFetcher },
+      });
+      expect((await createSessionBoundGitHubDraft(context())).status).toBe('uncertain');
+      expect(restartedJournal.get('workspace-1')?.state).toBe('uncertain');
+      expect(restartedJournal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      conflict = false;
+      expect((await createSessionBoundGitHubDraft(context())).status).toBe('published');
+      expect(restartedJournal.get('workspace-1')?.pullRequestUrl).toBe(t.receipt.html_url);
+      expect(restartFetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      restartedDb?.close();
+      t.close();
+    }
+  });
+
+  it('requires a live operator grant and clean real Git after restarting a killed POST', async () => {
+    const t = setup();
+    let restartedDb: DatabaseSync | undefined;
+    const dirty = join(t.path, 'post-crash-untracked.txt');
+    try {
+      killPublisherAtPost(t, true);
+      restartedDb = new DatabaseSync(t.dbPath);
+      const restartedJournal = new DeliveryJournal(restartedDb);
+      const restartedSessions = new DeliverySessions(restartedDb, () => 10_000);
+      const original = t.fetcher.getMockImplementation()!;
+      const restartFetcher = vi.fn(async (url: string, init: RequestInit) => {
+        if (init.method === 'POST') throw new Error('Duplicate POST is forbidden.');
+        if (url.includes('/pulls?')) return Response.json([t.receipt]);
+        return original(url, init);
+      });
+      const context = () => ({
+        ...t.context(),
+        sessions: restartedSessions,
+        write: { ...t.context().write, fetcher: restartFetcher },
+      });
+      restartedSessions.setGrant('operator-1', 'workspace-1', 'approve:draft-pr', false);
+      await expect(createSessionBoundGitHubDraft(context())).rejects.toThrow();
+      expect(restartFetcher).not.toHaveBeenCalled();
+      expect(restartedJournal.get('workspace-1')?.state).toBe('reserved');
+      restartedSessions.setGrant('operator-1', 'workspace-1', 'approve:draft-pr', true);
+      writeFileSync(dirty, 'external worktree mutation');
+      await expect(createSessionBoundGitHubDraft(context())).rejects.toThrow();
+      expect(restartFetcher).not.toHaveBeenCalled();
+      expect(restartedJournal.get('workspace-1')?.state).toBe('reserved');
+      rmSync(dirty);
+      expect((await createSessionBoundGitHubDraft(context())).status).toBe('published');
+      expect(restartedJournal.get('workspace-1')?.pullRequestUrl).toBe(t.receipt.html_url);
+      expect(restartFetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      restartedDb?.close();
+      t.close();
+    }
+  });
+
 });
