@@ -505,8 +505,16 @@ POST adapter, and is forcibly terminated with `SIGKILL` before a local
 publication receipt can be written. A controlled fake GitHub transport records
 whether the remote side accepted the POST outside the Git worktree.
 
+The killed worker intentionally leaves the shared filesystem lease behind.
+Restarted operations initially fail with `Resource is locked`; the application
+**must not** automatically steal this lease. In the test only, the harness
+verifies that the `SIGKILL` child has exited and that every lock owner PID and
+lock detail belong to this exact temporary repository, then simulates explicit
+operator lease cleanup. This cleanup is not an application recovery API and
+must never be used against arbitrary production locks.
+
 A new SQLite connection and session service then recover the persisted
-`reserved` intent. The matrix covers:
+`reserved` intent, after the verified-dead test lease has been cleared. The matrix covers:
 
 - Crash before remote acceptance: no matching PR exists, so recovery remains
   `uncertain` and **never retries POST**.
