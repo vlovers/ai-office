@@ -31,7 +31,11 @@ if (process.argv.includes('--restart-server')) {
   });
   await auth.refresh();
   const providers = AGENT_IDS.map(
-    (id) => new CodexProvider({ home: join(process.env.AI_OFFICE_RESTART_ROOT!, 'workers', id), auth }),
+    (id) =>
+      new CodexProvider({
+        home: join(process.env.AI_OFFICE_RESTART_ROOT!, 'workers', id),
+        auth,
+      }),
   );
   const manager = new TaskManager(store, providers, auth);
   const { createApp } = await import(pathToFileURL(resolve('dist/server/app.js')).href);
@@ -42,7 +46,8 @@ if (process.argv.includes('--restart-server')) {
   });
   process.send?.({ type: 'ready', address });
 } else {
-  if (process.platform === 'win32') throw new Error('Process restart fixture requires POSIX signals.');
+  if (process.platform === 'win32')
+    throw new Error('Process restart fixture requires POSIX signals.');
   const root = await mkdtemp(join(tmpdir(), 'ai-office-browser-restart-'));
   const db = join(root, 'office.sqlite');
   const artifacts = process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(root, 'screenshots');
@@ -67,7 +72,10 @@ if (process.argv.includes('--restart-server')) {
       stderr += chunk.toString();
     });
     return await new Promise<string>((resolveReady, rejectReady) => {
-      const timeout = setTimeout(() => rejectReady(new Error('Backend startup timed out: ' + stderr)), 20000);
+      const timeout = setTimeout(
+        () => rejectReady(new Error('Backend startup timed out: ' + stderr)),
+        20000,
+      );
       const cleanup = () => {
         clearTimeout(timeout);
         proc.off('exit', exited);
@@ -117,18 +125,39 @@ if (process.argv.includes('--restart-server')) {
         baselineRevision: baseline,
         stages: [
           { kind: 'coder', agentId: coder.id, agentRevision: coder.revision, mode: 'write' },
-          { kind: 'reviewer', agentId: reviewer.id, agentRevision: reviewer.revision, mode: 'read-only' },
-          { kind: 'qa', agentId: reviewer.id, agentRevision: reviewer.revision, mode: 'read-only' },
+          {
+            kind: 'reviewer',
+            agentId: reviewer.id,
+            agentRevision: reviewer.revision,
+            mode: 'read-only',
+          },
+          {
+            kind: 'qa',
+            agentId: reviewer.id,
+            agentRevision: reviewer.revision,
+            mode: 'read-only',
+          },
         ],
       });
-      const approved = workflows.transition(created.id, created.version, { type: 'approve', revision: baseline });
+      const approved = workflows.transition(created.id, created.version, {
+        type: 'approve',
+        revision: baseline,
+      });
       const coderRunning = workflows.transition(created.id, approved.version, {
-        type: 'start', taskId: 'coder-' + label, revision: baseline,
+        type: 'start',
+        taskId: 'coder-' + label,
+        revision: baseline,
       });
       const coderDone = workflows.transition(created.id, coderRunning.version, {
-        type: 'finish', taskId: 'coder-' + label, revision, succeeded: true,
+        type: 'finish',
+        taskId: 'coder-' + label,
+        revision,
+        succeeded: true,
       });
-      const reviewerApproved = workflows.transition(created.id, coderDone.version, { type: 'approve', revision });
+      const reviewerApproved = workflows.transition(created.id, coderDone.version, {
+        type: 'approve',
+        revision,
+      });
       if (kind === 'reviewer') {
         const task = store.createTask({
           repositoryId: repository.id,
@@ -138,17 +167,27 @@ if (process.argv.includes('--restart-server')) {
           executionMode: 'read-only',
         });
         const running = workflows.transition(created.id, reviewerApproved.version, {
-          type: 'start', taskId: task.id, revision,
+          type: 'start',
+          taskId: task.id,
+          revision,
         });
         return { task, workflowId: running.id };
       }
       const reviewerRunning = workflows.transition(created.id, reviewerApproved.version, {
-        type: 'start', taskId: 'reviewer-' + label, revision,
+        type: 'start',
+        taskId: 'reviewer-' + label,
+        revision,
       });
       const reviewerDone = workflows.transition(created.id, reviewerRunning.version, {
-        type: 'finish', taskId: 'reviewer-' + label, revision, succeeded: true,
+        type: 'finish',
+        taskId: 'reviewer-' + label,
+        revision,
+        succeeded: true,
       });
-      const qaApproved = workflows.transition(created.id, reviewerDone.version, { type: 'approve', revision });
+      const qaApproved = workflows.transition(created.id, reviewerDone.version, {
+        type: 'approve',
+        revision,
+      });
       const task = store.createTask({
         repositoryId: repository.id,
         agentId: reviewer.id,
@@ -157,7 +196,9 @@ if (process.argv.includes('--restart-server')) {
         executionMode: 'read-only',
       });
       const running = workflows.transition(created.id, qaApproved.version, {
-        type: 'start', taskId: task.id, revision,
+        type: 'start',
+        taskId: task.id,
+        revision,
       });
       return { task, workflowId: running.id };
     };
@@ -169,7 +210,11 @@ if (process.argv.includes('--restart-server')) {
     const blocked = stage('qa', 'completed');
     store.updateTask(blocked.task.id, { state: 'completed', result: 'Awaiting approval.' });
     const ordinary = ['Ordinary first', 'Ordinary second'].map((title) => {
-      const task = store.createTask({ repositoryId: repository.id, title, prompt: 'Unrelated queue item' });
+      const task = store.createTask({
+        repositoryId: repository.id,
+        title,
+        prompt: 'Unrelated queue item',
+      });
       store.enqueue(task.id, 'local-cli-chatgpt');
       return task.id;
     });
@@ -193,7 +238,9 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(restarted, address);
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('REVIEWER — interrupted');
-    await expect(board.getByLabel('Workflow diagnostics')).toContainText('Persisted checkpoint diagnostics');
+    await expect(board.getByLabel('Workflow diagnostics')).toContainText(
+      'Persisted checkpoint diagnostics',
+    );
     await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
     await selector.selectOption(failed.workflowId);
     await expect(board.getByText(/^State: blocked/)).toBeVisible();
@@ -214,12 +261,17 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(taskStates.get(failed.task.id), 'failed');
     assert.equal(taskStates.get(blocked.task.id), 'completed');
     const ids = [interrupted.workflowId, failed.workflowId, blocked.workflowId];
-    const versions = await Promise.all(ids.map(async (id) => {
-      const response = await page.request.get(address + '/api/workflows/' + id);
-      assert.equal(response.status(), 200);
-      return (await response.json()).version as number;
-    }));
-    await page.screenshot({ path: join(artifacts, 'workflow-process-recovered.png'), fullPage: true });
+    const versions = await Promise.all(
+      ids.map(async (id) => {
+        const response = await page.request.get(address + '/api/workflows/' + id);
+        assert.equal(response.status(), 200);
+        return (await response.json()).version as number;
+      }),
+    );
+    await page.screenshot({
+      path: join(artifacts, 'workflow-process-recovered.png'),
+      fullPage: true,
+    });
 
     await kill();
     await start(port);
@@ -235,7 +287,9 @@ if (process.argv.includes('--restart-server')) {
       ordinary,
     );
     assert.deepEqual(pageErrors, []);
-    console.log('Browser process-restart E2E passed: live reconnect, durable states, FIFO, no replay.');
+    console.log(
+      'Browser process-restart E2E passed: live reconnect, durable states, FIFO, no replay.',
+    );
   } finally {
     await browser?.close();
     await kill();
