@@ -440,6 +440,8 @@ describe('read-only commit/push receipt reconciliation', () => {
       t.journal.begin('commit', t.identity);
       t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
       t.journal.begin('push', t.identity);
+      // Simulate a pre-upgrade journal written before monotonic SQL guards.
+      t.db.exec('DROP TRIGGER delivery_git_transfers_monotonic_receipt');
       t.db
         .prepare(
           "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE workspace_id=? AND stage='commit'",
@@ -461,6 +463,8 @@ describe('read-only commit/push receipt reconciliation', () => {
     try {
       t.journal.begin('commit', t.identity);
       t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      // Preserve an intentionally corrupted legacy receipt for reconciliation tests.
+      t.db.exec('DROP TRIGGER delivery_git_transfers_monotonic_receipt');
       t.db
         .prepare(
           "UPDATE delivery_git_transfers SET receipt_sha=? WHERE workspace_id=? AND stage='commit'",
@@ -483,6 +487,8 @@ describe('read-only commit/push receipt reconciliation', () => {
       t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
       t.journal.begin('push', t.identity);
       t.journal.confirmVerified('push', t.identity, t.identity.headSha);
+      // Preserve an intentionally corrupted legacy receipt for reconciliation tests.
+      t.db.exec('DROP TRIGGER delivery_git_transfers_monotonic_receipt');
       t.db
         .prepare(
           "UPDATE delivery_git_transfers SET receipt_sha=? WHERE workspace_id=? AND stage='push'",
