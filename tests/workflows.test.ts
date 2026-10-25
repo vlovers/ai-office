@@ -681,7 +681,7 @@ it('a fresh TaskManager cannot dispatch a workflow queue left by a crashed proce
   }
 });
 
-it('recovers queued and completed Reviewer stages without replay while preserving ordinary FIFO work', async () => {
+it('recovers Reviewer stages without replay and preserves ordinary FIFO work', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'ai-office-workflow-restart-matrix-'));
   const path = join(directory, 'metadata.sqlite');
   let store = new Store(path);
@@ -935,11 +935,7 @@ it('recovers queued and failed QA without replay and preserves unrelated FIFO or
     ]);
     expect(store.task(queuedQA.task.id)?.state).toBe('interrupted');
     expect(failed.state).toBe('blocked');
-    expect(failed.stages.map((stage) => stage.state)).toEqual([
-      'completed',
-      'completed',
-      'failed',
-    ]);
+    expect(failed.stages.map((stage) => stage.state)).toEqual(['completed', 'completed', 'failed']);
     expect(store.task(failedQA.task.id)?.state).toBe('failed');
     expect(stopped.state).toBe('blocked');
     expect(stopped.stages[2]?.state).toBe('failed');
