@@ -108,10 +108,11 @@ function crashDuringIntent(args: string[], commit: boolean) {
     "if(process.argv[9]==='commit')db.exec('COMMIT');",
     "process.kill(process.pid,'SIGKILL');",
   ].join(' ');
-  return spawnSync(process.execPath, ['-e', script, ...args, insert, commit ? 'commit' : 'rollback'], {
-    encoding: 'utf8',
-    timeout: 5000,
-  });
+  return spawnSync(
+    process.execPath,
+    ['-e', script, ...args, insert, commit ? 'commit' : 'rollback'],
+    { encoding: 'utf8', timeout: 5000 },
+  );
 }
 
 describe('multi-process durable Git transfer crash boundaries', () => {
@@ -205,7 +206,6 @@ describe('multi-process durable Git transfer crash boundaries', () => {
     }
   });
 
-
   it('serializes independent Node processes through the real repository lease', async () => {
     const t = setup();
     const script = [
@@ -217,7 +217,15 @@ describe('multi-process durable Git transfer crash boundaries', () => {
     const contender = () =>
       spawnSync(
         process.execPath,
-        ['--import', 'tsx', '--input-type=module', '-e', script, t.repository.path, t.repository.gitDir],
+        [
+          '--import',
+          'tsx',
+          '--input-type=module',
+          '-e',
+          script,
+          t.repository.path,
+          t.repository.gitDir,
+        ],
         { encoding: 'utf8', timeout: 5000 },
       );
     try {
