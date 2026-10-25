@@ -1074,9 +1074,10 @@ it('finishes Workflow recovery after a crash between Store and Workflow recovery
       }
       const persisted = halfway.prepare('SELECT json FROM workflows WHERE id=?').get(running.id);
       expect(JSON.parse(String(persisted!.json)).stages[1].state).toBe('running');
-      expect(halfway.prepare('SELECT state FROM tasks WHERE id=?').get(reviewerTask.id)?.state).toBe(
-        'interrupted',
-      );
+      const recoveredTaskRow = halfway
+        .prepare('SELECT state FROM tasks WHERE id=?')
+        .get(reviewerTask.id);
+      expect(recoveredTaskRow?.state).toBe('interrupted');
     } finally {
       halfway.close();
     }
