@@ -114,6 +114,10 @@ if (process.argv.includes('--restart-server')) {
       name: 'restart-fixture',
     });
     const coder = store.agent('codex-1')!;
+    // This fixture pins a write-capable Coder profile but never starts Codex.
+    store.db
+      .prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
+      .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, coder.revision);
     const reviewer = store.agent('codex-2')!;
     const workflows = new WorkflowStore(store.db);
     const baseline = 'a'.repeat(40);
@@ -253,7 +257,10 @@ if (process.argv.includes('--restart-server')) {
     const dashboardResponse = await page.request.get(address + '/api/dashboard');
     assert.equal(dashboardResponse.status(), 200);
     const dashboard = await dashboardResponse.json();
-    assert.deepEqual(dashboard.queue.map((item: { taskId: string }) => item.taskId), ordinary);
+    assert.deepEqual(
+      dashboard.queue.map((item: { taskId: string }) => item.taskId),
+      ordinary,
+    );
     const taskStates = new Map(
       dashboard.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
     );
