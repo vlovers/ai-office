@@ -286,7 +286,7 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     try {
       const before = attestLocalReviewedGitState.mock.calls.length;
       expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
-      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(4);
+      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(6);
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
       t.close();
@@ -510,7 +510,32 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
-  it('fails closed when the final trusted registry refresh rejects after reservation', async () => {
+  it('preserves one-use approval when registry refresh fails after inventory', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      let refreshes = 0;
+      await expect(
+        createSessionBoundGitHubDraft({
+          ...original,
+          refreshWorkspace: async () => {
+            if (++refreshes === 2) throw new Error('Trusted registry unavailable');
+            return original.workspace;
+          },
+        }),
+      ).rejects.toThrow('Trusted registry unavailable');
+      expect(refreshes).toBe(2);
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      expect((await createSessionBoundGitHubDraft(original)).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps reservation uncertain if the final registry refresh fails after reservation', async () => {
     const t = setup();
     try {
       const original = t.context();
@@ -518,11 +543,11 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       const result = await createSessionBoundGitHubDraft({
         ...original,
         refreshWorkspace: async () => {
-          if (++refreshes === 2) throw new Error('Trusted registry unavailable');
+          if (++refreshes === 4) throw new Error('Trusted registry unavailable');
           return original.workspace;
         },
       });
-      expect(refreshes).toBe(2);
+      expect(refreshes).toBe(4);
       expect(result.status).toBe('uncertain');
       expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
       expect(approvalConsumedAt(t.db, original.approvalId)).toBe(10_000);
