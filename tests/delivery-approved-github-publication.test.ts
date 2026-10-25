@@ -442,10 +442,12 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         return fetcher(url, init);
       });
       expect(
-        (await createSessionBoundGitHubDraft({
-          ...original,
-          refreshWorkspace: async () => current,
-        })).status,
+        (
+          await createSessionBoundGitHubDraft({
+            ...original,
+            refreshWorkspace: async () => current,
+          })
+        ).status,
       ).toBe('uncertain');
       t.fetcher.mockImplementation(async (url, init) => {
         if (url.includes('/pulls?')) return json([receipt]);
