@@ -213,6 +213,18 @@ remain intact and must fail closed during reconciliation. Test fixtures that
 model pre-upgrade corruption explicitly remove the new trigger before
 injecting an invalid row. Production migration must never do that.
 
+**Cross-stage SQLite enforcement (2026-10-25):** new additive triggers
+require a confirmed, exact-identity commit receipt before *any* push intent
+insertion or push receipt confirmation, including direct SQL from another
+process. Direct deletion of any commit/push intent or receipt is rejected to
+prevent an ambiguous operation being erased and replayed. The checks cover
+workspace, operation key, destination, managed branch and reviewed head/base
+SHAs; they do not independently attest Git or authorize a remote write.
+Pre-upgrade orphaned or malformed push rows remain intact for manual audit,
+and the application-level reconciliation/readiness gates still reject them.
+Never drop these triggers or delete journal records as an automated recovery
+strategy. An offline, reviewed data-repair procedure is a separate future gate.
+
 The triggers are additive and do not delete, rewrite or silently adopt legacy
 conflicting rows. On upgrade, the final `assertReadyForDraft` read-only gate
 still blocks any old collisions; an operator must investigate them without

@@ -138,6 +138,45 @@ export class DeliveryGitTransferJournal {
       BEGIN
         SELECT RAISE(ABORT, 'Git transfer receipt state must advance monotonically.');
       END`);
+    // A push is never independently reservable: its matching commit must
+    // already have a durable confirmed receipt, including for direct SQL
+    // writers and competing processes that bypass this TypeScript class.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_push_requires_commit_insert
+      BEFORE INSERT ON delivery_git_transfers
+      WHEN NEW.stage = 'push' AND NOT EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE workspace_id = NEW.workspace_id AND stage = 'commit'
+          AND operation_key = NEW.operation_key
+          AND destination = NEW.destination AND branch = NEW.branch
+          AND head_sha = NEW.head_sha AND base_sha = NEW.base_sha
+          AND state = 'confirmed' AND receipt_sha = NEW.head_sha
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Push intent requires matching confirmed commit receipt.');
+      END`);
+    // Preserve the same cross-stage guarantee at receipt confirmation.
+    // This also fails closed on pre-upgrade malformed commit rows.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_push_requires_commit_update
+      BEFORE UPDATE OF state, receipt_sha ON delivery_git_transfers
+      WHEN NEW.stage = 'push' AND NEW.state = 'confirmed' AND NOT EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE workspace_id = NEW.workspace_id AND stage = 'commit'
+          AND operation_key = NEW.operation_key
+          AND destination = NEW.destination AND branch = NEW.branch
+          AND head_sha = NEW.head_sha AND base_sha = NEW.base_sha
+          AND state = 'confirmed' AND receipt_sha = NEW.head_sha
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Push receipt requires matching confirmed commit receipt.');
+      END`);
+    // Never erase a durable attempt or its evidence via accidental direct
+    // SQL deletion. Legacy conflicts require explicit offline investigation;
+    // automatic cleanup would permit replay of an ambiguous remote write.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_no_delete
+      BEFORE DELETE ON delivery_git_transfers
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer intents and receipts cannot be deleted.');
+      END`);
   }
 
   get(workspaceId: string, stage: DeliveryGitStage): DeliveryGitTransferEntry | null {
