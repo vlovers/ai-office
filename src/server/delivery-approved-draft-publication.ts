@@ -21,6 +21,8 @@ export type ApprovedDraftPublicationContext = Omit<
   binding: PublicationApprovalBinding;
   /** Trusted server-side verification of the exact reviewed head/base snapshot. */
   verifyApprovedSnapshot: (plan: AllowedPlan, binding: PublicationApprovalBinding) => Promise<void>;
+  /** Independently inspect the exact remote PR detail before accepting a receipt. */
+  verifyRemoteReceipt?: (plan: AllowedPlan, url: string) => Promise<void>;
   /** Must check the operator's live session and grant synchronously inside SQLite. */
   authorizeBeforeReserve: () => void;
   now?: () => number;
@@ -75,6 +77,7 @@ export async function createApprovedDraftPublication(
     refreshPlan: context.refreshPlan,
     listRemote: context.listRemote,
     createDraft: context.createDraft,
+    verifyRemoteReceipt: context.verifyRemoteReceipt,
     verifySnapshot: async (plan) => {
       assertBinding(plan);
       await context.verifyApprovedSnapshot(plan, binding);
