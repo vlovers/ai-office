@@ -907,6 +907,13 @@ it('recovers queued and failed QA without replay and preserves unrelated FIFO or
     store.enqueue(ordinaryAfter.id, 'local-cli-chatgpt');
     const failedQA = startQA('failed');
     store.updateTask(failedQA.task.id, { state: 'failed', error: 'QA process failed.' });
+    const stoppedQA = startQA('stopped');
+    store.updateTask(stoppedQA.task.id, { state: 'stopped', error: 'QA was stopped.' });
+    const completedQA = startQA('completed');
+    store.updateTask(completedQA.task.id, {
+      state: 'completed',
+      result: 'QA output awaiting explicit approval',
+    });
     expect(store.queue().map((entry) => entry.taskId)).toEqual([
       ordinaryBefore.id,
       queuedQA.task.id,
@@ -918,6 +925,8 @@ it('recovers queued and failed QA without replay and preserves unrelated FIFO or
     const recovered = new WorkflowStore(store.db);
     const queued = recovered.get(queuedQA.running.id)!;
     const failed = recovered.get(failedQA.running.id)!;
+    const stopped = recovered.get(stoppedQA.running.id)!;
+    const completed = recovered.get(completedQA.running.id)!;
     expect(queued.state).toBe('blocked');
     expect(queued.stages.map((stage) => stage.state)).toEqual([
       'completed',
@@ -932,6 +941,12 @@ it('recovers queued and failed QA without replay and preserves unrelated FIFO or
       'failed',
     ]);
     expect(store.task(failedQA.task.id)?.state).toBe('failed');
+    expect(stopped.state).toBe('blocked');
+    expect(stopped.stages[2]?.state).toBe('failed');
+    expect(store.task(stoppedQA.task.id)?.state).toBe('stopped');
+    expect(completed.state).toBe('blocked');
+    expect(completed.stages[2]?.state).toBe('blocked');
+    expect(store.task(completedQA.task.id)?.state).toBe('completed');
     expect(store.queue().map((entry) => entry.taskId)).toEqual([
       ordinaryBefore.id,
       ordinaryAfter.id,
@@ -948,6 +963,8 @@ it('recovers queued and failed QA without replay and preserves unrelated FIFO or
     const again = new WorkflowStore(store.db);
     expect(again.get(queued.id)?.version).toBe(queued.version);
     expect(again.get(failed.id)?.version).toBe(failed.version);
+    expect(again.get(stopped.id)?.version).toBe(stopped.version);
+    expect(again.get(completed.id)?.version).toBe(completed.version);
     expect(store.queue().map((entry) => entry.taskId)).toEqual([
       ordinaryBefore.id,
       ordinaryAfter.id,
