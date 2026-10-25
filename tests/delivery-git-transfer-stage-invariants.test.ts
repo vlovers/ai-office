@@ -315,8 +315,7 @@ describe('SQLite cross-stage Git transfer invariants', () => {
           ],
         },
         {
-          sql:
-            "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE stage='push'",
+          sql: "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE stage='push'",
           values: [],
         },
         {
@@ -358,22 +357,6 @@ describe('SQLite cross-stage Git transfer invariants', () => {
     } finally {
       t.close();
     }
-  });
-
-  it('temporary Prettier diagnostic for the cross-process suite', async () => {
-    const prettier = await import('prettier');
-    const { readFileSync } = await import('node:fs');
-    const path = 'tests/delivery-git-transfer-stage-invariants.test.ts';
-    const current = readFileSync(path, 'utf8');
-    const expected = await prettier.format(current, {
-      ...(await prettier.resolveConfig(path)),
-      filepath: path,
-    });
-    const diff = spawnSync('diff', ['-u', path, '-'], {
-      input: expected,
-      encoding: 'utf8',
-    });
-    if (diff.status === 1) throw new Error(diff.stdout.slice(0, 10000));
   });
 
   it('retains a pre-upgrade orphaned push without adopting or deleting it', () => {
