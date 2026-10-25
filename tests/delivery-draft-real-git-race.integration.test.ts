@@ -481,5 +481,4 @@ describe('real Git Draft PR late-mutation integration', () => {
       t.close();
     }
   });
-
 });
