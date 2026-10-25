@@ -195,7 +195,7 @@ This is a **final Draft PR eligibility defense**, not a substitute for
 per-workspace Git lease serialization or a unique constraint on future transfer
 intent creation. Existing recovery fixtures intentionally exercise multiple
 unresolved workspaces; commit/push execution remains disabled pending an
-independent review of cross-workspace ownership at *intent reservation time*.
+independent review of cross-workspace ownership at _intent reservation time_.
 The final guard must be invoked under the shared repository lease by the
 trusted session-bound Draft PR executor; it is not a browser-accessible API.
 
