@@ -139,10 +139,21 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     );
     store.setThread(ordinarySession.id, 'persisted-session-thread');
     store.enqueue(ordinary.id, 'local-cli-chatgpt', ordinarySession.id);
+    const ordinaryAfter = store.createTask({
+      repositoryId: repository.id,
+      title: 'Second unrelated queued task',
+      prompt: 'Preserve FIFO after workflow restart',
+    });
+    store.enqueue(ordinaryAfter.id, 'local-cli-chatgpt');
     const qaFailed = startStage('qa', 'failed');
     store.updateTask(qaFailed.task.id, {
       state: 'failed',
       error: 'QA failed before restart.',
+    });
+    const qaStopped = startStage('qa', 'stopped');
+    store.updateTask(qaStopped.task.id, {
+      state: 'stopped',
+      error: 'QA stopped before restart.',
     });
     const qaCompleted = startStage('qa', 'completed');
     store.updateTask(qaCompleted.task.id, {
@@ -169,8 +180,12 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     const dashboard = await get('/api/dashboard');
     expect(dashboard.statusCode).toBe(200);
     const view = dashboard.json();
-    expect(view.queue.map((entry: { taskId: string }) => entry.taskId)).toEqual([ordinary.id]);
+    expect(view.queue.map((entry: { taskId: string }) => entry.taskId)).toEqual([
+      ordinary.id,
+      ordinaryAfter.id,
+    ]);
     expect(view.queue[0].resumeSessionId).toBe(ordinarySession.id);
+    expect(view.queue[1].resumeSessionId).toBeNull();
     expect(view.sessions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -189,8 +204,10 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     );
     expect(tasks.get(reviewerQueued.task.id)).toBe('interrupted');
     expect(tasks.get(qaFailed.task.id)).toBe('failed');
+    expect(tasks.get(qaStopped.task.id)).toBe('stopped');
     expect(tasks.get(qaCompleted.task.id)).toBe('completed');
     expect(tasks.get(ordinary.id)).toBe('queued');
+    expect(tasks.get(ordinaryAfter.id)).toBe('queued');
 
     const cases = [
       {
@@ -200,6 +217,7 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
         code: 'execution-interrupted',
       },
       { id: qaFailed.workflowId, stage: 2, status: 'failed', code: 'execution-failed' },
+      { id: qaStopped.workflowId, stage: 2, status: 'failed', code: 'execution-failed' },
       { id: qaCompleted.workflowId, stage: 2, status: 'blocked', code: 'stage-blocked' },
     ] as const;
     for (const entry of cases) {
@@ -229,8 +247,11 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(listed.statusCode).toBe(200);
     expect(
       listed.json().filter((workflow: { state: string }) => workflow.state === 'blocked'),
-    ).toHaveLength(3);
-    expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
+    ).toHaveLength(4);
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([
+      ordinary.id,
+      ordinaryAfter.id,
+    ]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
 
     const versions = cases.map((entry) => new WorkflowStore(store.db).get(entry.id)!.version);
@@ -242,7 +263,10 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     store = new Store(path);
     const again = new WorkflowStore(store.db);
     expect(cases.map((entry) => again.get(entry.id)!.version)).toEqual(versions);
-    expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
+    expect(store.queue().map((entry) => entry.taskId)).toEqual([
+      ordinary.id,
+      ordinaryAfter.id,
+    ]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
     expect(store.session(ordinarySession.id)?.threadId).toBe('persisted-session-thread');
     expect(store.sessionConfiguration(ordinarySession.id)).toEqual(sessionConfiguration);
