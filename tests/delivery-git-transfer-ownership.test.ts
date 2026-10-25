@@ -303,9 +303,9 @@ describe('Draft PR transfer ownership and replay isolation', () => {
       });
       t.journal.begin('commit', foreign);
       expect(() =>
-        t.db.prepare(
-          'UPDATE delivery_git_transfers SET branch=? WHERE workspace_id=?',
-        ).run(branch, 'foreign'),
+        t.db
+          .prepare('UPDATE delivery_git_transfers SET branch=? WHERE workspace_id=?')
+          .run(branch, 'foreign'),
       ).toThrow('another workspace');
       expect(t.journal.get('foreign', 'commit')?.branch).toBe(anotherBranch);
     } finally {
