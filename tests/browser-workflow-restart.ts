@@ -113,7 +113,7 @@ if (process.argv.includes('--restart-server')) {
     const proc = child;
     child = undefined;
     if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
-    const exited = once(proc, 'exit');
+    const exited = once(proc, 'exit', { signal: AbortSignal.timeout(10_000) });
     proc.kill('SIGKILL');
     await exited;
   };
@@ -225,6 +225,8 @@ if (process.argv.includes('--restart-server')) {
     store.enqueue(interrupted.task.id, 'local-cli-chatgpt');
     const failed = stage('qa', 'failed');
     store.updateTask(failed.task.id, { state: 'failed', error: 'QA failed before restart.' });
+    const stopped = stage('qa', 'stopped');
+    store.updateTask(stopped.task.id, { state: 'stopped', error: 'QA stopped before restart.' });
     const blocked = stage('qa', 'completed');
     store.updateTask(blocked.task.id, { state: 'completed', result: 'Awaiting approval.' });
     // A queued continuation is unrelated to the privileged workflow. Its
@@ -270,7 +272,7 @@ if (process.argv.includes('--restart-server')) {
     await page.goto(address);
     const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
     const selector = board.getByLabel('Workflow', { exact: true });
-    await expect(selector.locator('option')).toHaveCount(3, { timeout: 15000 });
+    await expect(selector.locator('option')).toHaveCount(4, { timeout: 15000 });
     await selector.selectOption(interrupted.workflowId);
     await expect(board.getByText(/^State: active/)).toBeVisible();
     await expect(board).toContainText('REVIEWER — running');
@@ -286,6 +288,9 @@ if (process.argv.includes('--restart-server')) {
     );
     await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
     await selector.selectOption(failed.workflowId);
+    await expect(board.getByText(/^State: blocked/)).toBeVisible();
+    await expect(board).toContainText('QA — failed');
+    await selector.selectOption(stopped.workflowId);
     await expect(board.getByText(/^State: blocked/)).toBeVisible();
     await expect(board).toContainText('QA — failed');
     await selector.selectOption(blocked.workflowId);
@@ -312,8 +317,14 @@ if (process.argv.includes('--restart-server')) {
     );
     assert.equal(taskStates.get(interrupted.task.id), 'interrupted');
     assert.equal(taskStates.get(failed.task.id), 'failed');
+    assert.equal(taskStates.get(stopped.task.id), 'stopped');
     assert.equal(taskStates.get(blocked.task.id), 'completed');
-    const ids = [interrupted.workflowId, failed.workflowId, blocked.workflowId];
+    const ids = [
+      interrupted.workflowId,
+      failed.workflowId,
+      stopped.workflowId,
+      blocked.workflowId,
+    ];
     const activePage = page;
     const versions = await Promise.all(
       ids.map(async (id) => {
@@ -332,16 +343,27 @@ if (process.argv.includes('--restart-server')) {
     // A previously rendered blocked state is not evidence of reconnect.
     // Observe a fresh successful browser-originated API response after process death.
     const reconnected = page.waitForResponse(
-      (response) => response.url().startsWith(address + '/api/') && response.ok(),
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url() === address + '/api/workflows/' + blocked.workflowId + '/timeline' &&
+        response.ok(),
       { timeout: 20000 },
     );
     await start(port);
     await reconnected;
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
+    await expect(board).toContainText('QA — blocked');
+    await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
+    await expect(board.getByRole('alert')).toHaveCount(0);
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
       assert.equal((await response.json()).version, versions[index]);
+      const timeline = await activePage.request.get(address + '/api/workflows/' + id + '/timeline');
+      assert.equal(timeline.status(), 200);
+      const view = await timeline.json();
+      assert.equal(view.state, 'blocked');
+      assert.equal(view.downstreamExecutable, false);
     }
     const after = await activePage.request.get(address + '/api/dashboard');
     assert.equal(after.status(), 200);
@@ -357,6 +379,13 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(afterSession?.threadId, 'browser-restart-thread');
     assert.deepEqual(afterSession?.configuration, sessionConfiguration);
     assert.equal(JSON.stringify(afterDashboard).includes(sessionBinding.contextId), false);
+    const afterTasks = new Map(
+      afterDashboard.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
+    );
+    assert.equal(afterTasks.get(interrupted.task.id), 'interrupted');
+    assert.equal(afterTasks.get(failed.task.id), 'failed');
+    assert.equal(afterTasks.get(stopped.task.id), 'stopped');
+    assert.equal(afterTasks.get(blocked.task.id), 'completed');
     assert.deepEqual(pageErrors, []);
     passed = true;
     console.log(
