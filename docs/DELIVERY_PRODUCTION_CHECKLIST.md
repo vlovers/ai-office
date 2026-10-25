@@ -327,6 +327,13 @@ received, not only untrusted Content-Length; malformed UTF-8, JSON, empty
 bodies, endless streams and oversized bodies fail closed. Existing request
 deadlines bound stalled reads. Parser errors never echo remote response text.
 An ambiguous POST response remains an uncertain journal entry; the size limit
-never authorizes a second POST. The separately scoped read-only credential
-adapter retains its stricter 1 MiB upstream cap. Target-host validation and
-independent security review are still required before enabling remote writes.
+never authorizes a second POST. The separately scoped read-only credential adapter now applies the
+same per-endpoint limits (256 KiB refs, 1 MiB detail, 8 MiB inventory) before
+forwarding sanitized JSON to the downstream parser. Previously its blanket
+1 MiB cap could block valid complete PR inventories. Both layers count actual
+bytes and reject invalid UTF-8; neither awaits cancellation of an untrusted
+stream, because a hostile cancel handler may never resolve. HTTP errors and
+credential echoes still fail closed without exposing tokens. These are
+read-only transport safeguards, not permission to retry an ambiguous write.
+Target-host validation and independent security review are still required
+before enabling remote writes.
