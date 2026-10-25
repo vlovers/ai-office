@@ -39,6 +39,43 @@ describe('uncertain publication reconciliation', () => {
     ).toBe('unresolved');
   });
 
+  it('rejects one valid receipt when a second PR reuses the managed head', () => {
+    for (const conflict of [
+      {
+        ...candidate,
+        html_url: 'https://github.com/vlovers/ai-office/pull/124',
+        base: { ref: 'release', repo },
+      },
+      {
+        ...candidate,
+        html_url: 'https://github.com/vlovers/ai-office/pull/125',
+        state: 'closed',
+        base: { ref: 'release', repo },
+      },
+      {
+        ...candidate,
+        html_url: 'https://github.com/vlovers/ai-office/pull/126',
+        head: { ref: plan.branch, repo: { full_name: 'other/fork' } },
+      },
+    ]) {
+      const result = reconcilePublicationCandidates(plan, [candidate, conflict]);
+      expect(result.status).toBe('unresolved');
+      expect(result).toHaveProperty('reason', expect.stringContaining('managed head'));
+    }
+  });
+
+  it('still confirms a unique receipt alongside unrelated branches', () => {
+    const unrelated = {
+      ...candidate,
+      html_url: 'https://github.com/vlovers/ai-office/pull/124',
+      head: { ref: 'feature/unrelated', repo },
+    };
+    expect(reconcilePublicationCandidates(plan, [candidate, unrelated])).toEqual({
+      status: 'confirmed',
+      pullRequestUrl: candidate.html_url,
+    });
+  });
+
   it('refuses closed, non-draft, forked or foreign PRs', () => {
     for (const mismatch of [
       { ...candidate, state: 'closed' },
