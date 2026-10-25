@@ -127,3 +127,29 @@ HTTP route or automatic Git executor. Existing startup recovery still only
 marks interrupted intents uncertain. A trusted operator-controlled recovery
 workflow, independent security review, real target-host concurrency/crash tests
 and all remaining issue #58 gates are required before production activation.
+
+
+## Bounded, operator-controlled transfer recovery (issue #58)
+
+The server-only `recoverUnresolvedGitTransfers` coordinator enumerates **distinct**
+unresolved workspace IDs using stable keyset pagination (maximum 100 per
+batch). It resolves each workspace through a trusted registry callback and
+calls the existing read-only reconciliation under the shared repository lease.
+Missing registry records, revoked sessions, foreign SQLite journals, mismatched
+workspace identities and lease contention are reported as blocked/unavailable
+without deleting, replacing or fabricating any intent. One blocked workspace
+does not prevent inspection of subsequent workspaces; the cursor prevents
+permanent starvation of later entries.
+
+The coordinator is **not** an automatic startup task or HTTP endpoint.
+A privileged operator must supply a fresh, server-owned registry resolver,
+synchronous authorization, and read-only GitHub credentials. Cursor paging
+must be resumed explicitly; a completed batch is not evidence that all
+workspaces were recovered. Per-workspace outcomes must be audited without
+logging tokens. A failed or ambiguous GitHub GET cannot authorize a new
+commit, push or PR POST.
+
+Still required before activation: actual multi-process target-host crash
+tests, a trusted registry/startup integration, independent receipt/security
+review, and separate least-privilege write authorization. Do not treat
+read-only recovery as approval to retry any remote write.
