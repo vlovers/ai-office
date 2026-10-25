@@ -103,6 +103,41 @@ export class DeliveryGitTransferJournal {
       BEGIN
         SELECT RAISE(ABORT, 'Git transfer operation or branch belongs to another workspace.');
       END`);
+    // SQLite is the durable trust boundary, including for independent writers
+    // that do not use this TypeScript class. Never allow a receipt to appear
+    // without a reserved intent, or allow a transfer identity to be reassigned.
+    // Existing legacy rows are retained for explicit fail-closed reconciliation.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_intent_only_insert
+      BEFORE INSERT ON delivery_git_transfers
+      WHEN NEW.state != 'intent' OR NEW.receipt_sha IS NOT NULL
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer insertion must reserve a receipt-free intent.');
+      END`);
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_immutable_identity
+      BEFORE UPDATE ON delivery_git_transfers
+      WHEN OLD.workspace_id IS NOT NEW.workspace_id
+        OR OLD.stage IS NOT NEW.stage
+        OR OLD.operation_key IS NOT NEW.operation_key
+        OR OLD.destination IS NOT NEW.destination
+        OR OLD.branch IS NOT NEW.branch
+        OR OLD.head_sha IS NOT NEW.head_sha
+        OR OLD.base_sha IS NOT NEW.base_sha
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer identity is immutable.');
+      END`);
+    // A confirmed receipt is permanent; uncertainty cannot be reset to an
+    // intent, and only the exact reviewed SHA can complete a stage.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_monotonic_receipt
+      BEFORE UPDATE OF state, receipt_sha ON delivery_git_transfers
+      WHEN NOT (
+        (NEW.state = OLD.state AND NEW.receipt_sha IS OLD.receipt_sha)
+        OR (OLD.state = 'intent' AND NEW.state = 'uncertain' AND NEW.receipt_sha IS NULL)
+        OR (OLD.state IN ('intent', 'uncertain') AND NEW.state = 'confirmed'
+            AND NEW.receipt_sha = NEW.head_sha)
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer receipt state must advance monotonically.');
+      END`);
   }
 
   get(workspaceId: string, stage: DeliveryGitStage): DeliveryGitTransferEntry | null {
