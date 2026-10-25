@@ -214,20 +214,12 @@ describe('Draft PR transfer ownership and replay isolation', () => {
         "import { DeliveryGitTransferJournal } from './src/server/delivery-git-transfer-journal.ts';",
         'const db = new DatabaseSync(process.argv[1]);',
         'const owner = JSON.parse(process.argv[2]);',
-        "try { new DeliveryGitTransferJournal(db).assertReadyForDraft(owner); process.exit(43); }",
+        'try { new DeliveryGitTransferJournal(db).assertReadyForDraft(owner); process.exit(43); }',
         "catch (error) { process.exit(String(error).includes('another workspace') ? 42 : 44); }",
       ].join(' ');
       const child = spawnSync(
         process.execPath,
-        [
-          '--import',
-          'tsx',
-          '--input-type=module',
-          '-e',
-          script,
-          t.dbPath,
-          JSON.stringify(owner),
-        ],
+        ['--import', 'tsx', '--input-type=module', '-e', script, t.dbPath, JSON.stringify(owner)],
         { encoding: 'utf8', timeout: 5000 },
       );
       expect(child.status).toBe(42);
