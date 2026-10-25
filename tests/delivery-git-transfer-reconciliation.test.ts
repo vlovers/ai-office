@@ -727,5 +727,4 @@ describe('read-only commit/push receipt reconciliation', () => {
       t.close();
     }
   });
-
 });
