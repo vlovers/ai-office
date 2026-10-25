@@ -5,6 +5,7 @@ import {
   type DeliveryReadCredential,
 } from '../src/server/delivery-github-credentials.js';
 import { GITHUB_JSON_LIMITS } from '../src/server/delivery-github-json-boundary.js';
+import { listAllGitHubPullRequests } from '../src/server/delivery-github-readonly.js';
 
 const repository = 'vlovers/ai-office';
 const token = `github_pat_TEST_${'A'.repeat(25)}`;
@@ -29,7 +30,12 @@ async function request(
 ): Promise<Response> {
   const db = new DatabaseSync(':memory:');
   try {
-    const manager = new DeliveryGitHubCredentials(db, async () => credential(), transport, () => 1000);
+    const manager = new DeliveryGitHubCredentials(
+      db,
+      async () => credential(),
+      transport,
+      () => 1000,
+    );
     return await manager.readOnlyFetcher(repository, ['main'])(url, { method: 'GET' });
   } finally {
     db.close();
@@ -52,6 +58,42 @@ describe('credential-scoped GitHub response boundary', () => {
     const payload = [{ description: 'x'.repeat(1_200_000) }];
     const response = await request(listUrl, async () => Response.json(payload));
     expect(await response.json()).toEqual(payload);
+  });
+
+  it('passes a large authenticated PR page through complete downstream inventory validation', async () => {
+    const plan = {
+      allowed: true as const,
+      destination: `https://github.com/${repository}`,
+      branch: 'ai-office/12345678-1234-1234-1234-123456789abc',
+      baseBranch: 'main',
+      revision: 'a'.repeat(64),
+      draft: true as const,
+    };
+    const candidate = {
+      html_url: `https://github.com/${repository}/pull/123`,
+      draft: true,
+      state: 'open',
+      head: { ref: plan.branch, repo: { full_name: repository } },
+      base: { ref: 'main', repo: { full_name: repository } },
+      description: 'x'.repeat(1_200_000),
+    };
+    const db = new DatabaseSync(':memory:');
+    try {
+      const manager = new DeliveryGitHubCredentials(
+        db,
+        async () => credential(),
+        async () => Response.json([candidate]),
+        () => 1000,
+      );
+      const result = await listAllGitHubPullRequests(plan, {
+        fetcher: manager.readOnlyFetcher(repository, ['main', plan.branch]),
+      });
+      expect(result.complete).toBe(true);
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]?.html_url).toBe(candidate.html_url);
+    } finally {
+      db.close();
+    }
   });
 
   it('rejects a listing larger than 8 MiB without returning partial inventory', async () => {
@@ -82,24 +124,14 @@ describe('credential-scoped GitHub response boundary', () => {
     ).rejects.toMatchObject({ statusCode: 503 });
   });
 
-  it('rejects a declared oversized body before consuming the stream', async () => {
-    let consumed = false;
-    await expect(
-      request(refUrl, async () =>
-        new Response(
-          new ReadableStream<Uint8Array>({
-            pull(controller) {
-              consumed = true;
-              controller.enqueue(new Uint8Array([123, 125]));
-              controller.close();
-            },
-          }),
-          { headers: { 'Content-Length': String(GITHUB_JSON_LIMITS.refs + 1) } },
-        ),
-      ),
-    ).rejects.toMatchObject({ statusCode: 503 });
-    // Response may eagerly pull one chunk; no application-level read is required.
-    expect(typeof consumed).toBe('boolean');
+  it('rejects a declared oversized body without consuming it', async () => {
+    const response = new Response('{}', {
+      headers: { 'Content-Length': String(GITHUB_JSON_LIMITS.refs + 1) },
+    });
+    await expect(request(refUrl, async () => response)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(response.bodyUsed).toBe(false);
   });
 
   it('rejects invalid UTF-8 without exposing remote bytes', async () => {
