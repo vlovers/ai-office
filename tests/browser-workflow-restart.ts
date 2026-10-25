@@ -9,6 +9,7 @@ import { chromium, expect, type APIResponse, type Page } from '@playwright/test'
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
 import { TaskManager } from '../src/server/manager.js';
+import { profileConfiguration } from '../src/server/execution-config.js';
 import { CodexAuth } from '../src/server/providers/codex-auth.js';
 import { CodexProvider } from '../src/server/providers/codex.js';
 import { AGENT_IDS } from '../src/shared/types.js';
@@ -226,15 +227,41 @@ if (process.argv.includes('--restart-server')) {
     store.updateTask(failed.task.id, { state: 'failed', error: 'QA failed before restart.' });
     const blocked = stage('qa', 'completed');
     store.updateTask(blocked.task.id, { state: 'completed', result: 'Awaiting approval.' });
-    const ordinary = ['Ordinary first', 'Ordinary second'].map((title) => {
+    // A queued continuation is unrelated to the privileged workflow. Its
+    // pinned session and private connection binding must survive both crashes.
+    const sessionTask = store.createTask({
+      repositoryId: repository.id,
+      title: 'Queued session continuation',
+      prompt: 'Unrelated persisted session',
+    });
+    const sessionBinding = {
+      mode: 'local-cli-chatgpt' as const,
+      contextId: 'private-browser-restart-context',
+      model: null,
+      runtimeVersion: '0.162.1',
+    };
+    const sessionConfiguration = profileConfiguration(store.agent('codex-1')!, sessionTask);
+    const session = store.createSession(
+      repository.id,
+      sessionBinding,
+      'codex',
+      'codex-1',
+      'read-only',
+      undefined,
+      sessionConfiguration,
+    );
+    store.setThread(session.id, 'browser-restart-thread');
+    store.enqueue(sessionTask.id, 'local-cli-chatgpt', session.id);
+    const ordinary = [sessionTask.id];
+    for (const title of ['Ordinary first', 'Ordinary second']) {
       const task = store.createTask({
         repositoryId: repository.id,
         title,
         prompt: 'Unrelated queue item',
       });
       store.enqueue(task.id, 'local-cli-chatgpt');
-      return task.id;
-    });
+      ordinary.push(task.id);
+    }
     store.close();
 
     browser = await chromium.launch({ headless: true });
@@ -273,6 +300,13 @@ if (process.argv.includes('--restart-server')) {
       dashboard.queue.map((item: { taskId: string }) => item.taskId),
       ordinary,
     );
+    assert.equal(dashboard.queue[0]?.resumeSessionId, session.id);
+    const recoveredSession = dashboard.sessions.find(
+      (item: { id: string }) => item.id === session.id,
+    );
+    assert.equal(recoveredSession?.threadId, 'browser-restart-thread');
+    assert.deepEqual(recoveredSession?.configuration, sessionConfiguration);
+    assert.equal(JSON.stringify(dashboard).includes(sessionBinding.contextId), false);
     const taskStates = new Map(
       dashboard.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
     );
@@ -311,10 +345,18 @@ if (process.argv.includes('--restart-server')) {
     }
     const after = await activePage.request.get(address + '/api/dashboard');
     assert.equal(after.status(), 200);
+    const afterDashboard = await after.json();
     assert.deepEqual(
-      (await after.json()).queue.map((item: { taskId: string }) => item.taskId),
+      afterDashboard.queue.map((item: { taskId: string }) => item.taskId),
       ordinary,
     );
+    assert.equal(afterDashboard.queue[0]?.resumeSessionId, session.id);
+    const afterSession = afterDashboard.sessions.find(
+      (item: { id: string }) => item.id === session.id,
+    );
+    assert.equal(afterSession?.threadId, 'browser-restart-thread');
+    assert.deepEqual(afterSession?.configuration, sessionConfiguration);
+    assert.equal(JSON.stringify(afterDashboard).includes(sessionBinding.contextId), false);
     assert.deepEqual(pageErrors, []);
     passed = true;
     console.log(
