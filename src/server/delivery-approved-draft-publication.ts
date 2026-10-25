@@ -14,15 +14,17 @@ type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 
 export type ApprovedDraftPublicationContext = Omit<
   DraftPublicationContext,
-  'journal' | 'reserveApproved' | 'verifySnapshot'
+  'journal' | 'reserveApproved' | 'verifySnapshot' | 'verifyBeforeReserve' | 'verifyRemoteReceipt'
 > & {
   db: DatabaseSync;
   approvalId: string;
   binding: PublicationApprovalBinding;
   /** Trusted server-side verification of the exact reviewed head/base snapshot. */
   verifyApprovedSnapshot: (plan: AllowedPlan, binding: PublicationApprovalBinding) => Promise<void>;
-  /** Independently inspect the exact remote PR detail before accepting a receipt. */
-  verifyRemoteReceipt?: (plan: AllowedPlan, url: string) => Promise<void>;
+  /** Required post-inventory local/registry check before consuming one-use approval. */
+  verifyBeforeReserve: (plan: AllowedPlan) => Promise<void>;
+  /** Required independent PR-detail/commit-SHA verification before accepting any receipt. */
+  verifyRemoteReceipt: (plan: AllowedPlan, url: string) => Promise<void>;
   /** Must check the operator's live session and grant synchronously inside SQLite. */
   authorizeBeforeReserve: () => void;
   now?: () => number;
@@ -45,6 +47,14 @@ export async function createApprovedDraftPublication(
   context: ApprovedDraftPublicationContext,
 ): Promise<DraftPublicationResult> {
   const { db, binding, workspaceId, initialPlan } = context;
+  // A trusted approval is not enough: never accept inventory-only PR receipts
+  // or consume approval after asynchronous inventory without final attestation.
+  if (
+    typeof context.verifyBeforeReserve !== 'function' ||
+    typeof context.verifyRemoteReceipt !== 'function'
+  ) {
+    throw new Error('Approved Draft publication requires final snapshot and PR detail verification.');
+  }
   if (!binding.plan.allowed) {
     throw new Error('Publication approval differs from the reviewed workspace.');
   }
