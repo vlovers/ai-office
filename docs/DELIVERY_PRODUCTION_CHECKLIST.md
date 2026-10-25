@@ -130,6 +130,18 @@ refresh. A cancelled recovery cannot confirm a commit or push, cannot start a
 second push, and does not imply that an in-flight remote GET stopped running.
 The transport must be server-owned and GET-only.
 
+Every in-lease `refreshReviewed` registry read is also independently bounded
+(default 10 seconds; `refreshDeadlineMs` may be 100–60,000 ms). An initial
+timeout releases the lease without changing a pending intent; a timeout after
+local or remote attestation blocks confirmation and retains the uncertain
+receipt. External cancellation interrupts the wait even if the registry
+resolver ignores its signal. Late registry results are discarded and cannot
+confirm a receipt. The trusted registry refresh callback **must be read-only
+and side-effect-free**: a deadline cannot terminate underlying JavaScript
+work, so it must never contain a Git write, journal mutation or remote write.
+This prevents a stalled registry dependency from indefinitely monopolizing
+the shared repository lease; it does not replace host-level process isolation.
+
 This is an additional **read-only recovery primitive**, not a startup hook,
 HTTP route or automatic Git executor. Existing startup recovery still only
 marks interrupted intents uncertain. A trusted operator-controlled recovery
