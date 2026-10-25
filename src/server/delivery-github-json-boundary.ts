@@ -10,10 +10,7 @@ export const GITHUB_JSON_LIMITS = {
   draft: 1024 * 1024,
 } as const;
 
-export async function readBoundedGitHubText(
-  response: Response,
-  maxBytes: number,
-): Promise<string> {
+export async function readBoundedGitHubText(response: Response, maxBytes: number): Promise<string> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
     throw new Error('Invalid GitHub JSON response limit.');
   }
