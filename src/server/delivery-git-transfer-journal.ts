@@ -73,6 +73,110 @@ export class DeliveryGitTransferJournal {
       receipt_sha TEXT,
       PRIMARY KEY (workspace_id, stage)
     )`);
+    // SQLite executes triggers inside the INSERT statement's writer lock.
+    // Unlike a SELECT-then-INSERT check, this excludes competing workspaces
+    // even when separate Node processes race to reserve the same branch.
+    // Creating the triggers does not rewrite or discard legacy conflicting
+    // rows: assertReadyForDraft still detects those during migration.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_exclusive_insert
+      BEFORE INSERT ON delivery_git_transfers
+      WHEN EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE workspace_id != NEW.workspace_id
+          AND (operation_key = NEW.operation_key OR
+            (destination COLLATE NOCASE = NEW.destination AND branch = NEW.branch))
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer operation or branch belongs to another workspace.');
+      END`);
+    // No production API changes identity columns, but reject accidental SQL
+    // identity reassignment without weakening the cross-workspace invariant.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_exclusive_update
+      BEFORE UPDATE OF workspace_id, operation_key, destination, branch
+      ON delivery_git_transfers
+      WHEN EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE rowid != OLD.rowid AND workspace_id != NEW.workspace_id
+          AND (operation_key = NEW.operation_key OR
+            (destination COLLATE NOCASE = NEW.destination AND branch = NEW.branch))
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer operation or branch belongs to another workspace.');
+      END`);
+    // SQLite is the durable trust boundary, including for independent writers
+    // that do not use this TypeScript class. Never allow a receipt to appear
+    // without a reserved intent, or allow a transfer identity to be reassigned.
+    // Existing legacy rows are retained for explicit fail-closed reconciliation.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_intent_only_insert
+      BEFORE INSERT ON delivery_git_transfers
+      WHEN NEW.state != 'intent' OR NEW.receipt_sha IS NOT NULL
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer insertion must reserve a receipt-free intent.');
+      END`);
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_immutable_identity
+      BEFORE UPDATE ON delivery_git_transfers
+      WHEN OLD.workspace_id IS NOT NEW.workspace_id
+        OR OLD.stage IS NOT NEW.stage
+        OR OLD.operation_key IS NOT NEW.operation_key
+        OR OLD.destination IS NOT NEW.destination
+        OR OLD.branch IS NOT NEW.branch
+        OR OLD.head_sha IS NOT NEW.head_sha
+        OR OLD.base_sha IS NOT NEW.base_sha
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer identity is immutable.');
+      END`);
+    // A confirmed receipt is permanent; uncertainty cannot be reset to an
+    // intent, and only the exact reviewed SHA can complete a stage.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_monotonic_receipt
+      BEFORE UPDATE OF state, receipt_sha ON delivery_git_transfers
+      WHEN NOT (
+        (NEW.state = OLD.state AND NEW.receipt_sha IS OLD.receipt_sha)
+        OR (OLD.state = 'intent' AND NEW.state = 'uncertain' AND NEW.receipt_sha IS NULL)
+        OR (OLD.state IN ('intent', 'uncertain') AND NEW.state = 'confirmed'
+            AND NEW.receipt_sha IS NOT NULL AND NEW.receipt_sha = NEW.head_sha)
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer receipt state must advance monotonically.');
+      END`);
+    // A push is never independently reservable: its matching commit must
+    // already have a durable confirmed receipt, including for direct SQL
+    // writers and competing processes that bypass this TypeScript class.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_push_requires_commit_insert
+      BEFORE INSERT ON delivery_git_transfers
+      WHEN NEW.stage = 'push' AND NOT EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE workspace_id = NEW.workspace_id AND stage = 'commit'
+          AND operation_key = NEW.operation_key
+          AND destination = NEW.destination AND branch = NEW.branch
+          AND head_sha = NEW.head_sha AND base_sha = NEW.base_sha
+          AND state = 'confirmed' AND receipt_sha = NEW.head_sha
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Push intent requires matching confirmed commit receipt.');
+      END`);
+    // Preserve the same cross-stage guarantee at receipt confirmation.
+    // This also fails closed on pre-upgrade malformed commit rows.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_push_requires_commit_update
+      BEFORE UPDATE OF state, receipt_sha ON delivery_git_transfers
+      WHEN NEW.stage = 'push' AND NEW.state = 'confirmed' AND NOT EXISTS (
+        SELECT 1 FROM delivery_git_transfers
+        WHERE workspace_id = NEW.workspace_id AND stage = 'commit'
+          AND operation_key = NEW.operation_key
+          AND destination = NEW.destination AND branch = NEW.branch
+          AND head_sha = NEW.head_sha AND base_sha = NEW.base_sha
+          AND state = 'confirmed' AND receipt_sha = NEW.head_sha
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'Push receipt requires matching confirmed commit receipt.');
+      END`);
+    // Never erase a durable attempt or its evidence via accidental direct
+    // SQL deletion. Legacy conflicts require explicit offline investigation;
+    // automatic cleanup would permit replay of an ambiguous remote write.
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS delivery_git_transfers_no_delete
+      BEFORE DELETE ON delivery_git_transfers
+      BEGIN
+        SELECT RAISE(ABORT, 'Git transfer intents and receipts cannot be deleted.');
+      END`);
   }
 
   get(workspaceId: string, stage: DeliveryGitStage): DeliveryGitTransferEntry | null {
@@ -106,7 +210,51 @@ export class DeliveryGitTransferJournal {
   }
 
   /**
-   * One reservation per workspace/stage, including after restart.
+   * Stable, bounded discovery of unresolved workspaces. A workspace with both
+   * commit and push intents appears once. Cursor pagination avoids repeatedly
+   * selecting the first blocked workspace during operator-driven recovery.
+   * This performs no recovery or journal mutation.
+   */
+  listUnresolvedWorkspaces(
+    limit: number,
+    afterWorkspaceId?: string,
+  ): { workspaceIds: string[]; nextCursor: string | null; hasMore: boolean } {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error('Invalid Git transfer recovery batch limit.');
+    }
+    if (
+      afterWorkspaceId !== undefined &&
+      (typeof afterWorkspaceId !== 'string' ||
+        afterWorkspaceId.length === 0 ||
+        afterWorkspaceId.length > 200)
+    ) {
+      throw new Error('Invalid Git transfer recovery cursor.');
+    }
+    const rows =
+      afterWorkspaceId === undefined
+        ? this.db
+            .prepare(
+              "SELECT DISTINCT workspace_id FROM delivery_git_transfers WHERE state != 'confirmed' ORDER BY workspace_id LIMIT ?",
+            )
+            .all(limit + 1)
+        : this.db
+            .prepare(
+              "SELECT DISTINCT workspace_id FROM delivery_git_transfers WHERE state != 'confirmed' AND workspace_id > ? ORDER BY workspace_id LIMIT ?",
+            )
+            .all(afterWorkspaceId, limit + 1);
+    const hasMore = rows.length > limit;
+    const workspaceIds = rows.slice(0, limit).map((row) => String(row.workspace_id));
+    return {
+      workspaceIds,
+      nextCursor: hasMore ? workspaceIds[workspaceIds.length - 1]! : null,
+      hasMore,
+    };
+  }
+
+  /**
+   * One reservation per workspace/stage, including after restart. SQLite
+   * triggers atomically exclude a foreign workspace claiming this operation
+   * key or destination/branch, even across independent writer processes.
    * A push intent requires an independently confirmed matching commit receipt.
    */
   begin(stage: DeliveryGitStage, identity: DeliveryGitTransferIdentity): DeliveryGitTransferEntry {
@@ -196,10 +344,35 @@ export class DeliveryGitTransferJournal {
     return this.requireMatching(stage, identity);
   }
 
-  /** Both independent receipts are required before a Draft PR is eligible. */
+  /**
+   * A reviewed branch and publication operation have one durable owner across
+   * all workspaces, including interrupted and uncertain attempts. Older
+   * journals may predate this invariant: refuse Draft PR eligibility rather
+   * than silently adopting, deleting, or replaying a foreign intent. GitHub\n   * repository names are case-insensitive, while Git branch names are not.
+   *
+   * This read-only gate also protects receipt reconciliation of pre-upgrade
+   * conflicting rows. The trusted executor must still hold the
+   * shared repository lease, refresh the registry and attest both Git refs.
+   */
+  assertExclusiveOwnership(identity: DeliveryGitTransferIdentity): void {
+    const competing = this.db
+      .prepare(
+        `SELECT 1 FROM delivery_git_transfers
+         WHERE workspace_id != ?
+           AND (operation_key = ? OR (destination COLLATE NOCASE = ? AND branch = ?))
+         LIMIT 1`,
+      )
+      .get(identity.workspaceId, identity.operationKey, identity.destination, identity.branch);
+    if (competing) {
+      throw new Error('Git transfer operation or branch belongs to another workspace.');
+    }
+  }
+
+  /** Both independent receipts and exclusive ownership are required for Draft PR. */
   assertReadyForDraft(identity: DeliveryGitTransferIdentity) {
     this.assertConfirmed('commit', identity);
     this.assertConfirmed('push', identity);
+    this.assertExclusiveOwnership(identity);
   }
 
   private requireMatching(stage: DeliveryGitStage, identity: DeliveryGitTransferIdentity) {
