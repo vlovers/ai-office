@@ -10,10 +10,10 @@ export const GITHUB_JSON_LIMITS = {
   draft: 1024 * 1024,
 } as const;
 
-export async function readBoundedGitHubJson(
+export async function readBoundedGitHubText(
   response: Response,
   maxBytes: number,
-): Promise<unknown> {
+): Promise<string> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
     throw new Error('Invalid GitHub JSON response limit.');
   }
@@ -48,6 +48,15 @@ export async function readBoundedGitHubJson(
     }
     throw new Error('Invalid GitHub JSON response body.');
   }
+  return content;
+}
+
+/** Parse only after the complete UTF-8 body has passed the byte boundary. */
+export async function readBoundedGitHubJson(
+  response: Response,
+  maxBytes: number,
+): Promise<unknown> {
+  const content = await readBoundedGitHubText(response, maxBytes);
   try {
     return JSON.parse(content) as unknown;
   } catch {
