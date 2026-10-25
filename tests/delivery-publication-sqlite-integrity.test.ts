@@ -136,7 +136,7 @@ describe('durable publication SQLite invariants', () => {
         ']) { try { db.exec(sql); } catch { blocked++; } }',
         'db.close();',
         'if (blocked !== 3) process.exitCode = 1;',
-      ].join('\\n');
+      ].join('\n');
       const child = spawnSync(process.execPath, ['--input-type=module', '-e', script, file], {
         encoding: 'utf8',
       });
