@@ -78,6 +78,7 @@ export async function createApprovedDraftPublication(
     listRemote: context.listRemote,
     createDraft: context.createDraft,
     verifyRemoteReceipt: context.verifyRemoteReceipt,
+    verifyBeforeReserve: context.verifyBeforeReserve,
     verifySnapshot: async (plan) => {
       assertBinding(plan);
       await context.verifyApprovedSnapshot(plan, binding);
