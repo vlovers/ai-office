@@ -122,6 +122,31 @@ function setup() {
   };
 }
 
+function interruptReservationTransaction(
+  dbPath: string,
+  approvalId: string,
+  operationKey: string,
+  committed: boolean,
+) {
+  // A separate Node process simulates the SQLite atomic boundary immediately
+  // before or after COMMIT, then dies without running cleanup or GitHub I/O.
+  const script = [
+    "const {DatabaseSync}=require('node:sqlite');",
+    "const db=new DatabaseSync(process.argv[1]);",
+    "db.exec('BEGIN IMMEDIATE');",
+    "const consumed=db.prepare('UPDATE delivery_publication_approvals SET consumed_at=10000 WHERE approval_id=? AND consumed_at IS NULL').run(process.argv[2]);",
+    "if(consumed.changes!==1)process.exit(3);",
+    "db.prepare(\"INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)\").run('workspace-1', process.argv[3]);",
+    "if(process.argv[4]==='commit')db.exec('COMMIT');",
+    "process.kill(process.pid,'SIGKILL');",
+  ].join(' ');
+  return spawnSync(
+    process.execPath,
+    ['-e', script, dbPath, approvalId, operationKey, committed ? 'commit' : 'rollback'],
+    { encoding: 'utf8', timeout: 5000 },
+  );
+}
+
 describe('session-bound approved GitHub Draft PR executor (server only)', () => {
   it('attests both refs, inventories PRs, atomically reserves and verifies detail after one POST', async () => {
     const t = setup();
@@ -297,20 +322,21 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
   it('recovers a reservation left by a killed publisher process without creating a second PR', async () => {
     const t = setup();
     try {
-      // The publisher persists a reservation, then dies without cleanup.
-      // The next process must treat that reservation as a possibly completed POST.
-      const killed = spawnSync(
-        process.execPath,
-        [
-          '-e',
-          "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync(process.argv[1]); db.prepare(\"INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)\").run('workspace-1', process.argv[2]); process.kill(process.pid, 'SIGKILL');",
-          t.dbPath,
-          publicationKey(plan),
-        ],
-        { encoding: 'utf8', timeout: 5000 },
+      // Simulate the actual atomic approval-consumption + journal-reservation
+      // commit boundary in a separate process, not a journal-only forged row.
+      const killed = interruptReservationTransaction(
+        t.dbPath,
+        t.context().approvalId,
+        publicationKey(plan),
+        true,
       );
       expect(killed.signal).toBe('SIGKILL');
       expect(t.journal.get('workspace-1')?.state).toBe('reserved');
+      expect(
+        t.db
+          .prepare('SELECT consumed_at FROM delivery_publication_approvals WHERE approval_id=?')
+          .get(t.context().approvalId)?.consumed_at,
+      ).toBe(10_000);
       const original = t.fetcher.getMockImplementation()!;
       t.fetcher.mockImplementation(async (url, init) => {
         if (init.method === 'POST') throw new Error('A recovered operation must not write.');
@@ -331,6 +357,50 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       } finally {
         restoredDb.close();
       }
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rolls back approval consumption and reservation when killed before COMMIT', async () => {
+    const t = setup();
+    try {
+      const killed = interruptReservationTransaction(
+        t.dbPath,
+        t.context().approvalId,
+        publicationKey(plan),
+        false,
+      );
+      expect(killed.signal).toBe('SIGKILL');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(
+        t.db
+          .prepare('SELECT consumed_at FROM delivery_publication_approvals WHERE approval_id=?')
+          .get(t.context().approvalId)?.consumed_at,
+      ).toBeNull();
+      const result = await createSessionBoundGitHubDraft(t.context());
+      expect(result.status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('does not POST after a committed reservation if remote inventory finds no PR', async () => {
+    const t = setup();
+    try {
+      const killed = interruptReservationTransaction(
+        t.dbPath,
+        t.context().approvalId,
+        publicationKey(plan),
+        true,
+      );
+      expect(killed.signal).toBe('SIGKILL');
+      expect(t.journal.get('workspace-1')?.state).toBe('reserved');
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
     } finally {
       t.close();
     }
