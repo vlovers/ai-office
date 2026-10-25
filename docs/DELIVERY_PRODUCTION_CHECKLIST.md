@@ -539,3 +539,36 @@ there is no automatic replay of an ambiguous remote write.
 Production GitHub writes, merge endpoints and automatic retries remain
 disabled pending independent security review, least-privilege credentials,
 target-host crash testing and operational sign-off.
+
+## Post-write managed-head uniqueness gate (combined PR #79)
+
+A successful GitHub Draft PR POST and independently verified PR detail are not
+sufficient to persist a local `published` receipt: a different actor can create
+a second PR using the same managed head after our preflight inventory but
+before the write completes.
+
+The session-bound publication adapter now repeats the **complete open/closed
+GitHub PR inventory after the POST** and independently reconciles ownership.
+Exactly one valid PR must own the managed head, and its canonical URL must
+match the independently fetched detail. This also runs on receipt reuse and
+ambiguous-result recovery, not just the initial success path.
+
+- A second PR using the managed head (including a different base or fork)
+  blocks confirmation. Neither a 201 response nor a valid PR detail overrides
+  the conflict.
+- HTTP 403/429/5xx, partial pagination, malformed responses and eventual
+  inventory visibility gaps leave the reserved operation `uncertain`. A
+  subsequent invocation may only perform read-only reconciliation; it cannot
+  issue another POST or consume another approval.
+- After the post-write inventory, revalidate the trusted registry, operator
+  authorization, real local Git state and immutable commit/push receipts before
+  the durable `published` transition. A local Git mutation during the
+  additional remote GET leaves the journal uncertain.
+- Tests cover conflicting PR ownership after a successful POST, a post-write
+  HTTP 429, delayed inventory visibility and real Git drift during the final
+  inventory. The existing SIGKILL/restart tests still prohibit a second POST.
+
+This narrows the inventory-to-write race; it does **not** make GitHub's PR
+inventory transactional. Independent security review, target-host crash tests,
+least-privilege credential validation and explicit production activation
+remain required. Production remote writes are still disabled.
