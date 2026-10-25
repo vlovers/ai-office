@@ -168,7 +168,15 @@ describe('multi-process durable Git transfer crash boundaries', () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const replay = spawnSync(
           process.execPath,
-          ['--import', 'tsx', '--input-type=module', '-e', script, t.dbPath, JSON.stringify(t.identity)],
+          [
+            '--import',
+            'tsx',
+            '--input-type=module',
+            '-e',
+            script,
+            t.dbPath,
+            JSON.stringify(t.identity),
+          ],
           { encoding: 'utf8', timeout: 5000 },
         );
         expect(replay.status).toBe(42);
