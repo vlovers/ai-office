@@ -2,13 +2,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { format } from 'prettier';
+import { format, resolveConfig } from 'prettier';
 import { it } from 'vitest';
 
 it('temporary formatting diagnostic for Draft PR integration tests', async () => {
   const target = 'tests/delivery-approved-github-publication.test.ts';
   const original = readFileSync(target, 'utf8');
-  const formatted = await format(original, { filepath: target });
+  const formatted = await format(original, { ...(await resolveConfig(target)), filepath: target });
   const root = mkdtempSync(join(tmpdir(), 'delivery-format-diff-'));
   try {
     const expected = join(root, 'expected.ts');
