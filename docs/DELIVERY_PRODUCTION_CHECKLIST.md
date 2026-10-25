@@ -450,3 +450,24 @@ successful retry only after restoring the original reviewed state.
 External Git mutation is not atomically locked; the final pre-POST and
 post-detail attestations remain necessary. Production writes stay disabled
 until independent security review and target-host validation.
+
+## Ambiguous Draft PR managed-head ownership (combined PR #79)
+
+Read-only recovery now applies the same conservative managed-head ownership
+policy as preflight. A single matching open Draft PR is **not** sufficient
+evidence if another open or closed PR uses the reviewed managed head branch,
+even when the other PR targets a different base branch or comes from a fork.
+The full `state=all` inventory must contain exactly one PR using that head
+before the independent PR-detail SHA check can confirm the SQLite receipt.
+
+On conflict, the publication journal stays `uncertain` with no stored PR
+URL. The original one-use approval remains consumed and recovery never sends
+another POST. Operators must investigate all matching-head PRs, including
+closed records, and establish unique ownership using a fresh complete
+inventory; do not delete SQLite rows or manually mark a receipt published.
+Unrelated PRs on other heads do not block legitimate recovery.
+
+Regression coverage includes pure reconciliation for open, closed and forked
+conflicts; SQLite orchestration after an ambiguous POST; and the full
+session-bound GitHub adapter across a second SQLite connection/restart.
+This is defense in depth, not permission to enable remote write credentials.
