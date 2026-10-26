@@ -259,3 +259,14 @@ Created a separate draft PR against current `main` rather than modifying the sta
 
 This is a focused integration follow-up created from current `main`, not a merge or replacement of #272. The PR is draft; tests and CI have not been run on this new head. Keep it unapproved until CI and independent review pass. The older #272 remains blocked until safely reconciled with the newer main history and all workflows are covered.
 
+
+## 2026-10-27 01:00 — Grid Atlas #319 CI failure triage and fix
+
+- Checked [draft PR #319](https://github.com/vlovers/grid-atlas/pull/319), initial head `320c882d5b587adb73435ab1d854eb20f79467c2`, mergeable=true, no submitted GitHub reviews.
+- [Foundation CI run 40414299431](https://github.com/vlovers/grid-atlas/actions/runs/40414299431) **failed**: 349/350 Node tests passed. `tests/commons-original-review-workflow.test.mjs` asserted the old mutable `actions/upload-artifact@v4` string, which correctly disappeared after the pin. The workflow itself passed foundation validation; failure was the outdated test expectation.
+- Fixed the test in PR #319 branch: assert immutable 40-hex action references for checkout/setup-node/upload-artifact, reject `actions/*@vN`, and require checkout `persist-credentials: false`. Fix commit: [`6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e`](https://github.com/vlovers/grid-atlas/commit/6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e).
+- Verified all three pinned SHAs resolve to commits in their official `actions/*` repositories. SHA existence does not by itself prove the version comment matches a release tag; tag-to-commit verification is a separate check.
+- [Foundation CI run 40417012847](https://github.com/vlovers/grid-atlas/actions/runs/40417012847) on the fixed head was **in progress** at this checkpoint. Do not claim green until it completes. Independent review remains outstanding; PR stays draft, no merge.
+
+Next: inspect the completed exact-head CI; if green, check version tag-to-commit mapping and remaining security review. Then proceed to #272 branch reconciliation.
+
