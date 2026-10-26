@@ -36,11 +36,14 @@ unrelated FIFO entries, matching the persisted Dashboard API. Preserve
 session configuration and private execution bindings across restarts.
 A second restart must not mutate blocked workflow versions. After explicit
 cancellation, a third restart must keep the selected Workflow cancelled in
-the live timeline, with no actionable downstream controls. The persistent
+the live timeline, with no actionable downstream controls. The
 "Workflow execution requires manual review after server restart." alert is
-an intentional safety notice, not a transient connection error. Assert that
-this notice remains visible without duplicate transport-error alerts after
-reconnection; do not suppress it just to make a browser test pass.
+an intentional safety notice, not a transient connection error. The current
+browser regression permits that notice and rejects other alerts observed after
+reconnection, but does **not** prove that the notice always appears or that a
+transport error cannot arrive later. Treat persistent notice visibility and
+late asynchronous transport errors as a separate UX acceptance gap; do not
+suppress the notice merely to make a browser test pass.
 
 ## 4. Crash between recovery transactions
 
@@ -87,3 +90,5 @@ Workflow approval does not authorize production delivery.
 - Synthetic browser tests cannot establish real model review quality.
 - The recovery commit-gap test simulates durable SQLite state.
 - Workflow validation does not approve production GitHub writes.
+- Alert inspection is a point-in-time check; deterministic post-reconnect notice
+  visibility and delayed transport-error detection still require UX coverage.
