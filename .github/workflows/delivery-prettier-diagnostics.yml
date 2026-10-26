@@ -1,0 +1,23 @@
+name: Delivery Prettier diagnostics (temporary)
+on:
+  pull_request:
+    paths:
+      - tests/delivery-github-ref-attestation.test.ts
+      - .github/workflows/delivery-prettier-diagnostics.yml
+permissions:
+  contents: read
+jobs:
+  formatting-diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Show exact Prettier diff (read-only)
+        run: |
+          npx prettier tests/delivery-github-ref-attestation.test.ts > /tmp/delivery-prettier-output.ts
+          diff -u tests/delivery-github-ref-attestation.test.ts /tmp/delivery-prettier-output.ts || true
