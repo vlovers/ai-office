@@ -600,6 +600,119 @@ if (process.argv.includes('--restart-server')) {
       timeout: 20000,
     });
     await expect(createWorkflow).toBeEnabled();
+    // A pending Dashboard response must not prevent Pause/Resume from
+    // starting a new polling generation. The old response is released only
+    // after a fresh post-resume response has been observed.
+    let releasePausedPoll: (() => void) | undefined;
+    let markPausedPollStarted: (() => void) | undefined;
+    const pausedPollStarted = new Promise<void>((resolve) => {
+      markPausedPollStarted = resolve;
+    });
+    const pausedPollGate = new Promise<void>((resolve) => {
+      releasePausedPoll = resolve;
+    });
+    let holdPausedPoll = true;
+    await page.route(dashboardUrl, async (route) => {
+      if (holdPausedPoll) {
+        holdPausedPoll = false;
+        markPausedPollStarted?.();
+        await pausedPollGate;
+      }
+      await route.continue();
+    });
+    try {
+      await Promise.race([
+        pausedPollStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Paused polling request never started')), 10000),
+        ),
+      ]);
+      await board.getByRole('button', { name: 'Pause live updates' }).click();
+      await expect(createWorkflow).toBeDisabled();
+      const resumedResponse = page.waitForResponse(
+        (response) => response.url() === dashboardUrl && response.ok(),
+        { timeout: 10000 },
+      );
+      await board.getByRole('button', { name: 'Resume live updates' }).click();
+      await resumedResponse;
+      await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+    } finally {
+      releasePausedPoll?.();
+      await page.unroute(dashboardUrl);
+    }
+    await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+
+    // A response slower than the 3s polling interval must not starve the UI.
+    // While that poll is pending, an explicit refresh must supersede it.
+    let releaseSlowPoll: (() => void) | undefined;
+    let markSlowPollStarted: (() => void) | undefined;
+    const slowPollStarted = new Promise<void>((resolve) => {
+      markSlowPollStarted = resolve;
+    });
+    const slowPollGate = new Promise<void>((resolve) => {
+      releaseSlowPoll = resolve;
+    });
+    let delayOnce = true;
+    let dashboardRequests = 0;
+    await page.route(dashboardUrl, async (route) => {
+      dashboardRequests++;
+      if (delayOnce) {
+        delayOnce = false;
+        markSlowPollStarted?.();
+        await slowPollGate;
+        // An old failed response must not replace a newer successful refresh.
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Obsolete delayed dashboard failure' }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+    let staleFailure: Promise<unknown> | undefined;
+    try {
+      await Promise.race([
+        slowPollStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Slow polling request never started')), 10000),
+        ),
+      ]);
+      // Let the next interval tick while the first response is deliberately held.
+      await page.waitForTimeout(3500);
+      assert.equal(dashboardRequests, 1, 'Periodic polling must not overlap a slow request');
+      const freshResponse = page.waitForResponse(
+        (response) => response.url() === dashboardUrl && response.ok(),
+        { timeout: 10000 },
+      );
+      await board.getByRole('button', { name: 'Refresh workflow' }).click();
+      await freshResponse;
+      assert.equal(
+        dashboardRequests,
+        2,
+        'Explicit refresh must bypass the held poll with exactly one fresh Dashboard request',
+      );
+      await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
+        timeout: 10000,
+      });
+      await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+      // Register before releasing the held request to avoid missing the 503.
+      staleFailure = page.waitForResponse(
+        (response) => response.url() === dashboardUrl && response.status() === 503,
+        { timeout: 10000 },
+      );
+    } finally {
+      releaseSlowPoll?.();
+      await page.unroute(dashboardUrl);
+    }
+    await staleFailure;
+    // Once the delayed request completes, its obsolete epoch must not undo
+    // the successful operator refresh or leave controls stuck in a stale state.
+    await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await expect(
+      board.getByRole('alert').filter({ hasText: 'Obsolete delayed dashboard failure' }),
+    ).toHaveCount(0);
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {

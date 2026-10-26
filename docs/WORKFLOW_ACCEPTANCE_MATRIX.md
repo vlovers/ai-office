@@ -51,11 +51,29 @@ Dashboard response must also invalidate previously selected Coder tasks and
 Reviewer/QA profiles that are no longer eligible; the creation button must
 remain disabled rather than submitting stale React form state. The process
 restart browser regression injects filtered Dashboard snapshots to exercise
-missing Coder and Reviewer choices. This does
-**not** prove that the persistent
+missing Coder and Reviewer choices. A stacked Draft regression in PR #93
+also holds a Dashboard response beyond the 3-second polling interval, asserts
+that no second periodic Dashboard request overlaps it, and verifies that an
+explicit operator refresh issues exactly one fresh Dashboard request (not two
+reads through the mutation helper). A second
+browser scenario pauses and resumes while a prior Dashboard response remains
+held, requiring a successful new-generation response before controls unlock;
+releasing the old response must not revoke that recovered state. These
+regressions require a successful candidate-specific CI run before merge.
+Marking PR #93 ready for review is not evidence. This does **not** prove that the persistent
 manual-review notice always appears or that arbitrary delayed failures cannot
 arrive after the observation window. Treat those as separate UX acceptance
 gaps; do not suppress the notice merely to make a browser test pass.
+
+## Stacked PR CI routing
+
+`.github/workflows/validation.yml` validates pull requests targeting `main`
+and `test/**` integration branches, plus pushes to `main`. PR #93 targets
+PR #77's `test/workflow-restart-stage-matrix-20261025` branch; it must
+receive its **own** successful Actions run on the exact candidate HEAD.
+A green PR #77 run does not validate PR #93's additional polling code.
+The workflow also supports manual `workflow_dispatch` when a rerun is
+needed. Keep GitHub writes and live model calls disabled during CI.
 
 ## 4. Crash between recovery transactions
 
