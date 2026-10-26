@@ -43,9 +43,9 @@ production remote write route is activated.
 
 ### GitHub ref and Draft-write deadline hardening (2026-10-26)
 
-Both exact GitHub commit-ref GETs now share **one monotonic attestation
+The three exact GitHub commit-ref GETs now share **one monotonic attestation
 budget** (15 seconds by default, configurable 100–60,000 ms). A slow head
-lookup cannot silently renew the entire budget for the base lookup. An
+or base lookup cannot silently renew the budget for a later GET. An
 expired budget, stale ref, abort or malformed response blocks attestation;
 it never authorizes a push or Draft PR POST. Read-only reconciliation
 retains its separate outer deadline and shared Git lease.
