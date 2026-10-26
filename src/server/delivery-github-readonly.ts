@@ -176,71 +176,75 @@ export async function listAllGitHubPullRequests(
     return remaining;
   };
   const fetcher: Fetcher = options.fetcher ?? globalThis.fetch;
-  const inventory = await collectRemotePullRequests(async (page) => {
-    // Never renew the full timeout for every page while holding the Git lease.
-    // An incomplete inventory must never authorize a Draft PR POST.
-    const remaining = assertBudget();
-    const url = new URL(`https://api.github.com/repos/${match[1]}/${match[2]}/pulls`);
-    url.searchParams.set('state', 'all');
-    url.searchParams.set('per_page', String(perPage));
-    url.searchParams.set('page', String(page));
-    const headers: Record<string, string> = {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-    };
-    if (options.token) headers.Authorization = `Bearer ${options.token}`;
-    const { response, payload } = await withGitHubRequestDeadline(
-      async (signal) => {
-        const response = await fetcher(url.toString(), {
-          method: 'GET',
-          redirect: 'error',
-          headers,
-          signal,
-        });
-        if (response.redirected || (response.url && response.url !== url.toString())) {
-          throw new Error('GitHub PR listing redirected outside the approved request.');
-        }
-        if (response.status !== 200) {
-          // Never include response body or credential in thrown errors.
-          throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
-        }
-        return {
-          response,
-          payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing),
-        };
-      },
-      { signal: options.signal, timeoutMs: Math.min(options.timeoutMs ?? 15_000, remaining) },
-    );
-    if (!Array.isArray(payload) || payload.length > perPage) {
-      throw new Error('Invalid GitHub PR listing page.');
-    }
-    // GitHub's repository PR endpoint must return canonical URLs and base
-    // repository identities for that same destination. An inconsistent page
-    // cannot be treated as a complete negative duplicate check.
-    const repositoryName = `${match[1]}/${match[2]}`;
-    const canonicalPrefix = `${plan.destination}/pull/`;
-    const candidates = payload.map((value) => {
-      const candidate = parseGitHubPullRequest(value);
-      if (
-        !candidate.html_url.startsWith(canonicalPrefix) ||
-        !/^[1-9][0-9]*$/.test(candidate.html_url.slice(canonicalPrefix.length)) ||
-        candidate.base.repo?.full_name !== repositoryName
-      ) {
-        throw new Error('GitHub PR inventory contains a foreign or noncanonical PR identity.');
+  const inventory = await collectRemotePullRequests(
+    async (page) => {
+      // Never renew the full timeout for every page while holding the Git lease.
+      // An incomplete inventory must never authorize a Draft PR POST.
+      const remaining = assertBudget();
+      const url = new URL(`https://api.github.com/repos/${match[1]}/${match[2]}/pulls`);
+      url.searchParams.set('state', 'all');
+      url.searchParams.set('per_page', String(perPage));
+      url.searchParams.set('page', String(page));
+      const headers: Record<string, string> = {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      };
+      if (options.token) headers.Authorization = `Bearer ${options.token}`;
+      const { response, payload } = await withGitHubRequestDeadline(
+        async (signal) => {
+          const response = await fetcher(url.toString(), {
+            method: 'GET',
+            redirect: 'error',
+            headers,
+            signal,
+          });
+          if (response.redirected || (response.url && response.url !== url.toString())) {
+            throw new Error('GitHub PR listing redirected outside the approved request.');
+          }
+          if (response.status !== 200) {
+            // Never include response body or credential in thrown errors.
+            throw new Error(`GitHub PR listing failed with HTTP ${response.status}.`);
+          }
+          return {
+            response,
+            payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing),
+          };
+        },
+        { signal: options.signal, timeoutMs: Math.min(options.timeoutMs ?? 15_000, remaining) },
+      );
+      if (!Array.isArray(payload) || payload.length > perPage) {
+        throw new Error('Invalid GitHub PR listing page.');
       }
-      return candidate;
-    });
-    assertBudget();
-    return {
-      candidates,
-      nextPage: nextGitHubPage(
-        response.headers.get('link'),
-        url,
-        page,
-        candidates.length === perPage,
-      ),
-    };
-  }, options.maxPages, true);
+      // GitHub's repository PR endpoint must return canonical URLs and base
+      // repository identities for that same destination. An inconsistent page
+      // cannot be treated as a complete negative duplicate check.
+      const repositoryName = `${match[1]}/${match[2]}`;
+      const canonicalPrefix = `${plan.destination}/pull/`;
+      const candidates = payload.map((value) => {
+        const candidate = parseGitHubPullRequest(value);
+        if (
+          !candidate.html_url.startsWith(canonicalPrefix) ||
+          !/^[1-9][0-9]*$/.test(candidate.html_url.slice(canonicalPrefix.length)) ||
+          candidate.base.repo?.full_name !== repositoryName
+        ) {
+          throw new Error('GitHub PR inventory contains a foreign or noncanonical PR identity.');
+        }
+        return candidate;
+      });
+      assertBudget();
+      return {
+        candidates,
+        nextPage: nextGitHubPage(
+          response.headers.get('link'),
+          url,
+          page,
+          candidates.length === perPage,
+        ),
+      };
+    },
+    options.maxPages,
+    true,
+  );
   // The same monotonic inventory budget covers both passes. A second-pass
   // failure or changed PR identity is not evidence that the branch is unused.
   assertBudget();
