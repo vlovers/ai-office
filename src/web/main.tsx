@@ -369,8 +369,10 @@ function App() {
     if (id === 'overview') setScreen('office');
     const origin = document.activeElement;
     requestAnimationFrame(() => {
-      // A later keyboard/pointer action takes precedence over this deferred navigation.
-      if (document.activeElement !== origin) return;
+      // A later keyboard/pointer action takes precedence while its origin remains mounted.
+      // Navigation can unmount the clicked control, moving focus to body; in that case,
+      // continue and focus the destination section instead of abandoning navigation.
+      if (document.activeElement !== origin && origin instanceof HTMLElement && origin.isConnected) return;
       const section = document.getElementById(id);
       section?.focus();
       section?.scrollIntoView({ block: 'start' });
