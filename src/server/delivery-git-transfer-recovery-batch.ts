@@ -156,6 +156,7 @@ export async function recoverUnresolvedGitTransfers(
       continue;
     }
 
+    let activeSignal: AbortSignal | undefined;
     try {
       // Treat registry results as a runtime trust boundary, not just a TS type.
       // The journal and workspace must match the server-discovered entry.
@@ -165,22 +166,27 @@ export async function recoverUnresolvedGitTransfers(
       // Forward operator cancellation into the read-only in-lease operation.
       // Never race the whole reconciliation against a batch timeout: doing so
       // would release control while a Git lease or journal write is still active.
-      const signal =
+      activeSignal =
         options.signal && context.remote.signal
           ? AbortSignal.any([options.signal, context.remote.signal])
           : (options.signal ?? context.remote.signal);
       const result = await reconcileGitTransferReceipts({
         ...context,
-        remote: { ...context.remote, signal },
+        remote: { ...context.remote, signal: activeSignal },
       });
       outcomes.push({ workspaceId, status: 'reconciled', result });
     } catch {
       // Revoked grants, lock contention and corrupt receipts are fail-closed.
       outcomes.push({ workspaceId, status: 'blocked' });
     }
-    // An aborted in-lease attempt may have left this workspace uncertain.
-    // Report its outcome, but do not advance the resume cursor past it.
-    if (options.signal?.aborted) return stopped('aborted');
+    // A trusted per-workspace cancellation is as final as a batch-level
+    // cancellation. An in-lease failure may leave a durable uncertain intent;
+    // keep the cursor before this workspace so the next sweep can revisit it.
+    if (activeSignal?.aborted || options.signal?.aborted) return stopped('aborted');
+    // The batch budget is soft while the shared lease is held. Once the
+    // reconciliation has settled, stop rather than advancing past a possibly
+    // unresolved workspace when the budget expired during its remote reads.
+    if (remainingBudget() <= 0) return stopped('budget-exhausted');
     lastProcessed = workspaceId;
   }
 
