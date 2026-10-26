@@ -838,6 +838,29 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
+  it('rejects an already-aborted recovery before touching durable intents', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    try {
+      t.journal.begin('commit', t.identity);
+      controller.abort();
+      await expect(
+        reconcileGitTransferReceipts({
+          ...t.context,
+          remote: { fetcher: t.fetcher, signal: controller.signal },
+        }),
+      ).rejects.toThrow('aborted');
+      expect(t.journal.get(t.identity.workspaceId, 'commit')).toMatchObject({
+        state: 'intent',
+        receiptSha: null,
+      });
+      expect(t.fetcher).not.toHaveBeenCalled();
+      expect(t.authorize).toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects a swapped worktree registry binding before touching an intent', async () => {
     const t = setup();
     try {
