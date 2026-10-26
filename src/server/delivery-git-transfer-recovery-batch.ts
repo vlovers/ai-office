@@ -178,6 +178,9 @@ export async function recoverUnresolvedGitTransfers(
       // Revoked grants, lock contention and corrupt receipts are fail-closed.
       outcomes.push({ workspaceId, status: 'blocked' });
     }
+    // An aborted in-lease attempt may have left this workspace uncertain.
+    // Report its outcome, but do not advance the resume cursor past it.
+    if (options.signal?.aborted) return stopped('aborted');
     lastProcessed = workspaceId;
   }
 
