@@ -99,6 +99,17 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     headSha: commits.headCommitSha,
     baseSha: commits.baseCommitSha,
   };
+  const refreshDeadlineMs = context.refreshDeadlineMs ?? 10_000;
+  const refreshBudgetMs = context.refreshBudgetMs ?? 60_000;
+  for (const [name, value] of [
+    ['deadline', refreshDeadlineMs],
+    ['budget', refreshBudgetMs],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 100 || value > 60_000) {
+      throw new Error(`Invalid trusted delivery registry refresh ${name}.`);
+    }
+  }
+  const refreshStartedAt = performance.now();
   // The trusted registry may change while an asynchronous GitHub GET is in
   // flight. Compare the entire reviewed workspace, not just the operation key,
   // after each remote attestation and before a reserved Draft PR POST.
@@ -148,17 +159,6 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       if (onAbort) write.signal?.removeEventListener('abort', onAbort);
     }
   };
-  const refreshDeadlineMs = context.refreshDeadlineMs ?? 10_000;
-  const refreshBudgetMs = context.refreshBudgetMs ?? 60_000;
-  for (const [name, value] of [
-    ['deadline', refreshDeadlineMs],
-    ['budget', refreshBudgetMs],
-  ] as const) {
-    if (!Number.isSafeInteger(value) || value < 100 || value > 60_000) {
-      throw new Error(`Invalid trusted delivery registry refresh ${name}.`);
-    }
-  }
-  const refreshStartedAt = performance.now();
   const repository = plan.destination.slice('https://github.com/'.length);
   return createApprovedDraftPublication({
     db: context.sessions.db,
