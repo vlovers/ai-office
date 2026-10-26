@@ -174,6 +174,16 @@ export function WorkflowBoard({
       pollingInFlight.current = false;
     };
   }, [refresh, paused]);
+  async function refreshNow() {
+    // A manual read is not a mutation: do not invoke mutate(), which would
+    // run the supplied refresh and then issue a second forced refresh.
+    setLoading(true);
+    try {
+      await refresh(true);
+    } finally {
+      setLoading(false);
+    }
+  }
   async function mutate(operation: () => Promise<unknown>) {
     setLoading(true);
     setError('');
@@ -270,7 +280,7 @@ export function WorkflowBoard({
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
         )}
-        <button className="secondary" disabled={loading} onClick={() => void mutate(() => refresh(true))}>
+        <button className="secondary" disabled={loading} onClick={() => void refreshNow()}>
           Refresh workflow
         </button>
       </div>
