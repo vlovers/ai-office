@@ -685,6 +685,7 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.journal.confirmVerified('commit', owner, owner.headSha);
       t.journal.begin('push', owner);
       t.journal.begin('commit', t.identity('b'));
+      const original = t.fetcher.getMockImplementation()!;
       t.fetcher.mockImplementation(async () => new Promise<Response>(() => undefined));
       const attempt = recoverUnresolvedGitTransfers(
         t.journal,
@@ -695,7 +696,7 @@ describe('bounded Git transfer recovery across workspaces', () => {
       controller.abort();
       const stopped = await attempt;
       expect(stopped).toMatchObject({
-        nextCursor: 'a',
+        nextCursor: null,
         hasMore: true,
         stopReason: 'aborted',
         outcomes: [
@@ -710,13 +711,16 @@ describe('bounded Git transfer recovery across workspaces', () => {
       expect(t.journal.get('a', 'push')?.receiptSha).toBeNull();
       expect(t.journal.get('b', 'commit')?.state).toBe('intent');
       expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+      t.fetcher.mockImplementation(original);
       const resumed = await recoverUnresolvedGitTransfers(
         t.journal,
         async (id) => t.contextFor(id),
-        { afterWorkspaceId: stopped.nextCursor! },
+        { afterWorkspaceId: stopped.nextCursor ?? undefined },
       );
-      expect(resumed.outcomes.map((item) => item.workspaceId)).toEqual(['b']);
+      expect(resumed.outcomes.map((item) => item.workspaceId)).toEqual(['a', 'b']);
+      expect(t.journal.get('a', 'push')?.state).toBe('confirmed');
       expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
     } finally {
       t.close();
     }
