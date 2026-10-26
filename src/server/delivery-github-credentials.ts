@@ -57,6 +57,27 @@ export class DeliveryGitHubCredentials {
   ): Fetcher {
     if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(repository) || /\/(?:\.|\.\.)$/.test(repository))
       throw new DeliverySecurityError(503);
+    // A trusted registry supplies the ref allowlist, but validate it at this
+    // credential boundary too. A malformed ref must not become an approved
+    // endpoint through URL normalization or segment encoding.
+    if (
+      !Array.isArray(branches) ||
+      branches.length < 1 ||
+      branches.length > 16 ||
+      branches.some(
+        (branch) =>
+          typeof branch !== 'string' ||
+          branch.length > 200 ||
+          !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch) ||
+          branch.includes('..') ||
+          branch.includes('//') ||
+          branch.endsWith('/') ||
+          branch.endsWith('.') ||
+          branch.endsWith('.lock'),
+      )
+    ) {
+      throw new DeliverySecurityError(503);
+    }
     const prefix = `https://api.github.com/repos/${repository}`;
     const refs = branches.map(
       (branch) => `${prefix}/git/ref/heads/${branch.split('/').map(encodeURIComponent).join('/')}`,
@@ -71,7 +92,12 @@ export class DeliveryGitHubCredentials {
               url.searchParams.get('state') === 'all' &&
               /^[1-9]\d{0,3}$/.test(url.searchParams.get('page') ?? '') &&
               /^(?:[1-9]\d?|100)$/.test(url.searchParams.get('per_page') ?? '') &&
-              [...url.searchParams.keys()].sort().join(',') === 'page,per_page,state';
+              [...url.searchParams.keys()].sort().join(',') === 'page,per_page,state' &&
+              // Only canonical URLs may reach the credential provider. URL
+              // normalization can hide dot segments, default ports, encoded
+              // query aliases and case changes from pathname/query checks.
+              input === url.href &&
+              url.search.slice(1) === url.searchParams.toString();
             const detailPrefix = `${prefix}/pulls/`;
             const pullDetail =
               input.startsWith(detailPrefix) &&
