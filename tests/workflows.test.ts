@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
-import { sandbox } from './helpers.js';
+import { sandbox, until } from './helpers.js';
 import { TaskManager } from '../src/server/manager.js';
 
 it('pins stages, requires explicit approval and survives restarts', async () => {
@@ -677,6 +677,96 @@ it('a fresh TaskManager cannot dispatch a workflow queue left by a crashed proce
     expect(restarted.queue()).toEqual([]);
   } finally {
     if (manager) await manager.shutdown();
+    restarted?.close();
+    await env.cleanup();
+  }
+});
+
+it('dispatches only unrelated queued work after restart when Codex auth is available', async () => {
+  const env = await sandbox();
+  let restarted: Store | undefined;
+  let manager: TaskManager | undefined;
+  try {
+    const repo = env.store.register({
+      path: env.repository,
+      gitDir: join(env.repository, '.git'),
+      name: 'authenticated restart fixture',
+    });
+    const coder = env.store.agent('codex-1')!;
+    const workflows = new WorkflowStore(env.store.db);
+    const baseline = 'a'.repeat(40);
+    const created = workflows.create({
+      repositoryId: repo.id,
+      baselineRevision: baseline,
+      stages: [
+        { kind: 'coder', agentId: coder.id, agentRevision: coder.revision, mode: 'write' },
+        {
+          kind: 'reviewer',
+          agentId: 'codex-2',
+          agentRevision: env.store.agent('codex-2')!.revision,
+          mode: 'read-only',
+        },
+      ],
+    });
+    const approved = workflows.transition(created.id, created.version, {
+      type: 'approve',
+      revision: baseline,
+    });
+    const workflowTask = env.store.createTask({
+      repositoryId: repo.id,
+      agentId: coder.id,
+      title: 'Privileged workflow must not replay',
+      prompt: 'WRITE_FIXTURE',
+      executionMode: 'write',
+    });
+    const bound = workflows.bindApprovedTask(created.id, approved.version, workflowTask.id);
+    workflows.enqueueApprovedTask(
+      env.store,
+      created.id,
+      bound.version,
+      workflowTask.id,
+      'local-cli-chatgpt',
+      baseline,
+    );
+    const ordinary = env.store.createTask({
+      repositoryId: repo.id,
+      agentId: coder.id,
+      title: 'Unrelated task may resume',
+      prompt: 'Read-only fixture after restart',
+      executionMode: 'read-only',
+    });
+    env.store.enqueue(ordinary.id, 'local-cli-chatgpt');
+    expect(env.store.queue().map((entry) => entry.taskId)).toEqual([
+      workflowTask.id,
+      ordinary.id,
+    ]);
+
+    // Authentication is available in sandbox(): unlike the browser restart
+    // fixture, this exercises the actual post-listen queue worker with a
+    // disposable CLI transport, without any model inference or GitHub writes.
+    restarted = new Store(join(env.root, 'metadata.sqlite'));
+    manager = new TaskManager(restarted, env.providers, env.auth);
+    expect(env.auth.view().status).toBe('available');
+    expect(restarted.queue().map((entry) => entry.taskId)).toEqual([ordinary.id]);
+    expect(restarted.task(workflowTask.id)?.state).toBe('interrupted');
+    const recovered = new WorkflowStore(restarted.db).get(created.id)!;
+    expect(recovered.state).toBe('blocked');
+    expect(recovered.stages[0]?.state).toBe('interrupted');
+
+    manager.startQueue();
+    await until(
+      () => restarted!.task(ordinary.id)!,
+      (task) => task.state === 'completed',
+    );
+    expect(restarted.queue()).toEqual([]);
+    expect(restarted.task(workflowTask.id)?.state).toBe('interrupted');
+    expect(new WorkflowStore(restarted.db).get(created.id)?.version).toBe(recovered.version);
+    expect(restarted.events(workflowTask.id).some((event) => event.kind === 'thread')).toBe(
+      false,
+    );
+    expect(restarted.task(workflowTask.id)?.sessionId).toBeNull();
+  } finally {
+    await manager?.shutdown();
     restarted?.close();
     await env.cleanup();
   }
