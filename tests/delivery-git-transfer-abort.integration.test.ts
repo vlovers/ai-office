@@ -209,7 +209,7 @@ describe('abort-safe read-only Git transfer reconciliation', () => {
         },
       });
       expect(refreshes).toBe(3);
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
       expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
       expect(t.journal.get(t.identity.workspaceId, 'commit')?.state).toBe('confirmed');
       expect(t.journal.get(t.identity.workspaceId, 'push')?.state).toBe('uncertain');
