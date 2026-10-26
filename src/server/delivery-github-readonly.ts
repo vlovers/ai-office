@@ -240,7 +240,9 @@ export async function listAllGitHubPullRequests(
         candidates.length === perPage,
       ),
     };
-  }, options.maxPages);
+  }, options.maxPages, true);
+  // The same monotonic inventory budget covers both passes. A second-pass
+  // failure or changed PR identity is not evidence that the branch is unused.
   assertBudget();
   return inventory;
 }
