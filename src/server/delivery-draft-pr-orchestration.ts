@@ -51,23 +51,32 @@ export type DraftPublicationContext = {
 function isValidCompleteInventory(
   inventory: CompleteRemotePrInventory,
 ): inventory is Extract<CompleteRemotePrInventory, { complete: true }> {
-  return (
-    inventory?.complete === true &&
-    Array.isArray(inventory.candidates) &&
-    inventory.candidates.length <= 100_000 &&
-    inventory.candidates.every(
-      (candidate) =>
-        candidate !== null &&
-        typeof candidate === 'object' &&
-        typeof candidate.html_url === 'string' &&
-        typeof candidate.draft === 'boolean' &&
-        typeof candidate.state === 'string' &&
-        typeof candidate.head?.ref === 'string' &&
-        typeof candidate.base?.ref === 'string' &&
-        (candidate.head.repo === null || typeof candidate.head.repo?.full_name === 'string') &&
-        (candidate.base.repo === null || typeof candidate.base.repo?.full_name === 'string'),
-    )
-  );
+  if (
+    inventory?.complete !== true ||
+    !Array.isArray(inventory.candidates) ||
+    inventory.candidates.length > 100_000
+  ) {
+    return false;
+  }
+  const seenUrls = new Set<string>();
+  for (const candidate of inventory.candidates) {
+    if (
+      candidate === null ||
+      typeof candidate !== 'object' ||
+      typeof candidate.html_url !== 'string' ||
+      seenUrls.has(candidate.html_url) ||
+      typeof candidate.draft !== 'boolean' ||
+      typeof candidate.state !== 'string' ||
+      typeof candidate.head?.ref !== 'string' ||
+      typeof candidate.base?.ref !== 'string' ||
+      (candidate.head.repo !== null && typeof candidate.head.repo?.full_name !== 'string') ||
+      (candidate.base.repo !== null && typeof candidate.base.repo?.full_name !== 'string')
+    ) {
+      return false;
+    }
+    seenUrls.add(candidate.html_url);
+  }
+  return true;
 }
 
 /**
