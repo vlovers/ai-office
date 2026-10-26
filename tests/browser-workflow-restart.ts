@@ -493,6 +493,19 @@ if (process.argv.includes('--restart-server')) {
     const createWorkflow = board.getByRole('button', { name: 'Create gated workflow' });
     await expect(createWorkflow).toBeEnabled();
 
+    // Paused polling must not leave privileged controls actionable on a stale
+    // snapshot. Resuming must first fetch a fresh successful checkpoint.
+    await board.getByRole('button', { name: 'Pause live updates' }).click();
+    await expect(
+      board.getByText('Live updates are paused. Resume and refresh before changing workflows.'),
+    ).toBeVisible();
+    await expect(createWorkflow).toBeDisabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
+    await board.getByRole('button', { name: 'Resume live updates' }).click();
+    await expect(createWorkflow).toBeEnabled({ timeout: 20000 });
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
+
     // Exercise an actual browser-visible transport failure after a successful
     // reconnect. Persisted state may remain visible, but stale operator actions
     // must not be executable until the next successful timeline refresh.
