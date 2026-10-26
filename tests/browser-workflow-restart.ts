@@ -670,6 +670,7 @@ if (process.argv.includes('--restart-server')) {
       }
       await route.continue();
     });
+    let staleFailure: Promise<unknown> | undefined;
     try {
       await Promise.race([
         slowPollStarted,
@@ -691,17 +692,16 @@ if (process.argv.includes('--restart-server')) {
         timeout: 10000,
       });
       await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
-    } finally {
-      // Observe the deliberately failed stale response before asserting UI
-      // state; otherwise the assertion can pass before the failure arrives.
-      const staleFailure = page.waitForResponse(
+      // Register before releasing the held request to avoid missing the 503.
+      staleFailure = page.waitForResponse(
         (response) => response.url() === dashboardUrl && response.status() === 503,
         { timeout: 10000 },
       );
+    } finally {
       releaseSlowPoll?.();
-      await staleFailure;
       await page.unroute(dashboardUrl);
     }
+    await staleFailure;
     // Once the delayed request completes, its obsolete epoch must not undo
     // the successful operator refresh or leave controls stuck in a stale state.
     await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
