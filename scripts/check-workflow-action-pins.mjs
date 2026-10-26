@@ -159,19 +159,17 @@ function hasCompositeRunBlock(source) {
   const lines = source.split(/\r?\n/);
   const runs = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (/^runs\s*:\s*(?:#.*)?$/.test(line)) runs.push(index);
+    if (/^runs\s*:\s*(?:#.*)?$/.test(lines[index])) runs.push(index);
   }
   if (runs.length !== 1) return false;
-  const start = runs[0];
   let using = 0;
   let steps = 0;
-  for (let index = start + 1; index < lines.length; index += 1) {
+  for (let index = runs[0] + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line.trim() || /^\s*#/.test(line)) continue;
-    const indent = indentation(line);
-    if (indent === 0) break;
-    if (indent !== 2) continue;
+    const depth = indentation(line);
+    if (depth === 0) break;
+    if (depth !== 2) continue;
     if (/^\s{2}using\s*:\s*composite\s*(?:#.*)?$/.test(line)) using++;
     if (/^\s{2}steps\s*:\s*(?:#.*)?$/.test(line)) steps++;
   }
