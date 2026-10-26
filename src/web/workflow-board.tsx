@@ -213,6 +213,11 @@ export function WorkflowBoard({
     dashboard?.profiles?.filter(
       (profile) => !profile.archived && profile.maximumMode === 'read-only',
     ) ?? [];
+  // A polling refresh can invalidate an already-selected task or profile.
+  // Never submit stale form values just because their IDs remain in React state.
+  const selectedCoder = unsubmitted.find((task) => task.id === coderTask);
+  const selectedReviewer = profiles.some((profile) => profile.id === reviewer);
+  const selectedQA = !qa || profiles.some((profile) => profile.id === qa);
   async function perform() {
     if (!action || !confirmed || staleAction || paused || refreshRequired || error) return;
     const body: Record<string, unknown> = { version: action.version, confirmed: true };
@@ -315,13 +320,15 @@ export function WorkflowBoard({
             </select>
           </label>
           <button
-            disabled={mutationUnavailable || !coderTask || !reviewer}
+            disabled={
+              mutationUnavailable || !selectedCoder || !selectedReviewer || !selectedQA
+            }
             onClick={() =>
               void mutate(async () => {
-                const task = dashboard!.tasks.find((item) => item.id === coderTask)!;
+                if (!selectedCoder || !selectedReviewer || !selectedQA) return;
                 const created = await request<Summary>('/workflows', {
-                  repositoryId: task.repositoryId,
-                  coderAgentId: task.agentId,
+                  repositoryId: selectedCoder.repositoryId,
+                  coderAgentId: selectedCoder.agentId,
                   reviewerAgentId: reviewer,
                   ...(qa ? { qaAgentId: qa } : {}),
                 });
