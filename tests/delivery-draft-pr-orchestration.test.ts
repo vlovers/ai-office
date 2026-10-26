@@ -42,6 +42,7 @@ function setup() {
     candidates: [],
   }));
   const verifySnapshot = vi.fn(async () => {});
+  const verifyRemoteReceipt = vi.fn(async () => {});
   const context = {
     workspaceId: 'workspace-1',
     repository,
@@ -50,6 +51,7 @@ function setup() {
     initialPlan: plan,
     refreshPlan: async () => plan,
     verifySnapshot,
+    verifyRemoteReceipt,
     listRemote,
     createDraft,
   };
@@ -60,6 +62,7 @@ function setup() {
     createDraft,
     listRemote,
     verifySnapshot,
+    verifyRemoteReceipt,
     close: () => {
       db.close();
       rmSync(root, { recursive: true, force: true });
@@ -68,6 +71,99 @@ function setup() {
 }
 
 describe('Draft PR publication orchestration', () => {
+  it('rejects a list-only receipt verifier before acquiring a lease or reserving a write', async () => {
+    const t = setup();
+    try {
+      await expect(
+        createDraftPublication({
+          ...t.context,
+          verifyRemoteReceipt: undefined,
+        } as unknown as Parameters<typeof createDraftPublication>[0]),
+      ).rejects.toThrow('Independent GitHub PR detail verification is required');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.listRemote).not.toHaveBeenCalled();
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps a successful POST uncertain when the reviewed plan changes during detail GET', async () => {
+    const t = setup();
+    try {
+      let revision = plan.revision;
+      t.verifyRemoteReceipt.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+      });
+      const context = {
+        ...t.context,
+        refreshPlan: async () => ({ ...plan, revision }),
+      };
+      const result = await createDraftPublication(context);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      revision = plan.revision;
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      expect(t.verifyRemoteReceipt).toHaveBeenCalledTimes(2);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rechecks the reviewed plan after recovery detail GET before confirming SQLite', async () => {
+    const t = setup();
+    try {
+      let revision = plan.revision;
+      t.createDraft.mockRejectedValueOnce(new Error('remote response lost'));
+      const context = {
+        ...t.context,
+        refreshPlan: async () => ({ ...plan, revision }),
+      };
+      expect((await createDraftPublication(context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValue({ complete: true, candidates: [receipt] });
+      t.verifyRemoteReceipt.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+      });
+      expect((await createDraftPublication(context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      revision = plan.revision;
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('refuses stale receipt reuse after detail GET without rewriting a published row', async () => {
+    const t = setup();
+    try {
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      let revision = plan.revision;
+      t.verifyRemoteReceipt.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+      });
+      await expect(
+        createDraftPublication({
+          ...t.context,
+          refreshPlan: async () => ({ ...plan, revision }),
+        }),
+      ).rejects.toThrow('Publication snapshot changed before durable receipt confirmation');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'published',
+        pullRequestUrl: receipt.html_url,
+      });
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('integrates a real one-use SQLite approval with the draft orchestrator', async () => {
     const t = setup();
     try {
@@ -389,6 +485,7 @@ describe('Draft PR publication orchestration', () => {
       initialPlan: plan,
       refreshPlan: async () => plan,
       verifySnapshot: async () => {},
+      verifyRemoteReceipt: async () => {},
       listRemote: async (): Promise<CompleteRemotePrInventory> => ({
         complete: true,
         candidates: [],
