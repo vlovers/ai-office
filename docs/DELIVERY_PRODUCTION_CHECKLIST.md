@@ -735,3 +735,25 @@ run live disposable-repository concurrency tests, independently review the
 remaining remote publication race and decide whether additional
 server-side repository policy or an external coordination mechanism is
 required. Production writes remain disabled.
+
+### Multi-page GitHub PR inventory consistency (PR #79)
+
+The production-bound read-only GitHub inventory now performs a **second
+complete traversal whenever the first traversal spans multiple pages**.
+It compares the ordered PR URLs, draft/open state, head/base branches and
+repository identities from both traversals. A page shift, changed PR state,
+second-pass 403/429/5xx, invalid Link header, timeout, cancellation or
+incomplete page rejects the entire inventory. No partial result is returned
+as evidence that a managed head is unused. Both traversals share the same
+monotonic inventory deadline and per-request bounds; the second pass never
+renews the budget.
+
+This closes an observable offset-pagination drift gap: an insertion or
+deletion can shift a PR between pages without producing a duplicate within
+either pass. Two matching traversals still **do not constitute an atomic
+GitHub snapshot**. The shared Git lease, final local/registry checks,
+head/base/head ref attestation, durable one-attempt journal reservation,
+post-POST ownership inventory and independent detail GET remain mandatory.
+If the repository is too large or too active to verify consistently within
+the deadline, fail closed and require operator investigation rather than
+skipping pages or retrying a remote POST.
