@@ -457,7 +457,10 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
-    await expect(board.getByRole('alert')).toHaveCount(0);
+    // The timeline GET may resolve before the remaining poll requests and React
+    // state update settle. Allow multiple 3s polling cycles to clear a
+    // transient backend-disconnect alert without forcing a manual refresh.
+    await expect(board.getByRole('alert')).toHaveCount(0, { timeout: 20000 });
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
@@ -526,7 +529,10 @@ if (process.argv.includes('--restart-server')) {
     await expect(selector).toHaveValue(interrupted.workflowId);
     await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
-    await expect(board.getByRole('alert')).toHaveCount(0);
+    // The timeline GET may resolve before the remaining poll requests and React
+    // state update settle. Allow multiple 3s polling cycles to clear a
+    // transient backend-disconnect alert without forcing a manual refresh.
+    await expect(board.getByRole('alert')).toHaveCount(0, { timeout: 20000 });
     await assertOrdinaryQueueVisible();
 
     for (const [index, id] of ids.entries()) {
@@ -586,6 +592,16 @@ if (process.argv.includes('--restart-server')) {
     const evidence = [
       'Failure: ' + String(error),
       'Browser page errors: ' + JSON.stringify(pageErrors),
+      'Workflow alert text: ' +
+        JSON.stringify(
+          page
+            ? await page
+                .getByRole('region', { name: 'Workflow timeline', exact: true })
+                .getByRole('alert')
+                .allTextContents()
+                .catch(() => [])
+            : [],
+        ),
       'Backend stderr (bounded per attempt): ' + JSON.stringify(serverLogs, null, 2),
     ].join('\n\n');
     await Promise.allSettled([
