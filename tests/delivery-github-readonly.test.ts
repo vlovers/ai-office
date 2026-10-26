@@ -336,7 +336,7 @@ describe('read-only GitHub PR discovery', () => {
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
     const fetcher = vi.fn(async (url: string) => {
       const page = Number(new URL(url).searchParams.get('page'));
-      elapsed = page === 1 ? 20 : 40;
+      elapsed += 20;
       return json(page === 1 ? [candidate] : []);
     });
     try {
