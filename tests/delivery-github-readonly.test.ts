@@ -284,6 +284,65 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it('bounds the entire paginated inventory rather than renewing the timeout per page', async () => {
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      expect(init.method).toBe('GET');
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        elapsed = 90;
+        return json([candidate]);
+      }
+      elapsed = 150;
+      return json([]);
+    });
+    try {
+      await expect(
+        listAllGitHubPullRequests(plan, {
+          fetcher,
+          perPage: 1,
+          inventoryDeadlineMs: 200,
+        }),
+      ).rejects.toThrow('inventory deadline exceeded');
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('returns complete multi-page inventory while the total budget remains valid', async () => {
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      elapsed = page === 1 ? 20 : 40;
+      return json(page === 1 ? [candidate] : []);
+    });
+    try {
+      const result = await listAllGitHubPullRequests(plan, {
+        fetcher,
+        perPage: 1,
+        inventoryDeadlineMs: 200,
+      });
+      expect(result.complete).toBe(true);
+      expect(result.candidates).toEqual([candidate]);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('rejects invalid total inventory deadlines before contacting GitHub', async () => {
+    const fetcher = vi.fn();
+    for (const inventoryDeadlineMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
+      await expect(
+        listAllGitHubPullRequests(plan, { fetcher, inventoryDeadlineMs }),
+      ).rejects.toThrow('Invalid GitHub PR inventory deadline');
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('rejects untrusted destinations before any request', async () => {
     const fetcher = vi.fn();
     await expect(
