@@ -41,8 +41,9 @@ the live timeline, with no actionable downstream controls. The
 an intentional safety notice, not a transient connection error. The current
 browser regression permits that notice and rejects other alerts observed after
 reconnection. It also injects a synthetic HTTP 503 during subsequent live
-polling and requires stale Workflow actions to become disabled; after the
-transport recovers, the error must disappear and the controls become available
+polling against both the timeline and Dashboard endpoints and requires stale
+Workflow actions **and the Create gated workflow form** to become disabled;
+after transport recovery, errors must disappear and controls become available
 again without reloading the page. This does **not** prove that the persistent
 manual-review notice always appears or that arbitrary delayed failures cannot
 arrive after the observation window. Treat those as separate UX acceptance
