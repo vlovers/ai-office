@@ -44,7 +44,10 @@ reconnection. It also injects a synthetic HTTP 503 during subsequent live
 polling against both the timeline and Dashboard endpoints and requires stale
 Workflow actions **and the Create gated workflow form** to become disabled;
 after transport recovery, errors must disappear and controls become available
-again without reloading the page. This does **not** prove that the persistent
+again without reloading the page. Pausing live polling must also disable
+Workflow creation, cancellation, and checkpoint mutations; resuming requires a
+fresh successful refresh before these controls become actionable. This does
+**not** prove that the persistent
 manual-review notice always appears or that arbitrary delayed failures cannot
 arrive after the observation window. Treat those as separate UX acceptance
 gaps; do not suppress the notice merely to make a browser test pass.
