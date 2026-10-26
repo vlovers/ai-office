@@ -611,7 +611,9 @@ if (process.argv.includes('--restart-server')) {
       releaseSlowPoll = resolve;
     });
     let delayOnce = true;
+    let dashboardRequests = 0;
     await page.route(dashboardUrl, async (route) => {
+      dashboardRequests++;
       if (delayOnce) {
         delayOnce = false;
         markSlowPollStarted?.();
@@ -628,12 +630,17 @@ if (process.argv.includes('--restart-server')) {
       ]);
       // Let the next interval tick while the first response is deliberately held.
       await page.waitForTimeout(3500);
+      assert.equal(dashboardRequests, 1, 'Periodic polling must not overlap a slow request');
       const freshResponse = page.waitForResponse(
         (response) => response.url() === dashboardUrl && response.ok(),
         { timeout: 10000 },
       );
       await board.getByRole('button', { name: 'Refresh workflow' }).click();
       await freshResponse;
+      assert.ok(dashboardRequests >= 2, 'Explicit refresh must bypass the slow periodic poll');
+      await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
+        timeout: 10000,
+      });
       await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
     } finally {
       releaseSlowPoll?.();
