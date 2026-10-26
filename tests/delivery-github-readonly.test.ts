@@ -143,7 +143,9 @@ describe('read-only GitHub PR discovery', () => {
   it('rejects malformed and truncated responses without returning partial results', async () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = new URL(url).searchParams.get('page');
-      return page === '1' ? json([candidate, candidate]) : json({ incomplete: true });
+      return page === '1'
+        ? json([candidate, { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }])
+        : json({ incomplete: true });
     });
     await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 2 })).rejects.toThrow(
       'Invalid GitHub PR listing page',
@@ -167,7 +169,10 @@ describe('read-only GitHub PR discovery', () => {
   });
 
   it('rejects a listing that cannot be exhausted within the page limit', async () => {
-    const fetcher = vi.fn(async () => json([candidate]));
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      return json([{ ...candidate, html_url: `https://github.com/vlovers/ai-office/pull/${page + 122}` }]);
+    });
     await expect(
       listAllGitHubPullRequests(plan, { fetcher, perPage: 1, maxPages: 2 }),
     ).rejects.toThrow('safe pagination limit');
