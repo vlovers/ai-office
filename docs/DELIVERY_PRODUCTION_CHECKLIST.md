@@ -172,6 +172,23 @@ would release the lease while background journal writes could still execute.
 A timed-out registry resolver may continue running in the background; it must
 remain side-effect-free and must never perform Git, journal or network writes.
 
+The operator-driven sweep also accepts an `AbortSignal` and a monotonic
+`batchBudgetMs` (default 60 seconds, allowed 100 ms–10 minutes). This is a
+**soft budget**, not a promise timeout around a held Git lease. The coordinator
+limits each trusted registry lookup to the smaller of its own timeout and the
+remaining batch budget, rejects late resolver results, and stops starting new
+workspaces when the budget is exhausted. An operator abort interrupts a pending
+registry lookup and propagates to the active read-only GitHub reconciliation,
+which must finish its own lease-protected cleanup before the batch returns.
+
+A stopped batch returns `stopReason` (`aborted` or `budget-exhausted`),
+`hasMore: true`, and `nextCursor` pointing to the **last processed**
+workspace (or the input cursor when none was processed). The workspace whose
+lookup was interrupted is never silently skipped. Resume explicitly from that
+cursor with a new authorized call. A normal completed page reports
+`stopReason: null`; its original keyset cursor semantics remain unchanged.
+No new Git intents, remote writes or automatic retries are permitted.
+
 The coordinator is **not** an automatic startup task or HTTP endpoint.
 A privileged operator must supply a fresh, server-owned registry resolver,
 synchronous authorization, and read-only GitHub credentials. Cursor paging
