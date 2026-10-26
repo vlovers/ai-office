@@ -67,7 +67,6 @@ export async function collectRemotePullRequests(
 
   const first = await collectPass();
   if (verifyStablePages && first.pages > 1) {
-    const second = await collectPass();
     const fingerprint = (candidate: RemoteDraftCandidate): string =>
       JSON.stringify([
         candidate.html_url,
@@ -78,11 +77,15 @@ export async function collectRemotePullRequests(
         candidate.base.ref,
         candidate.base.repo?.full_name,
       ]);
+    // Freeze the first-pass evidence before the second traversal. A mutable
+    // injected adapter must not be able to rewrite both sides of the check.
+    const firstFingerprints = first.candidates.map(fingerprint);
+    const second = await collectPass();
     if (
       first.pages !== second.pages ||
       first.candidates.length !== second.candidates.length ||
-      first.candidates.some(
-        (candidate, index) => fingerprint(candidate) !== fingerprint(second.candidates[index]!),
+      firstFingerprints.some(
+        (value, index) => value !== fingerprint(second.candidates[index]!),
       )
     ) {
       throw new Error('GitHub PR pagination changed during inventory; publication blocked.');
