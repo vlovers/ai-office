@@ -658,6 +658,9 @@ function App() {
                 className="button-link"
                 href="#repositories"
                 onClick={() => {
+                  // Hashchange may run after the next frame. Show Settings immediately
+                  // so the repository input is visible when the focus callback runs.
+                  setScreen('settings');
                   setView('mission');
                   requestAnimationFrame(() => document.getElementById('path')?.focus());
                 }}
