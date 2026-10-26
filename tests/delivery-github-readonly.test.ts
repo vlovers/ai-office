@@ -80,7 +80,10 @@ describe('read-only GitHub PR discovery', () => {
     ['mismatched PR number', { ...candidate, number: 124 }],
     ['string PR number', { ...candidate, number: '123' }],
     ['zero PR number', { ...candidate, number: 0 }],
-    ['noncanonical numeric alias', { ...candidate, number: 123, html_url: 'https://github.com/vlovers/ai-office/pull/0123' }],
+    [
+      'noncanonical numeric alias',
+      { ...candidate, number: 123, html_url: 'https://github.com/vlovers/ai-office/pull/0123' },
+    ],
   ])('rejects inconsistent listing identity: %s', async (_label, malformed) => {
     const fetcher = vi.fn(async () => json([malformed]));
     await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow(
