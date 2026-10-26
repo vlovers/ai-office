@@ -79,7 +79,9 @@ describe('Draft PR publication orchestration', () => {
           ...t.context,
           verifyRemoteReceipt: undefined,
         } as unknown as Parameters<typeof createDraftPublication>[0]),
-      ).rejects.toThrow('Independent GitHub PR detail verification is required');
+      ).rejects.toThrow(
+        'Independent GitHub PR detail verification is required',
+      );
       expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.listRemote).not.toHaveBeenCalled();
       expect(t.createDraft).not.toHaveBeenCalled();
@@ -153,7 +155,9 @@ describe('Draft PR publication orchestration', () => {
           ...t.context,
           refreshPlan: async () => ({ ...plan, revision }),
         }),
-      ).rejects.toThrow('Publication snapshot changed before durable receipt confirmation');
+      ).rejects.toThrow(
+        'Publication snapshot changed before durable receipt confirmation',
+      );
       expect(t.journal.get('workspace-1')).toMatchObject({
         state: 'published',
         pullRequestUrl: receipt.html_url,
