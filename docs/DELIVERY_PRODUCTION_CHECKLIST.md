@@ -616,3 +616,32 @@ integration tests cover both boundaries and safe read-only recovery.
 This deadline is **not** proof of atomic GitHub inventory or permission to
 retry an ambiguous remote write. Real-host timing, network failure injection,
 credential scoping, independent review and manual activation remain required.
+
+## Bounded trusted registry refresh under Git lease (integration PR #79)
+
+The session-bound Draft PR executor now bounds every asynchronous trusted
+workspace registry refresh to 10 seconds by default (`refreshDeadlineMs`,
+100–60,000 ms), with a separate 60-second monotonic attempt-wide budget
+(`refreshBudgetMs`, 100–60,000 ms). The shared budget is checked before
+each refresh and again after its result; a slow GitHub inventory cannot
+silently renew the registry budget. Cancellation is observed independently
+of a non-cooperating registry resolver. Timed-out, cancelled or late resolver
+results are never used to approve a publication transition.
+
+The failure boundary is intentionally asymmetric. Before the atomic
+approval/reservation transaction, a hung registry fails closed with the
+one-use approval intact and no Draft PR POST. After the transaction, the
+durable journal remains `uncertain` even if no POST was sent, because a
+restart cannot infer whether the remote write occurred. After a successful
+POST, a stalled post-write registry verification also leaves the journal
+`uncertain`; subsequent attempts use complete read-only GitHub inventory,
+independent PR detail and reviewed snapshot checks, never another POST.
+
+Integration coverage exercises initial and post-inventory hangs, a hang
+after reservation, a hang after remote acceptance followed by GET-only
+reconciliation, cumulative budget exhaustion, invalid deadline values,
+and cancellation with a late registry result. This does **not** guarantee
+that a non-cooperating resolver stops consuming external resources; it
+guarantees only that its late promise result cannot authorize the GitHub
+write or durable receipt. Native target-host validation and independent
+security review remain required before any production activation.
