@@ -195,7 +195,8 @@ function auditLocalCompositeActions(workflowDirectory, files) {
       // Composite metadata uses the same fail-closed YAML restrictions as workflows.
       // A synthetic permission header lets us reuse the syntax and uses scanner.
       const metadataFindings = auditWorkflowText('permissions:\n  contents: read\n' + content, file);
-      findings.push(...metadataFindings);\n      for (const [index, line] of content.split(/\r?\n/).entries()) {
+      findings.push(...metadataFindings);
+      for (const [index, line] of content.split(/\r?\n/).entries()) {
         const match = USES_DECLARATION.exec(line);
         if (!match) continue;
         const nested = match[1].trim();
