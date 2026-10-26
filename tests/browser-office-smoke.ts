@@ -96,6 +96,13 @@ try {
       page.locator('nav[aria-label="Dashboard sections"] a[aria-current="page"]'),
     ).toHaveCount(1);
   }
+  // A reload must restore the active workspace rather than silently hiding
+  // a running Workflow timeline behind the default Office screen.
+  await navigation.getByRole('link', { name: 'Workflows' }).click();
+  await page.reload();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
+  await expect(page.locator('#workflow-timeline')).toBeVisible();
+  await navigation.getByRole('link', { name: 'Office' }).click();
   // Capture each workspace at desktop and phone sizes; assertions detect hidden
   // destinations and horizontal overflow before any visual review.
   for (const [label, screen] of [
