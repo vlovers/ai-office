@@ -23,10 +23,7 @@ export async function collectRemotePullRequests(
   // Re-read multi-page inventories and compare the ordered security-relevant
   // identities. This is not an atomic GitHub snapshot, but any observed drift
   // must block publication rather than be treated as negative duplicate proof.
-  const collectPass = async (): Promise<{
-    candidates: RemoteDraftCandidate[];
-    pages: number;
-  }> => {
+  const collectPass = async (): Promise<{ candidates: RemoteDraftCandidate[]; pages: number }> => {
     const candidates: RemoteDraftCandidate[] = [];
     const seenPullRequestUrls = new Set<string>();
     let page: number | null = 1;
@@ -84,9 +81,7 @@ export async function collectRemotePullRequests(
     if (
       first.pages !== second.pages ||
       first.candidates.length !== second.candidates.length ||
-      firstFingerprints.some(
-        (value, index) => value !== fingerprint(second.candidates[index]!),
-      )
+      firstFingerprints.some((value, index) => value !== fingerprint(second.candidates[index]!))
     ) {
       throw new Error('GitHub PR pagination changed during inventory; publication blocked.');
     }
