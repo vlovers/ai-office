@@ -552,6 +552,7 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.close();
     }
   });
+
   it('stops before the first workspace on operator cancellation and resumes without skipping it', async () => {
     const t = setup();
     const controller = new AbortController();
@@ -631,9 +632,7 @@ describe('bounded Git transfer recovery across workspaces', () => {
         hasMore: true,
         stopReason: 'budget-exhausted',
       });
-      expect(stopped.outcomes).toMatchObject([
-        { workspaceId: 'a', status: 'reconciled' },
-      ]);
+      expect(stopped.outcomes).toMatchObject([{ workspaceId: 'a', status: 'reconciled' }]);
       expect(t.journal.get('a', 'commit')?.state).toBe('confirmed');
       expect(t.journal.get('b', 'commit')?.state).toBe('intent');
       expect(t.journal.get('c', 'commit')?.state).toBe('intent');
@@ -657,7 +656,9 @@ describe('bounded Git transfer recovery across workspaces', () => {
     const t = setup();
     try {
       t.journal.begin('commit', t.identity('a'));
-      const resolver = vi.fn(async () => new Promise<GitTransferReconciliationContext>(() => undefined));
+      const resolver = vi.fn(
+        async () => new Promise<GitTransferReconciliationContext>(() => undefined),
+      );
       const stopped = await recoverUnresolvedGitTransfers(t.journal, resolver, {
         resolveTimeoutMs: 60_000,
         batchBudgetMs: 100,
@@ -737,5 +738,4 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.close();
     }
   });
-
 });
