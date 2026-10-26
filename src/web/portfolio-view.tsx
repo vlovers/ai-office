@@ -83,11 +83,9 @@ export function PortfolioView() {
         }
       }),
     ).then((result) => {
-      if (!controller.signal.aborted) {
-        setRows(result);
-        setUpdated(new Date().toLocaleString());
-        setLoading(false);
-      }
+      setRows(result);
+      setUpdated(new Date().toLocaleString());
+      setLoading(false);
     });
     return () => {
       window.clearTimeout(timeout);
