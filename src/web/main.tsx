@@ -90,7 +90,23 @@ function App() {
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const lastNavigation = useRef('');
   useEffect(() => {
-    const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
+    const onHashChange = () => {
+      const hash = window.location.hash;
+      setNavigation(decodeTaskNavigation(hash));
+      if (decodeTaskNavigation(hash)) {
+        setScreen('tasks');
+      } else if (hash === '#overview') {
+        setScreen('office');
+      } else if (hash === '#task-history' || hash === '#task-workspace' || hash === '#compose') {
+        setScreen('tasks');
+      } else if (hash === '#workflow-timeline' || hash === '#workflows') {
+        setScreen('workflows');
+      } else if (hash === '#agent-studio' || hash === '#agent') {
+        setScreen('team');
+      } else if (hash === '#repositories' || hash === '#codex-connection') {
+        setScreen('settings');
+      }
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
@@ -212,6 +228,7 @@ function App() {
     if (lastNavigation.current === key) return;
     if (selected !== target.id) setSelected(target.id);
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
+    setScreen('tasks');
     if (view !== 'focus') setView('focus');
   }, [navigation, dashboard, selected, selectedAgent, view]);
   useEffect(() => {
