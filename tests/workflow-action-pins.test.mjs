@@ -283,3 +283,22 @@ test('rejects escaped YAML mapping keys that disguise uses and permissions', () 
 });
 
 // Regression coverage for local composite-action traversal is tracked in #82.
+
+
+test('rejects mutable actions nested in a local composite action', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
+  try {
+    const workflows = join(root, '.github', 'workflows');
+    const action = join(root, '.github', 'actions', 'nested');
+    mkdirSync(workflows, { recursive: true });
+    mkdirSync(action, { recursive: true });
+    writeFileSync(join(workflows, 'validation.yml'), 'permissions:\\n  contents: read\\njobs:\\n  test:\\n    steps:\\n      - uses: ./.github/actions/nested\\n');
+    writeFileSync(join(action, 'action.yml'), 'name: nested\\nruns:\\n  using: composite\\n  steps:\\n    - uses: actions/download-artifact@v4\\n');
+    assert.throws(() => auditWorkflowDirectory(workflows), /nested action must use immutable SHA/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
