@@ -236,6 +236,54 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('preserves the one-use approval when a full paginated inventory changes between passes', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    const unrelated = Array.from({ length: 100 }, (_, index) => ({
+      ...receipt,
+      number: 1000 + index,
+      html_url: `https://github.com/vlovers/ai-office/pull/${1000 + index}`,
+      head: { ...receipt.head, ref: `unrelated-${index}` },
+    }));
+    let firstPageReads = 0;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.includes('/pulls?')) {
+          const page = Number(new URL(url).searchParams.get('page'));
+          if (page !== 1) return json([]);
+          firstPageReads += 1;
+          return json(
+            firstPageReads === 1
+              ? unrelated
+              : unrelated.map((candidate, index) =>
+                  index === 0
+                    ? {
+                        ...candidate,
+                        number: 2000,
+                        html_url: 'https://github.com/vlovers/ai-office/pull/2000',
+                      }
+                    : candidate,
+                ),
+          );
+        }
+        return original(url, init);
+      });
+      await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow(
+        'Remote PR inventory failed',
+      );
+      expect(firstPageReads).toBe(2);
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+
+      t.fetcher.mockImplementation(original);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('keeps a completed POST uncertain when the receipt inventory shifts across pages', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
