@@ -274,6 +274,70 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('preserves approval when the managed head moves between the first and final ref GET', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    let headReads = 0;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'GET' && url.includes('/git/ref/heads/') && !url.endsWith('/main')) {
+          headReads++;
+          return json({
+            ref: 'refs/heads/' + plan.branch,
+            object: { type: 'commit', sha: headReads === 1 ? headSha : 'f'.repeat(40) },
+          });
+        }
+        return original(url, init);
+      });
+      await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow(
+        'head branch moved during remote attestation',
+      );
+      expect(headReads).toBe(2);
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+
+      t.fetcher.mockImplementation(original);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('retains an uncertain reservation if the head moves during final pre-POST attestation', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    let headReads = 0;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'GET' && url.includes('/git/ref/heads/') && !url.endsWith('/main')) {
+          headReads++;
+          return json({
+            ref: 'refs/heads/' + plan.branch,
+            object: { type: 'commit', sha: headReads === 4 ? 'f'.repeat(40) : headSha },
+          });
+        }
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(headReads).toBe(4);
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBe(10_000);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+
+      t.fetcher.mockImplementation(original);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
   it('attests both refs, inventories PRs, atomically reserves and verifies detail after one POST', async () => {
     const t = setup();
     try {
