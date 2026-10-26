@@ -1,43 +1,81 @@
-# Workflow acceptance matrix — operator-facing release gate
+# Workflow acceptance matrix
 
-This document separates evidence already recorded from tests that must still run on
-the exact candidate commit. It does **not** authorize production GitHub writes,
-automatic approval, merging, or deployment.
+This document separates historical evidence from candidate-specific checks.
+It does not authorize production GitHub writes, merging, or deployment.
 
-## Evidence and acceptance gates
+## 1. Real Coder → Reviewer → QA
 
-| Gate | Existing evidence | Candidate acceptance requirement |
-| --- | --- | --- |
-| Coder → Reviewer → QA | `docs/V0_7_VALIDATION.md` records a two-turn local Codex trial on an earlier commit. | Explicit opt-in `npm run test:real:workflow` on the candidate with local Codex credentials, a disposable repository, and no retry or push. Record commit, model, terminal state, and evidence path. |
-| Browser operator journey | `npm run test:browser:workflow` exercises workflow approvals and Review Center with synthetic transport. | Green browser suite on the candidate; inspect failed/stale approval, read-only Reviewer, QA report, and mobile rendering. |
-| Real backend restart and Dashboard reconnect | PR #77 adds `tests/browser-workflow-restart.ts` and restart/session/unit suites. | Green `npm run test:browser:workflow` on the PR #77 candidate (its package script runs both `tests/browser-workflow-smoke.ts` and `tests/browser-workflow-restart.ts`); verify a new successful browser-originated timeline response after process restart, not just cached UI text. |
-| Durable queue and workflow recovery | PR #77 covers interrupted/failed/stopped/completed Reviewer and QA stages, unrelated FIFO order, and repeated recovery. | Verify no Reviewer/QA replay, no unapproved resume, no changed workflow versions after a second restart, and ordinary queue/session preservation. |
-| Crash between recovery commits | PR #77 includes a deterministic SQLite intermediate-state fixture. | Confirm the fixture passes; it simulates the persisted boundary and does **not** establish that a process was killed precisely between the commits. |
-| Security and review | Native sandbox, immutable evidence, and explicit approval gates are described in `docs/V0_7_WORKFLOW_ENGINE.md`. | Independent security review of candidate changes and native sandbox compatibility; review comments or author self-review do not count as independent approval. |
-| Release and production delivery | Existing validation is not a deployment or release certificate. | Separate backup/rollback, ingress/TLS, credentials, operator grants, and least-privilege GitHub write authorization review. |
+**Existing evidence:** `docs/V0_7_VALIDATION.md` records a two-turn
+local Codex trial on an earlier commit.
+
+**Acceptance:** With explicit operator authorization, run
+`npm run test:real:workflow` on the candidate using local Codex credentials
+and a disposable repository. Record the commit, model, final state, and
+evidence path. No retry, push, merge, or release is permitted.
+
+## 2. Browser workflow and operator checkpoints
+
+**Existing evidence:** `tests/browser-workflow-smoke.ts` exercises
+workflow approvals and Review Center with synthetic transport.
+
+**Acceptance:** Run `npm run test:browser:workflow` on the candidate.
+In PR #77, this command runs both the workflow browser smoke test and
+`tests/browser-workflow-restart.ts`. Verify rejected/stale approvals,
+read-only Reviewer, QA report, and mobile rendering.
+
+## 3. Backend restart and Dashboard reconnect
+
+**Existing evidence:** PR #77 adds browser process-restart, session,
+Dashboard, and workflow recovery coverage.
+
+**Acceptance:** Verify a new successful browser-originated timeline
+response after backend restart, rather than trusting cached UI text.
+Confirm that interrupted, failed, stopped, and completed stages do not
+replay. Preserve unrelated FIFO queue order and session configuration.
+A second restart must not mutate blocked workflow versions.
+
+## 4. Crash between recovery transactions
+
+**Existing evidence:** PR #77 constructs the SQLite state after the
+Store recovery commit and before Workflow recovery.
+
+**Acceptance:** The deterministic regression must pass. This fixture
+does not prove that a process was killed at that precise boundary.
+
+## 5. Independent security review
+
+**Existing evidence:** `docs/V0_7_WORKFLOW_ENGINE.md` describes
+sandboxing, immutable evidence, and explicit approval gates.
+
+**Acceptance:** Obtain an independent review of the candidate and
+native sandbox compatibility. Author comments and self-review do not
+count as independent approval.
+
+## 6. Release and production delivery
+
+**Existing evidence:** The historical validation is not a deployment
+or release certificate.
+
+**Acceptance:** Separately review backup/rollback, ingress/TLS,
+operator grants, credentials, and least-privilege GitHub write access.
+Workflow approval does not authorize production delivery.
 
 ## Safe execution order
 
-1. Pin the candidate commit SHA and record the current open PRs to avoid mixing
-   unrelated agent work. Run formatting, lint, typecheck, tests, and build.
-2. Run deterministic workflow, browser, restart, and Dashboard tests on that
-   same commit. Keep all credentials and production GitHub writes disabled.
-3. Inspect the failure artifacts and confirm no unexpected task execution,
-   unapproved stage transition, secret exposure, or changed primary checkout.
-4. **Only after explicit operator authorization**, run the real local Codex
-   smoke script against its new disposable repository. The script requires
-   `--run`, consumes real model turns, and does not perform push/merge/release.
-5. Record exact commit, CI run IDs, native host/CLI versions, test results,
-   model-trial evidence location, independent reviewer, and unresolved risks.
-6. Do not mark the workflow release-ready until all applicable gates have
-   concrete candidate-specific evidence. A green unit suite alone is not enough.
+1. Pin the candidate SHA and inspect open PRs for overlapping agent work.
+2. Run formatting, lint, typecheck, tests, and build on that SHA.
+3. Run deterministic workflow and browser restart suites with production
+   credentials and GitHub writes disabled.
+4. Inspect artifacts for unapproved execution, secret exposure, and
+   unexpected changes to the primary checkout.
+5. Only with explicit authorization, run the real local Codex smoke test.
+6. Record the commit, CI run IDs, native host/CLI versions, test results,
+   model evidence path, independent reviewer, and unresolved risks.
+7. Do not declare release readiness without candidate-specific evidence.
 
 ## Known limits
 
-- The historical live Codex trial in `docs/V0_7_VALIDATION.md` predates PR #77.
-- Synthetic browser tests prove UI orchestration and reconnect behavior, not
-  the quality of a real model review.
-- The restart commit-gap test uses a deliberately constructed durable SQLite
-  state rather than a precisely timed process kill.
-- Approval of workflow tests does not imply approval of delivery automation,
-  GitHub writes, production ingress, or deployment.
+- The live Codex trial in `docs/V0_7_VALIDATION.md` predates PR #77.
+- Synthetic browser tests cannot establish real model review quality.
+- The recovery commit-gap test simulates durable SQLite state.
+- Workflow validation does not approve production GitHub writes.
