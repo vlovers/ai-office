@@ -4,6 +4,9 @@ import { sandbox, until } from './helpers.js';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
 import { TaskManager } from '../src/server/manager.js';
+import { CodexAuth } from '../src/server/providers/codex-auth.js';
+import { CodexProvider } from '../src/server/providers/codex.js';
+import { AGENT_IDS } from '../src/shared/types.js';
 
 async function seedResumableSession(env: Awaited<ReturnType<typeof sandbox>>) {
   const repository = env.store.register({
@@ -31,7 +34,20 @@ async function seedResumableSession(env: Awaited<ReturnType<typeof sandbox>>) {
   return { repository, session, binding };
 }
 
-it('resumes an unrelated pinned session after restart without replaying a queued Workflow', async () => {
+async function freshManager(env: Awaited<ReturnType<typeof sandbox>>, store: Store) {
+  const auth = new CodexAuth({
+    dataDir: env.root,
+    inspectLocal: async () => env.inspection,
+  });
+  await auth.refresh();
+  expect(auth.view().status).toBe('available');
+  const providers = AGENT_IDS.map(
+    (id) => new CodexProvider({ home: join(env.root, 'workers', id), auth }),
+  );
+  return new TaskManager(store, providers, auth);
+}
+
+it('resumes a saved session without Workflow replay', async () => {
   const env = await sandbox();
   let restarted: Store | undefined;
   let manager: TaskManager | undefined;
@@ -98,7 +114,7 @@ it('resumes an unrelated pinned session after restart without replaying a queued
 
     // Keep the original SQLite connection open to simulate abrupt process death.
     restarted = new Store(join(env.root, 'metadata.sqlite'));
-    manager = new TaskManager(restarted, env.providers, env.auth);
+    manager = await freshManager(env, restarted);
     const recovered = new WorkflowStore(restarted.db).get(created.id)!;
     expect(recovered.state).toBe('blocked');
     expect(restarted.task(privileged.id)?.state).toBe('interrupted');
@@ -160,7 +176,7 @@ it('refuses a restarted session when its server-only execution binding has chang
     restarted.db
       .prepare('UPDATE session_bindings SET json=? WHERE session_id=?')
       .run(JSON.stringify({ ...binding, contextId: 'altered-context' }), session.id);
-    manager = new TaskManager(restarted, env.providers, env.auth);
+    manager = await freshManager(env, restarted);
     manager.startQueue();
     const failed = await until(
       () => restarted!.task(continuation.id)!,
