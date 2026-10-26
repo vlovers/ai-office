@@ -257,7 +257,11 @@ export function WorkflowBoard({
           </p>
           <label>
             Coder task
-            <select aria-label="Coder task" value={coderTask} onChange={(event) => setCoderTask(event.target.value)}>
+            <select
+              aria-label="Coder task"
+              value={coderTask}
+              onChange={(event) => setCoderTask(event.target.value)}
+            >
               <option value="">Select Coder task</option>
               {unsubmitted.map((task) => (
                 <option key={task.id} value={task.id}>
@@ -268,7 +272,11 @@ export function WorkflowBoard({
           </label>
           <label>
             Reviewer profile
-            <select aria-label="Reviewer profile" value={reviewer} onChange={(event) => setReviewer(event.target.value)}>
+            <select
+              aria-label="Reviewer profile"
+              value={reviewer}
+              onChange={(event) => setReviewer(event.target.value)}
+            >
               <option value="">Select Reviewer</option>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
@@ -279,7 +287,11 @@ export function WorkflowBoard({
           </label>
           <label>
             QA profile
-            <select aria-label="QA profile" value={qa} onChange={(event) => setQA(event.target.value)}>
+            <select
+              aria-label="QA profile"
+              value={qa}
+              onChange={(event) => setQA(event.target.value)}
+            >
               <option value="">No QA stage</option>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
