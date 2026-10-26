@@ -138,16 +138,37 @@ export async function attestGitHubCommitRefs(
   if (options.token !== undefined && (!options.token || /\s/.test(options.token))) {
     throw new Error('Invalid server-side GitHub credential.');
   }
+  // Both sequential GETs share one monotonic budget. A separate full
+  // timeout for each ref could hold the shared Git lease for twice as long,
+  // even though neither response constitutes a complete attestation alone.
+  const timeoutMs = options.timeoutMs ?? 15_000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 60_000) {
+    throw new Error('Invalid GitHub commit ref attestation deadline.');
+  }
+  const startedAt = performance.now();
+  const remaining = (): number => {
+    if (options.signal?.aborted) throw new Error('GitHub commit ref attestation aborted.');
+    const budget = Math.floor(timeoutMs - (performance.now() - startedAt));
+    if (budget < 100) throw new Error('GitHub commit ref attestation deadline exceeded.');
+    return budget;
+  };
   // Sequential reads avoid exposing an apparently complete attestation if
   // the first ref is already missing or stale.
-  const headCommitSha = await fetchExactCommitRef(repository, plan.branch, options);
+  const headCommitSha = await fetchExactCommitRef(repository, plan.branch, {
+    ...options,
+    timeoutMs: remaining(),
+  });
   if (headCommitSha !== approval.headCommitSha) {
     throw new Error('GitHub head branch moved since operator review.');
   }
-  const baseCommitSha = await fetchExactCommitRef(repository, plan.baseBranch, options);
+  const baseCommitSha = await fetchExactCommitRef(repository, plan.baseBranch, {
+    ...options,
+    timeoutMs: remaining(),
+  });
   if (baseCommitSha !== approval.baseCommitSha) {
     throw new Error('GitHub base branch moved since operator review.');
   }
+  remaining();
   return {
     ...approval,
     repository,
