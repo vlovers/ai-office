@@ -1,11 +1,13 @@
 # Pull request
 
 ## Scope
+
 - Related issue:
 - What changed and why:
 - Out of scope:
 
 ## Verification
+
 - [ ] Formatting
 - [ ] Lint / typecheck
 - [ ] Unit / integration tests
@@ -16,12 +18,14 @@
 Provide commands, results, and links to CI. Mark unrun checks explicitly; unchecked is not passing.
 
 ## Security and operations
+
 - Trust boundaries / credentials / tenant isolation affected:
 - Security review considerations:
 - Migration, deployment, or rollback considerations:
 - Documentation updated:
 
 ## Review gate
+
 - [ ] Independent reviewer approval obtained (not self-review)
 - [ ] Required CI green
 - [ ] No unresolved blocking findings
