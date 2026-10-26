@@ -49,6 +49,17 @@ export function parseGitHubPullRequest(value: unknown): GitHubDraftReceipt {
   ) {
     throw new Error('Invalid GitHub PR listing entry.');
   }
+  // GitHub list/detail/POST responses include a numeric PR identity. If it
+  // is present, the canonical URL must identify the very same PR. A mismatched
+  // pair cannot be trusted as duplicate evidence or a durable receipt.
+  if (
+    'number' in value &&
+    (!Number.isSafeInteger(value.number) ||
+      (value.number as number) <= 0 ||
+      !value.html_url.endsWith(`/pull/${value.number}`))
+  ) {
+    throw new Error('Invalid GitHub PR number or URL identity.');
+  }
   return {
     html_url: value.html_url,
     draft: value.draft,
