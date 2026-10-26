@@ -158,6 +158,55 @@ describe('read-only commit/push receipt reconciliation', () => {
     },
   );
 
+  it('keeps a moving remote head uncertain across SQLite restart until three stable GETs', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    let headReads = 0;
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async (url, init) => {
+        expect(init.method).toBe('GET');
+        if (url.endsWith('/main')) return original(url, init);
+        headReads++;
+        return Response.json({
+          ref: 'refs/heads/' + branch,
+          object: {
+            type: 'commit',
+            sha: headReads === 1 ? t.identity.headSha : 'f'.repeat(40),
+          },
+        });
+      });
+      expect(await reconcileGitTransferReceipts(t.context)).toMatchObject({
+        status: 'blocked',
+        stage: 'push',
+      });
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
+      expect(t.journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+        state: 'uncertain',
+        receiptSha: null,
+      });
+
+      const reopened = new DatabaseSync(t.dbPath);
+      try {
+        const journal = new DeliveryGitTransferJournal(reopened);
+        expect(journal.get(t.identity.workspaceId, 'push')?.state).toBe('uncertain');
+        t.fetcher.mockImplementation(original);
+        expect((await reconcileGitTransferReceipts({ ...t.context, journal })).status).toBe(
+          'ready',
+        );
+        expect(journal.get(t.identity.workspaceId, 'push')?.receiptSha).toBe(t.identity.headSha);
+        expect(t.fetcher).toHaveBeenCalledTimes(6);
+        expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects a moved remote head without confirming the push', async () => {
     const t = setup();
     try {
