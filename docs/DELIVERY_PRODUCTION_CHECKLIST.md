@@ -124,6 +124,15 @@ rejects a foreign workspace attempting to claim the original operation key.
 These tests deliberately do not contact GitHub or assert that a restored
 approval is safe to reuse.
 
+A separate real-Git recovery fixture now restores a WAL snapshot containing a
+pending push intent while the original database has subsequently confirmed
+that push. Recovery must verify the exact local reviewed commit and GitHub
+branch via GET-only reads, confirm the receipt once, and perform no POST or
+Git mutation. A simulated GitHub HTTP 429 must retain the restored intent as
+`uncertain` until a later authorized read-only sweep obtains matching evidence.
+This is simulated HTTP evidence, not a live GitHub or target-host acceptance
+result.
+
 **A successful SQLite integrity check is not permission to resume writes.**
 A backup may be older than a successful GitHub POST, push, approval revocation
 or a journal transition. Restoring it could erase the only local evidence of a
