@@ -35,6 +35,30 @@ This is a **read-only planning inventory**, not proof that GitHub branch protect
 - [ ] Get explicit owner approval for changes to protection/rulesets.
 - [ ] Enable gates in small batches, verify with a test PR, and record results in #87.
 
+
+## Governance files audit — default branches (2026-10-26)
+
+This is a path-specific snapshot of **default branches**, not a repository-wide absence claim and not a report that draft governance PRs have merged. Existing project-specific `CONTRIBUTING.md` requirements remain authoritative; a shared agent contract must **add to, not replace**, stricter project security, historical attribution, database isolation or release constraints.
+
+| Repository | `AGENTS.md` | `CLAUDE.md` | `CONTRIBUTING.md` | `.github/PULL_REQUEST_TEMPLATE.md` |
+| --- | --- | --- | --- | --- |
+| AI Office | missing | missing | present | missing |
+| Grid Atlas | present | present | present | present |
+| RuleWitness | missing | missing | present | missing |
+| MutationBoundary | missing | missing | present | missing |
+| Estima | missing | missing | missing | missing |
+| Last Chapter | missing | missing | missing | missing |
+
+The paths `REVIEW_POLICY.md` and `docs/RELEASE_CHECKLIST.md` were not found at repository root / indicated location on these branches; policies may exist elsewhere. Do not conflate file presence with enforced GitHub rules. Some governance changes already exist in draft PRs and require independent review before integration.
+
+### Integration order and exit criteria
+
+1. **Do not create duplicate governance PRs.** Reconcile existing governance PRs (#88 AI Office, #85 RuleWitness, #71 MutationBoundary, #16 Estima, #14 Last Chapter) against the default-branch baseline; Grid Atlas already has both agent files.
+2. Validate that each governance proposal references the actual project commands and retains its domain-specific safeguards. No universal CI command should override repository instructions.
+3. For each project, confirm: one canonical agent contract, Claude guidance pointing to it, a PR template, Definition of Done, independent review expectations, issue triage rules, and a release checklist or documented equivalent. Record deliberate exceptions.
+4. Obtain independent review and passing checks for each **governance** PR before proposing merge. Do not inspect or manage unrelated product PRs as part of this work.
+5. Verify resulting files on the actual integration branch **after** authorized merges; only then mark governance rollout complete. Branch protection/ruleset changes require separate owner approval.
+
 ## Dashboard data contract (proposed)
 
 One row per repository with `repository`, `integrationBranch`, `governancePr`, `ciRunUrls`, `ciState` (`passing|failing|pending|unknown`), `independentReview` (`approved|missing|unknown`), `branchProtection` (`verified|unverified`), `blockers`, `lastVerifiedAt`, and `evidenceUrls`. Never map unknown or pending to green. The dashboard should link to live GitHub evidence and clearly distinguish a historical snapshot from live status.
