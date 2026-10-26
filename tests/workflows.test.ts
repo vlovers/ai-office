@@ -754,16 +754,11 @@ it('dispatches only unrelated queued work after restart when Codex auth is avail
     expect(recovered.stages[0]?.state).toBe('interrupted');
 
     manager.startQueue();
-    await until(
-      () => restarted!.task(ordinary.id)!,
-      (task) => task.state === 'completed',
-    );
+    await until(() => restarted!.task(ordinary.id)!, (task) => task.state === 'completed');
     expect(restarted.queue()).toEqual([]);
     expect(restarted.task(workflowTask.id)?.state).toBe('interrupted');
     expect(new WorkflowStore(restarted.db).get(created.id)?.version).toBe(recovered.version);
-    expect(restarted.events(workflowTask.id).some((event) => event.kind === 'thread')).toBe(
-      false,
-    );
+    expect(restarted.events(workflowTask.id).some((event) => event.kind === 'thread')).toBe(false);
     expect(restarted.task(workflowTask.id)?.sessionId).toBeNull();
   } finally {
     await manager?.shutdown();
