@@ -169,6 +169,9 @@ export function WorkflowBoard({
     return () => {
       if (timer) clearInterval(timer);
       refreshEpoch.current++;
+      // Invalidated requests may still be pending. Their finally blocks
+      // cannot clear the new epoch's lock, so reset it on effect teardown.
+      pollingInFlight.current = false;
     };
   }, [refresh, paused]);
   async function mutate(operation: () => Promise<unknown>) {
