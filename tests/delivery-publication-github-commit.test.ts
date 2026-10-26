@@ -155,6 +155,35 @@ describe('ambiguous GitHub publication outcomes', () => {
     }
   });
 
+  it('treats a redirected Draft POST as uncertain and never retries it', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = mockGitHub();
+      const original = fetcher.getMockImplementation()!;
+      fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          expect(init.redirect).toBe('error');
+          const response = json(receipt, 201);
+          Object.defineProperty(response, 'redirected', { value: true });
+          return response;
+        }
+        return original(url, init);
+      });
+      const ctx = context(journal);
+      await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
+        'redirected',
+      );
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
+        'uncertain',
+      );
+      expect(fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
   it('leaves uncertain state on a stale GitHub commit receipt', async () => {
     const db = new DatabaseSync(':memory:');
     try {
