@@ -408,6 +408,34 @@ describe('read-only GitHub PR discovery', () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
+  it('does not renew the total deadline for the pagination verification pass', async () => {
+    let elapsed = 0;
+    let firstPageReads = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        elapsed = firstPageReads === 1 ? 20 : 180;
+        return json([candidate]);
+      }
+      elapsed = firstPageReads === 1 ? 100 : 205;
+      return json([]);
+    });
+    try {
+      await expect(
+        listAllGitHubPullRequests(plan, {
+          fetcher,
+          perPage: 1,
+          inventoryDeadlineMs: 200,
+        }),
+      ).rejects.toThrow('inventory deadline exceeded');
+      expect(fetcher).toHaveBeenCalledTimes(4);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('rejects invalid total inventory deadlines before contacting GitHub', async () => {
     const fetcher = vi.fn();
     for (const inventoryDeadlineMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
