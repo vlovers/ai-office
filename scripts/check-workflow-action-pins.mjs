@@ -1,6 +1,6 @@
-import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 const SHA_ACTION = /^(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+@[a-f0-9]{40}$/;
 const SHA_DOCKER = /^docker:\/\/[A-Za-z0-9_.:/-]+@sha256:[a-f0-9]{64}$/;
@@ -183,7 +183,9 @@ function auditLocalCompositeActions(workflowDirectory, files) {
     }
     if (inspected.has(canonical)) return;
     active.add(canonical);
-    const metadata = ['action.yml', 'action.yaml'].filter((name) => existsSync(join(canonical, name)));
+    const metadata = ['action.yml', 'action.yaml'].filter((name) =>
+      existsSync(join(canonical, name)),
+    );
     if (metadata.length !== 1) {
       findings.push(`${source}: local action requires exactly one action.yml or action.yaml: ${reference}`);
     } else {
@@ -201,7 +203,9 @@ function auditLocalCompositeActions(workflowDirectory, files) {
         if (!match) continue;
         const nested = match[1].trim();
         if (!isSafeReference(nested)) {
-          findings.push(`${file}:${index + 1}: nested action must use immutable SHA or Docker digest (${nested})`);
+          findings.push(
+            `${file}:${index + 1}: nested action must use immutable SHA or Docker digest (${nested})`,
+          );
         } else if (nested.startsWith('./')) {
           visit(nested, `${file}:${index + 1}`);
         }
@@ -214,7 +218,10 @@ function auditLocalCompositeActions(workflowDirectory, files) {
     const source = readFileSync(join(workflowDirectory, name), 'utf8');
     for (const [index, line] of source.split(/\r?\n/).entries()) {
       const match = USES_DECLARATION.exec(line);
-      if (match?.[1].trim().startsWith('./') && !match[1].trim().startsWith('./.github/workflows/')) {
+      if (
+        match?.[1].trim().startsWith('./') &&
+        !match[1].trim().startsWith('./.github/workflows/')
+      ) {
         visit(match[1].trim(), `${name}:${index + 1}`);
       }
     }
