@@ -130,9 +130,9 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
         const replacePublication = first.prepare(
           "INSERT OR REPLACE INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)",
         );
-        expect(() =>
-          replacePublication.run(identity.workspaceId, identity.operationKey),
-        ).toThrow('already exists');
+        expect(() => replacePublication.run(identity.workspaceId, identity.operationKey)).toThrow(
+          'already exists',
+        );
 
         const replacePush = second.prepare(
           "INSERT OR REPLACE INTO delivery_git_transfers (workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) VALUES (?, 'push', ?, ?, ?, ?, ?, 'intent', NULL)",
@@ -232,14 +232,12 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
         state TEXT NOT NULL,
         pull_request_url TEXT
       )`);
-      live.prepare("INSERT INTO delivery_journal VALUES (?, ?, 'reserved', NULL)").run(
-        'workspace-a',
-        'shared-legacy-operation',
-      );
-      live.prepare("INSERT INTO delivery_journal VALUES (?, ?, 'uncertain', NULL)").run(
-        'workspace-b',
-        'shared-legacy-operation',
-      );
+      live
+        .prepare("INSERT INTO delivery_journal VALUES (?, ?, 'reserved', NULL)")
+        .run('workspace-a', 'shared-legacy-operation');
+      live
+        .prepare("INSERT INTO delivery_journal VALUES (?, ?, 'uncertain', NULL)")
+        .run('workspace-b', 'shared-legacy-operation');
       await backup(live, snapshotPath);
       const restored = new DatabaseSync(snapshotPath);
       try {
@@ -250,7 +248,9 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
         expect(() => journal.reserve('workspace-c', 'shared-legacy-operation')).toThrow(
           'belongs to another workspace',
         );
-        const restoredRows = restored.prepare('SELECT COUNT(*) AS total FROM delivery_journal').get();
+        const restoredRows = restored
+          .prepare('SELECT COUNT(*) AS total FROM delivery_journal')
+          .get();
         expect(restoredRows?.total).toBe(2);
       } finally {
         restored.close();
