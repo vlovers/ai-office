@@ -3,6 +3,7 @@
 This file applies to the whole repository. Follow more-specific instructions in subdirectories when present; do not override security controls.
 
 ## Workflow
+
 1. Read the README, architecture/security documentation, open issue, and relevant code before editing.
 2. Work from a scoped GitHub issue and a feature branch. Keep changes reviewable and avoid unrelated refactors.
 3. Identify trust boundaries and threat model changes before modifying authentication, authorization, approvals, GitHub credentials, persistence, or worker execution.
@@ -11,6 +12,7 @@ This file applies to the whole repository. Follow more-specific instructions in 
 6. Open a PR with issue link, summary, security impact, evidence, rollback notes, and explicit remaining risks. Do not mark a failing check as passing.
 
 ## Safety and approvals
+
 - Never print, commit, or expose secrets or tokens. Use least-privilege credentials and server-side handling.
 - Never bypass origin/CSRF protections, approval gates, tenant isolation, or audit trails to make tests pass.
 - Never deploy, publish packages, merge, delete data, alter production configuration, or change branch protections without explicit authorization.
@@ -19,6 +21,7 @@ This file applies to the whole repository. Follow more-specific instructions in 
 - If the requested change has an unclear security consequence, stop and record the blocker in the PR.
 
 ## Definition of Done
+
 - Acceptance criteria satisfied with evidence and relevant regression tests.
 - Formatting, lint/typecheck, tests, build, and applicable smoke checks green, or failures disclosed as blockers.
 - Documentation and security assumptions updated where behavior changed.
@@ -26,4 +29,5 @@ This file applies to the whole repository. Follow more-specific instructions in 
 - Release and rollback steps recorded when applicable; no deployment is implied by merging.
 
 ## Coordination
+
 The cross-repository governance tracking issue is vlovers/ai-office#87. These rules do not automatically apply to other repositories; propose scoped PRs in each repository after inspecting its own conventions.
