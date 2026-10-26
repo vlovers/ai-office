@@ -284,7 +284,6 @@ test('rejects escaped YAML mapping keys that disguise uses and permissions', () 
 
 // Regression coverage for local composite-action traversal is tracked in #82.
 
-
 test('rejects mutable actions nested in a local composite action', async () => {
   const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -295,8 +294,14 @@ test('rejects mutable actions nested in a local composite action', async () => {
     const action = join(root, '.github', 'actions', 'nested');
     mkdirSync(workflows, { recursive: true });
     mkdirSync(action, { recursive: true });
-    writeFileSync(join(workflows, 'validation.yml'), 'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n');
-    writeFileSync(join(action, 'action.yml'), 'name: nested\nruns:\n  using: composite\n  steps:\n    - uses: actions/download-artifact@v4\n');
+    writeFileSync(
+      join(workflows, 'validation.yml'),
+      'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n',
+    );
+    writeFileSync(
+      join(action, 'action.yml'),
+      'name: nested\nruns:\n  using: composite\n  steps:\n    - uses: actions/download-artifact@v4\n',
+    );
     assert.throws(() => auditWorkflowDirectory(workflows), /nested action must use immutable SHA/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -313,9 +318,15 @@ test('rejects missing local composite metadata and recursive local action cycles
     const action = join(root, '.github', 'actions', 'nested');
     mkdirSync(workflows, { recursive: true });
     mkdirSync(action, { recursive: true });
-    writeFileSync(join(workflows, 'validation.yml'), 'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n');
+    writeFileSync(
+      join(workflows, 'validation.yml'),
+      'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n',
+    );
     assert.throws(() => auditWorkflowDirectory(workflows), /requires exactly one action.yml/);
-    writeFileSync(join(action, 'action.yml'), 'name: nested\nruns:\n  using: composite\n  steps:\n    - uses: ./.github/actions/nested\n');
+    writeFileSync(
+      join(action, 'action.yml'),
+      'name: nested\nruns:\n  using: composite\n  steps:\n    - uses: ./.github/actions/nested\n',
+    );
     assert.throws(() => auditWorkflowDirectory(workflows), /cyclic local composite action/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -332,8 +343,14 @@ test('rejects composite checkout without explicit credential opt-out', async () 
     const action = join(root, '.github', 'actions', 'nested');
     mkdirSync(workflows, { recursive: true });
     mkdirSync(action, { recursive: true });
-    writeFileSync(join(workflows, 'validation.yml'), 'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n');
-    writeFileSync(join(action, 'action.yml'), 'name: nested\nruns:\n  using: composite\n  steps:\n    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n');
+    writeFileSync(
+      join(workflows, 'validation.yml'),
+      'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n',
+    );
+    writeFileSync(
+      join(action, 'action.yml'),
+      'name: nested\nruns:\n  using: composite\n  steps:\n    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n',
+    );
     assert.throws(() => auditWorkflowDirectory(workflows), /checkout requires exactly one/);
   } finally {
     rmSync(root, { recursive: true, force: true });
