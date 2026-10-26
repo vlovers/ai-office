@@ -76,6 +76,26 @@ describe('read-only GitHub PR discovery', () => {
     ).toThrow('repository identity');
   });
 
+  it.each([
+    ['mismatched PR number', { ...candidate, number: 124 }],
+    ['string PR number', { ...candidate, number: '123' }],
+    ['zero PR number', { ...candidate, number: 0 }],
+    ['noncanonical numeric alias', { ...candidate, number: 123, html_url: 'https://github.com/vlovers/ai-office/pull/0123' }],
+  ])('rejects inconsistent listing identity: %s', async (_label, malformed) => {
+    const fetcher = vi.fn(async () => json([malformed]));
+    await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow(
+      'Invalid GitHub PR number or URL identity',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a canonical PR number matching its URL in a complete inventory', async () => {
+    const fetcher = vi.fn(async () => json([{ ...candidate, number: 123 }]));
+    const result = await listAllGitHubPullRequests(plan, { fetcher });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]?.html_url).toBe(candidate.html_url);
+  });
+
   it('rejects malformed and truncated responses without returning partial results', async () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = new URL(url).searchParams.get('page');
