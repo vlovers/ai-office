@@ -118,10 +118,7 @@ it('resumes a saved session without Workflow replay', async () => {
     const recovered = new WorkflowStore(restarted.db).get(created.id)!;
     expect(recovered.state).toBe('blocked');
     expect(restarted.task(privileged.id)?.state).toBe('interrupted');
-    expect(restarted.queue().map((entry) => entry.taskId)).toEqual([
-      continuation.id,
-      ordinary.id,
-    ]);
+    expect(restarted.queue().map((entry) => entry.taskId)).toEqual([continuation.id, ordinary.id]);
     expect(restarted.queue()[0]?.resumeSessionId).toBe(session.id);
     expect(restarted.sessionBinding(session.id)).toEqual(binding);
 
