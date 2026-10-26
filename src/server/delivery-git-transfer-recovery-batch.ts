@@ -106,11 +106,7 @@ export async function recoverUnresolvedGitTransfers(
   ) {
     throw new Error('Invalid Git transfer registry lookup deadline.');
   }
-  if (
-    !Number.isSafeInteger(batchBudgetMs) ||
-    batchBudgetMs < 100 ||
-    batchBudgetMs > 600_000
-  ) {
+  if (!Number.isSafeInteger(batchBudgetMs) || batchBudgetMs < 100 || batchBudgetMs > 600_000) {
     throw new Error('Invalid Git transfer recovery batch budget.');
   }
   // Validate the page before invoking any resolver or touching journal state.
