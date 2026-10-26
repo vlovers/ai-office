@@ -523,5 +523,4 @@ describe('read-only GitHub PR discovery', () => {
     }
     expect(fetcher).not.toHaveBeenCalled();
   });
-
 });
