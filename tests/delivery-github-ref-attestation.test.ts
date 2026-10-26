@@ -117,9 +117,7 @@ describe('GitHub immutable ref attestation', () => {
         ? jsonResponse({ message: 'rate limited' }, 429)
         : jsonResponse(refBody(plan.branch, headCommitSha));
     });
-    await expect(attestGitHubCommitRefs(plan, approval, { fetcher })).rejects.toThrow(
-      'HTTP 429',
-    );
+    await expect(attestGitHubCommitRefs(plan, approval, { fetcher })).rejects.toThrow('HTTP 429');
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
