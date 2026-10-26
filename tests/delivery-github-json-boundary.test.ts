@@ -86,6 +86,55 @@ describe('bounded GitHub JSON response parsing', () => {
     expect(pulls).toBeLessThan(10);
   });
 
+  it('accepts a multibyte UTF-8 JSON body split across individual stream chunks', async () => {
+    const payload = { label: 'café ☃', count: 2 };
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+          controller.close();
+        },
+      }),
+    );
+    await expect(readBoundedGitHubJson(response, bytes.byteLength)).resolves.toEqual(payload);
+  });
+
+  it('counts actual UTF-8 bytes rather than decoded characters', async () => {
+    const body = JSON.stringify({ label: 'é'.repeat(32) });
+    expect(Buffer.byteLength(body)).toBeGreaterThan(body.length);
+    await expect(readBoundedGitHubJson(new Response(body), body.length)).rejects.toThrow(
+      'safe size limit',
+    );
+  });
+
+  it('rejects a forged short Content-Length when the streamed body is oversized', async () => {
+    const response = new Response(JSON.stringify({ data: 'x'.repeat(256) }), {
+      headers: { 'Content-Length': '2' },
+    });
+    await expect(readBoundedGitHubJson(response, 64)).rejects.toThrow('safe size limit');
+  });
+
+  it('sanitizes a stream failure after a partial JSON prefix', async () => {
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"token":"private-'));
+          controller.error(new Error('upstream-secret-leak'));
+        },
+      }),
+    );
+    let message = '';
+    try {
+      await readBoundedGitHubJson(response, 1024);
+    } catch (error) {
+      message = String(error);
+    }
+    expect(message).toContain('Invalid GitHub JSON response body');
+    expect(message).not.toContain('private-');
+    expect(message).not.toContain('upstream-secret-leak');
+  });
+
   it('rejects oversized listing pages without returning partial inventory', async () => {
     const fetcher = vi.fn(async () => new Response('x'.repeat(GITHUB_JSON_LIMITS.listing + 1)));
     await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow('safe size limit');
