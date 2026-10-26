@@ -191,3 +191,26 @@ Rechecked review submissions for Grid Atlas #271/#272 and AI Office #88/#89. All
 
 Before assigning reviewers, choose a reviewer account/team with repository access and no authorship conflict. This workflow has not requested a reviewer because no suitable reviewer identity was established. Do not use the repository owner as a substitute for independent review. Branch protection/ruleset enforcement remains unverified because the available connector did not expose an authoritative read action in this pass.
 
+
+## Grid Atlas workflow-pin and issue-intake review (2026-10-27)
+
+### PR #272 — immutable Actions pins
+
+Diff inspection shows the workflow updates replace common tags with full commit references for `actions/checkout`, `actions/setup-node`, and `actions/upload-artifact`, and set `persist-credentials: false` for checkout in many workflows. However, the diff also contains multiple occurrences of `actions/checkout@v4` and `actions/upload-artifact@v4` in test fixtures, scripts, and examples. These may be intentionally unpinned negative fixtures used to test the audit; the PR must demonstrate that production workflow files are clean while negative fixtures remain intentional.
+
+Review checklist before approval:
+- [ ] Run `scripts/check-workflow-action-pins.mjs` against the candidate and verify it scans all production `.github/workflows/*.yml` files, not just a fixed subset.
+- [ ] Confirm every actual workflow `uses: owner/action@ref` uses a full 40-character commit SHA; distinguish local actions and Docker image digest pins correctly.
+- [ ] Confirm the SHA comments map to the intended upstream action versions and are not the only evidence of identity.
+- [ ] Verify `persist-credentials: false` wherever checkout credentials are not needed; check workflows that intentionally require authenticated Git operations separately.
+- [ ] Run the action-pin tests, including negative fixtures for tags and malformed refs; inspect permissions and workflow triggers for privileged `pull_request_target` or write-token paths.
+- [ ] Confirm current CI on the current PR head and independent review.
+
+### PR #271 — issue intake
+
+The diff adds `.github/ISSUE_TEMPLATE/bug_report.md` and `engineering_task.md`. Review that bug reports collect reproducible evidence without asking users to publish secrets or personal data; engineering tasks request scope, acceptance criteria, tests and risk; neither template promises automated triage or merge enforcement unless a workflow/ruleset actually implements it.
+
+### Current status
+
+This is a static diff review only. No tests were run by this review pass, and current head SHA, current CI and independent approval were not verified. Do not treat either PR as accepted or merge-ready based on this inspection.
+
