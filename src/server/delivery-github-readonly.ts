@@ -214,7 +214,22 @@ export async function listAllGitHubPullRequests(
     if (!Array.isArray(payload) || payload.length > perPage) {
       throw new Error('Invalid GitHub PR listing page.');
     }
-    const candidates = payload.map(parseGitHubPullRequest);
+    // GitHub's repository PR endpoint must return canonical URLs and base
+    // repository identities for that same destination. An inconsistent page
+    // cannot be treated as a complete negative duplicate check.
+    const repositoryName = `${match[1]}/${match[2]}`;
+    const canonicalPrefix = `${plan.destination}/pull/`;
+    const candidates = payload.map((value) => {
+      const candidate = parseGitHubPullRequest(value);
+      if (
+        !candidate.html_url.startsWith(canonicalPrefix) ||
+        !/^[1-9][0-9]*$/.test(candidate.html_url.slice(canonicalPrefix.length)) ||
+        candidate.base.repo?.full_name !== repositoryName
+      ) {
+        throw new Error('GitHub PR inventory contains a foreign or noncanonical PR identity.');
+      }
+      return candidate;
+    });
     assertBudget();
     return {
       candidates,
