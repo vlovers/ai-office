@@ -762,6 +762,42 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
+  it('never adopts a remote ref after GitHub returns a successful but malformed receipt', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      const original = t.fetcher.getMockImplementation()!;
+      const malformed = [
+        { ref: 'refs/heads/' + branch, object: { type: 'tag', sha: t.identity.headSha } },
+        { ref: 'refs/heads/foreign', object: { type: 'commit', sha: t.identity.headSha } },
+        { ref: 'refs/heads/' + branch, object: { type: 'commit', sha: 'f'.repeat(40) } },
+        { ref: 'refs/heads/' + branch, object: { type: 'commit' } },
+      ];
+      for (const payload of malformed) {
+        t.fetcher.mockImplementation(async (_url, init) => {
+          expect(init.method).toBe('GET');
+          return Response.json(payload);
+        });
+        expect(await reconcileGitTransferReceipts(t.context)).toMatchObject({
+          status: 'blocked',
+          stage: 'push',
+        });
+        expect(t.journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+          state: 'uncertain',
+          receiptSha: null,
+        });
+      }
+      t.fetcher.mockImplementation(original);
+      expect((await reconcileGitTransferReceipts(t.context)).status).toBe('ready');
+      expect(t.journal.get(t.identity.workspaceId, 'push')?.receiptSha).toBe(t.identity.headSha);
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects a swapped worktree registry binding before touching an intent', async () => {
     const t = setup();
     try {
