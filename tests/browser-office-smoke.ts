@@ -120,10 +120,7 @@ try {
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
         .toBe(true);
       await page.screenshot({
-        path: join(
-          artifacts,
-          `workspace-${screen}-${width === 1440 ? 'desktop' : 'mobile'}.png`,
-        ),
+        path: join(artifacts, `workspace-${screen}-${width === 1440 ? 'desktop' : 'mobile'}.png`),
         fullPage: true,
       });
     }

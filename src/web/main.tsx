@@ -69,29 +69,31 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
-  const [screen, setScreen] = useState<'office' | 'tasks' | 'workflows' | 'team' | 'settings'>(() => {
-    const hash = window.location.hash;
-    if (hash.startsWith('#task-') || hash === '#compose') return 'tasks';
-    if (hash.startsWith('#workflow')) return 'workflows';
-    if (hash === '#agent-studio' || hash === '#agent') return 'team';
-    if (hash === '#repositories') return 'settings';
-    // Restore the active workspace after a reload. A direct deep link takes
-    // precedence, and untrusted storage values never become screen selectors.
-    try {
-      const saved = sessionStorage.getItem('ai-office-workspace-screen');
-      if (
-        saved === 'office' ||
-        saved === 'tasks' ||
-        saved === 'workflows' ||
-        saved === 'team' ||
-        saved === 'settings'
-      )
-        return saved;
-    } catch {
-      /* Session storage is optional (private browsing / disabled storage). */
-    }
-    return 'office';
-  });
+  const [screen, setScreen] = useState<'office' | 'tasks' | 'workflows' | 'team' | 'settings'>(
+    () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#task-') || hash === '#compose') return 'tasks';
+      if (hash.startsWith('#workflow')) return 'workflows';
+      if (hash === '#agent-studio' || hash === '#agent') return 'team';
+      if (hash === '#repositories') return 'settings';
+      // Restore the active workspace after a reload. A direct deep link takes
+      // precedence, and untrusted storage values never become screen selectors.
+      try {
+        const saved = sessionStorage.getItem('ai-office-workspace-screen');
+        if (
+          saved === 'office' ||
+          saved === 'tasks' ||
+          saved === 'workflows' ||
+          saved === 'team' ||
+          saved === 'settings'
+        )
+          return saved;
+      } catch {
+        /* Session storage is optional (private browsing / disabled storage). */
+      }
+      return 'office';
+    },
+  );
   useEffect(() => {
     try {
       sessionStorage.setItem('ai-office-workspace-screen', screen);
@@ -416,13 +418,15 @@ function App() {
         </a>
         <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Dashboard sections">
-          {([
-            ['office', '⌂', 'Office', '#overview'],
-            ['tasks', '▤', 'Tasks', '#task-history'],
-            ['workflows', '◇', 'Workflows', '#workflow-timeline'],
-            ['team', '♙', 'Team', '#agent-studio'],
-            ['settings', '⚙', 'Settings', '#repositories'],
-          ] as const).map(([destination, icon, label, href]) => (
+          {(
+            [
+              ['office', '⌂', 'Office', '#overview'],
+              ['tasks', '▤', 'Tasks', '#task-history'],
+              ['workflows', '◇', 'Workflows', '#workflow-timeline'],
+              ['team', '♙', 'Team', '#agent-studio'],
+              ['settings', '⚙', 'Settings', '#repositories'],
+            ] as const
+          ).map(([destination, icon, label, href]) => (
             <a
               key={destination}
               className={`nav-item ${screen === destination ? 'active' : ''}`}
@@ -433,9 +437,14 @@ function App() {
                 setScreen(destination);
               }}
             >
-              <span aria-hidden="true">{icon}</span>{label}
-              {destination === 'tasks' && <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>}
-              {destination === 'team' && <span className="nav-count">{dashboard?.agents.length ?? 0}</span>}
+              <span aria-hidden="true">{icon}</span>
+              {label}
+              {destination === 'tasks' && (
+                <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
+              )}
+              {destination === 'team' && (
+                <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
+              )}
             </a>
           ))}
           <button
@@ -539,10 +548,32 @@ function App() {
             <div>
               <div className="eyebrow">AI OFFICE / {screen.toUpperCase()}</div>
               <h1>
-                {view === 'focus' ? 'Focus mode' : ({ office: 'Office overview', tasks: 'Tasks & activity', workflows: 'Workflows', team: 'Your team', settings: 'Workspace settings' } as const)[screen]}
+                {view === 'focus'
+                  ? 'Focus mode'
+                  : (
+                      {
+                        office: 'Office overview',
+                        tasks: 'Tasks & activity',
+                        workflows: 'Workflows',
+                        team: 'Your team',
+                        settings: 'Workspace settings',
+                      } as const
+                    )[screen]}
                 <span>_</span>
               </h1>
-              <p>{({ office: 'See who is working and what needs your attention.', tasks: 'Create tasks, follow progress and review results.', workflows: 'Move work safely through review and QA.', team: 'Manage the agents who work with you.', settings: 'Manage repositories, connections and workspace access.' } as const)[screen]}</p>
+              <p>
+                {
+                  (
+                    {
+                      office: 'See who is working and what needs your attention.',
+                      tasks: 'Create tasks, follow progress and review results.',
+                      workflows: 'Move work safely through review and QA.',
+                      team: 'Manage the agents who work with you.',
+                      settings: 'Manage repositories, connections and workspace access.',
+                    } as const
+                  )[screen]
+                }
+              </p>
             </div>
             <a
               className="button-link"
@@ -1380,7 +1411,11 @@ function App() {
                 </div>
                 {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
-              <section className="panel connection-panel" id="codex-connection" aria-label="Codex connection">
+              <section
+                className="panel connection-panel"
+                id="codex-connection"
+                aria-label="Codex connection"
+              >
                 <div className="panel-heading">
                   <h2>Codex connection</h2>
                   <span
