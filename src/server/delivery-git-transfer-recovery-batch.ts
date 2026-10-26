@@ -129,7 +129,7 @@ export async function recoverUnresolvedGitTransfers(
   for (const workspaceId of page.workspaceIds) {
     if (options.signal?.aborted) return stopped('aborted');
     const remaining = remainingBudget();
-    if (remaining < 100) return stopped('budget-exhausted');
+    if (remaining <= 0) return stopped('budget-exhausted');
 
     let context: GitTransferReconciliationContext | null;
     try {
@@ -143,7 +143,7 @@ export async function recoverUnresolvedGitTransfers(
     } catch (error) {
       if (error instanceof RecoveryBatchInterrupted) return stopped(error.reason);
       if (options.signal?.aborted) return stopped('aborted');
-      if (remainingBudget() < 100) return stopped('budget-exhausted');
+      if (remainingBudget() <= 0) return stopped('budget-exhausted');
       // A workspace-specific registry outage does not starve later workspaces.
       outcomes.push({ workspaceId, status: 'blocked' });
       lastProcessed = workspaceId;
@@ -152,7 +152,7 @@ export async function recoverUnresolvedGitTransfers(
     // A resolver can settle exactly as cancellation or the batch deadline
     // arrives. Never start an in-lease reconciliation using that stale result.
     if (options.signal?.aborted) return stopped('aborted');
-    if (remainingBudget() < 100) return stopped('budget-exhausted');
+    if (remainingBudget() <= 0) return stopped('budget-exhausted');
 
     if (!context) {
       outcomes.push({ workspaceId, status: 'unavailable' });
