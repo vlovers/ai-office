@@ -330,9 +330,18 @@ function App() {
       setScreen('tasks');
       if (id === 'compose' || id === 'task-history') setView('mission');
     }
-    if (id === 'workflows' || id === 'workflow-timeline' || id === 'task-workflow') { setScreen('workflows'); setView('mission'); }
-    if (id === 'agent' || id === 'agent-studio') { setScreen('team'); setView('mission'); }
-    if (id === 'repositories') { setScreen('settings'); setView('mission'); }
+    if (id === 'workflows' || id === 'workflow-timeline' || id === 'task-workflow') {
+      setScreen('workflows');
+      setView('mission');
+    }
+    if (id === 'agent' || id === 'agent-studio') {
+      setScreen('team');
+      setView('mission');
+    }
+    if (id === 'repositories') {
+      setScreen('settings');
+      setView('mission');
+    }
     if (id === 'overview') setScreen('office');
     const origin = document.activeElement;
     requestAnimationFrame(() => {
@@ -370,7 +379,14 @@ function App() {
         Skip to mission control
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
-        <a className="brand" href="#overview" onClick={() => { setView('mission'); setScreen('office'); }}>
+        <a
+          className="brand"
+          href="#overview"
+          onClick={() => {
+            setView('mission');
+            setScreen('office');
+          }}
+        >
           <PixelBot />
           <span>
             AI OFFICE<small>A space for your agents</small>
