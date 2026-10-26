@@ -5,7 +5,18 @@ import { buildPortfolio, renderMarkdown } from '../scripts/portfolio-dashboard.m
 function mockFetch({ failRuns = false } = {}) {
   return async (url) => {
     const json = (status, data) => ({ ok: status === 200, status, json: async () => data });
-    if (url.includes('/actions/runs')) return failRuns ? json(403, {}) : json(200, { workflow_runs: [{ status: 'completed', conclusion: 'success', html_url: 'https://github.com/example/actions/runs/1' }] });
+    if (url.includes('/actions/runs'))
+      return failRuns
+        ? json(403, {})
+        : json(200, {
+            workflow_runs: [
+              {
+                status: 'completed',
+                conclusion: 'success',
+                html_url: 'https://github.com/example/actions/runs/1',
+              },
+            ],
+          });
     if (url.includes('/pulls?')) return json(200, [{ number: 1 }]);
     if (url.endsWith('/protection')) return json(404, {});
     throw new Error('unexpected request');
@@ -13,7 +24,11 @@ function mockFetch({ failRuns = false } = {}) {
 }
 
 test('snapshot does not equate passing workflow with required checks or unverified protection', async () => {
-  const data = await buildPortfolio({ fetcher: mockFetch(), token: '', now: new Date('2026-10-26T10:00:00Z') });
+  const data = await buildPortfolio({
+    fetcher: mockFetch(),
+    token: '',
+    now: new Date('2026-10-26T10:00:00Z'),
+  });
   assert.equal(data.rows.length, 6);
   assert.equal(data.rows.find((r) => r.name === 'estima').branch, 'develop');
   assert.equal(data.rows[0].ci, 'latest run passed (not gate verified)');
@@ -34,8 +49,13 @@ test('API request is bounded and a full PR page is not reported as an exact coun
   const seen = [];
   const fetcher = async (url, options) => {
     seen.push(options);
-    if (url.includes('/actions/runs')) return { ok: true, json: async () => ({ workflow_runs: [] }) };
-    if (url.includes('/pulls?')) return { ok: true, json: async () => Array.from({ length: 100 }, (_, number) => ({ number })) };
+    if (url.includes('/actions/runs'))
+      return { ok: true, json: async () => ({ workflow_runs: [] }) };
+    if (url.includes('/pulls?'))
+      return {
+        ok: true,
+        json: async () => Array.from({ length: 100 }, (_, number) => ({ number })),
+      };
     return { ok: false, status: 403 };
   };
   const data = await buildPortfolio({ fetcher, token: '' });
