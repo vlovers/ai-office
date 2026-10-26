@@ -322,6 +322,19 @@ if (process.argv.includes('--restart-server')) {
     await selector.selectOption(interrupted.workflowId);
     await expect(board.getByText(/^State: active/)).toBeVisible();
     await expect(board).toContainText('REVIEWER — running');
+    const liveQueue = page.getByRole('region', { name: 'Live task queue' });
+    await expect(liveQueue).toContainText('Approved Coder queued before restart');
+    const assertOrdinaryQueueVisible = async () => {
+      await expect(liveQueue.locator('li')).toHaveCount(3, { timeout: 20000 });
+      for (const [index, title] of [
+        'Queued session continuation',
+        'Ordinary first',
+        'Ordinary second',
+      ].entries()) {
+        await expect(liveQueue.locator('li').nth(index)).toContainText(title);
+      }
+      await expect(liveQueue).not.toContainText('Approved Coder queued before restart');
+    };
 
     // No reload: the same React page must observe a real process death and new backend.
     await kill();
@@ -329,6 +342,7 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(restarted, address);
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('REVIEWER — interrupted');
+    await assertOrdinaryQueueVisible();
     await expect(board.getByLabel('Workflow diagnostics')).toContainText(
       'Persisted checkpoint diagnostics',
     );
@@ -442,6 +456,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await expect(board.getByRole('alert')).toHaveCount(0);
+    await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
@@ -491,17 +506,26 @@ if (process.argv.includes('--restart-server')) {
       data: { version: cancelled.version, confirmed: true },
     });
     assert.equal(repeatedCancellation.status(), 409);
+    await selector.selectOption(interrupted.workflowId);
+    await expect(board.getByText(/^State: cancelled/)).toBeVisible();
+    await expect(board).toContainText('REVIEWER — interrupted');
+    await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
 
     await kill();
     const terminalReconnect = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url() === address + '/api/workflows/' + blocked.workflowId + '/timeline' &&
+        response.url() === address + '/api/workflows/' + interrupted.workflowId + '/timeline' &&
         response.ok(),
       { timeout: 20000 },
     );
     await start(port);
     await terminalReconnect;
+    await expect(selector).toHaveValue(interrupted.workflowId);
+    await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
+    await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
+    await expect(board.getByRole('alert')).toHaveCount(0);
+    await assertOrdinaryQueueVisible();
 
     for (const [index, id] of ids.entries()) {
       const response = await activePage.request.get(address + '/api/workflows/' + id);
