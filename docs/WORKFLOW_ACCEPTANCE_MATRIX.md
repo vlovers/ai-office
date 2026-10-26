@@ -51,7 +51,12 @@ Dashboard response must also invalidate previously selected Coder tasks and
 Reviewer/QA profiles that are no longer eligible; the creation button must
 remain disabled rather than submitting stale React form state. The process
 restart browser regression injects filtered Dashboard snapshots to exercise
-missing Coder and Reviewer choices. This does
+missing Coder and Reviewer choices. A stacked Draft regression in PR #93
+also holds a Dashboard response beyond the 3-second polling interval, asserts
+that no second periodic Dashboard request overlaps it, and verifies that an
+explicit operator refresh still fetches a fresh Dashboard response. This new
+regression is **not yet CI-verified** and must pass before PR #93 is ready for
+review. This does
 **not** prove that the persistent
 manual-review notice always appears or that arbitrary delayed failures cannot
 arrive after the observation window. Treat those as separate UX acceptance
