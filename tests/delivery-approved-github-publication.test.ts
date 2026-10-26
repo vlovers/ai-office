@@ -937,6 +937,50 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it.each(['post', 'detail', 'inventory'] as const)(
+    'recovers a conflicting %s PR identity without replaying the Draft POST',
+    async (failure) => {
+      const t = setup();
+      const original = t.fetcher.getMockImplementation()!;
+      let posted = false;
+      let corrupt = true;
+      try {
+        t.fetcher.mockImplementation(async (url, init) => {
+          if (init.method === 'POST') {
+            posted = true;
+            const response = await original(url, init);
+            return corrupt && failure === 'post'
+              ? json({ ...receipt, number: 124 }, 201)
+              : response;
+          }
+          if (corrupt && failure === 'detail' && url.endsWith('/pulls/123')) {
+            return json({
+              ...receipt,
+              html_url: 'https://github.com/vlovers/ai-office/pull/124',
+            });
+          }
+          if (corrupt && failure === 'inventory' && posted && url.includes('/pulls?')) {
+            return json([{ ...receipt, number: 124 }]);
+          }
+          return original(url, init);
+        });
+        expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+        expect(t.journal.get('workspace-1')).toMatchObject({
+          state: 'uncertain',
+          pullRequestUrl: null,
+        });
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+
+        corrupt = false;
+        expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+        expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      } finally {
+        t.close();
+      }
+    },
+  );
+
   it('treats invalid post-write PR detail as uncertain, not published', async () => {
     const t = setup();
     try {
