@@ -221,7 +221,11 @@ try {
   });
   await capture('failure');
   // CSV export uses the current history filters and contains no prompt or transcript content.
+  // Task history lives on its own workspace after the unified navigation rebuild.
+  await navigation.getByRole('link', { name: 'Tasks' }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   const history = page.locator('#task-history');
+  await expect(history).toBeVisible();
   await history.getByLabel('Search tasks').fill('FIXTURE · provider failure');
   await expect(history.getByRole('button', { name: /Export filtered CSV/ })).toBeEnabled();
   const [download] = await Promise.all([
