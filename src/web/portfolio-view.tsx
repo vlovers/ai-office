@@ -16,6 +16,7 @@ type PortfolioRow = {
   runUrl?: string;
   openPrs: string;
   note?: string;
+  warning?: string;
 };
 
 async function readJson(path: string, signal: AbortSignal): Promise<unknown> {
@@ -59,7 +60,8 @@ async function loadProject(project: (typeof PROJECTS)[number], signal: AbortSign
     state,
     runUrl: latest?.html_url,
     openPrs: count === null ? 'Unknown' : count === 100 ? '100+' : String(count),
-    note: project.slug === 'last-chapter' ? 'Game development currently uses a separate integration branch.' : undefined,
+    note: project.slug === 'last-chapter' ? 'Main is a bootstrap branch; active game development uses a separate integration branch.' : undefined,
+    warning: runs.status === 'rejected' || prs.status === 'rejected' ? 'Some GitHub data could not be retrieved.' : undefined,
   };
 }
 
@@ -131,6 +133,7 @@ export function PortfolioView() {
                     {row.slug} ↗
                   </a>
                   {row.note && <small style={{ display: 'block' }}>{row.note}</small>}
+                  {row.warning && <small style={{ display: 'block' }}>{row.warning}</small>}
                 </td>
                 <td>{row.branch}</td>
                 <td>
