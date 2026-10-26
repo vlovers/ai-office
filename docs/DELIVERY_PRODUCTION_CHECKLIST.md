@@ -22,6 +22,25 @@ Status: **unreleased authorization foundation; remote write activation blocked**
       session persistence and administrator revocation tests.
 - [x] No HTTP commit/push/publication/merge/force/reset/delete/retry path.
 
+### Remote ref TOCTOU hardening (2026-10-26)
+
+The approved Draft PR executor and read-only Git transfer reconciliation now
+attest the reviewed remote commits in **head → base → head** order under one
+shared monotonic GitHub request deadline. A managed head that moves during the
+base lookup is rejected before any PR POST; if an attempt was already durably
+reserved, the result stays `uncertain` and no second POST is permitted.
+Recovery must independently observe three stable GET responses before confirming
+a push receipt. HTTP 429, malformed/late responses and timeouts on the final
+head read fail closed. Integration coverage includes one-use approval preservation,
+post-reservation uncertainty, and SQLite restart recovery without replay.
+
+This reduces a remote ref time-of-check/time-of-use window; it **does not**
+make multiple GitHub GETs an atomic snapshot or prevent a separate actor from
+moving a ref after the last GET. The final Draft PR detail receipt must still
+match the exact reviewed head/base SHAs, and the target-host crash/permission
+review and independent security approval remain deployment blockers. No
+production remote write route is activated.
+
 ### GitHub ref and Draft-write deadline hardening (2026-10-26)
 
 Both exact GitHub commit-ref GETs now share **one monotonic attestation
