@@ -19,6 +19,29 @@ describe('bounded GitHub request boundary', () => {
     },
   );
 
+  it('rejects spoofed abort signals before invoking the GitHub transport', async () => {
+    for (const malformed of [
+      { aborted: false },
+      {
+        aborted: false,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      },
+    ]) {
+      let dispatched = false;
+      await expect(
+        withGitHubRequestDeadline(
+          async () => {
+            dispatched = true;
+            return 200;
+          },
+          { signal: malformed as AbortSignal },
+        ),
+      ).rejects.toThrow('Invalid GitHub request abort signal');
+      expect(dispatched).toBe(false);
+    }
+  });
+
   it('completes a successful request within its deadline', async () => {
     const value = await withGitHubRequestDeadline(async (signal) => {
       expect(signal.aborted).toBe(false);
