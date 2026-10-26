@@ -50,27 +50,40 @@ export type DraftPublicationContext = {
  */
 function isValidCompleteInventory(
   inventory: CompleteRemotePrInventory,
+  plan: AllowedPlan,
 ): inventory is Extract<CompleteRemotePrInventory, { complete: true }> {
+  const destination = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)$/.exec(
+    plan.destination,
+  );
   if (
+    !destination ||
+    destination[2] === '.' ||
+    destination[2] === '..' ||
     inventory?.complete !== true ||
     !Array.isArray(inventory.candidates) ||
     inventory.candidates.length > 100_000
   ) {
     return false;
   }
+  const repository = `${destination[1]}/${destination[2]}`;
+  const prefix = `${plan.destination}/pull/`;
   const seenUrls = new Set<string>();
   for (const candidate of inventory.candidates) {
     if (
       candidate === null ||
       typeof candidate !== 'object' ||
       typeof candidate.html_url !== 'string' ||
+      !candidate.html_url.startsWith(prefix) ||
+      !/^[1-9][0-9]*$/.test(candidate.html_url.slice(prefix.length)) ||
       seenUrls.has(candidate.html_url) ||
       typeof candidate.draft !== 'boolean' ||
-      typeof candidate.state !== 'string' ||
+      (candidate.state !== 'open' && candidate.state !== 'closed') ||
       typeof candidate.head?.ref !== 'string' ||
+      candidate.head.ref.length === 0 ||
       typeof candidate.base?.ref !== 'string' ||
+      candidate.base.ref.length === 0 ||
       (candidate.head.repo !== null && typeof candidate.head.repo?.full_name !== 'string') ||
-      (candidate.base.repo !== null && typeof candidate.base.repo?.full_name !== 'string')
+      candidate.base.repo?.full_name !== repository
     ) {
       return false;
     }
@@ -140,7 +153,7 @@ export async function createDraftPublication(
       } catch {
         throw new Error('Remote PR inventory failed; publication blocked.');
       }
-      if (!isValidCompleteInventory(inventory)) {
+      if (!isValidCompleteInventory(inventory, plan)) {
         throw new Error('Remote PR inventory is incomplete or invalid; publication blocked.');
       }
       const preflight = reconcilePublicationCandidates(plan, inventory.candidates);
@@ -161,6 +174,11 @@ export async function createDraftPublication(
       if (!preReservePlan.allowed || publicationKey(preReservePlan) !== operationKey) {
         throw new Error('Publication snapshot changed during remote inventory.');
       }
+      // A complete remote inventory can take seconds. The mandatory snapshot
+      // verifier must run again even for callers without the optional stronger
+      // pre-reservation hook; otherwise a changed local worktree could consume
+      // approval and trigger the only remote POST using a stale review.
+      await context.verifySnapshot(preReservePlan);
       await context.verifyBeforeReserve?.(preReservePlan);
 
       const reservation = context.reserveApproved
@@ -223,7 +241,7 @@ async function reconcileOnly(
       reason: 'Remote inventory request failed; no write was retried.',
     };
   }
-  if (!isValidCompleteInventory(inventory)) {
+  if (!isValidCompleteInventory(inventory, plan)) {
     return {
       status: 'uncertain',
       entry: context.journal.get(context.workspaceId)!,
