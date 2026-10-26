@@ -289,7 +289,7 @@ export function WorkflowBoard({
             </select>
           </label>
           <button
-            disabled={loading || !coderTask || !reviewer}
+            disabled={loading || Boolean(error) || !coderTask || !reviewer}
             onClick={() =>
               void mutate(async () => {
                 const task = dashboard!.tasks.find((item) => item.id === coderTask)!;
