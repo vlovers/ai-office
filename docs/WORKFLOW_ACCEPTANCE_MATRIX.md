@@ -36,7 +36,11 @@ unrelated FIFO entries, matching the persisted Dashboard API. Preserve
 session configuration and private execution bindings across restarts.
 A second restart must not mutate blocked workflow versions. After explicit
 cancellation, a third restart must keep the selected Workflow cancelled in
-the live timeline, with no actionable downstream controls.
+the live timeline, with no actionable downstream controls. The persistent
+"Workflow execution requires manual review after server restart." alert is
+an intentional safety notice, not a transient connection error. Assert that
+this notice remains visible without duplicate transport-error alerts after
+reconnection; do not suppress it just to make a browser test pass.
 
 ## 4. Crash between recovery transactions
 
