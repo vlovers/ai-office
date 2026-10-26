@@ -1992,10 +1992,12 @@ select {
 }
 
 /* Focused screens must not inherit the legacy two-column inspector layout. */
-.unified-workspace[data-screen="tasks"].focus-mode .mission-grid,
-.unified-workspace[data-screen="workflows"].focus-mode .mission-grid,
-.unified-workspace[data-screen="team"].focus-mode .mission-grid,
-.unified-workspace[data-screen="settings"].focus-mode .mission-grid {
+.unified-workspace.focus-mode:is(
+  [data-screen="tasks"],
+  [data-screen="workflows"],
+  [data-screen="team"],
+  [data-screen="settings"]
+) .mission-grid {
   grid-template-columns: minmax(0, 1fr);
 }
 .unified-workspace[data-screen="tasks"].focus-mode .inspector {
