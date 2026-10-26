@@ -1966,3 +1966,27 @@ select {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Keep onboarding and optional scene controls in the overview where they belong. */
+.unified-workspace[data-screen="tasks"] .onboarding,
+.unified-workspace[data-screen="workflows"] .onboarding,
+.unified-workspace[data-screen="team"] .onboarding,
+.unified-workspace[data-screen="settings"] .onboarding,
+.unified-workspace[data-screen="tasks"] .motion-toggle,
+.unified-workspace[data-screen="workflows"] .motion-toggle,
+.unified-workspace[data-screen="team"] .motion-toggle,
+.unified-workspace[data-screen="settings"] .motion-toggle,
+.unified-workspace[data-screen="tasks"] .crt-toggle,
+.unified-workspace[data-screen="workflows"] .crt-toggle,
+.unified-workspace[data-screen="team"] .crt-toggle,
+.unified-workspace[data-screen="settings"] .crt-toggle {
+  display: none !important;
+}
+.unified-workspace .sidebar .nav-item[aria-current="page"] {
+  font-weight: 700;
+}
+.unified-workspace .nav-create-task {
+  margin-top: 8px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 8px;
+}
