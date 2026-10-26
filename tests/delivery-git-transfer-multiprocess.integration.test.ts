@@ -276,7 +276,7 @@ describe('multi-process durable Git transfer crash boundaries', () => {
           state: 'confirmed',
           receiptSha: t.identity.headSha,
         });
-        expect(remote).toHaveBeenCalledTimes(3);
+        expect(remote).toHaveBeenCalledTimes(4);
       } finally {
         reopened.close();
       }
