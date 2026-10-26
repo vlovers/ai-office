@@ -235,3 +235,16 @@ Reviewed the full added `scripts/check-workflow-action-pins.mjs` and `tests/work
 
 Diff review identified strong coverage but cannot establish runtime test success. No tests were executed here, current PR head/base SHA and CI freshness remain unverified, and no independent review approval was observed in the prior review-submission query. PR #272 is therefore not marked accepted or merge-ready.
 
+
+## Grid Atlas #272 current integration blocker confirmed (2026-10-27)
+
+Fetched the live PR metadata and the current default-branch `.github/workflows/commons-original-review.yml`.
+
+- PR #272 current reported head: `5dbec0773952fc417c8cebe40f67e226e2610b9f`; base `main` at `7bea3bb9bab06f93cc6547e3fe2e5e89294711b4`; GitHub reports `mergeable=false`.
+- The current default-branch workflow `.github/workflows/commons-original-review.yml` is absent from the PR branch diff and still contains mutable `actions/checkout@v4`, `actions/setup-node@v4`, and `actions/upload-artifact@v4` references.
+- Therefore full repository-wide pin coverage cannot be claimed for PR #272 as it stands. The PR body itself identifies this workflow as a post-divergence blocker.
+- Safe next action is to reconcile the PR branch with current `main`, resolve any add/add conflict by retaining the complete research-only workflow behavior, pin the three actions to verified full SHAs, and then rerun `npm run check`, `npm test`, relevant workflow CI, and the existing failing UI/accessibility workflow separately. Do not relax the 200%-text overflow assertion or mix unrelated UI changes into the security PR.
+- Current CI is not confirmed green and independent approval is outstanding. Do not merge until the new workflow is covered, the branch is current/mergeable, current-head checks pass, and independent review is recorded.
+
+This is a live metadata and default-branch file check, not a branch modification. No PR files or workflows were changed in this step.
+
