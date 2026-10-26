@@ -46,6 +46,7 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await expect(page.locator('#workflows')).toBeFocused();
   const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
@@ -228,8 +229,10 @@ try {
     'approval',
     { timeout: 10000 },
   );
-  await page.getByRole('navigation', { name: 'Dashboard sections' })
-    .getByRole('link', { name: 'Office' }).click();
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Office' })
+    .click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
   await page.getByRole('navigation', { name: 'Dashboard sections' })
