@@ -224,10 +224,10 @@ describe('multi-process durable Git transfer crash boundaries', () => {
           state: 'confirmed',
           receiptSha: t.identity.headSha,
         });
-        expect(remote).toHaveBeenCalledTimes(2);
+        expect(remote).toHaveBeenCalledTimes(3);
         expect(() => journal.begin('push', t.identity)).toThrow('already exists');
         expect((await reconcileGitTransferReceipts(context)).status).toBe('ready');
-        expect(remote).toHaveBeenCalledTimes(4);
+        expect(remote).toHaveBeenCalledTimes(6);
       } finally {
         reopened.close();
       }
