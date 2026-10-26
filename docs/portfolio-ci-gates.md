@@ -36,29 +36,26 @@ This is a **read-only planning inventory**, not proof that GitHub branch protect
 - [ ] Enable gates in small batches, verify with a test PR, and record results in #87.
 
 
-## Governance files audit — default branches (2026-10-26)
+## Governance rollout inventory (refreshed 2026-10-27)
 
-This is a path-specific snapshot of **default branches**, not a repository-wide absence claim and not a report that draft governance PRs have merged. Existing project-specific `CONTRIBUTING.md` requirements remain authoritative; a shared agent contract must **add to, not replace**, stricter project security, historical attribution, database isolation or release constraints.
+This inventory is based on repository file checks and the currently open PR search. It does not assert that any PR is approved, mergeable, or that branch protection is enabled. Do not create duplicate PRs or merge without current checks and independent review.
 
-| Repository | `AGENTS.md` | `CLAUDE.md` | `CONTRIBUTING.md` | `.github/PULL_REQUEST_TEMPLATE.md` |
-| --- | --- | --- | --- | --- |
-| AI Office | missing | missing | present | missing |
-| Grid Atlas | present | present | present | present |
-| RuleWitness | missing | missing | present | missing |
-| MutationBoundary | missing | missing | present | missing |
-| Estima | missing | missing | missing | missing |
-| Last Chapter | missing | missing | missing | missing |
+| Repository | Existing governance candidates | Next action |
+| --- | --- | --- |
+| AI Office | [#88 foundation governance](https://github.com/vlovers/ai-office/pull/88), [#89 evidence ledger](https://github.com/vlovers/ai-office/pull/89); follow-ups [#91 security intake](https://github.com/vlovers/ai-office/pull/91), [#80 action SHA pins](https://github.com/vlovers/ai-office/pull/80) | Review #88 and #89 first; independently review #91 and #80 against current main. Portfolio feature PRs are not governance prerequisites. |
+| Grid Atlas | Governance baseline exists; [#271 issue intake](https://github.com/vlovers/grid-atlas/pull/271), [#272 immutable Actions pins](https://github.com/vlovers/grid-atlas/pull/272) | Preserve editorial/source/media safeguards; validate workflow pinning and issue templates separately. |
+| RuleWitness | [#82 engineering governance](https://github.com/vlovers/rulewitness/pull/82), [#85 agent agreement](https://github.com/vlovers/rulewitness/pull/85), [#83 issue/security intake](https://github.com/vlovers/rulewitness/pull/83) | Reconcile overlapping docs and retain package-safety rules. |
+| MutationBoundary | [#68 engineering governance](https://github.com/vlovers/mutation-boundary/pull/68), [#71 agent agreement](https://github.com/vlovers/mutation-boundary/pull/71), [#69 issue intake](https://github.com/vlovers/mutation-boundary/pull/69) | Reconcile overlap and retain disposable PostgreSQL-only tests and redacted diagnostics. |
+| Estima | [#13 engineering governance](https://github.com/vlovers/estima/pull/13), [#16 agent agreement](https://github.com/vlovers/estima/pull/16), [#14 contributing/security baseline](https://github.com/vlovers/estima/pull/14), [#15 Actions SHA pins](https://github.com/vlovers/estima/pull/15) | Target develop, not main; retain tenant isolation and migration gates. |
+| Last Chapter | [#5 engineering foundation](https://github.com/vlovers/last-chapter/pull/5), [#14 Claude guidance](https://github.com/vlovers/last-chapter/pull/14) | Resolve integration strategy carefully: active game branch has richer narrative/architecture rules than bootstrap main. |
 
-The paths `REVIEW_POLICY.md` and `docs/RELEASE_CHECKLIST.md` were not found at repository root / indicated location on these branches; policies may exist elsewhere. Do not conflate file presence with enforced GitHub rules. Some governance changes already exist in draft PRs and require independent review before integration.
+### Rollout exit criteria
 
-### Integration order and exit criteria
+1. Select canonical governance PR(s) per repository; do not close duplicates until confirming no unique changes would be lost.
+2. Check changed files against the current target branch and current CI result; old branch snapshots and CI runs are not evidence for the latest head.
+3. Verify local links and exact package scripts; report unrun tests honestly.
+4. Obtain independent review on the exact head SHA and resolve blocking findings.
+5. Inspect actual rulesets/branch protection through an authorized reader and capture exact check contexts. Status remains unknown until verified; documentation is not enforcement.
+6. Obtain explicit owner authorization before changing branch protection, merging, publishing, or deploying.
+7. After authorized integration, re-fetch files from the target branch and update this ledger with evidence.
 
-1. **Do not create duplicate governance PRs.** Reconcile existing governance PRs (#88 AI Office, #85 RuleWitness, #71 MutationBoundary, #16 Estima, #14 Last Chapter) against the default-branch baseline; Grid Atlas already has both agent files.
-2. Validate that each governance proposal references the actual project commands and retains its domain-specific safeguards. No universal CI command should override repository instructions.
-3. For each project, confirm: one canonical agent contract, Claude guidance pointing to it, a PR template, Definition of Done, independent review expectations, issue triage rules, and a release checklist or documented equivalent. Record deliberate exceptions.
-4. Obtain independent review and passing checks for each **governance** PR before proposing merge. Do not inspect or manage unrelated product PRs as part of this work.
-5. Verify resulting files on the actual integration branch **after** authorized merges; only then mark governance rollout complete. Branch protection/ruleset changes require separate owner approval.
-
-## Dashboard data contract (proposed)
-
-One row per repository with `repository`, `integrationBranch`, `governancePr`, `ciRunUrls`, `ciState` (`passing|failing|pending|unknown`), `independentReview` (`approved|missing|unknown`), `branchProtection` (`verified|unverified`), `blockers`, `lastVerifiedAt`, and `evidenceUrls`. Never map unknown or pending to green. The dashboard should link to live GitHub evidence and clearly distinguish a historical snapshot from live status.
