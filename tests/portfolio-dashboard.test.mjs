@@ -21,7 +21,7 @@ test('snapshot does not equate passing workflow with required checks or unverifi
   const output = renderMarkdown(data);
   assert.match(output, /not live monitoring/);
   assert.match(output, /not gate verified/);
-  assert.match(output, /Last Chapter/i);
+  assert.match(output, /last-chapter/i);
 });
 
 test('rate limited workflow calls remain unknown', async () => {
