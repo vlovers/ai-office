@@ -138,10 +138,13 @@ export async function attestGitHubCommitRefs(
   if (options.token !== undefined && (!options.token || /\s/.test(options.token))) {
     throw new Error('Invalid server-side GitHub credential.');
   }
-  // One outer deadline bounds BOTH sequential ref GETs, including body
-  // parsing. Per-request deadlines alone would renew the budget for the
-  // second GET. The outer AbortSignal prevents a late head response from
-  // starting the base GET after the attestation has timed out.
+  // One outer deadline bounds the head/base/head sequence, including body
+  // parsing. A concurrent writer may move the managed head while the base
+  // request is pending. Re-read it after the base rather than authorizing a
+  // POST from a head snapshot that was already stale during attestation.
+  // This is a fail-closed TOCTOU reduction, not an atomic GitHub snapshot.
+  // The outer AbortSignal also prevents late responses from starting a
+  // subsequent GET after the attestation has timed out.
   const timeoutMs = options.timeoutMs ?? 15_000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 60_000) {
     throw new Error('Invalid GitHub commit ref attestation deadline.');
@@ -156,6 +159,14 @@ export async function attestGitHubCommitRefs(
       const baseCommitSha = await fetchExactCommitRef(repository, plan.baseBranch, boundedOptions);
       if (baseCommitSha !== approval.baseCommitSha) {
         throw new Error('GitHub base branch moved since operator review.');
+      }
+      const confirmedHeadSha = await fetchExactCommitRef(
+        repository,
+        plan.branch,
+        boundedOptions,
+      );
+      if (confirmedHeadSha !== approval.headCommitSha) {
+        throw new Error('GitHub head branch moved during remote attestation.');
       }
       return {
         ...approval,
