@@ -692,7 +692,14 @@ if (process.argv.includes('--restart-server')) {
       });
       await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
     } finally {
+      // Observe the deliberately failed stale response before asserting UI
+      // state; otherwise the assertion can pass before the failure arrives.
+      const staleFailure = page.waitForResponse(
+        (response) => response.url() === dashboardUrl && response.status() === 503,
+        { timeout: 10000 },
+      );
       releaseSlowPoll?.();
+      await staleFailure;
       await page.unroute(dashboardUrl);
     }
     // Once the delayed request completes, its obsolete epoch must not undo
