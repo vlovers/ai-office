@@ -52,7 +52,7 @@ describe('read-only GitHub PR discovery', () => {
     expect(result.complete).toBe(true);
     expect(result.candidates).toHaveLength(3);
     expect(result.candidates[2]?.state).toBe('closed');
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it('uses only server-provided credentials and does not include them in errors', async () => {
@@ -164,7 +164,7 @@ describe('read-only GitHub PR discovery', () => {
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
     expect(result.candidates).toHaveLength(2);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it.each([
@@ -216,7 +216,7 @@ describe('read-only GitHub PR discovery', () => {
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
     expect(result.candidates).toHaveLength(2);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it('rejects a last-page hint beyond the current page without a next link', async () => {
@@ -347,10 +347,65 @@ describe('read-only GitHub PR discovery', () => {
       });
       expect(result.complete).toBe(true);
       expect(result.candidates).toEqual([candidate]);
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(4);
     } finally {
       clock.mockRestore();
     }
+  });
+
+  it('rejects a shifted multi-page inventory even when each pass has no duplicate URL', async () => {
+    let firstPageReads = 0;
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      expect(init.method).toBe('GET');
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        return json([
+          firstPageReads === 1
+            ? candidate
+            : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+        ]);
+      }
+      return json([]);
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 1 })).rejects.toThrow(
+      'pagination changed during inventory',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+  });
+
+  it('rejects a changed PR state between pagination passes', async () => {
+    let firstPageReads = 0;
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        return json([{ ...candidate, state: firstPageReads === 1 ? 'open' : 'closed' }]);
+      }
+      return json([]);
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 1 })).rejects.toThrow(
+      'pagination changed during inventory',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it('fails closed on a rate limit during the second inventory pass', async () => {
+    let firstPageReads = 0;
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        if (firstPageReads === 2) return json({ message: 'rate limit' }, 429);
+        return json([candidate]);
+      }
+      return json([]);
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 1 })).rejects.toThrow(
+      'HTTP 429',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it('rejects invalid total inventory deadlines before contacting GitHub', async () => {
