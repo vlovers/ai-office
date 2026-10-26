@@ -147,3 +147,16 @@ Requeried PR-triggered workflow runs for the exact head SHAs recorded in the thr
 
 Review submissions previously inspected showed no non-author APPROVED review on these candidates. Workflow success does not replace independent approval, and these results do not prove required branch protection is enabled. Next gate: obtain current PR head/base SHA and current checks, then independent review on that exact diff.
 
+
+## Independent content review notes (2026-10-27)
+
+Read-only reviewer pass over the available PR diff payloads for RuleWitness #82, MutationBoundary #68 and Estima #13 found the following concrete items to validate before acceptance. This is an assistant technical assessment, not an authorized GitHub review submission.
+
+- **RuleWitness #82:** The PR template requires package smoke and `npm pack --dry-run`; the AGENTS contract correctly distinguishes the repository's own documented packaging/build checks from executing analyzed third-party lifecycle scripts. During review, verify the implemented package test actually disables scripts for installed analyzed packages and that unknown/fail-closed and exit-code 3 cases are asserted by independent tests, not only described in docs.
+- **MutationBoundary #68:** The docs strongly require disposable PostgreSQL, but its test instructions include a named database and role. Review must verify the executable test guard independently establishes an isolated/disposable target rather than treating database name or a confirmation flag as proof; also check redaction tests cover connection strings, row values and keys.
+- **Estima #13:** The docs correctly point to `develop` and emphasize tenant boundaries and atomic writes. Review must verify that the referenced scripts exist on the current target branch and that the cross-tenant negative tests and migration rollback claims are backed by actual integration tests rather than the documentation checklist alone.
+
+### Acceptance status
+
+These are review prompts, not confirmed defects. The available tools expose diff content and historical CI runs but do not provide a reliable current PR head/base SHA snapshot here. Therefore current-head CI, current branch protection, and independent reviewer approval remain **unverified**. Do not mark these candidates accepted or merge-ready until a reviewer checks the current exact diff and GitHub shows the required approval/checks.
+
