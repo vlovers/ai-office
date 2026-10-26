@@ -340,9 +340,7 @@ export function WorkflowBoard({
             </select>
           </label>
           <button
-            disabled={
-              mutationUnavailable || !selectedCoder || !selectedReviewer || !selectedQA
-            }
+            disabled={mutationUnavailable || !selectedCoder || !selectedReviewer || !selectedQA}
             onClick={() =>
               void mutate(async () => {
                 if (!selectedCoder || !selectedReviewer || !selectedQA) return;
