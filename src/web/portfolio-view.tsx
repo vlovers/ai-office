@@ -118,7 +118,11 @@ export function PortfolioView() {
           <span className="eyebrow">ENGINEERING / PORTFOLIO</span>
           <h2 id="portfolio-heading">Project health</h2>
         </div>
-        <button className="secondary" type="button" onClick={() => setRevision((value) => value + 1)}>
+        <button
+          className="secondary"
+          type="button"
+          onClick={() => setRevision((value) => value + 1)}
+        >
           Refresh
         </button>
       </div>
@@ -172,7 +176,8 @@ export function PortfolioView() {
         Independent reviews and effective branch rules are not verified here. See{' '}
         <a href="https://github.com/vlovers/ai-office/issues/87" target="_blank" rel="noreferrer">
           governance tracking #87
-        </a>.
+        </a>
+        .
       </p>
     </section>
   );
