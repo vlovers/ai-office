@@ -156,6 +156,80 @@ function approvalConsumedAt(db: DatabaseSync, approvalId: string) {
 }
 
 describe('session-bound approved GitHub Draft PR executor (server only)', () => {
+  it('blocks a drifting preflight inventory before consuming approval or issuing POST', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    const unrelated = {
+      ...receipt,
+      number: 901,
+      html_url: 'https://github.com/vlovers/ai-office/pull/901',
+      head: { ...receipt.head, ref: 'other-branch' },
+    };
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (url.includes('/pulls?')) {
+          if (url.includes('page=2')) return json([unrelated]);
+          const next = url.replace('page=1', 'page=2');
+          return new Response(JSON.stringify([unrelated]), {
+            status: 200,
+            headers: { Link: `<${next}>; rel="next"` },
+          });
+        }
+        return original(url, init);
+      });
+      await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow(
+        'Remote PR inventory failed',
+      );
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+
+      t.fetcher.mockImplementation(original);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps a completed POST uncertain when the receipt inventory shifts across pages', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    let posted = false;
+    let drifting = true;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          posted = true;
+          return original(url, init);
+        }
+        if (posted && drifting && url.includes('/pulls?')) {
+          if (url.includes('page=2')) return json([receipt]);
+          const next = url.replace('page=1', 'page=2');
+          return new Response(JSON.stringify([receipt]), {
+            status: 200,
+            headers: { Link: `<${next}>; rel="next"` },
+          });
+        }
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBe(10_000);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+
+      drifting = false;
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('attests both refs, inventories PRs, atomically reserves and verifies detail after one POST', async () => {
     const t = setup();
     try {
