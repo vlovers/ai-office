@@ -288,6 +288,28 @@ registered as an HTTP endpoint. It is not permission to enable production
 GitHub write credentials. Real target-host crash/credential tests, independently
 reviewed operator ingress and issue #58 remain release blockers.
 
+### Receipt confirmation: final read-only revalidation (PR #79)
+
+The shared `createDraftPublication` orchestrator now requires an independent
+`verifyRemoteReceipt` callback even for its generic server-side entry point.
+A GitHub PR list entry, an unverified POST body, or a stored URL cannot by itself
+confirm a publication. Missing verification is rejected before acquiring a lease,
+reserving an approval, or contacting GitHub.
+
+After the independent detail GET, the orchestrator refreshes the approved
+publication plan and re-runs the trusted snapshot verifier **under the same
+repository lease**, immediately before `publish` or `confirmUncertain`.
+This applies to successful POSTs, ambiguous-write reconciliation, and already
+published receipt reuse. If the plan changes or the snapshot check fails after
+a remote request, the local reservation stays uncertain; an already published
+row is left intact and reuse is refused. Neither outcome permits another POST.
+
+The final verifier must be read-only, server-owned, and capable of checking
+exact Git commit identities. This is a defense against registry and Git drift
+during asynchronous remote receipt reads, **not** a guarantee that a remote
+request and local authorization revocation are atomic. Independent security
+review and target-host tests remain required before production activation.
+
 ## Publication Journal SQLite invariants (combined integration PR #79)
 
 The `DeliveryJournal` constructor now installs additive SQLite indexes/triggers
