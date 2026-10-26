@@ -181,6 +181,8 @@ describe('durable publication SQLite invariants', () => {
         ],
         { encoding: 'utf8', timeout: 5000 },
       );
+      expect(child.error).toBeUndefined();
+      expect(child.stderr).toBe('');
       expect(child.signal).toBe('SIGKILL');
 
       const reopened = new DatabaseSync(file);
