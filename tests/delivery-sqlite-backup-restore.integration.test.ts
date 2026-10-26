@@ -127,33 +127,38 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
       try {
         const restoredPublications = new DeliveryJournal(first);
         const restoredTransfers = new DeliveryGitTransferJournal(second);
+        const replacePublication = first.prepare(
+          "INSERT OR REPLACE INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)",
+        );
         expect(() =>
-          first
-            .prepare(
-              "INSERT OR REPLACE INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)",
-            )
-            .run(identity.workspaceId, identity.operationKey),
+          replacePublication.run(identity.workspaceId, identity.operationKey),
         ).toThrow('already exists');
+
+        const replacePush = second.prepare(
+          "INSERT OR REPLACE INTO delivery_git_transfers (workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) VALUES (?, 'push', ?, ?, ?, ?, ?, 'intent', NULL)",
+        );
         expect(() =>
-          second
-            .prepare(
-              "INSERT OR REPLACE INTO delivery_git_transfers (workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) VALUES (?, 'push', ?, ?, ?, ?, ?, 'intent', NULL)",
-            )
-            .run(
-              identity.workspaceId,
-              identity.operationKey,
-              identity.destination,
-              identity.branch,
-              identity.headSha,
-              identity.baseSha,
-            ),
+          replacePush.run(
+            identity.workspaceId,
+            identity.operationKey,
+            identity.destination,
+            identity.branch,
+            identity.headSha,
+            identity.baseSha,
+          ),
         ).toThrow('already exists');
+
+        const deletePublication = () =>
+          first.exec("DELETE FROM delivery_journal WHERE workspace_id='workspace-backup'");
+        const deleteTransfers = () =>
+          second.exec("DELETE FROM delivery_git_transfers WHERE workspace_id='workspace-backup'");
+        expect(deletePublication).toThrow('cannot be deleted');
+        expect(deleteTransfers).toThrow('cannot be deleted');
+
+        const secondPublicationJournal = new DeliveryJournal(second);
         expect(() =>
-          first.exec("DELETE FROM delivery_journal WHERE workspace_id='workspace-backup'"),
-        ).toThrow('cannot be deleted');
-        expect(() =>
-          second.exec("DELETE FROM delivery_git_transfers WHERE workspace_id='workspace-backup'"),
-        ).toThrow('cannot be deleted');
+          secondPublicationJournal.reserve('workspace-foreign', identity.operationKey),
+        ).toThrow('belongs to another workspace');
 
         expect(restoredPublications.get(identity.workspaceId)).toMatchObject({
           operationKey: identity.operationKey,
@@ -168,6 +173,47 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
       } finally {
         second.close();
         first.close();
+      }
+    } finally {
+      source.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a stale restored publication uncertain after a newer live receipt', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-delivery-stale-backup-'));
+    const source = new DatabaseSync(join(directory, 'live.sqlite'));
+    const snapshotPath = join(directory, 'snapshot.sqlite');
+    const pullRequestUrl = 'https://github.com/vlovers/ai-office/pull/123';
+    try {
+      source.exec('PRAGMA journal_mode=WAL');
+      const liveJournal = new DeliveryJournal(source);
+      liveJournal.reserve(identity.workspaceId, identity.operationKey);
+      liveJournal.markUncertain(identity.workspaceId, identity.operationKey);
+      await backup(source, snapshotPath);
+
+      liveJournal.confirmUncertain(identity.workspaceId, identity.operationKey, pullRequestUrl);
+      expect(liveJournal.get(identity.workspaceId)?.state).toBe('published');
+
+      const restored = new DatabaseSync(snapshotPath);
+      try {
+        const journal = new DeliveryJournal(restored);
+        expect(restored.prepare('PRAGMA integrity_check').get()?.integrity_check).toBe('ok');
+        expect(journal.get(identity.workspaceId)).toMatchObject({
+          operationKey: identity.operationKey,
+          state: 'uncertain',
+          pullRequestUrl: null,
+        });
+        expect(() => journal.reserve(identity.workspaceId, identity.operationKey)).toThrow(
+          'already exists',
+        );
+        expect(() =>
+          journal.publish(identity.workspaceId, identity.operationKey, pullRequestUrl),
+        ).toThrow('requires manual recovery');
+        expect(journal.listUnresolved()).toHaveLength(1);
+        expect(journal.get(identity.workspaceId)?.state).toBe('uncertain');
+      } finally {
+        restored.close();
       }
     } finally {
       source.close();
