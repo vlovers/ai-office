@@ -17,11 +17,32 @@ describe('complete read-only GitHub PR pagination', () => {
     const fetchPage = vi.fn(async (page: number) =>
       page === 1
         ? { candidates: [candidate], nextPage: 2 }
-        : { candidates: [{ ...candidate, state: 'closed' }], nextPage: null },
+        : {
+            candidates: [
+              {
+                ...candidate,
+                html_url: 'https://github.com/vlovers/ai-office/pull/124',
+                state: 'closed',
+              },
+            ],
+            nextPage: null,
+          },
     );
     const result = await collectRemotePullRequests(fetchPage);
     expect(result.complete).toBe(true);
     expect(result.candidates).toHaveLength(2);
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects repeated PR URLs even if their state changes between pages', async () => {
+    const fetchPage = vi.fn(async (page: number) =>
+      page === 1
+        ? { candidates: [candidate], nextPage: 2 }
+        : { candidates: [{ ...candidate, state: 'closed' }], nextPage: null },
+    );
+    await expect(collectRemotePullRequests(fetchPage)).rejects.toThrow(
+      'duplicate or invalid PR identity',
+    );
     expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 
@@ -51,7 +72,15 @@ describe('complete read-only GitHub PR pagination', () => {
   it('refuses a listing that exceeds the configured safe page limit', async () => {
     await expect(
       collectRemotePullRequests(
-        async (page) => ({ candidates: [candidate], nextPage: page + 1 }),
+        async (page) => ({
+          candidates: [
+            {
+              ...candidate,
+              html_url: `https://github.com/vlovers/ai-office/pull/${page + 122}`,
+            },
+          ],
+          nextPage: page + 1,
+        }),
         2,
       ),
     ).rejects.toThrow('safe pagination limit');
