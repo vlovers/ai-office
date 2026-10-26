@@ -134,3 +134,16 @@ Content comparison of the shared files found meaningful differences, not just du
 
 These findings are recommendations for the PR authors/canonical branches; no pull request has been edited or closed by this audit. Before declaring any smaller PR redundant, confirm the missing safeguards have been added to the selected foundation candidate, check the exact current base/head and CI, and obtain independent review.
 
+
+## Candidate CI evidence rechecked (2026-10-27)
+
+Requeried PR-triggered workflow runs for the exact head SHAs recorded in the three foundation PR descriptions. These results confirm historical evidence on those SHAs only; they do **not** establish that each PR still has the same head SHA or that CI is current after subsequent changes.
+
+| PR | Recorded head SHA | Workflow evidence | Interpretation |
+| --- | --- | --- | --- |
+| [RuleWitness #82](https://github.com/vlovers/rulewitness/pull/82) | `7ea6357de953a8cb9e37140dc2b67765f7941b5b` | RuleWitness CI: success; permissions review: success | Historical exact-SHA checks confirmed; recheck current PR head before merge. |
+| [MutationBoundary #68](https://github.com/vlovers/mutation-boundary/pull/68) | `d901cc88697a0e3008f866d32b6385f17342d52d` | MutationBoundary checks: success | Historical exact-SHA check confirmed; recheck current PR head before merge. |
+| [Estima #13](https://github.com/vlovers/estima/pull/13) | `804873ea0b0c6311cce9dd7e883df1224ac93bfa` | PostgreSQL integration validation: success; Bun migration validation: success | Historical exact-SHA checks confirmed; recheck current PR head before merge. |
+
+Review submissions previously inspected showed no non-author APPROVED review on these candidates. Workflow success does not replace independent approval, and these results do not prove required branch protection is enabled. Next gate: obtain current PR head/base SHA and current checks, then independent review on that exact diff.
+
