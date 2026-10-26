@@ -35,7 +35,7 @@ describe('bounded GitHub request boundary', () => {
             dispatched = true;
             return 200;
           },
-          { signal: malformed as AbortSignal },
+          { signal: malformed as unknown as AbortSignal },
         ),
       ).rejects.toThrow('Invalid GitHub request abort signal');
       expect(dispatched).toBe(false);
