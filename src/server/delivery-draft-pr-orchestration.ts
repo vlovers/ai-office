@@ -39,8 +39,8 @@ export type DraftPublicationContext = {
   createDraft: (plan: AllowedPlan) => Promise<GitHubDraftReceipt>;
   /** Optional trusted atomic approval+reservation adapter; no external writes inside. */
   reserveApproved?: (plan: AllowedPlan) => DeliveryJournalEntry;
-  /** Optional independent PR detail verification, including immutable commit SHAs. */
-  verifyRemoteReceipt?: (plan: AllowedPlan, url: string) => Promise<void>;
+  /** Mandatory independent PR detail verification, including immutable commit SHAs. */
+  verifyRemoteReceipt: (plan: AllowedPlan, url: string) => Promise<void>;
 };
 
 /**
@@ -82,6 +82,11 @@ export async function createDraftPublication(
   if (!workspaceId || !initialPlan.allowed) {
     throw new Error('Publication identity is required.');
   }
+  // A list entry or POST body is not an independently verified commit-pinned
+  // receipt. Reject unsafe generic callers before any lease or journal write.
+  if (typeof context.verifyRemoteReceipt !== 'function') {
+    throw new Error('Independent GitHub PR detail verification is required.');
+  }
   const operationKey = publicationKey(initialPlan);
   return withPublicationLease(
     context.repository,
@@ -107,9 +112,8 @@ export async function createDraftPublication(
           if (decision.action !== 'reuse') {
             throw new Error('Stored publication receipt failed destination verification.');
           }
-          if (context.verifyRemoteReceipt) {
-            await context.verifyRemoteReceipt(plan, existing.pullRequestUrl!);
-          }
+          await context.verifyRemoteReceipt(plan, existing.pullRequestUrl!);
+          await revalidateReceiptSnapshot(context, operationKey);
           return { status: 'published', entry: existing } as const;
         }
         // Even a reserved record may represent a successful remote write after a crash.
@@ -177,7 +181,8 @@ export async function createDraftPublication(
       }
       try {
         const url = validatePublicationReceipt(plan, receipt);
-        await context.verifyRemoteReceipt?.(plan, url);
+        await context.verifyRemoteReceipt(plan, url);
+        await revalidateReceiptSnapshot(context, operationKey);
         return {
           status: 'published',
           entry: journal.publish(workspaceId, operationKey, url),
@@ -224,16 +229,15 @@ async function reconcileOnly(
       reason: result.reason,
     };
   }
-  if (context.verifyRemoteReceipt) {
-    try {
-      await context.verifyRemoteReceipt(plan, result.pullRequestUrl);
-    } catch {
-      return {
-        status: 'uncertain',
-        entry: context.journal.get(context.workspaceId)!,
-        reason: 'Remote PR detail failed independent verification; no write was retried.',
-      };
-    }
+  try {
+    await context.verifyRemoteReceipt(plan, result.pullRequestUrl);
+    await revalidateReceiptSnapshot(context, operationKey);
+  } catch {
+    return {
+      status: 'uncertain',
+      entry: context.journal.get(context.workspaceId)!,
+      reason: 'Remote PR receipt or final reviewed snapshot failed verification; no write was retried.',
+    };
   }
   return {
     status: 'published',
@@ -243,4 +247,20 @@ async function reconcileOnly(
       result.pullRequestUrl,
     ),
   };
+}
+
+/**
+ * Remote GETs and receipt verification yield the event loop. A stale review
+ * must not be committed as published after an independent verification call.
+ * This is deliberately read-only and runs under the shared repository lease.
+ */
+async function revalidateReceiptSnapshot(
+  context: DraftPublicationContext,
+  operationKey: string,
+): Promise<void> {
+  const refreshed = await context.refreshPlan();
+  if (!refreshed.allowed || publicationKey(refreshed) !== operationKey) {
+    throw new Error('Publication snapshot changed before durable receipt confirmation.');
+  }
+  await context.verifySnapshot(refreshed);
 }
