@@ -250,19 +250,22 @@ describe('read-only GitHub PR discovery', () => {
         target.searchParams.set('page', String(targetPage));
         return `<${target.toString()}>; rel="${relation}"`;
       };
-      return new Response(JSON.stringify([
-        page === 1
-          ? candidate
-          : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
-      ]), {
-        status: 200,
-        headers: {
-          link:
-            page === 1
-              ? [linked(2, 'next'), linked(2, 'last')].join(', ')
-              : [linked(1, 'first'), linked(1, 'prev'), linked(2, 'last')].join(', '),
+      return new Response(
+        JSON.stringify([
+          page === 1
+            ? candidate
+            : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+        ]),
+        {
+          status: 200,
+          headers: {
+            link:
+              page === 1
+                ? [linked(2, 'next'), linked(2, 'last')].join(', ')
+                : [linked(1, 'first'), linked(1, 'prev'), linked(2, 'last')].join(', '),
+          },
         },
-      });
+      );
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
     expect(result.candidates).toHaveLength(2);
