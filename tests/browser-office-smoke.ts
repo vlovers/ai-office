@@ -49,7 +49,7 @@ try {
     // Scene screenshots are captured on Office even when a task was started
     // from Tasks. Restore the previous screen for subsequent user actions.
     const previousScreen = await page.locator('.shell').getAttribute('data-screen');
-    if (previousScreen !== 'office') {
+    if (previousScreen && previousScreen !== 'office') {
       await page.getByRole('navigation', { name: 'Dashboard sections' })
         .getByRole('link', { name: 'Office' }).click();
     }
