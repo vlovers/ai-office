@@ -239,6 +239,68 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it.each([422, 429, 503])(
+    'keeps a GitHub Draft POST HTTP %i uncertain and refuses a second POST',
+    async (status) => {
+      const t = setup();
+      try {
+        const original = t.context();
+        let postCount = 0;
+        const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+          if (init.method === 'POST') {
+            postCount++;
+            return json({ message: 'untrusted GitHub error' }, status);
+          }
+          return t.fetcher(url, init);
+        });
+        const context = { ...original, write: { ...original.write, fetcher } };
+        expect((await createSessionBoundGitHubDraft(context)).status).toBe('uncertain');
+        expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+        // A complete negative GET inventory after the failed POST is not
+        // permission to consume another approval or attempt a second write.
+        expect((await createSessionBoundGitHubDraft(context)).status).toBe('uncertain');
+        expect(postCount).toBe(1);
+        expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      } finally {
+        t.close();
+      }
+    },
+  );
+
+  it.each(['redirected', 'foreign-response-url'])(
+    'keeps a %s GitHub Draft POST uncertain without replay',
+    async (mode) => {
+      const t = setup();
+      try {
+        const original = t.context();
+        let postCount = 0;
+        const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+          if (init.method === 'POST') {
+            postCount++;
+            expect(init.redirect).toBe('error');
+            const response = json(receipt, 201);
+            if (mode === 'redirected') {
+              Object.defineProperty(response, 'redirected', { value: true });
+            } else {
+              Object.defineProperty(response, 'url', {
+                value: 'https://untrusted.example.invalid/pulls',
+              });
+            }
+            return response;
+          }
+          return t.fetcher(url, init);
+        });
+        const context = { ...original, write: { ...original.write, fetcher } };
+        expect((await createSessionBoundGitHubDraft(context)).status).toBe('uncertain');
+        expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+        expect((await createSessionBoundGitHubDraft(context)).status).toBe('uncertain');
+        expect(postCount).toBe(1);
+      } finally {
+        t.close();
+      }
+    },
+  );
+
   it('blocks a drifting preflight inventory before consuming approval or issuing POST', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
