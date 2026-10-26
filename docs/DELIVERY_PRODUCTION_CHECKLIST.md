@@ -51,13 +51,16 @@ it never authorizes a push or Draft PR POST. Read-only reconciliation
 retains its separate outer deadline and shared Git lease.
 
 The session-bound Draft PR executor also rejects malformed write deadlines,
-invalid injected transports and already-aborted requests **before** consuming
-the one-use approval or creating a durable publication reservation. After
-reservation, an ambiguous remote outcome remains uncertain and must be
-reconciled by GET; no automatic POST retry is allowed. These checks are
-covered by combined-budget and SQLite approval-preservation tests. They
-do not replace target-host crash tests, least-privilege credential review
-or independent security approval, and remote writes remain disabled.
+invalid injected transports, non-native/spoofed abort signals, malformed
+pre-POST authorization hooks and already-aborted requests **before** consuming
+the one-use approval or creating a durable publication reservation. The shared
+GitHub deadline helper independently rejects malformed cancellation signals
+before dispatch, including on read-only GET paths. After reservation, an
+ambiguous remote outcome remains uncertain and must be reconciled by GET;
+no automatic POST retry is allowed. These checks are covered by combined-budget,
+request-boundary and SQLite approval-preservation tests. They do not replace
+target-host crash tests, least-privilege credential review or independent
+security approval, and remote writes remain disabled.
 
 ## Deployment blockers before real operator access
 
