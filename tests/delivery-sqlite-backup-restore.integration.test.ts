@@ -38,7 +38,7 @@ const identity = {
 };
 
 describe('delivery SQLite WAL backup and offline restore safety', () => {
-  it('preserves consumed approval, uncertain publication, confirmed transfers and SQL guards', async () => {
+  it('restores consumed approval, uncertain PR and confirmed transfers from WAL', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'ai-office-delivery-backup-'));
     const livePath = join(directory, 'live.sqlite');
     const snapshotPath = join(directory, 'snapshot.sqlite');
@@ -82,9 +82,9 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
         expect(() => restoredApprovals.assertPending(approvalId, binding)).toThrow(
           'missing, expired or no longer valid',
         );
-        expect(() => restoredPublications.reserve(identity.workspaceId, identity.operationKey)).toThrow(
-          'already exists',
-        );
+        expect(() =>
+          restoredPublications.reserve(identity.workspaceId, identity.operationKey),
+        ).toThrow('already exists');
         expect(() =>
           restored.exec(
             "UPDATE delivery_journal SET state='reserved' WHERE workspace_id='workspace-backup'",
@@ -103,7 +103,7 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
     }
   });
 
-  it('retains legacy duplicate operation owners across backup and refuses automatic adoption', async () => {
+  it('fails closed on legacy duplicate owners after backup and restore', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'ai-office-delivery-legacy-backup-'));
     const live = new DatabaseSync(join(directory, 'live.sqlite'));
     const snapshotPath = join(directory, 'snapshot.sqlite');
@@ -132,9 +132,9 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
         expect(() => journal.reserve('workspace-c', 'shared-legacy-operation')).toThrow(
           'belongs to another workspace',
         );
-        expect(restored.prepare('SELECT COUNT(*) AS total FROM delivery_journal').get()?.total).toBe(
-          2,
-        );
+        expect(
+          restored.prepare('SELECT COUNT(*) AS total FROM delivery_journal').get()?.total,
+        ).toBe(2);
       } finally {
         restored.close();
       }
