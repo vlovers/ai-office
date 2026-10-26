@@ -80,6 +80,25 @@ try {
   await capture('loading');
   releaseLoading();
   await page.unrouteAll({ behavior: 'wait' });
+  // The five workspaces must be navigable without losing the active office scene.
+  const navigation = page.getByRole('navigation', { name: 'Dashboard sections' });
+  for (const [label, screen, visibleSelector] of [
+    ['Tasks', 'tasks', '#task-history'],
+    ['Workflows', 'workflows', '#workflow-timeline'],
+    ['Team', 'team', '#agent-studio'],
+    ['Settings', 'settings', '#repositories'],
+    ['Office', 'office', '.office-scene'],
+  ] as const) {
+    await navigation.getByRole('link', { name: new RegExp(label) }).click();
+    await expect(page.locator('.shell')).toHaveAttribute('data-screen', screen);
+    await expect(page.locator(visibleSelector)).toBeVisible();
+    await expect(page.locator('nav[aria-label="Dashboard sections"] a[aria-current="page"]')).toHaveCount(1);
+  }
+  await navigation.getByRole('button', { name: /New task/ }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
+  await expect(page.locator('#compose')).toBeVisible();
+  await navigation.getByRole('link', { name: 'Office' }).click();
+  await expect(scene).toBeVisible();
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await capture('two-idle');
