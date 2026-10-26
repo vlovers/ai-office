@@ -160,11 +160,7 @@ export async function attestGitHubCommitRefs(
       if (baseCommitSha !== approval.baseCommitSha) {
         throw new Error('GitHub base branch moved since operator review.');
       }
-      const confirmedHeadSha = await fetchExactCommitRef(
-        repository,
-        plan.branch,
-        boundedOptions,
-      );
+      const confirmedHeadSha = await fetchExactCommitRef(repository, plan.branch, boundedOptions);
       if (confirmedHeadSha !== approval.headCommitSha) {
         throw new Error('GitHub head branch moved during remote attestation.');
       }
