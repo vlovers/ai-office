@@ -307,6 +307,15 @@ if (process.argv.includes('--restart-server')) {
       store.enqueue(task.id, 'local-cli-chatgpt');
       ordinary.push(task.id);
     }
+    // Unsubmitted write task is intentionally outside the queue and every Workflow.
+    // Its create action must be disabled when the dashboard snapshot goes stale.
+    const unsubmittedCoder = store.createTask({
+      repositoryId: repository.id,
+      agentId: coder.id,
+      title: 'Unsubmitted Coder creation gate',
+      prompt: 'Never dispatch this synthetic task',
+      executionMode: 'write',
+    });
     store.close();
 
     browser = await chromium.launch({ headless: true });
@@ -470,6 +479,11 @@ if (process.argv.includes('--restart-server')) {
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await assertNoUnexpectedWorkflowAlerts();
+    await board.getByText('Create workflow', { exact: true }).click();
+    await board.getByLabel('Coder task', { exact: true }).selectOption(unsubmittedCoder.id);
+    await board.getByLabel('Reviewer profile', { exact: true }).selectOption(reviewer.id);
+    const createWorkflow = board.getByRole('button', { name: 'Create gated workflow' });
+    await expect(createWorkflow).toBeEnabled();
 
     // Exercise an actual browser-visible transport failure after a successful
     // reconnect. Persisted state may remain visible, but stale operator actions
@@ -487,10 +501,34 @@ if (process.argv.includes('--restart-server')) {
     });
     await expect(transportAlert).toBeVisible({ timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
+    await expect(createWorkflow).toBeDisabled();
     await expect(board.getByText(/^State: blocked/)).toBeVisible();
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await page.unroute(timelineUrl);
     await expect(transportAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await expect(createWorkflow).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
+
+    // A failed Dashboard fetch also leaves the creation form backed by stale
+    // task/profile choices. It must fail closed until a fresh snapshot arrives.
+    const dashboardUrl = address + '/api/dashboard';
+    await page.route(dashboardUrl, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic dashboard outage' }),
+      }),
+    );
+    const dashboardAlert = board.getByRole('alert').filter({
+      hasText: 'Synthetic dashboard outage',
+    });
+    await expect(dashboardAlert).toBeVisible({ timeout: 20000 });
+    await expect(createWorkflow).toBeDisabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
+    await page.unroute(dashboardUrl);
+    await expect(dashboardAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
