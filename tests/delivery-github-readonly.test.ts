@@ -464,4 +464,64 @@ describe('read-only GitHub PR discovery', () => {
     ).rejects.toThrow('credential');
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it('rejects an inventory that exhausts its total streamed byte budget across pages', async () => {
+    const first = JSON.stringify([candidate]);
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      return new Response(page === 1 ? first : '[]', {
+        status: 200,
+        // A forged small Content-Length must not bypass actual streamed bytes.
+        headers: { 'content-length': '1' },
+      });
+    });
+    await expect(
+      listAllGitHubPullRequests(plan, {
+        fetcher,
+        perPage: 1,
+        inventoryMaxBytes: Buffer.byteLength(first) + 1,
+      }),
+    ).rejects.toThrow('cumulative byte budget');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('counts the verification traversal against the same inventory byte budget', async () => {
+    const first = JSON.stringify([candidate]);
+    const fetcher = vi.fn(async (url: string) =>
+      new Response(new URL(url).searchParams.get('page') === '1' ? first : '[]', {
+        status: 200,
+      }),
+    );
+    await expect(
+      listAllGitHubPullRequests(plan, {
+        fetcher,
+        perPage: 1,
+        inventoryMaxBytes: Buffer.byteLength(first) * 2 + Buffer.byteLength('[]') - 1,
+      }),
+    ).rejects.toThrow('cumulative byte budget');
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('counts actual UTF-8 bytes rather than JavaScript string length', async () => {
+    const body = JSON.stringify([{ ...candidate, note: '🎈'.repeat(40) }]);
+    expect(Buffer.byteLength(body)).toBeGreaterThan(body.length);
+    const fetcher = vi.fn(async () => new Response(body, { status: 200 }));
+    await expect(
+      listAllGitHubPullRequests(plan, {
+        fetcher,
+        inventoryMaxBytes: body.length,
+      }),
+    ).rejects.toThrow('cumulative byte budget');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects malformed cumulative inventory limits before any GitHub request', async () => {
+    const fetcher = vi.fn();
+    for (const inventoryMaxBytes of [0, -1, 1.5, NaN, Infinity, 32 * 1024 * 1024 + 1]) {
+      await expect(
+        listAllGitHubPullRequests(plan, { fetcher, inventoryMaxBytes }),
+      ).rejects.toThrow('Invalid GitHub PR cumulative inventory byte limit');
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
 });
