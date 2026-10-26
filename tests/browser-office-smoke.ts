@@ -94,6 +94,29 @@ try {
     await expect(page.locator(visibleSelector)).toBeVisible();
     await expect(page.locator('nav[aria-label="Dashboard sections"] a[aria-current="page"]')).toHaveCount(1);
   }
+  // Capture each workspace at desktop and phone sizes; assertions detect hidden
+  // destinations and horizontal overflow before any visual review.
+  for (const [label, screen] of [
+    ['Office', 'office'],
+    ['Tasks', 'tasks'],
+    ['Workflows', 'workflows'],
+    ['Team', 'team'],
+    ['Settings', 'settings'],
+  ] as const) {
+    await navigation.getByRole('link', { name: new RegExp(label) }).click();
+    await expect(page.locator('.shell')).toHaveAttribute('data-screen', screen);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: join(artifacts, `workspace-${screen}-${width === 1440 ? 'desktop' : 'mobile'}.png`),
+        fullPage: true,
+      });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1100 });
   await navigation.getByRole('button', { name: /New task/ }).click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   await expect(page.locator('#compose')).toBeVisible();
