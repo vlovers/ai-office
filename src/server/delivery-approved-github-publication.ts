@@ -58,6 +58,15 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     baseCommitSha: workspace.baseSha,
   };
   const binding = { workspaceId, operator, plan, commits };
+  // Validate the caller's server-side hook before replacing it with the composed
+  // authorization gate. Otherwise malformed hooks are hidden by the wrapper,
+  // consuming the one-use approval and leaving an uncertain journal entry.
+  if (
+    context.write.authorizeBeforePost !== undefined &&
+    typeof context.write.authorizeBeforePost !== 'function'
+  ) {
+    throw new Error('Invalid GitHub draft write authorization hook.');
+  }
   const write: GitHubDraftWriteOptions = {
     ...context.write,
     confirmation: { ...commits, action: 'create-draft-pr' },
