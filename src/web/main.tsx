@@ -699,7 +699,9 @@ function App() {
                   }}
                 />
               )}
-              <WorkflowBoard inspection={workflowInspection} />
+              <section id="workflow-timeline" aria-label="Workflows" tabIndex={-1}>
+                <WorkflowBoard inspection={workflowInspection} />
+              </section>
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
