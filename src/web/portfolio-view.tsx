@@ -45,8 +45,7 @@ async function loadProject(
       ? runs.value.workflow_runs
       : [];
   const latest = workflows[0] as
-    | { status?: string; conclusion?: string; html_url?: string }
-    | undefined;
+    { status?: string; conclusion?: string; html_url?: string } | undefined;
   const state = !latest
     ? 'Unknown'
     : latest.status !== 'completed'
