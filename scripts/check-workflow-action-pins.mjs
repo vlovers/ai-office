@@ -192,7 +192,10 @@ function auditLocalCompositeActions(workflowDirectory, files) {
       if (!/^\s*using\s*:\s*composite\s*(?:#.*)?$/m.test(content)) {
         findings.push(`${file}: local action must be inspectable composite metadata`);
       }
-      // Composite metadata uses the same fail-closed YAML restrictions as workflows.\n      // A synthetic permission header lets us reuse the syntax and uses scanner.\n      const metadataFindings = auditWorkflowText('permissions:\n  contents: read\n' + content, file);\n      findings.push(...metadataFindings);\n      for (const [index, line] of content.split(/\r?\n/).entries()) {
+      // Composite metadata uses the same fail-closed YAML restrictions as workflows.
+      // A synthetic permission header lets us reuse the syntax and uses scanner.
+      const metadataFindings = auditWorkflowText('permissions:\n  contents: read\n' + content, file);
+      findings.push(...metadataFindings);\n      for (const [index, line] of content.split(/\r?\n/).entries()) {
         const match = USES_DECLARATION.exec(line);
         if (!match) continue;
         const nested = match[1].trim();
