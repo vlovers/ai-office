@@ -15,6 +15,8 @@ export type ReadOnlyGitHubOptions = {
   maxPages?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Total monotonic budget for every PR page, not a fresh timeout per page. */
+  inventoryDeadlineMs?: number;
 };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -158,8 +160,26 @@ export async function listAllGitHubPullRequests(
   if (options.token !== undefined && (!options.token || /\s/.test(options.token))) {
     throw new Error('Invalid server-side GitHub credential.');
   }
+  const inventoryDeadlineMs = options.inventoryDeadlineMs ?? 60_000;
+  if (
+    !Number.isSafeInteger(inventoryDeadlineMs) ||
+    inventoryDeadlineMs < 100 ||
+    inventoryDeadlineMs > 60_000
+  ) {
+    throw new Error('Invalid GitHub PR inventory deadline.');
+  }
+  const startedAt = performance.now();
+  const assertBudget = (): number => {
+    if (options.signal?.aborted) throw new Error('GitHub PR inventory aborted.');
+    const remaining = Math.floor(inventoryDeadlineMs - (performance.now() - startedAt));
+    if (remaining < 100) throw new Error('GitHub PR inventory deadline exceeded.');
+    return remaining;
+  };
   const fetcher: Fetcher = options.fetcher ?? globalThis.fetch;
-  return collectRemotePullRequests(async (page) => {
+  const inventory = await collectRemotePullRequests(async (page) => {
+    // Never renew the full timeout for every page while holding the Git lease.
+    // An incomplete inventory must never authorize a Draft PR POST.
+    const remaining = assertBudget();
     const url = new URL(`https://api.github.com/repos/${match[1]}/${match[2]}/pulls`);
     url.searchParams.set('state', 'all');
     url.searchParams.set('per_page', String(perPage));
@@ -189,12 +209,13 @@ export async function listAllGitHubPullRequests(
           payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing),
         };
       },
-      { signal: options.signal, timeoutMs: options.timeoutMs },
+      { signal: options.signal, timeoutMs: Math.min(options.timeoutMs ?? 15_000, remaining) },
     );
     if (!Array.isArray(payload) || payload.length > perPage) {
       throw new Error('Invalid GitHub PR listing page.');
     }
     const candidates = payload.map(parseGitHubPullRequest);
+    assertBudget();
     return {
       candidates,
       nextPage: nextGitHubPage(
@@ -205,4 +226,6 @@ export async function listAllGitHubPullRequests(
       ),
     };
   }, options.maxPages);
+  assertBudget();
+  return inventory;
 }
