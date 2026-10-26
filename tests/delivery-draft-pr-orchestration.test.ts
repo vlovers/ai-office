@@ -71,6 +71,55 @@ function setup() {
 }
 
 describe('Draft PR publication orchestration', () => {
+  it('rejects duplicate unrelated PRs from an injected inventory before reserving', async () => {
+    const t = setup();
+    const unrelated = {
+      ...receipt,
+      html_url: 'https://github.com/vlovers/ai-office/pull/124',
+      head: { ...receipt.head, ref: 'unrelated-branch' },
+    };
+    try {
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [unrelated, unrelated],
+      });
+      await expect(createDraftPublication(t.context)).rejects.toThrow(
+        'Remote PR inventory is incomplete or invalid',
+      );
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps a reserved write uncertain when recovery inventory duplicates unrelated PRs', async () => {
+    const t = setup();
+    const unrelated = {
+      ...receipt,
+      html_url: 'https://github.com/vlovers/ai-office/pull/124',
+      head: { ...receipt.head, ref: 'unrelated-branch' },
+    };
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('lost POST response'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [receipt, unrelated, unrelated],
+      });
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects a list-only receipt verifier before acquiring a lease or reserving a write', async () => {
     const t = setup();
     try {
