@@ -93,9 +93,7 @@ describe('lease-protected GitHub GET reconciliation', () => {
       expect(result.state).toBe('published');
       expect(result.pullRequestUrl).toBe(candidate.html_url);
       expect(fetcher).toHaveBeenCalledOnce();
-      expect(() => journal.reserve('workspace-1', publicationKey(plan))).toThrow(
-        'already exists',
-      );
+      expect(() => journal.reserve('workspace-1', publicationKey(plan))).toThrow('already exists');
     } finally {
       db.close();
     }
