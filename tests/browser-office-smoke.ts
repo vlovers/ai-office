@@ -46,6 +46,13 @@ try {
   const address = await app.listen({ host: '127.0.0.1', port: 0 });
   const scene = page.getByRole('region', { name: 'Shared Codex office' });
   const capture = async (name: string) => {
+    // Scene screenshots are captured on Office even when a task was started
+    // from Tasks. Restore the previous screen for subsequent user actions.
+    const previousScreen = await page.locator('.shell').getAttribute('data-screen');
+    if (previousScreen !== 'office') {
+      await page.getByRole('navigation', { name: 'Dashboard sections' })
+        .getByRole('link', { name: 'Office' }).click();
+    }
     await page
       .locator('.studio-kicker')
       .first()
@@ -64,6 +71,12 @@ try {
       await page.screenshot({
         path: join(artifacts, `${name}-${width === 1440 ? 'desktop' : 'mobile'}-viewport.png`),
       });
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    if (previousScreen && previousScreen !== 'office') {
+      await page.getByRole('navigation', { name: 'Dashboard sections' })
+        .getByRole('link', { name: previousScreen === 'tasks' ? 'Tasks' : previousScreen === 'workflows' ? 'Workflows' : previousScreen === 'team' ? 'Team' : 'Settings' }).click();
+      await expect(page.locator('.shell')).toHaveAttribute('data-screen', previousScreen);
     }
   };
   let releaseLoading!: () => void;
