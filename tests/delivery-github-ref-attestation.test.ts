@@ -264,7 +264,7 @@ describe('GitHub immutable ref attestation', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it('ignores a late head response after the shared deadline without starting a base GET', async () => {
+  it('ignores a late head response after the shared deadline', async () => {
     vi.useFakeTimers();
     try {
       const fetcher = vi.fn(async (input: string, init: RequestInit) => {
