@@ -248,3 +248,14 @@ Fetched the live PR metadata and the current default-branch `.github/workflows/c
 
 This is a live metadata and default-branch file check, not a branch modification. No PR files or workflows were changed in this step.
 
+
+## Follow-up implementation for current-main Actions gap (2026-10-27)
+
+Created a separate draft PR against current `main` rather than modifying the stale #272 branch directly:
+- [Grid Atlas #319 — pin Actions in Commons originals workflow](https://github.com/vlovers/grid-atlas/pull/319)
+- Branch: `security/pin-commons-review-actions-20261027`
+- Head SHA: `320c882d5b587adb73435ab1d854eb20f79467c2`
+- Change: pin checkout/setup-node/upload-artifact to full SHA and set checkout `persist-credentials: false`; preserve read-only `contents` permission, research-only artifact behavior and fail-closed check.
+
+This is a focused integration follow-up created from current `main`, not a merge or replacement of #272. The PR is draft; tests and CI have not been run on this new head. Keep it unapproved until CI and independent review pass. The older #272 remains blocked until safely reconciled with the newer main history and all workflows are covered.
+
