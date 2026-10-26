@@ -99,6 +99,20 @@ try {
   await expect(page.locator('#compose')).toBeVisible();
   await navigation.getByRole('link', { name: 'Office' }).click();
   await expect(scene).toBeVisible();
+  // Focus mode must not leak into unrelated screens.
+  await page.evaluate(() => {
+    const shell = document.querySelector('.shell');
+    shell?.classList.add('focus-mode');
+  });
+  await navigation.getByRole('link', { name: 'Workflows' }).click();
+  await expect(page.locator('#workflow-timeline')).toBeVisible();
+  await navigation.getByRole('link', { name: 'Team' }).click();
+  await expect(page.locator('#agent-studio')).toBeVisible();
+  await navigation.getByRole('link', { name: 'Settings' }).click();
+  await expect(page.locator('#repositories')).toBeVisible();
+  await navigation.getByRole('link', { name: 'Office' }).click();
+  await expect(scene).toBeVisible();
+  await page.evaluate(() => document.querySelector('.shell')?.classList.remove('focus-mode'));
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await capture('two-idle');
