@@ -28,7 +28,10 @@ async function readJson(path: string, signal: AbortSignal): Promise<unknown> {
   return response.json();
 }
 
-async function loadProject(project: (typeof PROJECTS)[number], signal: AbortSignal): Promise<PortfolioRow> {
+async function loadProject(
+  project: (typeof PROJECTS)[number],
+  signal: AbortSignal,
+): Promise<PortfolioRow> {
   const [runs, prs] = await Promise.allSettled([
     readJson(`${project.slug}/actions/runs?branch=${project.branch}&per_page=1`, signal),
     readJson(`${project.slug}/pulls?state=open&per_page=100`, signal),
@@ -60,8 +63,14 @@ async function loadProject(project: (typeof PROJECTS)[number], signal: AbortSign
     state,
     runUrl: latest?.html_url,
     openPrs: count === null ? 'Unknown' : count === 100 ? '100+' : String(count),
-    note: project.slug === 'last-chapter' ? 'Main is a bootstrap branch; active game development uses a separate integration branch.' : undefined,
-    warning: runs.status === 'rejected' || prs.status === 'rejected' ? 'Some GitHub data could not be retrieved.' : undefined,
+    note:
+      project.slug === 'last-chapter'
+        ? 'Main is a bootstrap branch; active game development uses a separate integration branch.'
+        : undefined,
+    warning:
+      runs.status === 'rejected' || prs.status === 'rejected'
+        ? 'Some GitHub data could not be retrieved.'
+        : undefined,
   };
 }
 
@@ -82,7 +91,12 @@ export function PortfolioView() {
         try {
           return await loadProject(project, controller.signal);
         } catch {
-          return { slug: project.slug, branch: project.branch, state: 'Unknown', openPrs: 'Unknown' };
+          return {
+            slug: project.slug,
+            branch: project.branch,
+            state: 'Unknown',
+            openPrs: 'Unknown',
+          };
         }
       }),
     ).then((result) => {
@@ -129,7 +143,11 @@ export function PortfolioView() {
             {rows.map((row) => (
               <tr key={row.slug}>
                 <td>
-                  <a href={`https://github.com/vlovers/${row.slug}`} target="_blank" rel="noreferrer">
+                  <a
+                    href={`https://github.com/vlovers/${row.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     {row.slug} ↗
                   </a>
                   {row.note && <small style={{ display: 'block' }}>{row.note}</small>}
