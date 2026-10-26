@@ -28,4 +28,21 @@ describe('GitHub deadline cancellation races', () => {
     complete(201);
     await expect(pending).rejects.toThrow('GitHub request aborted');
   });
+
+  it('rejects late transport success after a deadline', async () => {
+    let finish!: (value: number) => void;
+    let started!: () => void;
+    let observedSignal: AbortSignal | undefined;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const pending = withGitHubRequestDeadline(async (signal) => {
+      observedSignal = signal;
+      started();
+      return new Promise<number>((resolve) => { finish = resolve; });
+    }, { timeoutMs: 100 });
+    await entered;
+    await expect(pending).rejects.toThrow('GitHub request timed out');
+    expect(observedSignal?.aborted).toBe(true);
+    finish(201);
+    await Promise.resolve();
+  });
 });
