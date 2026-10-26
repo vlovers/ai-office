@@ -31,3 +31,12 @@ This file applies to the whole repository. Follow more-specific instructions in 
 ## Coordination
 
 The cross-repository governance tracking issue is vlovers/ai-office#87. These rules do not automatically apply to other repositories; propose scoped PRs in each repository after inspecting its own conventions.
+
+## Project-specific contracts
+
+- The dashboard, Vite, task/workflow routes and SSE remain loopback-only. The separate, unreleased Delivery API requires its own HTTPS ingress, operator session, live grants and Origin/CSRF checks. Neither an approval nor a transfer reservation enables remote Git writes.
+- For delivery changes, verify approval scope and expiry, immutable Git/ref attestation, journal/receipt consistency, lease ownership, idempotency and crash recovery. Mock-only success is not production evidence.
+- Distinguish implemented, verified, accepted and released states. Record exact base/head SHAs and revalidate after material branch changes.
+- Use `npm run check`, `npm run format:check`, and relevant browser/native sandbox suites. Real Codex, native macOS and target-host Delivery validation require actual authorized evidence; do not infer them from fixtures.
+
+Read [Definition of Done](docs/engineering/DEFINITION_OF_DONE.md), [independent review policy](docs/engineering/REVIEW_POLICY.md), and [release checklist](docs/engineering/RELEASE_CHECKLIST.md) before marking a change ready.
