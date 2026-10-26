@@ -22,6 +22,22 @@ Status: **unreleased authorization foundation; remote write activation blocked**
       session persistence and administrator revocation tests.
 - [x] No HTTP commit/push/publication/merge/force/reset/delete/retry path.
 
+### Cumulative GitHub inventory memory boundary (2026-10-26)
+
+The read-only PR inventory now has a **32 MiB total streamed JSON byte cap**
+across all pages and the second stability-verification traversal, in addition
+to the existing 8 MiB per-page cap, bounded page count and monotonic time
+budget. A server-owned counter measures actual UTF-8 bytes rather than trusting
+Content-Length or the parsed object size. Exhausting the budget fails closed:
+an incomplete inventory cannot authorize a Draft PR POST or confirm an
+uncertain receipt. The caller may lower, but not raise, the total cap.
+Integration tests cover multi-page exhaustion, second-pass exhaustion, forged
+Content-Length, multi-byte UTF-8 and invalid configuration.
+
+This is a resource-safety limit, not an atomic remote snapshot. A repository
+whose full inventory exceeds the cap remains blocked for manual review; the
+publisher must never silently truncate the listing or retry a remote write.
+
 ### Remote ref TOCTOU hardening (2026-10-26)
 
 The approved Draft PR executor and read-only Git transfer reconciliation now
