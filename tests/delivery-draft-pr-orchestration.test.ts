@@ -42,6 +42,7 @@ function setup() {
     candidates: [],
   }));
   const verifySnapshot = vi.fn(async () => {});
+  const verifyRemoteReceipt = vi.fn(async () => {});
   const context = {
     workspaceId: 'workspace-1',
     repository,
@@ -50,6 +51,7 @@ function setup() {
     initialPlan: plan,
     refreshPlan: async () => plan,
     verifySnapshot,
+    verifyRemoteReceipt,
     listRemote,
     createDraft,
   };
@@ -60,6 +62,7 @@ function setup() {
     createDraft,
     listRemote,
     verifySnapshot,
+    verifyRemoteReceipt,
     close: () => {
       db.close();
       rmSync(root, { recursive: true, force: true });
@@ -68,6 +71,148 @@ function setup() {
 }
 
 describe('Draft PR publication orchestration', () => {
+  it('rejects duplicate unrelated PRs from an injected inventory before reserving', async () => {
+    const t = setup();
+    const unrelated = {
+      ...receipt,
+      html_url: 'https://github.com/vlovers/ai-office/pull/124',
+      head: { ...receipt.head, ref: 'unrelated-branch' },
+    };
+    try {
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [unrelated, unrelated],
+      });
+      await expect(createDraftPublication(t.context)).rejects.toThrow(
+        'Remote PR inventory is incomplete or invalid',
+      );
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps a reserved write uncertain when recovery inventory duplicates unrelated PRs', async () => {
+    const t = setup();
+    const unrelated = {
+      ...receipt,
+      html_url: 'https://github.com/vlovers/ai-office/pull/124',
+      head: { ...receipt.head, ref: 'unrelated-branch' },
+    };
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('lost POST response'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [receipt, unrelated, unrelated],
+      });
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects a list-only receipt verifier before acquiring a lease or reserving a write', async () => {
+    const t = setup();
+    try {
+      await expect(
+        createDraftPublication({
+          ...t.context,
+          verifyRemoteReceipt: undefined,
+        } as unknown as Parameters<typeof createDraftPublication>[0]),
+      ).rejects.toThrow('Independent GitHub PR detail verification is required');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.listRemote).not.toHaveBeenCalled();
+      expect(t.createDraft).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps a successful POST uncertain when the reviewed plan changes during detail GET', async () => {
+    const t = setup();
+    try {
+      let revision = plan.revision;
+      t.verifyRemoteReceipt.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+      });
+      const context = {
+        ...t.context,
+        refreshPlan: async () => ({ ...plan, revision }),
+      };
+      const result = await createDraftPublication(context);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      revision = plan.revision;
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      expect(t.verifyRemoteReceipt).toHaveBeenCalledTimes(2);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rechecks the reviewed plan after recovery detail GET before confirming SQLite', async () => {
+    const t = setup();
+    try {
+      let revision = plan.revision;
+      t.createDraft.mockRejectedValueOnce(new Error('remote response lost'));
+      const context = {
+        ...t.context,
+        refreshPlan: async () => ({ ...plan, revision }),
+      };
+      expect((await createDraftPublication(context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValue({ complete: true, candidates: [receipt] });
+      t.verifyRemoteReceipt.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+      });
+      expect((await createDraftPublication(context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      revision = plan.revision;
+      expect((await createDraftPublication(context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('refuses stale receipt reuse after detail GET without rewriting a published row', async () => {
+    const t = setup();
+    try {
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      let revision = plan.revision;
+      t.verifyRemoteReceipt.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+      });
+      await expect(
+        createDraftPublication({
+          ...t.context,
+          refreshPlan: async () => ({ ...plan, revision }),
+        }),
+      ).rejects.toThrow('Publication snapshot changed before durable receipt confirmation');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'published',
+        pullRequestUrl: receipt.html_url,
+      });
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('integrates a real one-use SQLite approval with the draft orchestrator', async () => {
     const t = setup();
     try {
@@ -138,21 +283,20 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
-  it('refuses a reserved journal record with an unexpected PR URL', async () => {
+  it('refuses a forged reservation adapter returning an unexpected PR URL', async () => {
     const t = setup();
     try {
       const context = {
         ...t.context,
-        reserveApproved: () => {
-          t.db
-            .prepare(
-              "INSERT INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', ?)",
-            )
-            .run('workspace-1', publicationKey(plan), receipt.html_url);
-          return t.journal.get('workspace-1')!;
-        },
+        reserveApproved: () => ({
+          workspaceId: 'workspace-1',
+          operationKey: publicationKey(plan),
+          state: 'reserved' as const,
+          pullRequestUrl: receipt.html_url,
+        }),
       };
       await expect(createDraftPublication(context)).rejects.toThrow('did not persist');
+      expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.createDraft).not.toHaveBeenCalled();
     } finally {
       t.close();
@@ -227,6 +371,36 @@ describe('Draft PR publication orchestration', () => {
       t.createDraft.mockRejectedValueOnce(new Error('HTTP timeout'));
       expect((await createDraftPublication(t.context)).status).toBe('uncertain');
       expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps an ambiguous write uncertain when another PR reuses its managed head', async () => {
+    const t = setup();
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('POST accepted but response lost'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      const conflict = {
+        ...receipt,
+        html_url: 'https://github.com/vlovers/ai-office/pull/124',
+        base: { ...receipt.base, ref: 'release' },
+        state: 'closed',
+      };
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [receipt, conflict],
+      });
+      const ambiguous = await createDraftPublication(t.context);
+      expect(ambiguous.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBeNull();
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+      // A later, independently complete inventory can establish uniqueness.
+      // Neither reconciliation attempt is permitted to create another PR.
       t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
       expect((await createDraftPublication(t.context)).status).toBe('published');
       expect(t.createDraft).toHaveBeenCalledTimes(1);
@@ -342,6 +516,81 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
+  it('re-attests the reviewed snapshot after PR inventory even without an optional hook', async () => {
+    const t = setup();
+    try {
+      t.verifySnapshot
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('reviewed worktree drifted during inventory'));
+      await expect(createDraftPublication(t.context)).rejects.toThrow(
+        'reviewed worktree drifted during inventory',
+      );
+      expect(t.verifySnapshot).toHaveBeenCalledTimes(2);
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+
+      // The rejected preflight never consumes the one-use operation. A new,
+      // independently verified attempt may still publish exactly once.
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects foreign, malformed, and incomplete PR identities before any reservation', async () => {
+    const unrelated = { ...receipt, head: { ...receipt.head, ref: 'unrelated-branch' } };
+    const invalid = [
+      { ...unrelated, html_url: 'https://github.com/foreign/repo/pull/123' },
+      { ...unrelated, html_url: `${plan.destination}/pull/00123` },
+      { ...unrelated, state: 'pending' },
+      { ...unrelated, base: { ...receipt.base, repo: { full_name: 'foreign/repo' } } },
+      { ...unrelated, base: { ...receipt.base, repo: null } },
+      { ...unrelated, head: { ...receipt.head, ref: '' } },
+      { ...unrelated, base: { ...receipt.base, ref: '' } },
+    ];
+    for (const candidate of invalid) {
+      const t = setup();
+      try {
+        t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [candidate] });
+        await expect(createDraftPublication(t.context)).rejects.toThrow(
+          'Remote PR inventory is incomplete or invalid',
+        );
+        expect(t.journal.get('workspace-1')).toBeNull();
+        expect(t.createDraft).not.toHaveBeenCalled();
+      } finally {
+        t.close();
+      }
+    }
+  });
+
+  it('keeps ambiguous POST recovery read-only when PR inventory has a foreign identity', async () => {
+    const t = setup();
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('lost GitHub POST response'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [{ ...receipt, html_url: 'https://github.com/foreign/repo/pull/123' }],
+      });
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(t.createDraft).toHaveBeenCalledOnce();
+
+      // Only a subsequent complete, canonical and independently verified
+      // inventory can reconcile the durable uncertain intent.
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      expect(t.verifyRemoteReceipt).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('reconciles an uncertain intent after SQLite restart', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-office-restart-'));
     const repoPath = join(root, 'repo');
@@ -360,6 +609,7 @@ describe('Draft PR publication orchestration', () => {
       initialPlan: plan,
       refreshPlan: async () => plan,
       verifySnapshot: async () => {},
+      verifyRemoteReceipt: async () => {},
       listRemote: async (): Promise<CompleteRemotePrInventory> => ({
         complete: true,
         candidates: [],
@@ -408,6 +658,55 @@ describe('Draft PR publication orchestration', () => {
       expect(t.createDraft).toHaveBeenCalledTimes(1);
     } finally {
       releaseDraft?.();
+      t.close();
+    }
+  });
+
+  it('does not consume a reservation when the review changes during PR inventory', async () => {
+    const t = setup();
+    try {
+      let revision = plan.revision;
+      t.listRemote.mockImplementationOnce(async () => {
+        revision = 'b'.repeat(64);
+        return { complete: true, candidates: [] };
+      });
+      await expect(
+        createDraftPublication({
+          ...t.context,
+          refreshPlan: async () => ({ ...plan, revision }),
+        }),
+      ).rejects.toThrow('snapshot changed during remote inventory');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      revision = plan.revision;
+      const retried = await createDraftPublication({
+        ...t.context,
+        refreshPlan: async () => ({ ...plan, revision }),
+      });
+      expect(retried.status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledTimes(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rechecks a final snapshot gate before any durable reservation or remote POST', async () => {
+    const t = setup();
+    try {
+      const verifyBeforeReserve = vi.fn(async () => {
+        throw new Error('worktree drifted during inventory');
+      });
+      const blocked = createDraftPublication({ ...t.context, verifyBeforeReserve });
+      await expect(blocked).rejects.toThrow('worktree drifted during inventory');
+      expect(verifyBeforeReserve).toHaveBeenCalledOnce();
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      const recovered = await createDraftPublication({
+        ...t.context,
+        verifyBeforeReserve: async () => {},
+      });
+      expect(recovered.status).toBe('published');
+    } finally {
       t.close();
     }
   });

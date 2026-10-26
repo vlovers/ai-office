@@ -136,7 +136,7 @@ describe('lease-protected delivery publication pipeline', () => {
         createDraft,
       });
       expect(result.state).toBe('published');
-      expect(order).toEqual(['local', 'GET', 'GET', 'POST']);
+      expect(order).toEqual(['local', 'GET', 'GET', 'GET', 'POST']);
       expect(verifyLocalGitState).toHaveBeenCalledOnce();
       expect(createDraft).toHaveBeenCalledOnce();
     } finally {
@@ -366,7 +366,7 @@ describe('lease-protected delivery publication pipeline', () => {
       const fetcher = remoteRefs();
       const createDraft = vi.fn(async () => {
         expect(journal.get('workspace-1')?.state).toBe('reserved');
-        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(fetcher).toHaveBeenCalledTimes(3);
         return commitReceipt;
       });
       const args = {
@@ -381,7 +381,7 @@ describe('lease-protected delivery publication pipeline', () => {
       const reused = await publishCommitAttestedDraft(args);
       expect(reused.pullRequestUrl).toBe(candidate.html_url);
       expect(createDraft).toHaveBeenCalledOnce();
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(3);
     } finally {
       db.close();
     }
@@ -450,7 +450,7 @@ describe('lease-protected delivery publication pipeline', () => {
       expect(journal.get('workspace-1')?.state).toBe('uncertain');
       await expect(publishCommitAttestedDraft(args)).rejects.toThrow('reconcile before retrying');
       expect(createDraft).toHaveBeenCalledOnce();
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(3);
     } finally {
       db.close();
     }

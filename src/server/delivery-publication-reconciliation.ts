@@ -32,6 +32,18 @@ export function reconcilePublicationCandidates(
           : 'Multiple remote PRs match; manual reconciliation required.',
     };
   }
+  // A second PR using the same managed head, even with another base or
+  // repository, is an ownership conflict. Preflight refuses this shape before
+  // the POST; recovery must not silently adopt one receipt while ignoring the
+  // other. Closed PRs count too: inventory is deliberately state=all.
+  if (
+    candidates.some((candidate) => candidate !== matching[0] && candidate.head.ref === plan.branch)
+  ) {
+    return {
+      status: 'unresolved',
+      reason: 'Conflicting remote PRs reuse the managed head; manual reconciliation required.',
+    };
+  }
   try {
     return {
       status: 'confirmed',

@@ -107,7 +107,12 @@ describe('local Git and durable operator approval publication composition', () =
         repository: t.context.repository,
         commits,
       });
-      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'POST']);
+      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual([
+        'GET',
+        'GET',
+        'GET',
+        'POST',
+      ]);
       expect(() =>
         t.ledger.assertPending(t.authorization.approvalId, {
           workspaceId: 'workspace-1',

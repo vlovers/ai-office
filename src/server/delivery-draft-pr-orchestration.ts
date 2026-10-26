@@ -33,10 +33,14 @@ export type DraftPublicationContext = {
   verifySnapshot: (plan: AllowedPlan) => Promise<void>;
   /** Must enumerate all open AND closed PR pages; never return a partial list as complete. */
   listRemote: (plan: AllowedPlan) => Promise<CompleteRemotePrInventory>;
+  /** Optional final local/registry attestation after remote inventory, before consuming approval. */
+  verifyBeforeReserve?: (plan: AllowedPlan) => Promise<void>;
   /** Trusted server-side adapter only. Must create a draft PR; no retries. */
   createDraft: (plan: AllowedPlan) => Promise<GitHubDraftReceipt>;
   /** Optional trusted atomic approval+reservation adapter; no external writes inside. */
   reserveApproved?: (plan: AllowedPlan) => DeliveryJournalEntry;
+  /** Mandatory independent PR detail verification, including immutable commit SHAs. */
+  verifyRemoteReceipt: (plan: AllowedPlan, url: string) => Promise<void>;
 };
 
 /**
@@ -46,24 +50,46 @@ export type DraftPublicationContext = {
  */
 function isValidCompleteInventory(
   inventory: CompleteRemotePrInventory,
+  plan: AllowedPlan,
 ): inventory is Extract<CompleteRemotePrInventory, { complete: true }> {
-  return (
-    inventory?.complete === true &&
-    Array.isArray(inventory.candidates) &&
-    inventory.candidates.length <= 100_000 &&
-    inventory.candidates.every(
-      (candidate) =>
-        candidate !== null &&
-        typeof candidate === 'object' &&
-        typeof candidate.html_url === 'string' &&
-        typeof candidate.draft === 'boolean' &&
-        typeof candidate.state === 'string' &&
-        typeof candidate.head?.ref === 'string' &&
-        typeof candidate.base?.ref === 'string' &&
-        (candidate.head.repo === null || typeof candidate.head.repo?.full_name === 'string') &&
-        (candidate.base.repo === null || typeof candidate.base.repo?.full_name === 'string'),
-    )
+  const destination = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)$/.exec(
+    plan.destination,
   );
+  if (
+    !destination ||
+    destination[2] === '.' ||
+    destination[2] === '..' ||
+    inventory?.complete !== true ||
+    !Array.isArray(inventory.candidates) ||
+    inventory.candidates.length > 100_000
+  ) {
+    return false;
+  }
+  const repository = `${destination[1]}/${destination[2]}`;
+  const prefix = `${plan.destination}/pull/`;
+  const seenUrls = new Set<string>();
+  for (const candidate of inventory.candidates) {
+    if (
+      candidate === null ||
+      typeof candidate !== 'object' ||
+      typeof candidate.html_url !== 'string' ||
+      !candidate.html_url.startsWith(prefix) ||
+      !/^[1-9][0-9]*$/.test(candidate.html_url.slice(prefix.length)) ||
+      seenUrls.has(candidate.html_url) ||
+      typeof candidate.draft !== 'boolean' ||
+      (candidate.state !== 'open' && candidate.state !== 'closed') ||
+      typeof candidate.head?.ref !== 'string' ||
+      candidate.head.ref.length === 0 ||
+      typeof candidate.base?.ref !== 'string' ||
+      candidate.base.ref.length === 0 ||
+      (candidate.head.repo !== null && typeof candidate.head.repo?.full_name !== 'string') ||
+      candidate.base.repo?.full_name !== repository
+    ) {
+      return false;
+    }
+    seenUrls.add(candidate.html_url);
+  }
+  return true;
 }
 
 /**
@@ -77,6 +103,11 @@ export async function createDraftPublication(
   const { workspaceId, journal, initialPlan } = context;
   if (!workspaceId || !initialPlan.allowed) {
     throw new Error('Publication identity is required.');
+  }
+  // A list entry or POST body is not an independently verified commit-pinned
+  // receipt. Reject unsafe generic callers before any lease or journal write.
+  if (typeof context.verifyRemoteReceipt !== 'function') {
+    throw new Error('Independent GitHub PR detail verification is required.');
   }
   const operationKey = publicationKey(initialPlan);
   return withPublicationLease(
@@ -103,6 +134,8 @@ export async function createDraftPublication(
           if (decision.action !== 'reuse') {
             throw new Error('Stored publication receipt failed destination verification.');
           }
+          await context.verifyRemoteReceipt(plan, existing.pullRequestUrl!);
+          await revalidateReceiptSnapshot(context, operationKey);
           return { status: 'published', entry: existing } as const;
         }
         // Even a reserved record may represent a successful remote write after a crash.
@@ -120,7 +153,7 @@ export async function createDraftPublication(
       } catch {
         throw new Error('Remote PR inventory failed; publication blocked.');
       }
-      if (!isValidCompleteInventory(inventory)) {
+      if (!isValidCompleteInventory(inventory, plan)) {
         throw new Error('Remote PR inventory is incomplete or invalid; publication blocked.');
       }
       const preflight = reconcilePublicationCandidates(plan, inventory.candidates);
@@ -134,6 +167,19 @@ export async function createDraftPublication(
       if (branchConflict) {
         throw new Error('Remote PR head branch conflict requires manual reconciliation.');
       }
+
+      // Inventory is asynchronous. Do not consume the one-use approval if the
+      // trusted review or local Git snapshot changed while listing PRs.
+      const preReservePlan = await context.refreshPlan();
+      if (!preReservePlan.allowed || publicationKey(preReservePlan) !== operationKey) {
+        throw new Error('Publication snapshot changed during remote inventory.');
+      }
+      // A complete remote inventory can take seconds. The mandatory snapshot
+      // verifier must run again even for callers without the optional stronger
+      // pre-reservation hook; otherwise a changed local worktree could consume
+      // approval and trigger the only remote POST using a stale review.
+      await context.verifySnapshot(preReservePlan);
+      await context.verifyBeforeReserve?.(preReservePlan);
 
       const reservation = context.reserveApproved
         ? context.reserveApproved(plan)
@@ -162,6 +208,8 @@ export async function createDraftPublication(
       }
       try {
         const url = validatePublicationReceipt(plan, receipt);
+        await context.verifyRemoteReceipt(plan, url);
+        await revalidateReceiptSnapshot(context, operationKey);
         return {
           status: 'published',
           entry: journal.publish(workspaceId, operationKey, url),
@@ -193,7 +241,7 @@ async function reconcileOnly(
       reason: 'Remote inventory request failed; no write was retried.',
     };
   }
-  if (!isValidCompleteInventory(inventory)) {
+  if (!isValidCompleteInventory(inventory, plan)) {
     return {
       status: 'uncertain',
       entry: context.journal.get(context.workspaceId)!,
@@ -208,6 +256,17 @@ async function reconcileOnly(
       reason: result.reason,
     };
   }
+  try {
+    await context.verifyRemoteReceipt(plan, result.pullRequestUrl);
+    await revalidateReceiptSnapshot(context, operationKey);
+  } catch {
+    return {
+      status: 'uncertain',
+      entry: context.journal.get(context.workspaceId)!,
+      reason:
+        'Remote PR receipt or final reviewed snapshot failed verification; no write was retried.',
+    };
+  }
   return {
     status: 'published',
     entry: context.journal.confirmUncertain(
@@ -216,4 +275,20 @@ async function reconcileOnly(
       result.pullRequestUrl,
     ),
   };
+}
+
+/**
+ * Remote GETs and receipt verification yield the event loop. A stale review
+ * must not be committed as published after an independent verification call.
+ * This is deliberately read-only and runs under the shared repository lease.
+ */
+async function revalidateReceiptSnapshot(
+  context: DraftPublicationContext,
+  operationKey: string,
+): Promise<void> {
+  const refreshed = await context.refreshPlan();
+  if (!refreshed.allowed || publicationKey(refreshed) !== operationKey) {
+    throw new Error('Publication snapshot changed before durable receipt confirmation.');
+  }
+  await context.verifySnapshot(refreshed);
 }

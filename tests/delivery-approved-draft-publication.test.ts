@@ -51,6 +51,8 @@ function setup() {
     candidates: [],
   }));
   const verifyApprovedSnapshot = vi.fn(async () => {});
+  const verifyBeforeReserve = vi.fn(async () => {});
+  const verifyRemoteReceipt = vi.fn(async () => {});
   const authorizeBeforeReserve = vi.fn(() => {});
   const approvals = new DeliveryPublicationApprovalLedger(db, () => 10_000);
   const approvalId = approvals.issue(binding);
@@ -64,6 +66,8 @@ function setup() {
     initialPlan: plan,
     refreshPlan: async () => plan,
     verifyApprovedSnapshot,
+    verifyBeforeReserve,
+    verifyRemoteReceipt,
     authorizeBeforeReserve,
     listRemote,
     createDraft,
@@ -74,6 +78,8 @@ function setup() {
     createDraft,
     listRemote,
     verifyApprovedSnapshot,
+    verifyBeforeReserve,
+    verifyRemoteReceipt,
     authorizeBeforeReserve,
     approvals,
     journal: () => new DeliveryJournal(db),
@@ -89,6 +95,74 @@ function setup() {
 }
 
 describe('approved Draft PR publication end-to-end boundary', () => {
+  it('rejects missing final snapshot or independent receipt verification before any side effects', async () => {
+    const t = setup();
+    try {
+      for (const missing of ['verifyBeforeReserve', 'verifyRemoteReceipt'] as const) {
+        const invalid = { ...t.context(), [missing]: undefined };
+        await expect(
+          createApprovedDraftPublication(
+            invalid as unknown as Parameters<typeof createApprovedDraftPublication>[0],
+          ),
+        ).rejects.toThrow('requires final snapshot and PR detail verification');
+      }
+      t.approvals.assertPending(t.context().approvalId, binding);
+      expect(t.journal().get(binding.workspaceId)).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect(t.listRemote).not.toHaveBeenCalled();
+      expect(t.verifyApprovedSnapshot).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('invokes both mandatory gates for a successful approved publication', async () => {
+    const t = setup();
+    try {
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
+      expect(t.verifyBeforeReserve).toHaveBeenCalledOnce();
+      expect(t.verifyRemoteReceipt).toHaveBeenCalledWith(plan, receipt.html_url);
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('preserves unused approval when mandatory post-inventory snapshot verification fails', async () => {
+    const t = setup();
+    try {
+      t.verifyBeforeReserve.mockRejectedValueOnce(new Error('reviewed Git changed'));
+      await expect(createApprovedDraftPublication(t.context())).rejects.toThrow(
+        'reviewed Git changed',
+      );
+      t.approvals.assertPending(t.context().approvalId, binding);
+      expect(t.journal().get(binding.workspaceId)).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('leaves a completed POST uncertain until independent detail verification succeeds', async () => {
+    const t = setup();
+    try {
+      t.verifyRemoteReceipt.mockRejectedValueOnce(new Error('PR head SHA changed'));
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('uncertain');
+      expect(t.journal().get(binding.workspaceId)?.state).toBe('uncertain');
+      expect(t.journal().get(binding.workspaceId)?.pullRequestUrl).toBeNull();
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      expect(() => t.approvals.assertPending(t.context().approvalId, binding)).toThrow();
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createApprovedDraftPublication(t.context())).status).toBe('published');
+      expect(t.verifyRemoteReceipt).toHaveBeenCalledTimes(2);
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('never consumes an approval when remote preflight fails after snapshot verification', async () => {
     const t = setup();
     try {

@@ -36,18 +36,23 @@ describe('read-only GitHub PR discovery', () => {
       expect(parsed.searchParams.get('state')).toBe('all');
       expect(parsed.searchParams.get('per_page')).toBe('2');
       const page = Number(parsed.searchParams.get('page'));
+      const closed = {
+        ...candidate,
+        state: 'closed',
+        html_url: 'https://github.com/vlovers/ai-office/pull/125',
+      };
       return page === 1
         ? json([
             candidate,
             { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
           ])
-        : json([{ ...candidate, state: 'closed' }]);
+        : json([closed]);
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 2 });
     expect(result.complete).toBe(true);
     expect(result.candidates).toHaveLength(3);
     expect(result.candidates[2]?.state).toBe('closed');
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it('uses only server-provided credentials and does not include them in errors', async () => {
@@ -76,10 +81,37 @@ describe('read-only GitHub PR discovery', () => {
     ).toThrow('repository identity');
   });
 
+  it.each([
+    ['mismatched PR number', { ...candidate, number: 124 }],
+    ['string PR number', { ...candidate, number: '123' }],
+    ['zero PR number', { ...candidate, number: 0 }],
+    [
+      'noncanonical numeric alias',
+      { ...candidate, number: 123, html_url: 'https://github.com/vlovers/ai-office/pull/0123' },
+    ],
+  ])('rejects inconsistent listing identity: %s', async (_label, malformed) => {
+    const fetcher = vi.fn(async () => json([malformed]));
+    await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow(
+      'Invalid GitHub PR number or URL identity',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a canonical PR number matching its URL in a complete inventory', async () => {
+    const fetcher = vi.fn(async () => json([{ ...candidate, number: 123 }]));
+    const result = await listAllGitHubPullRequests(plan, { fetcher });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]?.html_url).toBe(candidate.html_url);
+  });
+
   it('rejects malformed and truncated responses without returning partial results', async () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = new URL(url).searchParams.get('page');
-      return page === '1' ? json([candidate, candidate]) : json({ incomplete: true });
+      const unrelated = {
+        ...candidate,
+        html_url: 'https://github.com/vlovers/ai-office/pull/124',
+      };
+      return page === '1' ? json([candidate, unrelated]) : json({ incomplete: true });
     });
     await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 2 })).rejects.toThrow(
       'Invalid GitHub PR listing page',
@@ -103,11 +135,315 @@ describe('read-only GitHub PR discovery', () => {
   });
 
   it('rejects a listing that cannot be exhausted within the page limit', async () => {
-    const fetcher = vi.fn(async () => json([candidate]));
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      const item = {
+        ...candidate,
+        html_url: `https://github.com/vlovers/ai-office/pull/${page + 122}`,
+      };
+      return json([item]);
+    });
     await expect(
       listAllGitHubPullRequests(plan, { fetcher, perPage: 1, maxPages: 2 }),
     ).rejects.toThrow('safe pagination limit');
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('follows an explicit next Link even when GitHub returns a short page', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        const next = new URL(url);
+        next.searchParams.set('page', '2');
+        return new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: '<' + next.toString() + '>; rel="next"' },
+        });
+      }
+      return json([{ ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }]);
+    });
+    const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
+    expect(result.candidates).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it.each([
+    ['cross-origin', 'https://attacker.invalid/pulls?page=2'],
+    [
+      'skipped page',
+      'https://api.github.com/repos/vlovers/ai-office/pulls?state=all&per_page=5&page=3',
+    ],
+    [
+      'different repository',
+      'https://api.github.com/repos/foreign/repo/pulls?state=all&per_page=5&page=2',
+    ],
+  ])('rejects a malicious pagination next link: %s', async (_label, next) => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: '<' + next + '>; rel="next"' },
+        }),
+    );
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'pagination',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('honors consistent next/last and first/prev/last links across pages', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const current = new URL(url);
+      const page = Number(current.searchParams.get('page'));
+      const linked = (targetPage: number, relation: string) => {
+        const target = new URL(url);
+        target.searchParams.set('page', String(targetPage));
+        return `<${target.toString()}>; rel="${relation}"`;
+      };
+      const second = {
+        ...candidate,
+        html_url: 'https://github.com/vlovers/ai-office/pull/124',
+      };
+      return new Response(JSON.stringify([page === 1 ? candidate : second]), {
+        status: 200,
+        headers: {
+          link:
+            page === 1
+              ? [linked(2, 'next'), linked(2, 'last')].join(', ')
+              : [linked(1, 'first'), linked(1, 'prev'), linked(2, 'last')].join(', '),
+        },
+      });
+    });
+    const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
+    expect(result.candidates).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it('rejects a last-page hint beyond the current page without a next link', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const last = new URL(url);
+      last.searchParams.set('page', '3');
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: `<${last.toString()}>; rel="last"` },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'pagination Link header is incomplete',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects duplicate pagination relations even when the links agree', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const next = new URL(url);
+      next.searchParams.set('page', '2');
+      const item = `<${next.toString()}>; rel="next"`;
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: [item, item].join(', ') },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'Duplicate GitHub PR pagination relation',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects inconsistent first, previous and last pagination relations', async () => {
+    for (const [relation, targetPage] of [
+      ['first', 2],
+      ['prev', 3],
+      ['last', 0],
+    ] as const) {
+      const fetcher = vi.fn(async (url: string) => {
+        const target = new URL(url);
+        target.searchParams.set('page', String(targetPage));
+        return new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: `<${target.toString()}>; rel="${relation}"` },
+        });
+      });
+      await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+        'inconsistent page',
+      );
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('fails closed when a short first page links to a rate-limited second page', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get('page') === '2') {
+        return json({ message: 'rate limited' }, 429);
+      }
+      const next = new URL(url);
+      next.searchParams.set('page', '2');
+      return new Response(JSON.stringify([candidate]), {
+        status: 200,
+        headers: { link: '<' + next.toString() + '>; rel="next"' },
+      });
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 5 })).rejects.toThrow(
+      'HTTP 429',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds a stalled GitHub listing body without returning partial inventory', async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response(
+        new ReadableStream({
+          pull: () => new Promise<void>(() => undefined),
+        }),
+        { status: 200 },
+      );
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, timeoutMs: 100 })).rejects.toThrow(
+      'GitHub request timed out',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('bounds the entire paginated inventory rather than renewing the timeout per page', async () => {
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      expect(init.method).toBe('GET');
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        elapsed = 90;
+        return json([candidate]);
+      }
+      elapsed = 150;
+      return json([]);
+    });
+    try {
+      await expect(
+        listAllGitHubPullRequests(plan, {
+          fetcher,
+          perPage: 1,
+          inventoryDeadlineMs: 200,
+        }),
+      ).rejects.toThrow('inventory deadline exceeded');
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('returns complete multi-page inventory while the total budget remains valid', async () => {
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      elapsed += 20;
+      return json(page === 1 ? [candidate] : []);
+    });
+    try {
+      const result = await listAllGitHubPullRequests(plan, {
+        fetcher,
+        perPage: 1,
+        inventoryDeadlineMs: 200,
+      });
+      expect(result.complete).toBe(true);
+      expect(result.candidates).toEqual([candidate]);
+      expect(fetcher).toHaveBeenCalledTimes(4);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('rejects a shifted multi-page inventory even when each pass has no duplicate URL', async () => {
+    let firstPageReads = 0;
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      expect(init.method).toBe('GET');
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        return json([
+          firstPageReads === 1
+            ? candidate
+            : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+        ]);
+      }
+      return json([]);
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 1 })).rejects.toThrow(
+      'pagination changed during inventory',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+  });
+
+  it('rejects a changed PR state between pagination passes', async () => {
+    let firstPageReads = 0;
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        return json([{ ...candidate, state: firstPageReads === 1 ? 'open' : 'closed' }]);
+      }
+      return json([]);
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 1 })).rejects.toThrow(
+      'pagination changed during inventory',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it('fails closed on a rate limit during the second inventory pass', async () => {
+    let firstPageReads = 0;
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        if (firstPageReads === 2) return json({ message: 'rate limit' }, 429);
+        return json([candidate]);
+      }
+      return json([]);
+    });
+    await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 1 })).rejects.toThrow(
+      'HTTP 429',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not renew the total deadline for the pagination verification pass', async () => {
+    let elapsed = 0;
+    let firstPageReads = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      if (page === 1) {
+        firstPageReads += 1;
+        elapsed = firstPageReads === 1 ? 20 : 180;
+        return json([candidate]);
+      }
+      elapsed = firstPageReads === 1 ? 100 : 205;
+      return json([]);
+    });
+    try {
+      await expect(
+        listAllGitHubPullRequests(plan, {
+          fetcher,
+          perPage: 1,
+          inventoryDeadlineMs: 200,
+        }),
+      ).rejects.toThrow('inventory deadline exceeded');
+      expect(fetcher).toHaveBeenCalledTimes(3);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('rejects invalid total inventory deadlines before contacting GitHub', async () => {
+    const fetcher = vi.fn();
+    for (const inventoryDeadlineMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
+      await expect(
+        listAllGitHubPullRequests(plan, { fetcher, inventoryDeadlineMs }),
+      ).rejects.toThrow('Invalid GitHub PR inventory deadline');
+    }
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('rejects untrusted destinations before any request', async () => {
@@ -126,6 +462,65 @@ describe('read-only GitHub PR discovery', () => {
     await expect(
       listAllGitHubPullRequests(plan, { fetcher, token: 'bad\ncredential' }),
     ).rejects.toThrow('credential');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('rejects an inventory that exhausts its total streamed byte budget across pages', async () => {
+    const first = JSON.stringify([candidate]);
+    const fetcher = vi.fn(async (url: string) => {
+      const page = Number(new URL(url).searchParams.get('page'));
+      return new Response(page === 1 ? first : '[]', {
+        status: 200,
+        // A forged small Content-Length must not bypass actual streamed bytes.
+        headers: { 'content-length': '1' },
+      });
+    });
+    await expect(
+      listAllGitHubPullRequests(plan, {
+        fetcher,
+        perPage: 1,
+        inventoryMaxBytes: Buffer.byteLength(first) + 1,
+      }),
+    ).rejects.toThrow('cumulative byte budget');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('counts the verification traversal against the same inventory byte budget', async () => {
+    const first = JSON.stringify([candidate]);
+    const fetcher = vi.fn(async (url: string) =>
+      new Response(new URL(url).searchParams.get('page') === '1' ? first : '[]', {
+        status: 200,
+      }),
+    );
+    await expect(
+      listAllGitHubPullRequests(plan, {
+        fetcher,
+        perPage: 1,
+        inventoryMaxBytes: Buffer.byteLength(first) * 2 + Buffer.byteLength('[]') - 1,
+      }),
+    ).rejects.toThrow('cumulative byte budget');
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('counts actual UTF-8 bytes rather than JavaScript string length', async () => {
+    const body = JSON.stringify([{ ...candidate, note: '🎈'.repeat(40) }]);
+    expect(Buffer.byteLength(body)).toBeGreaterThan(body.length);
+    const fetcher = vi.fn(async () => new Response(body, { status: 200 }));
+    await expect(
+      listAllGitHubPullRequests(plan, {
+        fetcher,
+        inventoryMaxBytes: body.length,
+      }),
+    ).rejects.toThrow('cumulative byte budget');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects malformed cumulative inventory limits before any GitHub request', async () => {
+    const fetcher = vi.fn();
+    for (const inventoryMaxBytes of [0, -1, 1.5, NaN, Infinity, 32 * 1024 * 1024 + 1]) {
+      await expect(
+        listAllGitHubPullRequests(plan, { fetcher, inventoryMaxBytes }),
+      ).rejects.toThrow('Invalid GitHub PR cumulative inventory byte limit');
+    }
     expect(fetcher).not.toHaveBeenCalled();
   });
 });

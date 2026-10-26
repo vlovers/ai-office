@@ -76,7 +76,7 @@ beforeEach(() => {
 });
 
 describe('commit-pinned GitHub publication adapter', () => {
-  it('performs two GET attestations then one POST and reuses its receipt', async () => {
+  it('performs head/base/head GET attestations then one POST and reuses its receipt', async () => {
     const db = new DatabaseSync(':memory:');
     try {
       const journal = new DeliveryJournal(db);
@@ -84,9 +84,14 @@ describe('commit-pinned GitHub publication adapter', () => {
       const result = await publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher));
       expect(result.state).toBe('published');
       expect(result.pullRequestUrl).toBe(receipt.html_url);
-      expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'POST']);
+      expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual([
+        'GET',
+        'GET',
+        'GET',
+        'POST',
+      ]);
       await publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher));
-      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(fetcher).toHaveBeenCalledTimes(4);
     } finally {
       db.close();
     }
@@ -130,7 +135,7 @@ describe('ambiguous GitHub publication outcomes', () => {
       await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
         'uncertain',
       );
-      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(fetcher).toHaveBeenCalledTimes(4);
       const recovered = await reconcileCommitAttestedDraftViaGitHub(ctx, {
         fetcher,
         token: 'test-token',
@@ -140,10 +145,40 @@ describe('ambiguous GitHub publication outcomes', () => {
       expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual([
         'GET',
         'GET',
+        'GET',
         'POST',
         'GET',
         'GET',
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('treats a redirected Draft POST as uncertain and never retries it', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      const fetcher = mockGitHub();
+      const original = fetcher.getMockImplementation()!;
+      fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          expect(init.redirect).toBe('error');
+          const response = json(receipt, 201);
+          Object.defineProperty(response, 'redirected', { value: true });
+          return response;
+        }
+        return original(url, init);
+      });
+      const ctx = context(journal);
+      await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
+        'redirected',
+      );
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+      await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
+        'uncertain',
+      );
+      expect(fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
       db.close();
     }
@@ -164,7 +199,7 @@ describe('ambiguous GitHub publication outcomes', () => {
         publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher)),
       ).rejects.toThrow('commit identity changed');
       expect(journal.get('workspace-1')?.state).toBe('uncertain');
-      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(fetcher).toHaveBeenCalledTimes(4);
     } finally {
       db.close();
     }

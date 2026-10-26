@@ -7,6 +7,8 @@ import {
   type GitHubCommitReceipt,
 } from './delivery-github-ref-attestation.js';
 import { parseGitHubPullRequest } from './delivery-github-readonly.js';
+import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
+import { GITHUB_JSON_LIMITS, readBoundedGitHubJson } from './delivery-github-json-boundary.js';
 
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -28,6 +30,9 @@ export type GitHubDraftWriteOptions = {
   confirmation: ConfirmedDraftWrite;
   fetcher?: Fetcher;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  /** Trusted synchronous live-authorization gate at the last possible point before POST. */
+  authorizeBeforePost?: () => void;
 };
 
 function expectedRepository(plan: AllowedPlan): string {
@@ -74,6 +79,32 @@ export function validateGitHubDraftWrite(
   if (typeof options.token !== 'string' || !options.token || /\s/.test(options.token)) {
     throw new Error('Valid server-side GitHub credentials are required.');
   }
+  // Reject configuration errors and already-cancelled attempts BEFORE the
+  // approval and SQLite journal are atomically reserved. After reservation,
+  // even a failed POST must remain uncertain and cannot be replayed.
+  if (
+    options.timeoutMs !== undefined &&
+    (!Number.isSafeInteger(options.timeoutMs) ||
+      options.timeoutMs < 100 ||
+      options.timeoutMs > 60_000)
+  ) {
+    throw new Error('Invalid GitHub draft write deadline.');
+  }
+  if (options.fetcher !== undefined && typeof options.fetcher !== 'function') {
+    throw new Error('Invalid GitHub draft write transport.');
+  }
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
+    throw new Error('Invalid GitHub draft write abort signal.');
+  }
+  if (
+    options.authorizeBeforePost !== undefined &&
+    typeof options.authorizeBeforePost !== 'function'
+  ) {
+    throw new Error('Invalid GitHub draft write authorization hook.');
+  }
+  if (options.signal?.aborted) {
+    throw new Error('GitHub draft write aborted before reservation.');
+  }
   if (
     typeof options.title !== 'string' ||
     options.title.trim().length < 1 ||
@@ -111,35 +142,45 @@ export async function createCommitAttestedGitHubDraft(
     throw new Error('GitHub draft publication attestation does not match the destination.');
   }
   const url = `https://api.github.com/repos/${repository}/pulls`;
-  const response = await (options.fetcher ?? globalThis.fetch)(url, {
-    method: 'POST',
-    redirect: 'error',
-    signal: options.signal,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      Authorization: `Bearer ${options.token}`,
-      'Content-Type': 'application/json',
+  const body: unknown = await withGitHubRequestDeadline(
+    async (signal) => {
+      const authorization: unknown = options.authorizeBeforePost?.();
+      if (authorization && typeof (authorization as { then?: unknown }).then === 'function') {
+        void Promise.resolve(authorization).catch(() => undefined);
+        throw new Error('Draft PR authorization must be synchronous.');
+      }
+      const response = await (options.fetcher ?? globalThis.fetch)(url, {
+        method: 'POST',
+        redirect: 'error',
+        signal,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          Authorization: `Bearer ${options.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: options.title,
+          body: options.body ?? '',
+          head: plan.branch,
+          base: plan.baseBranch,
+          draft: true,
+          maintainer_can_modify: false,
+        }),
+      });
+      if (response.redirected || (response.url && response.url !== url)) {
+        throw new Error('GitHub draft publication request was redirected.');
+      }
+      if (response.status !== 201) {
+        // Do not inspect/echo the response body: it can contain untrusted content.
+        throw new Error(
+          `GitHub draft publication returned HTTP ${response.status}; outcome uncertain.`,
+        );
+      }
+      return readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.draft);
     },
-    body: JSON.stringify({
-      title: options.title,
-      body: options.body ?? '',
-      head: plan.branch,
-      base: plan.baseBranch,
-      draft: true,
-      maintainer_can_modify: false,
-    }),
-  });
-  if (response.redirected || (response.url && response.url !== url)) {
-    throw new Error('GitHub draft publication request was redirected.');
-  }
-  if (response.status !== 201) {
-    // Do not inspect/echo the response body: it can contain untrusted content.
-    throw new Error(
-      `GitHub draft publication returned HTTP ${response.status}; outcome uncertain.`,
-    );
-  }
-  const body: unknown = await response.json();
+    { signal: options.signal, timeoutMs: options.timeoutMs },
+  );
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     throw new Error('Invalid GitHub draft publication response.');
   }
