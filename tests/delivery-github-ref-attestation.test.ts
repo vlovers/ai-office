@@ -264,20 +264,43 @@ describe('GitHub immutable ref attestation', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it('uses one deadline for both ref GETs and refuses to start the base read with insufficient budget', async () => {
+  it('ignores a late head response after the shared deadline without starting a base GET', async () => {
     vi.useFakeTimers();
     try {
       const fetcher = vi.fn(async (input: string, init: RequestInit) => {
         expect(init.method).toBe('GET');
         if (input.endsWith('/main')) throw new Error('Base GET must not start.');
-        await new Promise<void>((resolve) => setTimeout(resolve, 150));
+        await new Promise<void>((resolve) => setTimeout(resolve, 250));
         return jsonResponse(refBody(plan.branch, headCommitSha));
       });
       const attempt = attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 200 });
-      const assertion = expect(attempt).rejects.toThrow('attestation deadline exceeded');
-      await vi.advanceTimersByTimeAsync(150);
+      const assertion = expect(attempt).rejects.toThrow('GitHub request timed out');
+      await vi.advanceTimersByTimeAsync(260);
       await assertion;
       expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('accepts both exact refs when the combined reads finish within one deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(async (input: string, init: RequestInit) => {
+        expect(init.method).toBe('GET');
+        const isBase = input.endsWith('/main');
+        await new Promise<void>((resolve) => setTimeout(resolve, isBase ? 70 : 80));
+        return jsonResponse(
+          refBody(isBase ? plan.baseBranch : plan.branch, isBase ? baseCommitSha : headCommitSha),
+        );
+      });
+      const attempt = attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 200 });
+      await vi.advanceTimersByTimeAsync(160);
+      await expect(attempt).resolves.toMatchObject({
+        headCommitSha,
+        baseCommitSha,
+      });
+      expect(fetcher).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
