@@ -687,7 +687,11 @@ if (process.argv.includes('--restart-server')) {
       );
       await board.getByRole('button', { name: 'Refresh workflow' }).click();
       await freshResponse;
-      assert.ok(dashboardRequests >= 2, 'Explicit refresh must bypass the slow periodic poll');
+      assert.equal(
+        dashboardRequests,
+        2,
+        'Explicit refresh must bypass the held poll with exactly one fresh Dashboard request',
+      );
       await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
         timeout: 10000,
       });
