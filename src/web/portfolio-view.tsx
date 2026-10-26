@@ -72,6 +72,7 @@ export function PortfolioView() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let mounted = true;
     const timeout = window.setTimeout(() => controller.abort(), 10000);
     setLoading(true);
     void Promise.all(
@@ -83,11 +84,13 @@ export function PortfolioView() {
         }
       }),
     ).then((result) => {
+      if (!mounted) return;
       setRows(result);
       setUpdated(new Date().toLocaleString());
       setLoading(false);
     });
     return () => {
+      mounted = false;
       window.clearTimeout(timeout);
       controller.abort();
     };
