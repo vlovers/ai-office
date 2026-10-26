@@ -84,7 +84,12 @@ describe('commit-pinned GitHub publication adapter', () => {
       const result = await publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher));
       expect(result.state).toBe('published');
       expect(result.pullRequestUrl).toBe(receipt.html_url);
-      expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'GET', 'POST']);
+      expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual([
+        'GET',
+        'GET',
+        'GET',
+        'POST',
+      ]);
       await publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher));
       expect(fetcher).toHaveBeenCalledTimes(4);
     } finally {
