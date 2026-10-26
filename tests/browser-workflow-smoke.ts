@@ -132,8 +132,10 @@ try {
   await page.reload();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
-  await page.getByRole('navigation', { name: 'Dashboard sections' })
-    .getByRole('link', { name: 'Tasks' }).click();
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Tasks' })
+    .click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
@@ -235,12 +237,16 @@ try {
     .click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
-  await page.getByRole('navigation', { name: 'Dashboard sections' })
-    .getByRole('link', { name: 'Workflows' }).click();
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Workflows' })
+    .click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await board.getByRole('button', { name: 'Pause live updates' }).click();
-  await page.getByRole('navigation', { name: 'Dashboard sections' })
-    .getByRole('link', { name: 'Office' }).click();
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Office' })
+    .click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
