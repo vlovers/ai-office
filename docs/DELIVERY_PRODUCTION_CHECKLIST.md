@@ -184,9 +184,14 @@ which must finish its own lease-protected cleanup before the batch returns.
 A stopped batch returns `stopReason` (`aborted` or `budget-exhausted`),
 `hasMore: true`, and `nextCursor` pointing to the **last processed**
 workspace (or the input cursor when none was processed). A workspace whose
-registry lookup was interrupted, or whose in-lease reconciliation was aborted,
-is never skipped by the resume cursor, even if its blocked outcome is reported.
-Resume explicitly from that cursor with a new authorized call. A normal completed page reports
+registry lookup was interrupted, whose in-lease reconciliation was cancelled
+by either the operator or its trusted per-workspace transport, or whose
+reconciliation completed after the soft budget expired is never skipped by
+the resume cursor, even if its blocked outcome is reported. In-lease work is
+allowed to settle under the shared Git lease before the coordinator checks
+the budget and cursor. Resume explicitly from the returned cursor with a new
+authorized call; the same workspace may be visited again, and durable
+confirmed receipts must remain idempotent. A normal completed page reports
 `stopReason: null`; its original keyset cursor semantics remain unchanged.
 No new Git intents, remote writes or automatic retries are permitted.
 
