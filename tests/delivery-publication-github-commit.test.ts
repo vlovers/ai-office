@@ -76,7 +76,7 @@ beforeEach(() => {
 });
 
 describe('commit-pinned GitHub publication adapter', () => {
-  it('performs two GET attestations then one POST and reuses its receipt', async () => {
+  it('performs head/base/head GET attestations then one POST and reuses its receipt', async () => {
     const db = new DatabaseSync(':memory:');
     try {
       const journal = new DeliveryJournal(db);
@@ -84,9 +84,9 @@ describe('commit-pinned GitHub publication adapter', () => {
       const result = await publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher));
       expect(result.state).toBe('published');
       expect(result.pullRequestUrl).toBe(receipt.html_url);
-      expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'POST']);
+      expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'GET', 'POST']);
       await publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher));
-      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(fetcher).toHaveBeenCalledTimes(4);
     } finally {
       db.close();
     }
@@ -130,7 +130,7 @@ describe('ambiguous GitHub publication outcomes', () => {
       await expect(publishCommitAttestedDraftViaGitHub(ctx, options(fetcher))).rejects.toThrow(
         'uncertain',
       );
-      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(fetcher).toHaveBeenCalledTimes(4);
       const recovered = await reconcileCommitAttestedDraftViaGitHub(ctx, {
         fetcher,
         token: 'test-token',
@@ -138,6 +138,7 @@ describe('ambiguous GitHub publication outcomes', () => {
       expect(recovered.state).toBe('published');
       expect(recovered.pullRequestUrl).toBe(receipt.html_url);
       expect(fetcher.mock.calls.map((call) => call[1].method)).toEqual([
+        'GET',
         'GET',
         'GET',
         'POST',
@@ -164,7 +165,7 @@ describe('ambiguous GitHub publication outcomes', () => {
         publishCommitAttestedDraftViaGitHub(context(journal), options(fetcher)),
       ).rejects.toThrow('commit identity changed');
       expect(journal.get('workspace-1')?.state).toBe('uncertain');
-      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(fetcher).toHaveBeenCalledTimes(4);
     } finally {
       db.close();
     }
