@@ -416,6 +416,70 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(afterTasks.get(failed.task.id), 'failed');
     assert.equal(afterTasks.get(stopped.task.id), 'stopped');
     assert.equal(afterTasks.get(blocked.task.id), 'completed');
+
+    // Recovery must leave a safe, explicit operator exit path. Cancelling a
+    // blocked Workflow is allowed; replaying its stages is not. The terminal
+    // cancellation must remain durable through another real process death.
+    const cancelUrl = address + '/api/workflows/' + interrupted.workflowId + '/cancel';
+    const cancellation = await activePage.request.post(cancelUrl, {
+      data: { version: versions[0], confirmed: true },
+    });
+    assert.equal(cancellation.status(), 200);
+    const cancelled = await cancellation.json();
+    assert.equal(cancelled.state, 'cancelled');
+    assert.equal(cancelled.version, versions[0]! + 1);
+    const repeatedCancellation = await activePage.request.post(cancelUrl, {
+      data: { version: cancelled.version, confirmed: true },
+    });
+    assert.equal(repeatedCancellation.status(), 409);
+
+    await kill();
+    const terminalReconnect = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url() === address + '/api/workflows/' + blocked.workflowId + '/timeline' &&
+        response.ok(),
+      { timeout: 20000 },
+    );
+    await start(port);
+    await terminalReconnect;
+
+    for (const [index, id] of ids.entries()) {
+      const response = await activePage.request.get(address + '/api/workflows/' + id);
+      assert.equal(response.status(), 200);
+      const workflow = await response.json();
+      assert.equal(workflow.version, index === 0 ? cancelled.version : versions[index]);
+      assert.equal(workflow.state, index === 0 ? 'cancelled' : 'blocked');
+    }
+    const cancelledTimeline = await activePage.request.get(
+      address + '/api/workflows/' + interrupted.workflowId + '/timeline',
+    );
+    assert.equal(cancelledTimeline.status(), 200);
+    const terminalView = await cancelledTimeline.json();
+    assert.equal(terminalView.state, 'cancelled');
+    assert.equal(terminalView.downstreamExecutable, false);
+
+    const terminalDashboardResponse = await activePage.request.get(address + '/api/dashboard');
+    assert.equal(terminalDashboardResponse.status(), 200);
+    const terminalDashboard = await terminalDashboardResponse.json();
+    assert.deepEqual(
+      terminalDashboard.queue.map((item: { taskId: string }) => item.taskId),
+      ordinary,
+    );
+    assert.equal(terminalDashboard.queue[0]?.resumeSessionId, session.id);
+    const terminalSession = terminalDashboard.sessions.find(
+      (item: { id: string }) => item.id === session.id,
+    );
+    assert.equal(terminalSession?.threadId, 'browser-restart-thread');
+    assert.deepEqual(terminalSession?.configuration, sessionConfiguration);
+    assert.equal(JSON.stringify(terminalDashboard).includes(sessionBinding.contextId), false);
+    const terminalTasks = new Map(
+      terminalDashboard.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
+    );
+    assert.equal(terminalTasks.get(interrupted.task.id), 'interrupted');
+    assert.equal(terminalTasks.get(failed.task.id), 'failed');
+    assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
+    assert.equal(terminalTasks.get(blocked.task.id), 'completed');
     assert.deepEqual(pageErrors, []);
     passed = true;
     console.log(
