@@ -77,6 +77,28 @@ describe('complete read-only GitHub PR pagination', () => {
     expect(fetchPage).toHaveBeenCalledTimes(4);
   });
 
+  it('detects an injected adapter mutating first-pass evidence during verification', async () => {
+    const mutable = { ...candidate };
+    let pass = 0;
+    const fetchPage = vi.fn(async (page: number) => {
+      if (page === 1) {
+        pass += 1;
+        if (pass === 2) {
+          mutable.html_url = 'https://github.com/vlovers/ai-office/pull/125';
+        }
+        return { candidates: [mutable], nextPage: 2 };
+      }
+      return {
+        candidates: [{ ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }],
+        nextPage: null,
+      };
+    });
+    await expect(collectRemotePullRequests(fetchPage, 100, true)).rejects.toThrow(
+      'pagination changed during inventory',
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(4);
+  });
+
   it('does not return a first-pass inventory when the verification traversal fails', async () => {
     let firstPageReads = 0;
     const fetchPage = vi.fn(async (page: number) => {
