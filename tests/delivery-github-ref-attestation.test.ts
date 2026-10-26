@@ -208,6 +208,18 @@ describe('GitHub immutable ref attestation', () => {
     ['missing head SHA', { ...receipt, number: 123, head: { ref: plan.branch, repo } }],
     ['wrong PR number', { ...receipt, number: 124 }],
     [
+      'detail URL identifies a different PR',
+      { ...receipt, number: 123, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+    ],
+    [
+      'detail URL has a noncanonical numeric alias',
+      { ...receipt, number: 123, html_url: 'https://github.com/vlovers/ai-office/pull/0123' },
+    ],
+    [
+      'detail URL points at a different repository',
+      { ...receipt, number: 123, html_url: 'https://github.com/foreign/repo/pull/123' },
+    ],
+    [
       'wrong repository',
       { ...receipt, number: 123, base: { ...receipt.base, repo: { full_name: 'other/repo' } } },
     ],
