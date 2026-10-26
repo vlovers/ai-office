@@ -600,6 +600,45 @@ if (process.argv.includes('--restart-server')) {
       timeout: 20000,
     });
     await expect(createWorkflow).toBeEnabled();
+    // A response slower than the 3s polling interval must not starve the UI.
+    // While that poll is pending, an explicit refresh must supersede it.
+    let releaseSlowPoll: (() => void) | undefined;
+    let markSlowPollStarted: (() => void) | undefined;
+    const slowPollStarted = new Promise<void>((resolve) => {
+      markSlowPollStarted = resolve;
+    });
+    const slowPollGate = new Promise<void>((resolve) => {
+      releaseSlowPoll = resolve;
+    });
+    let delayOnce = true;
+    await page.route(dashboardUrl, async (route) => {
+      if (delayOnce) {
+        delayOnce = false;
+        markSlowPollStarted?.();
+        await slowPollGate;
+      }
+      await route.continue();
+    });
+    try {
+      await Promise.race([
+        slowPollStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Slow polling request never started')), 10000),
+        ),
+      ]);
+      // Let the next interval tick while the first response is deliberately held.
+      await page.waitForTimeout(3500);
+      const freshResponse = page.waitForResponse(
+        (response) => response.url() === dashboardUrl && response.ok(),
+        { timeout: 10000 },
+      );
+      await board.getByRole('button', { name: 'Refresh workflow' }).click();
+      await freshResponse;
+      await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+    } finally {
+      releaseSlowPoll?.();
+      await page.unroute(dashboardUrl);
+    }
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
