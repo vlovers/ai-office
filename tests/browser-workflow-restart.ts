@@ -336,18 +336,27 @@ if (process.argv.includes('--restart-server')) {
       for (const [index, id] of ids.entries()) {
         const base = address + '/api/workflows/' + id;
         const version = versions[index]!;
-        const initial = await activePage.request.post(base + '/approve-initial', {
-          data: { version, confirmed: true },
-        });
-        assert.equal(initial.status(), 409);
-        const reviewer = await activePage.request.post(base + '/approve-reviewer', {
-          data: { version, confirmed: true, revision: 'c'.repeat(64) },
-        });
-        assert.equal(reviewer.status(), 409);
-        const preparation = await activePage.request.post(base + '/prepare-reviewer', {
-          data: { version, confirmed: true },
-        });
-        assert.equal(preparation.status(), 409);
+        const mutations = [
+          { action: 'approve-initial', data: { version, confirmed: true } },
+          { action: 'bind-task', data: { version, confirmed: true, taskId: sessionTask.id } },
+          { action: 'submit-initial', data: { version, confirmed: true, confirmedWrite: true } },
+          { action: 'capture-coder-evidence', data: { version, confirmed: true } },
+          {
+            action: 'approve-coder-evidence',
+            data: { version, confirmed: true, revision: 'c'.repeat(64) },
+          },
+          {
+            action: 'approve-reviewer',
+            data: { version, confirmed: true, revision: 'c'.repeat(64) },
+          },
+          { action: 'prepare-reviewer', data: { version, confirmed: true } },
+        ];
+        for (const mutation of mutations) {
+          const response = await activePage.request.post(base + '/' + mutation.action, {
+            data: mutation.data,
+          });
+          assert.equal(response.status(), 409, mutation.action + ' bypassed a blocked Workflow');
+        }
         const unchanged = await activePage.request.get(base);
         assert.equal(unchanged.status(), 200);
         assert.equal((await unchanged.json()).version, version);
