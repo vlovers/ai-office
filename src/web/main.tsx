@@ -69,6 +69,14 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
+  const [screen, setScreen] = useState<'office' | 'tasks' | 'workflows' | 'team' | 'settings'>(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#task-') || hash === '#compose') return 'tasks';
+    if (hash.startsWith('#workflow')) return 'workflows';
+    if (hash === '#agent-studio' || hash === '#agent') return 'team';
+    if (hash === '#repositories') return 'settings';
+    return 'office';
+  });
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -300,6 +308,11 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
+    if (id === 'compose' || id === 'task-workspace' || id === 'task-history') setScreen('tasks');
+    if (id === 'workflows' || id === 'workflow-timeline' || id === 'task-workflow') setScreen('workflows');
+    if (id === 'agent' || id === 'agent-studio') setScreen('team');
+    if (id === 'repositories') setScreen('settings');
+    if (id === 'overview') setScreen('office');
     const origin = document.activeElement;
     requestAnimationFrame(() => {
       // A later keyboard/pointer action takes precedence over this deferred navigation.
@@ -329,7 +342,8 @@ function App() {
   );
   return (
     <div
-      className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
+      className={`shell unified-workspace ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
+      data-screen={screen}
     >
       <a className="skip-link" href="#overview">
         Skip to mission control
@@ -343,30 +357,39 @@ function App() {
         </a>
         <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Dashboard sections">
-          <a
-            className={`nav-item ${view === 'mission' ? 'active' : ''}`}
-            href="#overview"
-            onClick={() => setView('mission')}
+          {([
+            ['office', '⌂', 'Office', '#overview'],
+            ['tasks', '▤', 'Tasks', '#task-history'],
+            ['workflows', '◇', 'Workflows', '#workflow-timeline'],
+            ['team', '♙', 'Team', '#agent-studio'],
+            ['settings', '⚙', 'Settings', '#repositories'],
+          ] as const).map(([destination, icon, label, href]) => (
+            <a
+              key={destination}
+              className={`nav-item ${screen === destination ? 'active' : ''}`}
+              href={href}
+              aria-current={screen === destination ? 'page' : undefined}
+              onClick={() => {
+                setView('mission');
+                setScreen(destination);
+              }}
+            >
+              <span aria-hidden="true">{icon}</span>{label}
+              {destination === 'tasks' && <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>}
+              {destination === 'team' && <span className="nav-count">{dashboard?.agents.length ?? 0}</span>}
+            </a>
+          ))}
+          <button
+            type="button"
+            className="nav-item nav-create-task"
+            onClick={() => {
+              setView('mission');
+              setScreen('tasks');
+              showSection('compose');
+            }}
           >
-            <span aria-hidden="true">⌂</span>Office
-          </a>
-          <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
-            <span aria-hidden="true">▤</span>Tasks
-            <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#workflow-timeline" onClick={() => setView('mission')}>
-            <span aria-hidden="true">◇</span>Workflows
-          </a>
-          <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
-            <span aria-hidden="true">♙</span>Team
-            <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#repositories" onClick={() => setView('mission')}>
-            <span aria-hidden="true">⚙</span>Settings
-          </a>
-          <a className="nav-item" href="#compose" onClick={() => setView('mission')}>
             <span aria-hidden="true">＋</span>New task
-          </a>
+          </button>
         </nav>
         <div className="sidebar-section">
           <div className="nav-label">
@@ -455,18 +478,19 @@ function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">AI OFFICE / WORKSPACE</div>
+              <div className="eyebrow">AI OFFICE / {screen.toUpperCase()}</div>
               <h1>
-                {view === 'focus' ? 'Focus mode' : 'Office overview'}
+                {view === 'focus' ? 'Focus mode' : ({ office: 'Office overview', tasks: 'Tasks & activity', workflows: 'Workflows', team: 'Your team', settings: 'Workspace settings' } as const)[screen]}
                 <span>_</span>
               </h1>
-              <p>Make room for your next idea. Your agents and their real work, together.</p>
+              <p>{({ office: 'See who is working and what needs your attention.', tasks: 'Create tasks, follow progress and review results.', workflows: 'Move work safely through review and QA.', team: 'Manage the agents who work with you.', settings: 'Manage repositories, connections and workspace access.' } as const)[screen]}</p>
             </div>
             <a
               className="button-link"
               href="#compose"
               onClick={() => {
                 setView('mission');
+                setScreen('tasks');
                 showSection('compose');
               }}
             >
@@ -1297,7 +1321,7 @@ function App() {
                 </div>
                 {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
-              <section className="panel connection-panel" aria-label="Codex connection">
+              <section className="panel connection-panel" id="codex-connection" aria-label="Codex connection">
                 <div className="panel-heading">
                   <h2>Codex connection</h2>
                   <span
