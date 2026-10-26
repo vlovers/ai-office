@@ -16,13 +16,17 @@ Security fixes target the latest `main` branch. Older commits and experimental b
 - **v0.6 Agent Studio and v0.7 workflow engine** are integrated into `main` but have not been separately released. See [Agent Studio validation](docs/V0_6_VALIDATION.md) and [workflow limits](docs/V0_7_WORKFLOW_ENGINE.md).
 - The **v0.8 Delivery authorization foundation** is unreleased. It is a separate ingress and is **not permission to execute GitHub remote writes**. Consult the [Delivery threat model](https://github.com/vlovers/ai-office/blob/main/docs/DELIVERY_THREAT_MODEL.md), [security design](https://github.com/vlovers/ai-office/blob/main/docs/DELIVERY_PRODUCTION_SECURITY.md) and [activation checklist](https://github.com/vlovers/ai-office/blob/main/docs/DELIVERY_PRODUCTION_CHECKLIST.md) before evaluating it.
 
-Check actual GitHub tags/releases before relying on these version statements.
+Version statements describe the documentation baseline of this PR, not a live release feed. Before deployment or disclosure triage, verify the current GitHub tag, the deployed commit and the actual enabled endpoints; do not infer deployment or activation from a branch name, CI result or a merged PR.
 
 ## Dashboard and Delivery are separate trust boundaries
 
 The local dashboard is for a **single trusted operator** and must remain bound to loopback. **Never expose dashboard port 4310, Vite, task/workflow endpoints or SSE through a tunnel, public listener or reverse proxy.** Browser confirmation is not a substitute for backend authorization.
 
 The dedicated Delivery API has a different, currently unreleased authorization model: trusted operator enrollment, expiring sessions, live workspace grants, exact HTTPS Origin/Host, CSRF checks and one-use approval/intent records. Its intended deployment requires independently verified TLS, credential scope, host configuration, operational safeguards and security review. **It currently exposes no HTTP commit, push, publication, merge, deployment or automatic retry endpoint.** A reserved transfer intent is not authorization to execute a remote write. Do not mount the legacy or new unreviewed write executors or treat this foundation as production-ready.
+
+## Incident containment and evidence handling
+
+If a suspected permission bypass, leaked token or unintended remote operation is observed, stop the affected local task or Delivery deployment, revoke affected operator sessions/grants and rotate potentially exposed credentials through their owning providers. Preserve only sanitized, minimal evidence in a private channel; do not paste raw session databases, tokens, request headers, Git credentials or private repository contents into public CI logs or issues. Treat ambiguous Git remote outcomes as unresolved until an authorized operator verifies the remote state; never blindly retry a push or publication. Do not claim that stopping the dashboard revokes a separately deployed Delivery session.
 
 ## Agent execution and recovery
 
