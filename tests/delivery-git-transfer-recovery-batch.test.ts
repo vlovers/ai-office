@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { backup, DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 import { recoverUnresolvedGitTransfers } from '../src/server/delivery-git-transfer-recovery-batch.js';
 import type { GitTransferReconciliationContext } from '../src/server/delivery-git-transfer-reconciliation.js';
@@ -390,6 +390,47 @@ describe('bounded Git transfer recovery across workspaces', () => {
         expect(t.fetcher).toHaveBeenCalledTimes(3);
       } finally {
         reopened.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
+  it('reconciles a stale WAL backup of a completed push without replaying remote writes', async () => {
+    const t = setup();
+    const snapshotPath = join(t.root, 'stale-transfer-snapshot.sqlite');
+    try {
+      t.db.exec('PRAGMA journal_mode=WAL');
+      const owner = t.identity('a');
+      t.journal.begin('commit', owner);
+      t.journal.confirmVerified('commit', owner, owner.headSha);
+      t.journal.begin('push', owner);
+
+      await backup(t.db, snapshotPath);
+      t.journal.confirmVerified('push', owner, owner.headSha);
+      expect(t.journal.get('a', 'push')?.state).toBe('confirmed');
+
+      const restored = new DatabaseSync(snapshotPath);
+      try {
+        const journal = new DeliveryGitTransferJournal(restored);
+        expect(journal.get('a', 'push')?.state).toBe('intent');
+        const result = await recoverUnresolvedGitTransfers(journal, async (id) =>
+          t.contextFor(id, journal),
+        );
+        expect(result.outcomes).toMatchObject([
+          { workspaceId: 'a', status: 'reconciled', result: { status: 'ready' } },
+        ]);
+        expect(journal.get('a', 'push')).toMatchObject({
+          state: 'confirmed',
+          receiptSha: owner.headSha,
+        });
+        expect(t.fetcher).toHaveBeenCalledTimes(3);
+        expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+        expect((await recoverUnresolvedGitTransfers(journal, async (id) =>
+          t.contextFor(id, journal),
+        )).outcomes).toEqual([]);
+      } finally {
+        restored.close();
       }
     } finally {
       t.close();
