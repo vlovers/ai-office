@@ -270,3 +270,5 @@ This is a focused integration follow-up created from current `main`, not a merge
 
 Next: inspect the completed exact-head CI; if green, check version tag-to-commit mapping and remaining security review. Then proceed to #272 branch reconciliation.
 
+
+**CI follow-up (same checkpoint):** [Foundation CI run 40417012847](https://github.com/vlovers/grid-atlas/actions/runs/40417012847) completed with **success** on exact PR #319 head `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e`. This confirms Foundation CI only, not the Commons originals research workflow or the full repository CI matrix. Independent approval and exact release-tag mapping remain unverified; keep PR draft.
