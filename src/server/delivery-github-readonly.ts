@@ -2,7 +2,11 @@ import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import type { GitHubDraftReceipt } from './delivery-publication-receipt.js';
 import { collectRemotePullRequests } from './delivery-publication-pagination.js';
 import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
-import { GITHUB_JSON_LIMITS, readBoundedGitHubJson } from './delivery-github-json-boundary.js';
+import {
+  GITHUB_JSON_LIMITS,
+  readBoundedGitHubJson,
+  type GitHubJsonByteBudget,
+} from './delivery-github-json-boundary.js';
 
 type AllowedPlan = Extract<DeliveryPublicationPlan, { allowed: true }>;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -17,6 +21,8 @@ export type ReadOnlyGitHubOptions = {
   timeoutMs?: number;
   /** Total monotonic budget for every PR page, not a fresh timeout per page. */
   inventoryDeadlineMs?: number;
+  /** Total streamed JSON bytes across all pages and both inventory passes. */
+  inventoryMaxBytes?: number;
 };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -168,6 +174,15 @@ export async function listAllGitHubPullRequests(
   ) {
     throw new Error('Invalid GitHub PR inventory deadline.');
   }
+  const inventoryMaxBytes = options.inventoryMaxBytes ?? 32 * 1024 * 1024;
+  if (
+    !Number.isSafeInteger(inventoryMaxBytes) ||
+    inventoryMaxBytes < 1 ||
+    inventoryMaxBytes > 32 * 1024 * 1024
+  ) {
+    throw new Error('Invalid GitHub PR cumulative inventory byte limit.');
+  }
+  const byteBudget: GitHubJsonByteBudget = { remainingBytes: inventoryMaxBytes };
   const startedAt = performance.now();
   const assertBudget = (): number => {
     if (options.signal?.aborted) throw new Error('GitHub PR inventory aborted.');
@@ -207,7 +222,7 @@ export async function listAllGitHubPullRequests(
           }
           return {
             response,
-            payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing),
+            payload: await readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.listing, byteBudget),
           };
         },
         { signal: options.signal, timeoutMs: Math.min(options.timeoutMs ?? 15_000, remaining) },
