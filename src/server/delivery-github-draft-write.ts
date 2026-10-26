@@ -93,6 +93,15 @@ export function validateGitHubDraftWrite(
   if (options.fetcher !== undefined && typeof options.fetcher !== 'function') {
     throw new Error('Invalid GitHub draft write transport.');
   }
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
+    throw new Error('Invalid GitHub draft write abort signal.');
+  }
+  if (
+    options.authorizeBeforePost !== undefined &&
+    typeof options.authorizeBeforePost !== 'function'
+  ) {
+    throw new Error('Invalid GitHub draft write authorization hook.');
+  }
   if (options.signal?.aborted) {
     throw new Error('GitHub draft write aborted before reservation.');
   }
