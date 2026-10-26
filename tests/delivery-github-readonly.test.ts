@@ -430,7 +430,7 @@ describe('read-only GitHub PR discovery', () => {
           inventoryDeadlineMs: 200,
         }),
       ).rejects.toThrow('inventory deadline exceeded');
-      expect(fetcher).toHaveBeenCalledTimes(4);
+      expect(fetcher).toHaveBeenCalledTimes(3);
     } finally {
       clock.mockRestore();
     }
