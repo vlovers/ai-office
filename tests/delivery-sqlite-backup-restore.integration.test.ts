@@ -132,9 +132,8 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
         expect(() => journal.reserve('workspace-c', 'shared-legacy-operation')).toThrow(
           'belongs to another workspace',
         );
-        expect(
-          restored.prepare('SELECT COUNT(*) AS total FROM delivery_journal').get()?.total,
-        ).toBe(2);
+        const restoredRows = restored.prepare('SELECT COUNT(*) AS total FROM delivery_journal').get();
+        expect(restoredRows?.total).toBe(2);
       } finally {
         restored.close();
       }
