@@ -18,6 +18,11 @@ export async function withGitHubRequestDeadline<T>(
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 60_000) {
     throw new Error('Invalid GitHub request deadline.');
   }
+  // Reject forged or malformed signal objects before dispatch. A non-native
+  // signal could otherwise fail only after a durable publication reservation.
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
+    throw new Error('Invalid GitHub request abort signal.');
+  }
   if (options.signal?.aborted) throw new Error('GitHub request aborted.');
 
   const controller = new AbortController();
