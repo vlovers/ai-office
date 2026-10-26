@@ -265,6 +265,12 @@ try {
   await capture('disconnected');
   await page.unroute('**/api/dashboard');
   await expect(page.locator('.studio-notice')).toHaveCount(0, { timeout: 10000 });
+  // Recovery must restore a usable Tasks workspace and its persisted records,
+  // not merely dismiss the disconnected banner.
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
+  await expect(history).toBeVisible();
+  await expect(history).toContainText('FIXTURE · provider failure');
+  await expect(history.getByRole('button', { name: /Export filtered CSV/ })).toBeEnabled();
   assert.deepEqual(errors, []);
   console.log(
     `Office V4 browser passed: zero/two/six profiles, overflow selection, real SDK fixture reasoning, submitted queue exact-task selection, failure, disconnected snapshot, reduced motion and desktop/mobile overflow. Screenshots: ${artifacts}`,
