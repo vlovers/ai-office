@@ -516,6 +516,81 @@ describe('Draft PR publication orchestration', () => {
     }
   });
 
+  it('re-attests the reviewed snapshot after PR inventory even without an optional hook', async () => {
+    const t = setup();
+    try {
+      t.verifySnapshot
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('reviewed worktree drifted during inventory'));
+      await expect(createDraftPublication(t.context)).rejects.toThrow(
+        'reviewed worktree drifted during inventory',
+      );
+      expect(t.verifySnapshot).toHaveBeenCalledTimes(2);
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(t.createDraft).not.toHaveBeenCalled();
+
+      // The rejected preflight never consumes the one-use operation. A new,
+      // independently verified attempt may still publish exactly once.
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects foreign, malformed, and incomplete PR identities before any reservation', async () => {
+    const unrelated = { ...receipt, head: { ...receipt.head, ref: 'unrelated-branch' } };
+    const invalid = [
+      { ...unrelated, html_url: 'https://github.com/foreign/repo/pull/123' },
+      { ...unrelated, html_url: `${plan.destination}/pull/00123` },
+      { ...unrelated, state: 'pending' },
+      { ...unrelated, base: { ...receipt.base, repo: { full_name: 'foreign/repo' } } },
+      { ...unrelated, base: { ...receipt.base, repo: null } },
+      { ...unrelated, head: { ...receipt.head, ref: '' } },
+      { ...unrelated, base: { ...receipt.base, ref: '' } },
+    ];
+    for (const candidate of invalid) {
+      const t = setup();
+      try {
+        t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [candidate] });
+        await expect(createDraftPublication(t.context)).rejects.toThrow(
+          'Remote PR inventory is incomplete or invalid',
+        );
+        expect(t.journal.get('workspace-1')).toBeNull();
+        expect(t.createDraft).not.toHaveBeenCalled();
+      } finally {
+        t.close();
+      }
+    }
+  });
+
+  it('keeps ambiguous POST recovery read-only when PR inventory has a foreign identity', async () => {
+    const t = setup();
+    try {
+      t.createDraft.mockRejectedValueOnce(new Error('lost GitHub POST response'));
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      t.listRemote.mockResolvedValueOnce({
+        complete: true,
+        candidates: [{ ...receipt, html_url: 'https://github.com/foreign/repo/pull/123' }],
+      });
+      expect((await createDraftPublication(t.context)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(t.createDraft).toHaveBeenCalledOnce();
+
+      // Only a subsequent complete, canonical and independently verified
+      // inventory can reconcile the durable uncertain intent.
+      t.listRemote.mockResolvedValueOnce({ complete: true, candidates: [receipt] });
+      expect((await createDraftPublication(t.context)).status).toBe('published');
+      expect(t.createDraft).toHaveBeenCalledOnce();
+      expect(t.verifyRemoteReceipt).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('reconciles an uncertain intent after SQLite restart', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-office-restart-'));
     const repoPath = join(root, 'repo');
