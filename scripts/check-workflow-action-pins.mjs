@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
@@ -197,6 +197,23 @@ function auditLocalCompositeActions(workflowDirectory, files) {
       );
     } else {
       const file = join(canonical, metadata[0]);
+      // The directory can be safe while action.yml itself is a symlink to
+      // an unreviewed file. Require regular, non-symlink metadata in-tree.
+      const fileStat = lstatSync(file);
+      const fileReal = realpathSync(file);
+      const fileRel = relative(realpathSync(root), fileReal);
+      if (
+        !fileStat.isFile() ||
+        fileStat.isSymbolicLink() ||
+        fileRel === '..' ||
+        fileRel.startsWith('../') ||
+        isAbsolute(fileRel)
+      ) {
+        findings.push(`${file}: composite metadata must be a regular in-repository file`);
+        active.delete(canonical);
+        inspected.add(canonical);
+        return;
+      }
       const content = readFileSync(file, 'utf8');
       if (!/^\s*using\s*:\s*composite\s*(?:#.*)?$/m.test(content)) {
         findings.push(`${file}: local action must be inspectable composite metadata`);
