@@ -20,7 +20,7 @@ export async function buildPortfolio({ fetcher = fetch, token = process.env.GITH
   if (token) headers.Authorization = `Bearer ${token}`;
 
   async function request(path) {
-    const response = await fetcher(`https://api.github.com${path}`, { headers });
+    const response = await fetcher(`https://api.github.com${path}`, { headers, signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }
@@ -41,8 +41,8 @@ export async function buildPortfolio({ fetcher = fetch, token = process.env.GITH
       latest.status !== 'completed' ? 'pending' :
       latest.conclusion === 'success' ? 'latest run passed (not gate verified)' :
       latest.conclusion === 'failure' ? 'latest run failed' : 'unknown';
-    const openPrs = pulls.status === 'fulfilled' ? pulls.value.length : null;
-    const protectedState = protection.status === 'fulfilled' ? 'verified (details require review)' : 'unverified';
+    const openPrs = pulls.status === 'fulfilled' ? (pulls.value.length === 100 ? '100+' : pulls.value.length) : null;
+    const protectedState = protection.status === 'fulfilled' ? 'API protection present (rulesets unverified)' : 'unverified';
     return { name, full, branch, ci, runUrl: latest?.html_url, openPrs, protectedState, note };
   }));
   return { checkedAt: now.toISOString(), rows };
