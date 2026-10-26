@@ -407,20 +407,20 @@ if (process.argv.includes('--restart-server')) {
     const assertWorkflowMutationsRejected = async (id: string, version: number) => {
       const base = address + '/api/workflows/' + id;
       const mutations = [
-          { action: 'approve-initial', data: { version, confirmed: true } },
-          { action: 'bind-task', data: { version, confirmed: true, taskId: sessionTask.id } },
-          { action: 'submit-initial', data: { version, confirmed: true, confirmedWrite: true } },
-          { action: 'capture-coder-evidence', data: { version, confirmed: true } },
-          {
-            action: 'approve-coder-evidence',
-            data: { version, confirmed: true, revision: 'c'.repeat(64) },
-          },
-          {
-            action: 'approve-reviewer',
-            data: { version, confirmed: true, revision: 'c'.repeat(64) },
-          },
-          { action: 'prepare-reviewer', data: { version, confirmed: true } },
-        ];
+        { action: 'approve-initial', data: { version, confirmed: true } },
+        { action: 'bind-task', data: { version, confirmed: true, taskId: sessionTask.id } },
+        { action: 'submit-initial', data: { version, confirmed: true, confirmedWrite: true } },
+        { action: 'capture-coder-evidence', data: { version, confirmed: true } },
+        {
+          action: 'approve-coder-evidence',
+          data: { version, confirmed: true, revision: 'c'.repeat(64) },
+        },
+        {
+          action: 'approve-reviewer',
+          data: { version, confirmed: true, revision: 'c'.repeat(64) },
+        },
+        { action: 'prepare-reviewer', data: { version, confirmed: true } },
+      ];
       for (const mutation of mutations) {
         const response = await activePage.request.post(base + '/' + mutation.action, {
           data: mutation.data,
