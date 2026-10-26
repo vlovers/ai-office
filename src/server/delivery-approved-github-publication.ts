@@ -35,6 +35,8 @@ export type SessionBoundDraftContext = {
   workspace: DeliverySecurityWorkspace;
   refreshWorkspace: () => Promise<DeliverySecurityWorkspace>;
   approvalId: string;
+  /** Server-owned total budget across all PR inventory pages; never a per-page reset. */
+  inventoryDeadlineMs?: number;
   write: Omit<GitHubDraftWriteOptions, 'confirmation'>;
 };
 
@@ -153,7 +155,10 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
     },
     listRemote: async (currentPlan) => {
       authorize();
-      return listAllGitHubPullRequests(currentPlan, refOptions);
+      return listAllGitHubPullRequests(currentPlan, {
+        ...refOptions,
+        inventoryDeadlineMs: context.inventoryDeadlineMs,
+      });
     },
     createDraft: async (currentPlan) => {
       // Repeat authorization and remote SHA attestation immediately before the
@@ -195,7 +200,10 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       // and the write. Require a second complete open/closed inventory before
       // persisting a receipt, even on the successful (non-recovery) path.
       // Missing/ambiguous results are uncertain, never permission to POST again.
-      const inventory = await listAllGitHubPullRequests(currentPlan, refOptions);
+      const inventory = await listAllGitHubPullRequests(currentPlan, {
+        ...refOptions,
+        inventoryDeadlineMs: context.inventoryDeadlineMs,
+      });
       const ownership = reconcilePublicationCandidates(currentPlan, inventory.candidates);
       if (ownership.status !== 'confirmed' || ownership.pullRequestUrl !== url) {
         throw new Error('Draft PR managed-head ownership is not uniquely verified.');
