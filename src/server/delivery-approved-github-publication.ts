@@ -37,6 +37,10 @@ export type SessionBoundDraftContext = {
   approvalId: string;
   /** Server-owned total budget across all PR inventory pages; never a per-page reset. */
   inventoryDeadlineMs?: number;
+  /** Maximum time for each trusted registry refresh while holding the Git lease. */
+  refreshDeadlineMs?: number;
+  /** Monotonic total budget for all registry refreshes in this publication attempt. */
+  refreshBudgetMs?: number;
   write: Omit<GitHubDraftWriteOptions, 'confirmation'>;
 };
 
@@ -99,12 +103,62 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
   // flight. Compare the entire reviewed workspace, not just the operation key,
   // after each remote attestation and before a reserved Draft PR POST.
   const refreshReviewedWorkspace = async (): Promise<DeliverySecurityWorkspace> => {
-    const refreshed = deliveryWorkspaceSchema.parse(await context.refreshWorkspace());
-    if (JSON.stringify(refreshed) !== JSON.stringify(workspace)) {
-      throw new Error('Trusted delivery workspace changed since operator review.');
+    // A registry implementation may hang or ignore cancellation. Bound the
+    // promise itself, not merely the underlying transport, so the shared Git
+    // lease is eventually released. Late results cannot authorize a POST.
+    const remaining = Math.floor(refreshBudgetMs - (performance.now() - refreshStartedAt));
+    if (remaining < 100) throw new Error('Trusted delivery registry refresh budget exhausted.');
+    if (write.signal?.aborted) throw new Error('Trusted delivery registry refresh aborted.');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('Trusted delivery registry refresh timed out.')),
+        Math.min(refreshDeadlineMs, remaining),
+      );
+    });
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(new Error('Trusted delivery registry refresh aborted.'));
+      write.signal?.addEventListener('abort', onAbort, { once: true });
+      if (write.signal?.aborted) onAbort();
+    });
+    try {
+      const refreshed = deliveryWorkspaceSchema.parse(
+        await Promise.race([
+          Promise.resolve().then(() => {
+            if (write.signal?.aborted) {
+              throw new Error('Trusted delivery registry refresh aborted.');
+            }
+            return context.refreshWorkspace();
+          }),
+          deadline,
+          aborted,
+        ]),
+      );
+      if (write.signal?.aborted) throw new Error('Trusted delivery registry refresh aborted.');
+      if (performance.now() - refreshStartedAt >= refreshBudgetMs) {
+        throw new Error('Trusted delivery registry refresh budget exhausted.');
+      }
+      if (JSON.stringify(refreshed) !== JSON.stringify(workspace)) {
+        throw new Error('Trusted delivery workspace changed since operator review.');
+      }
+      return refreshed;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      if (onAbort) write.signal?.removeEventListener('abort', onAbort);
     }
-    return refreshed;
   };
+  const refreshDeadlineMs = context.refreshDeadlineMs ?? 10_000;
+  const refreshBudgetMs = context.refreshBudgetMs ?? 60_000;
+  for (const [name, value] of [
+    ['deadline', refreshDeadlineMs],
+    ['budget', refreshBudgetMs],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 100 || value > 60_000) {
+      throw new Error(`Invalid trusted delivery registry refresh ${name}.`);
+    }
+  }
+  const refreshStartedAt = performance.now();
   const repository = plan.destination.slice('https://github.com/'.length);
   return createApprovedDraftPublication({
     db: context.sessions.db,
