@@ -155,6 +155,29 @@ export function auditWorkflowText(source, filename = 'workflow') {
   return findings;
 }
 
+function hasCompositeRunBlock(source) {
+  const lines = source.split(/\r?\n/);
+  const runs = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^runs\s*:\s*(?:#.*)?$/.test(line)) runs.push(index);
+  }
+  if (runs.length !== 1) return false;
+  const start = runs[0];
+  let using = 0;
+  let steps = 0;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const indent = indentation(line);
+    if (indent === 0) break;
+    if (indent !== 2) continue;
+    if (/^\s{2}using\s*:\s*composite\s*(?:#.*)?$/.test(line)) using++;
+    if (/^\s{2}steps\s*:\s*(?:#.*)?$/.test(line)) steps++;
+  }
+  return using === 1 && steps === 1;
+}
+
 function auditLocalCompositeActions(workflowDirectory, files) {
   const root = resolve(workflowDirectory, '..', '..');
   const findings = [];
@@ -215,7 +238,7 @@ function auditLocalCompositeActions(workflowDirectory, files) {
         return;
       }
       const content = readFileSync(file, 'utf8');
-      if (!/^\s*using\s*:\s*composite\s*(?:#.*)?$/m.test(content)) {
+      if (!hasCompositeRunBlock(content)) {
         findings.push(`${file}: local action must be inspectable composite metadata`);
       }
       // Composite metadata uses the same fail-closed YAML restrictions as workflows.
