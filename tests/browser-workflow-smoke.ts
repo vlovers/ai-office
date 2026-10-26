@@ -129,6 +129,7 @@ try {
   await expect(diagnostics).toContainText('Persisted checkpoint diagnostics');
   await expect(diagnostics).toContainText('no automatic restart');
   await page.reload();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
