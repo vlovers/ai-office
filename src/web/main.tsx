@@ -75,8 +75,30 @@ function App() {
     if (hash.startsWith('#workflow')) return 'workflows';
     if (hash === '#agent-studio' || hash === '#agent') return 'team';
     if (hash === '#repositories') return 'settings';
+    // Restore the active workspace after a reload. A direct deep link takes
+    // precedence, and untrusted storage values never become screen selectors.
+    try {
+      const saved = sessionStorage.getItem('ai-office-workspace-screen');
+      if (
+        saved === 'office' ||
+        saved === 'tasks' ||
+        saved === 'workflows' ||
+        saved === 'team' ||
+        saved === 'settings'
+      )
+        return saved;
+    } catch {
+      /* Session storage is optional (private browsing / disabled storage). */
+    }
     return 'office';
   });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('ai-office-workspace-screen', screen);
+    } catch {
+      /* Session storage is optional. */
+    }
+  }, [screen]);
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
