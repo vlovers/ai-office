@@ -201,7 +201,7 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
             write: {
               ...original.write,
               ...invalid,
-            } as Parameters<typeof createSessionBoundGitHubDraft>[0]['write'],
+            } as unknown as Parameters<typeof createSessionBoundGitHubDraft>[0]['write'],
           }),
         ).rejects.toThrow(/Invalid GitHub draft write (abort signal|authorization hook)/);
         expect(t.journal.get('workspace-1')).toBeNull();
