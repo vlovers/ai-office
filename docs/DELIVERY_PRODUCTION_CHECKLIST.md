@@ -107,8 +107,13 @@ the source database still open in WAL mode. A disposable restored snapshot
 must preserve the consumed one-use publication approval, an `uncertain` Draft
 PR reservation, confirmed commit/push transfer receipts, and the SQL triggers
 that prohibit resetting or deleting durable evidence. A second fixture
-restores a pre-upgrade database with conflicting operation owners and verifies
-that initialization preserves both records and blocks automatic adoption.
+opens the restored WAL snapshot through two independent SQLite connections and
+attempts direct `INSERT OR REPLACE` replay of the publication reservation and
+confirmed push receipt, plus raw SQL deletion. These writes must be rejected
+without losing the original uncertain reservation or verified transfer receipts,
+even when SQLite's default recursive DELETE triggers are disabled. A third
+fixture restores a pre-upgrade database with conflicting operation owners and
+verifies that initialization preserves both records and blocks automatic adoption.
 
 **A successful SQLite integrity check is not permission to resume writes.**
 A backup may be older than a successful GitHub POST, push, approval revocation
