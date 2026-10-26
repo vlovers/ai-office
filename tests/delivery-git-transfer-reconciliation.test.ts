@@ -910,6 +910,36 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
+  it('refuses push confirmation when an external process dirties Git during remote GET', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      const original = t.fetcher.getMockImplementation()!;
+      let changed = false;
+      t.fetcher.mockImplementation(async (url, init) => {
+        expect(init.method).toBe('GET');
+        if (!changed) {
+          changed = true;
+          writeFileSync(join(t.context.worktree.path, 'external-change.txt'), 'unreviewed');
+        }
+        return original(url, init);
+      });
+      expect(await reconcileGitTransferReceipts(t.context)).toMatchObject({
+        status: 'blocked',
+        stage: 'push',
+      });
+      expect(t.journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+        state: 'uncertain',
+        receiptSha: null,
+      });
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects a swapped worktree registry binding before touching an intent', async () => {
     const t = setup();
     try {
