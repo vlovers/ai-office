@@ -455,7 +455,9 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     try {
       const before = attestLocalReviewedGitState.mock.calls.length;
       expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
-      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(6);
+      // The seventh attestation runs after the PR detail GET, immediately
+      // before the durable published receipt is committed.
+      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(7);
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
       t.close();
