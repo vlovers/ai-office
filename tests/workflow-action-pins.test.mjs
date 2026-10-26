@@ -369,12 +369,44 @@ test('rejects symlinked local composite metadata even when the action directory 
     mkdirSync(action, { recursive: true });
     writeFileSync(
       join(workflows, 'validation.yml'),
-      'permissions:\\n  contents: read\\njobs:\\n  test:\\n    steps:\\n      - uses: ./.github/actions/nested\\n',
+      'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n',
     );
     const outside = join(root, 'unreviewed.yml');
-    writeFileSync(outside, 'runs:\\n  using: composite\\n  steps:\\n    - run: echo bypass\\n      shell: bash\\n');
+    writeFileSync(outside, 'runs:\n  using: composite\n  steps:\n    - run: echo bypass\n      shell: bash\n');
     symlinkSync(outside, join(action, 'action.yml'));
     assert.throws(() => auditWorkflowDirectory(workflows), /metadata must be a regular in-repository file/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('requires composite metadata using and steps inside runs', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
+  try {
+    const workflows = join(root, '.github', 'workflows');
+    const action = join(root, '.github', 'actions', 'nested');
+    mkdirSync(workflows, { recursive: true });
+    mkdirSync(action, { recursive: true });
+    writeFileSync(
+      join(workflows, 'validation.yml'),
+      'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n',
+    );
+    for (const invalid of [
+      'name: example\nusing: composite\nruns:\n  steps:\n    - run: echo bypass\n      shell: bash\n',
+      'name: example\nruns:\n  steps:\n    - run: echo bypass\n      shell: bash\nextra:\n  using: composite\n',
+      'runs:\n  using: composite\n  steps:\n    - run: echo okay\n      shell: bash\nruns:\n  using: composite\n  steps:\n    - run: echo bypass\n      shell: bash\n',
+    ]) {
+      writeFileSync(join(action, 'action.yml'), invalid);
+      assert.throws(() => auditWorkflowDirectory(workflows), /inspectable composite metadata/);
+    }
+    writeFileSync(
+      join(action, 'action.yml'),
+      'name: valid\nruns:\n  using: composite\n  steps:\n    - run: echo okay\n      shell: bash\n',
+    );
+    assert.equal(auditWorkflowDirectory(workflows), 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
