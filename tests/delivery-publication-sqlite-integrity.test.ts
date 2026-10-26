@@ -190,8 +190,8 @@ describe('durable publication SQLite invariants', () => {
       try {
         const recovered = new DeliveryJournal(reopened);
         expect(recovered.get('workspace-crash')?.state).toBe('reserved');
-      recovered.recoverWorkspace('workspace-crash', 'operation-crash');
-      expect(recovered.get('workspace-crash')).toMatchObject({
+        recovered.recoverWorkspace('workspace-crash', 'operation-crash');
+        expect(recovered.get('workspace-crash')).toMatchObject({
           state: 'uncertain',
           pullRequestUrl: null,
         });
