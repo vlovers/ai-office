@@ -171,6 +171,71 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('does not consume approval or reserve a journal row after cumulative preflight timeout', async () => {
+    const t = setup();
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const original = t.fetcher.getMockImplementation()!;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        const response = await original(url, init);
+        if (url.includes('/pulls?')) elapsed = 150;
+        return response;
+      });
+      await expect(
+        createSessionBoundGitHubDraft({ ...t.context(), inventoryDeadlineMs: 200 }),
+      ).rejects.toThrow('Remote PR inventory failed');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+
+      elapsed = 0;
+      t.fetcher.mockImplementation(original);
+      expect(
+        (await createSessionBoundGitHubDraft({ ...t.context(), inventoryDeadlineMs: 200 })).status,
+      ).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+      t.close();
+    }
+  });
+
+  it('keeps a completed POST uncertain on cumulative receipt-inventory timeout and recovers GET-only', async () => {
+    const t = setup();
+    let elapsed = 0;
+    let posted = false;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const original = t.fetcher.getMockImplementation()!;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        const response = await original(url, init);
+        if (init.method === 'POST') posted = true;
+        if (url.includes('/pulls?') && posted) elapsed = 150;
+        return response;
+      });
+      expect(
+        (await createSessionBoundGitHubDraft({ ...t.context(), inventoryDeadlineMs: 200 })).status,
+      ).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+
+      elapsed = 0;
+      t.fetcher.mockImplementation(original);
+      expect(
+        (await createSessionBoundGitHubDraft({ ...t.context(), inventoryDeadlineMs: 200 })).status,
+      ).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+      t.close();
+    }
+  });
+
   it('keeps a completed POST uncertain when page two contains a competing managed head', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
