@@ -76,6 +76,31 @@ describe('lease-protected GitHub GET reconciliation', () => {
     }
   });
 
+  it('reconciles a crashed reservation through GET and blocks a second publication', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      journal.reserve('workspace-1', publicationKey(plan));
+      expect(journal.get('workspace-1')?.state).toBe('reserved');
+      journal.recoverWorkspace('workspace-1', publicationKey(plan));
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+
+      const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+        expect(init.method).toBe('GET');
+        return json([candidate]);
+      });
+      const result = await reconcileUncertainDraftViaGitHub(context(journal), { fetcher });
+      expect(result.state).toBe('published');
+      expect(result.pullRequestUrl).toBe(candidate.html_url);
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(() => journal.reserve('workspace-1', publicationKey(plan))).toThrow(
+        'already exists',
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('keeps uncertain state after a failed later page', async () => {
     const db = new DatabaseSync(':memory:');
     try {
