@@ -97,7 +97,6 @@ export function validateGitHubDraftWrite(
     throw new Error('GitHub draft write aborted before reservation.');
   }
   if (
-    typeof options.title !== 'string' ||  if (
     typeof options.title !== 'string' ||
     options.title.trim().length < 1 ||
     options.title.length > 256 ||
