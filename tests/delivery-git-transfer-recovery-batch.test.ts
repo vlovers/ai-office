@@ -726,6 +726,108 @@ describe('bounded Git transfer recovery across workspaces', () => {
     }
   });
 
+  it('keeps the cursor before a workspace cancelled by its trusted remote signal', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    try {
+      const owner = t.identity('a');
+      t.journal.begin('commit', owner);
+      t.journal.confirmVerified('commit', owner, owner.headSha);
+      t.journal.begin('push', owner);
+      t.journal.begin('commit', t.identity('b'));
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (_url, init) => {
+        expect(init.method).toBe('GET');
+        controller.abort();
+        return new Promise<Response>(() => undefined);
+      });
+      const stopped = await recoverUnresolvedGitTransfers(t.journal, async (id) => {
+        const context = t.contextFor(id);
+        return id === 'a'
+          ? { ...context, remote: { ...context.remote, signal: controller.signal } }
+          : context;
+      });
+      expect(stopped).toMatchObject({
+        nextCursor: null,
+        hasMore: true,
+        stopReason: 'aborted',
+        outcomes: [
+          {
+            workspaceId: 'a',
+            status: 'reconciled',
+            result: { status: 'blocked', stage: 'push' },
+          },
+        ],
+      });
+      expect(t.journal.get('a', 'push')?.state).toBe('uncertain');
+      expect(t.journal.get('b', 'commit')?.state).toBe('intent');
+      t.fetcher.mockImplementation(original);
+      const resumed = await recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+        { afterWorkspaceId: stopped.nextCursor ?? undefined },
+      );
+      expect(resumed.outcomes.map((item) => item.workspaceId)).toEqual(['a', 'b']);
+      expect(t.journal.get('a', 'push')?.state).toBe('confirmed');
+      expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('revisits an uncertain push when the batch budget expires inside the Git lease', async () => {
+    const t = setup();
+    let fakeNow = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => fakeNow);
+    try {
+      const owner = t.identity('a');
+      t.journal.begin('commit', owner);
+      t.journal.confirmVerified('commit', owner, owner.headSha);
+      t.journal.begin('push', owner);
+      t.journal.begin('commit', t.identity('b'));
+      const original = t.fetcher.getMockImplementation()!;
+      t.fetcher.mockImplementation(async (_url, init) => {
+        expect(init.method).toBe('GET');
+        fakeNow = 250;
+        return new Response('{}', { status: 429 });
+      });
+      const stopped = await recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+        { batchBudgetMs: 200 },
+      );
+      expect(stopped).toMatchObject({
+        nextCursor: null,
+        hasMore: true,
+        stopReason: 'budget-exhausted',
+        outcomes: [
+          {
+            workspaceId: 'a',
+            status: 'reconciled',
+            result: { status: 'blocked', stage: 'push' },
+          },
+        ],
+      });
+      expect(t.journal.get('a', 'push')?.state).toBe('uncertain');
+      expect(t.journal.get('b', 'commit')?.state).toBe('intent');
+      clock.mockRestore();
+      t.fetcher.mockImplementation(original);
+      const resumed = await recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+        { afterWorkspaceId: stopped.nextCursor ?? undefined },
+      );
+      expect(resumed.outcomes.map((item) => item.workspaceId)).toEqual(['a', 'b']);
+      expect(t.journal.get('a', 'push')?.state).toBe('confirmed');
+      expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      clock.mockRestore();
+      t.close();
+    }
+  });
+
   it('rejects invalid batch budgets before registry reads or journal mutation', async () => {
     const t = setup();
     try {
