@@ -18,6 +18,11 @@ export async function collectRemotePullRequests(
     throw new Error('Invalid GitHub PR pagination limit.');
   }
   const candidates: RemoteDraftCandidate[] = [];
+  // Offset pagination is not a transactionally consistent GitHub snapshot.
+  // A concurrent PR insertion/deletion can shift later pages and repeat a
+  // previously observed PR. Treat overlap as an incomplete inventory rather
+  // than silently deduplicating and authorizing another Draft PR POST.
+  const seenPullRequestUrls = new Set<string>();
   let page: number | null = 1;
   let count = 0;
   while (page !== null) {
@@ -35,7 +40,17 @@ export async function collectRemotePullRequests(
     ) {
       throw new Error('GitHub PR listing returned an invalid next page.');
     }
-    candidates.push(...result.candidates);
+    for (const candidate of result.candidates) {
+      if (
+        !candidate ||
+        typeof candidate.html_url !== 'string' ||
+        seenPullRequestUrls.has(candidate.html_url)
+      ) {
+        throw new Error('GitHub PR inventory contains a duplicate or invalid PR identity.');
+      }
+      seenPullRequestUrls.add(candidate.html_url);
+      candidates.push(candidate);
+    }
     if (candidates.length > 100_000) {
       throw new Error('GitHub PR listing exceeded the safe result limit.');
     }
