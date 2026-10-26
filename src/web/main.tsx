@@ -326,10 +326,13 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
-    if (id === 'compose' || id === 'task-workspace' || id === 'task-history') setScreen('tasks');
-    if (id === 'workflows' || id === 'workflow-timeline' || id === 'task-workflow') setScreen('workflows');
-    if (id === 'agent' || id === 'agent-studio') setScreen('team');
-    if (id === 'repositories') setScreen('settings');
+    if (id === 'compose' || id === 'task-workspace' || id === 'task-history') {
+      setScreen('tasks');
+      if (id === 'compose' || id === 'task-history') setView('mission');
+    }
+    if (id === 'workflows' || id === 'workflow-timeline' || id === 'task-workflow') { setScreen('workflows'); setView('mission'); }
+    if (id === 'agent' || id === 'agent-studio') { setScreen('team'); setView('mission'); }
+    if (id === 'repositories') { setScreen('settings'); setView('mission'); }
     if (id === 'overview') setScreen('office');
     const origin = document.activeElement;
     requestAnimationFrame(() => {
