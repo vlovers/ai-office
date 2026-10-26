@@ -173,7 +173,8 @@ describe('durable publication SQLite invariants', () => {
           [
             "import { DatabaseSync } from 'node:sqlite';",
             'const db = new DatabaseSync(process.argv[1]);',
-            `db.exec("UPDATE delivery_journal SET state='uncertain' WHERE workspace_id='workspace-crash'");`,
+            `const entry = db.prepare("SELECT state FROM delivery_journal WHERE workspace_id='workspace-crash'").get();`,
+            "if (entry?.state !== 'reserved') process.exit(2);",
             'db.close();',
             "process.kill(process.pid, 'SIGKILL');",
           ].join('\n'),
@@ -188,7 +189,9 @@ describe('durable publication SQLite invariants', () => {
       const reopened = new DatabaseSync(file);
       try {
         const recovered = new DeliveryJournal(reopened);
-        expect(recovered.get('workspace-crash')).toMatchObject({
+        expect(recovered.get('workspace-crash')?.state).toBe('reserved');
+      recovered.recoverWorkspace('workspace-crash', 'operation-crash');
+      expect(recovered.get('workspace-crash')).toMatchObject({
           state: 'uncertain',
           pullRequestUrl: null,
         });
