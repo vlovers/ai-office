@@ -215,6 +215,11 @@ export async function readGitHubDraftCommitReceipt(
     throw new Error('Invalid GitHub draft PR commit details.');
   }
   const parsed = parseGitHubPullRequest(body);
+  // The API route's numeric identity and the returned HTML identity must
+  // agree. Otherwise a successful GET could confirm an unrelated PR.
+  if (parsed.html_url !== pullRequestUrl) {
+    throw new Error('GitHub draft PR detail URL differs from the requested receipt.');
+  }
   const receipt: GitHubCommitReceipt = {
     ...parsed,
     head: { ...parsed.head, sha: body.head.sha },
