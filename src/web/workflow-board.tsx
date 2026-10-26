@@ -548,7 +548,7 @@ export function WorkflowBoard({
                       ))}
                     {stage.nextAction && (
                       <button
-                        disabled={loading}
+                        disabled={loading || Boolean(error)}
                         onClick={() => {
                           setAction({
                             name: stage.nextAction!,
@@ -567,7 +567,7 @@ export function WorkflowBoard({
                     {stage.status === 'running' && stage.taskId && (
                       <button
                         className="secondary"
-                        disabled={loading}
+                        disabled={loading || Boolean(error)}
                         onClick={() =>
                           void mutate(() => request(`/tasks/${stage.taskId}/stop`, {}))
                         }
@@ -583,7 +583,7 @@ export function WorkflowBoard({
                 !timeline.stages.some((stage) => stage.status === 'running') && (
                   <button
                     className="secondary"
-                    disabled={loading}
+                    disabled={loading || Boolean(error)}
                     onClick={() => {
                       setAction({
                         name: 'cancel',
@@ -683,6 +683,7 @@ export function WorkflowBoard({
               <button
                 disabled={
                   loading ||
+                  Boolean(error) ||
                   staleAction ||
                   !confirmed ||
                   (action.name === 'approve-qa' && !commandId) ||
