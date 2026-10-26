@@ -457,10 +457,13 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
-    // The timeline GET may resolve before the remaining poll requests and React
-    // state update settle. Allow multiple 3s polling cycles to clear a
-    // transient backend-disconnect alert without forcing a manual refresh.
-    await expect(board.getByRole('alert')).toHaveCount(0, { timeout: 20000 });
+    // Recovery intentionally leaves a persistent manual-review safety notice.
+    // A successful reconnect must not hide that warning or leave an additional
+    // transient transport error in the same live Workflow region.
+    await expect(board.getByRole('alert')).toHaveText(
+      'Workflow execution requires manual review after server restart.',
+      { timeout: 20000 },
+    );
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
@@ -529,10 +532,13 @@ if (process.argv.includes('--restart-server')) {
     await expect(selector).toHaveValue(interrupted.workflowId);
     await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
-    // The timeline GET may resolve before the remaining poll requests and React
-    // state update settle. Allow multiple 3s polling cycles to clear a
-    // transient backend-disconnect alert without forcing a manual refresh.
-    await expect(board.getByRole('alert')).toHaveCount(0, { timeout: 20000 });
+    // Recovery intentionally leaves a persistent manual-review safety notice.
+    // A successful reconnect must not hide that warning or leave an additional
+    // transient transport error in the same live Workflow region.
+    await expect(board.getByRole('alert')).toHaveText(
+      'Workflow execution requires manual review after server restart.',
+      { timeout: 20000 },
+    );
     await assertOrdinaryQueueVisible();
 
     for (const [index, id] of ids.entries()) {
