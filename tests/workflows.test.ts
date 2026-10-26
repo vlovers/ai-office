@@ -736,10 +736,7 @@ it('dispatches only unrelated queued work after restart when Codex auth is avail
       executionMode: 'read-only',
     });
     env.store.enqueue(ordinary.id, 'local-cli-chatgpt');
-    expect(env.store.queue().map((entry) => entry.taskId)).toEqual([
-      workflowTask.id,
-      ordinary.id,
-    ]);
+    expect(env.store.queue().map((entry) => entry.taskId)).toEqual([workflowTask.id, ordinary.id]);
 
     // Authentication is available in sandbox(): unlike the browser restart
     // fixture, this exercises the actual post-listen queue worker with a
@@ -754,7 +751,10 @@ it('dispatches only unrelated queued work after restart when Codex auth is avail
     expect(recovered.stages[0]?.state).toBe('interrupted');
 
     manager.startQueue();
-    await until(() => restarted!.task(ordinary.id)!, (task) => task.state === 'completed');
+    await until(
+      () => restarted!.task(ordinary.id)!,
+      (task) => task.state === 'completed',
+    );
     expect(restarted.queue()).toEqual([]);
     expect(restarted.task(workflowTask.id)?.state).toBe('interrupted');
     expect(new WorkflowStore(restarted.db).get(created.id)?.version).toBe(recovered.version);
