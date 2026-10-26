@@ -236,6 +236,177 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it.each([1, 2] as const)(
+    'releases the Git lease on a hung trusted registry refresh #%i before approval consumption',
+    async (hangAt) => {
+      const t = setup();
+      const original = t.context();
+      let refreshes = 0;
+      try {
+        await expect(
+          createSessionBoundGitHubDraft({
+            ...original,
+            refreshDeadlineMs: 100,
+            refreshWorkspace: async () => {
+              if (++refreshes === hangAt) {
+                return new Promise<typeof original.workspace>(() => undefined);
+              }
+              return original.workspace;
+            },
+          }),
+        ).rejects.toThrow('registry refresh timed out');
+        expect(refreshes).toBe(hangAt);
+        expect(t.journal.get('workspace-1')).toBeNull();
+        expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
+        expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+        expect((await createSessionBoundGitHubDraft(original)).status).toBe('published');
+      } finally {
+        t.close();
+      }
+    },
+  );
+
+  it('preserves a durable uncertain reservation if the final registry refresh hangs', async () => {
+    const t = setup();
+    const original = t.context();
+    let refreshes = 0;
+    try {
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        refreshDeadlineMs: 100,
+        refreshWorkspace: async () => {
+          if (++refreshes === 4) return new Promise<typeof original.workspace>(() => undefined);
+          return original.workspace;
+        },
+      });
+      expect(refreshes).toBe(4);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBe(10_000);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      expect((await createSessionBoundGitHubDraft(original)).status).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('recovers a successful POST after post-write registry timeout without another POST', async () => {
+    const t = setup();
+    const original = t.context();
+    const transport = t.fetcher.getMockImplementation()!;
+    let posted = false;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') posted = true;
+        return transport(url, init);
+      });
+      const result = await createSessionBoundGitHubDraft({
+        ...original,
+        refreshDeadlineMs: 100,
+        refreshWorkspace: async () =>
+          posted ? new Promise<typeof original.workspace>(() => undefined) : original.workspace,
+      });
+      expect(posted).toBe(true);
+      expect(result.status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+      expect((await createSessionBoundGitHubDraft(original)).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('exhausts a cumulative registry budget without consuming one-use approval', async () => {
+    const t = setup();
+    const original = t.context();
+    const transport = t.fetcher.getMockImplementation()!;
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        const response = await transport(url, init);
+        if (url.includes('/pulls?')) elapsed = 150;
+        return response;
+      });
+      await expect(
+        createSessionBoundGitHubDraft({
+          ...original,
+          refreshBudgetMs: 200,
+        }),
+      ).rejects.toThrow('registry refresh budget exhausted');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      clock.mockRestore();
+      t.fetcher.mockImplementation(transport);
+      expect((await createSessionBoundGitHubDraft(original)).status).toBe('published');
+    } finally {
+      clock.mockRestore();
+      t.close();
+    }
+  });
+
+  it('rejects invalid registry deadlines before GitHub traffic or approval consumption', async () => {
+    const t = setup();
+    const original = t.context();
+    try {
+      for (const invalid of [0, 99, -1, 60_001, 1.5, Number.NaN, Infinity]) {
+        await expect(
+          createSessionBoundGitHubDraft({ ...original, refreshDeadlineMs: invalid }),
+        ).rejects.toThrow('Invalid trusted delivery registry refresh deadline');
+        await expect(
+          createSessionBoundGitHubDraft({ ...original, refreshBudgetMs: invalid }),
+        ).rejects.toThrow('Invalid trusted delivery registry refresh budget');
+      }
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('ignores a late trusted registry success after cancellation', async () => {
+    const t = setup();
+    const original = t.context();
+    const controller = new AbortController();
+    let refreshes = 0;
+    let finish!: (workspace: typeof original.workspace) => void;
+    const pending = new Promise<typeof original.workspace>((resolve) => {
+      finish = resolve;
+    });
+    try {
+      const attempt = createSessionBoundGitHubDraft({
+        ...original,
+        refreshDeadlineMs: 1000,
+        refreshWorkspace: async () => {
+          refreshes++;
+          return pending;
+        },
+        write: { ...original.write, signal: controller.signal },
+      });
+      await vi.waitFor(() => expect(refreshes).toBe(1));
+      controller.abort();
+      await expect(attempt).rejects.toThrow('registry refresh aborted');
+      finish(original.workspace);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
   it('keeps a completed POST uncertain when page two contains a competing managed head', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
