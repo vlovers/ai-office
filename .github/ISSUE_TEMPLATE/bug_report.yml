@@ -5,32 +5,67 @@ labels: ['bug']
 body:
   - type: markdown
     attributes:
-      value: 'For potential vulnerabilities, use the private reporting guidance in SECURITY.md. Never include secrets, native thread IDs, tokens or private repository files.'
+      value: 'For potential vulnerabilities, use private reporting in SECURITY.md, not a public issue. Never include credentials, enrollment tickets, session cookies, CSRF tokens, native thread/session IDs, private paths, prompts, transcripts, local databases or repository contents. The local dashboard must not be publicly exposed. The unreleased Delivery API has no active HTTP remote-write endpoint. Reproduce with a disposable repository and synthetic fixtures.'
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Dashboard, navigation or accessibility
+        - Agent profiles or task queue
+        - Read-only sandbox or isolated write
+        - Reviewer, QA or approval workflow
+        - Workspace ownership, cleanup or restart recovery
+        - HTTP, SSE or persistence
+        - Delivery operator sessions, grants, CSRF or remote-status reads
+        - Other or uncertain
+    validations:
+      required: true
   - type: textarea
     id: summary
     attributes:
-      label: What happened?
-      description: Expected and actual behavior
+      label: Observed and expected behavior
+      description: Explain the actual outcome and the expected behavior without private content.
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Steps to reproduce
-      description: Use a disposable repo and sanitized data
+      label: Minimal sanitized reproduction
+      description: Use a disposable repository and deterministic fixtures; do not execute untrusted commands or test against live credentials.
+      placeholder: |
+        1. Start from a clean disposable checkout at commit ...
+        2. Perform ...
+        3. Observe ...
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Version / commit
+      label: Version / exact commit SHA
+    validations:
+      required: true
   - type: dropdown
     id: os
     attributes:
       label: Operating system
       options: ['macOS', 'Linux', 'Windows (unsupported)', 'Other']
+    validations:
+      required: true
   - type: textarea
-    id: logs
+    id: boundaries
     attributes:
-      label: Sanitized logs
-      description: Remove credentials, local paths, prompts with private content and session identifiers
+      label: Permission boundary and recovery state (if relevant)
+      description: State read-only versus explicitly authorized isolated-write mode, or the separate Delivery ingress, whether an operation was confirmed, and whether recovery/leases remain uncertain. Do not include raw paths, session IDs or credentials.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence and checks
+      description: Provide sanitized logs, screenshots, a minimal regression test, exact CI run or a statement of what was not tested. Distinguish fixture CI from real-model and native sandbox validation.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public disclosure safety
+      options:
+        - label: I removed secrets, enrollment tickets, cookies, CSRF tokens, private content, credentials, session identifiers and exploitable vulnerability details. I will use private reporting for security vulnerabilities.
+          required: true
