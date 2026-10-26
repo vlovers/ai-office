@@ -7,12 +7,15 @@ publication operation.
 
 ## Durable states
 
-| State | Meaning | Safe next action |
-| --- | --- | --- |
-| No journal row | No durable publication reservation | Repeat the normal authenticated preflight with a valid one-use approval |
-| `reserved` | Approval and write intent committed; the remote outcome may be unknown | Startup recovery under the shared Git lease; never POST |
-| `uncertain` | The remote outcome has not been independently established | Read-only GitHub inventory and receipt verification |
-| `published` | A commit-pinned PR receipt was verified and recorded | Revalidate the remote receipt on reuse; never POST |
+- **No journal row:** No durable reservation exists. Repeat the normal
+  authenticated preflight with a valid one-use approval.
+- **`reserved`:** The approval and write intent were committed, but the remote
+  outcome may be unknown. Run startup recovery under the shared Git lease;
+  never POST.
+- **`uncertain`:** The remote outcome has not been independently established.
+  Use read-only GitHub inventory and receipt verification.
+- **`published`:** A commit-pinned PR receipt was verified and recorded.
+  Revalidate the remote receipt on reuse; never POST.
 
 An HTTP error does **not** prove that GitHub rejected the POST. A missing PR
 in a single list response does **not** authorize a retry.
