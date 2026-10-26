@@ -1990,3 +1990,24 @@ select {
   border: 1px solid var(--workspace-border);
   border-radius: 8px;
 }
+
+/* Focused screens must not inherit the legacy two-column inspector layout. */
+.unified-workspace[data-screen="tasks"].focus-mode .mission-grid,
+.unified-workspace[data-screen="workflows"].focus-mode .mission-grid,
+.unified-workspace[data-screen="team"].focus-mode .mission-grid,
+.unified-workspace[data-screen="settings"].focus-mode .mission-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.unified-workspace[data-screen="tasks"].focus-mode .inspector {
+  display: none !important;
+}
+.unified-workspace[data-screen="tasks"] .mission-board > .stats,
+.unified-workspace[data-screen="tasks"] .mission-board > .queue-panel,
+.unified-workspace[data-screen="tasks"] .mission-board > #workflow-timeline {
+  display: none !important;
+}
+.unified-workspace[data-screen="workflows"] .mission-board > #task-history,
+.unified-workspace[data-screen="workflows"] .mission-board > #task-workspace,
+.unified-workspace[data-screen="workflows"] .mission-board > #compose {
+  display: none !important;
+}
