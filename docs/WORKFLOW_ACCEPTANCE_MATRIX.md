@@ -31,8 +31,12 @@ Dashboard, and workflow recovery coverage.
 **Acceptance:** Verify a new successful browser-originated timeline
 response after backend restart, rather than trusting cached UI text.
 Confirm that interrupted, failed, stopped, and completed stages do not
-replay. Preserve unrelated FIFO queue order and session configuration.
-A second restart must not mutate blocked workflow versions.
+replay. The live queue UI must drop the approved Coder while retaining
+unrelated FIFO entries, matching the persisted Dashboard API. Preserve
+session configuration and private execution bindings across restarts.
+A second restart must not mutate blocked workflow versions. After explicit
+cancellation, a third restart must keep the selected Workflow cancelled in
+the live timeline, with no actionable downstream controls.
 
 ## 4. Crash between recovery transactions
 
