@@ -302,3 +302,22 @@ test('rejects mutable actions nested in a local composite action', async () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('rejects missing local composite metadata and recursive local action cycles', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
+  try {
+    const workflows = join(root, '.github', 'workflows');
+    const action = join(root, '.github', 'actions', 'nested');
+    mkdirSync(workflows, { recursive: true });
+    mkdirSync(action, { recursive: true });
+    writeFileSync(join(workflows, 'validation.yml'), 'permissions:\\n  contents: read\\njobs:\\n  test:\\n    steps:\\n      - uses: ./.github/actions/nested\\n');
+    assert.throws(() => auditWorkflowDirectory(workflows), /requires exactly one action.yml/);
+    writeFileSync(join(action, 'action.yml'), 'name: nested\\nruns:\\n  using: composite\\n  steps:\\n    - uses: ./.github/actions/nested\\n');
+    assert.throws(() => auditWorkflowDirectory(workflows), /cyclic local composite action/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
