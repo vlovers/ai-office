@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 
@@ -163,14 +163,18 @@ function auditLocalCompositeActions(workflowDirectory, files) {
   function visit(reference, source) {
     const absolute = resolve(root, reference);
     const rel = relative(root, absolute);
-    if (rel.startsWith('..') || isAbsolute(rel) || !existsSync(absolute)) {
+    if (rel === '..' || rel.startsWith('../') || isAbsolute(rel) || !existsSync(absolute)) {
       findings.push(`${source}: local action path missing or outside repository: ${reference}`);
       return;
     }
     const canonical = realpathSync(absolute);
     const realRel = relative(realpathSync(root), canonical);
-    if (realRel.startsWith('..') || isAbsolute(realRel)) {
+    if (realRel === '..' || realRel.startsWith('../') || isAbsolute(realRel)) {
       findings.push(`${source}: local action escapes repository: ${reference}`);
+      return;
+    }
+    if (!statSync(canonical).isDirectory()) {
+      findings.push(`${source}: local action must reference a directory: ${reference}`);
       return;
     }
     if (active.has(canonical)) {
