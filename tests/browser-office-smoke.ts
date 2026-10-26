@@ -50,8 +50,10 @@ try {
     // from Tasks. Restore the previous screen for subsequent user actions.
     const previousScreen = await page.locator('.shell').getAttribute('data-screen');
     if (previousScreen && previousScreen !== 'office') {
-      await page.getByRole('navigation', { name: 'Dashboard sections' })
-        .getByRole('link', { name: 'Office' }).click();
+      await page
+        .getByRole('navigation', { name: 'Dashboard sections' })
+        .getByRole('link', { name: 'Office' })
+        .click();
     }
     await page
       .locator('.studio-kicker')
@@ -74,8 +76,19 @@ try {
     }
     await page.setViewportSize({ width: 1440, height: 1100 });
     if (previousScreen && previousScreen !== 'office') {
-      await page.getByRole('navigation', { name: 'Dashboard sections' })
-        .getByRole('link', { name: previousScreen === 'tasks' ? 'Tasks' : previousScreen === 'workflows' ? 'Workflows' : previousScreen === 'team' ? 'Team' : 'Settings' }).click();
+      await page
+        .getByRole('navigation', { name: 'Dashboard sections' })
+        .getByRole('link', {
+          name:
+            previousScreen === 'tasks'
+              ? 'Tasks'
+              : previousScreen === 'workflows'
+                ? 'Workflows'
+                : previousScreen === 'team'
+                  ? 'Team'
+                  : 'Settings',
+        })
+        .click();
       await expect(page.locator('.shell')).toHaveAttribute('data-screen', previousScreen);
     }
   };
