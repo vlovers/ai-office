@@ -322,6 +322,61 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('keeps an accepted POST uncertain on second-pass PR inventory drift and recovers by GET', async () => {
+    const t = setup();
+    const original = t.fetcher.getMockImplementation()!;
+    const unrelated = Array.from({ length: 99 }, (_, index) => ({
+      ...receipt,
+      number: 1000 + index,
+      html_url: `https://github.com/vlovers/ai-office/pull/${1000 + index}`,
+      head: { ...receipt.head, ref: `unrelated-${index}` },
+    }));
+    let posted = false;
+    let drifting = true;
+    let postInventoryPasses = 0;
+    try {
+      t.fetcher.mockImplementation(async (url, init) => {
+        if (init.method === 'POST') {
+          posted = true;
+          return original(url, init);
+        }
+        if (posted && drifting && url.includes('/pulls?')) {
+          const page = Number(new URL(url).searchParams.get('page'));
+          if (page !== 1) return json([]);
+          postInventoryPasses += 1;
+          return json([
+            receipt,
+            ...unrelated.map((candidate, index) =>
+              postInventoryPasses === 2 && index === 0
+                ? {
+                    ...candidate,
+                    number: 2000,
+                    html_url: 'https://github.com/vlovers/ai-office/pull/2000',
+                  }
+                : candidate,
+            ),
+          ]);
+        }
+        return original(url, init);
+      });
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      expect(postInventoryPasses).toBe(2);
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBe(10_000);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+
+      drifting = false;
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('preserves approval when the managed head moves between the first and final ref GET', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
