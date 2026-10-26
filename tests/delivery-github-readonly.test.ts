@@ -41,7 +41,13 @@ describe('read-only GitHub PR discovery', () => {
             candidate,
             { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
           ])
-        : json([{ ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/125', state: 'closed' }]);
+        : json([
+            {
+              ...candidate,
+              html_url: 'https://github.com/vlovers/ai-office/pull/125',
+              state: 'closed',
+            },
+          ]);
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 2 });
     expect(result.complete).toBe(true);
@@ -84,7 +90,10 @@ describe('read-only GitHub PR discovery', () => {
   it.each([
     ['foreign PR URL', { ...candidate, html_url: 'https://github.com/foreign/repo/pull/123' }],
     ['noncanonical PR URL', { ...candidate, html_url: candidate.html_url + '?view=files' }],
-    ['foreign base repository', { ...candidate, base: { ...candidate.base, repo: { full_name: 'foreign/repo' } } }],
+    [
+      'foreign base repository',
+      { ...candidate, base: { ...candidate.base, repo: { full_name: 'foreign/repo' } } },
+    ],
     ['missing base repository', { ...candidate, base: { ...candidate.base, repo: null } }],
   ])('rejects %s in a supposedly complete repository inventory', async (_name, entry) => {
     const fetcher = vi.fn(async () => json([entry]));
@@ -95,7 +104,10 @@ describe('read-only GitHub PR discovery', () => {
   });
 
   it('allows forked head repositories when the PR belongs to the approved base repository', async () => {
-    const forked = { ...candidate, head: { ...candidate.head, repo: { full_name: 'fork/ai-office' } } };
+    const forked = {
+      ...candidate,
+      head: { ...candidate.head, repo: { full_name: 'fork/ai-office' } },
+    };
     const fetcher = vi.fn(async () => json([forked]));
     const result = await listAllGitHubPullRequests(plan, { fetcher });
     expect(result.candidates).toHaveLength(1);
@@ -144,7 +156,10 @@ describe('read-only GitHub PR discovery', () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = new URL(url).searchParams.get('page');
       return page === '1'
-        ? json([candidate, { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }])
+        ? json([
+            candidate,
+            { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+          ])
         : json({ incomplete: true });
     });
     await expect(listAllGitHubPullRequests(plan, { fetcher, perPage: 2 })).rejects.toThrow(
@@ -171,7 +186,12 @@ describe('read-only GitHub PR discovery', () => {
   it('rejects a listing that cannot be exhausted within the page limit', async () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = Number(new URL(url).searchParams.get('page'));
-      return json([{ ...candidate, html_url: `https://github.com/vlovers/ai-office/pull/${page + 122}` }]);
+      return json([
+        {
+          ...candidate,
+          html_url: `https://github.com/vlovers/ai-office/pull/${page + 122}`,
+        },
+      ]);
     });
     await expect(
       listAllGitHubPullRequests(plan, { fetcher, perPage: 1, maxPages: 2 }),
@@ -231,7 +251,9 @@ describe('read-only GitHub PR discovery', () => {
         return `<${target.toString()}>; rel="${relation}"`;
       };
       return new Response(JSON.stringify([
-        page === 1 ? candidate : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+        page === 1
+          ? candidate
+          : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
       ]), {
         status: 200,
         headers: {
