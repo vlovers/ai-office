@@ -121,7 +121,11 @@ export function WorkflowBoard({
   const [confirmed, setConfirmed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const refreshEpoch = useRef(0);
+  const pollingInFlight = useRef(false);
   const refresh = useCallback(async () => {
+    // Do not invalidate a slow, still-useful response with overlapping polling.
+    if (pollingInFlight.current) return;
+    pollingInFlight.current = true;
     const epoch = ++refreshEpoch.current;
     try {
       const [all, current, choices] = await Promise.all([
@@ -154,6 +158,8 @@ export function WorkflowBoard({
     } catch (cause) {
       if (epoch === refreshEpoch.current)
         setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      pollingInFlight.current = false;
     }
   }, [selected, taskId]);
   useEffect(() => {
