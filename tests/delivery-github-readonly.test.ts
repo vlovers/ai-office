@@ -66,7 +66,13 @@ describe('read-only GitHub PR discovery', () => {
       const fetcher = vi.fn(async (url: string) => {
         const page = Number(new URL(url).searchParams.get('page'));
         if (!acrossPages) return json([candidate, candidate]);
-        return json(page === 1 ? [candidate] : [candidate]);
+        if (page === 2) return json([candidate]);
+        const next = new URL(url);
+        next.searchParams.set('page', '2');
+        return new Response(JSON.stringify([candidate]), {
+          status: 200,
+          headers: { link: `<${next.toString()}>; rel="next"` },
+        });
       });
       await expect(
         listAllGitHubPullRequests(plan, { fetcher, perPage: 2 }),
