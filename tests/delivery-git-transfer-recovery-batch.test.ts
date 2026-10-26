@@ -687,11 +687,9 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.journal.begin('commit', t.identity('b'));
       const original = t.fetcher.getMockImplementation()!;
       t.fetcher.mockImplementation(async () => new Promise<Response>(() => undefined));
-      const attempt = recoverUnresolvedGitTransfers(
-        t.journal,
-        async (id) => t.contextFor(id),
-        { signal: controller.signal },
-      );
+      const attempt = recoverUnresolvedGitTransfers(t.journal, async (id) => t.contextFor(id), {
+        signal: controller.signal,
+      });
       await vi.waitFor(() => expect(t.fetcher).toHaveBeenCalledOnce());
       controller.abort();
       const stopped = await attempt;
