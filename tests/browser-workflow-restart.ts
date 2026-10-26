@@ -660,6 +660,13 @@ if (process.argv.includes('--restart-server')) {
         delayOnce = false;
         markSlowPollStarted?.();
         await slowPollGate;
+        // An old failed response must not replace a newer successful refresh.
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Obsolete delayed dashboard failure' }),
+        });
+        return;
       }
       await route.continue();
     });
@@ -692,6 +699,7 @@ if (process.argv.includes('--restart-server')) {
     // the successful operator refresh or leave controls stuck in a stale state.
     await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await expect(board.getByRole('alert').filter({ hasText: 'Obsolete delayed dashboard failure' })).toHaveCount(0);
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
