@@ -115,6 +115,15 @@ even when SQLite's default recursive DELETE triggers are disabled. A third
 fixture restores a pre-upgrade database with conflicting operation owners and
 verifies that initialization preserves both records and blocks automatic adoption.
 
+The restored-snapshot suite also verifies that a historical WAL backup remains
+`uncertain` even when the live database subsequently confirms the GitHub PR.
+The stale copy must reject both another reservation and an ordinary `publish`
+transition: only a new independently verified remote receipt may justify
+`confirmUncertain` under the shared lease. The two-connection fixture also
+rejects a foreign workspace attempting to claim the original operation key.
+These tests deliberately do not contact GitHub or assert that a restored
+approval is safe to reuse.
+
 **A successful SQLite integrity check is not permission to resume writes.**
 A backup may be older than a successful GitHub POST, push, approval revocation
 or a journal transition. Restoring it could erase the only local evidence of a
