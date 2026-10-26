@@ -257,6 +257,7 @@ function App() {
     }
   };
   const navigateTask = (item: Task, destination: TaskDestination) => {
+    setScreen('tasks');
     const target = taskNavigationTarget(item, destination);
     if (!target) return;
     setSelected(item.id);
@@ -366,7 +367,7 @@ function App() {
         Skip to mission control
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
-        <a className="brand" href="#overview" onClick={() => setView('mission')}>
+        <a className="brand" href="#overview" onClick={() => { setView('mission'); setScreen('office'); }}>
           <PixelBot />
           <span>
             AI OFFICE<small>A space for your agents</small>
