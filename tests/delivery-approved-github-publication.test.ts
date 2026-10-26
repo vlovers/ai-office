@@ -178,6 +178,45 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     }
   });
 
+  it('rejects malformed cancellation and authorization configuration before any durable intent', async () => {
+    const t = setup();
+    try {
+      const original = t.context();
+      const invalidOptions = [
+        { signal: { aborted: false } },
+        {
+          signal: {
+            aborted: false,
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+          },
+        },
+        { authorizeBeforePost: 'approved' },
+        { authorizeBeforePost: null },
+      ];
+      for (const invalid of invalidOptions) {
+        await expect(
+          createSessionBoundGitHubDraft({
+            ...original,
+            write: {
+              ...original.write,
+              ...invalid,
+            } as Parameters<typeof createSessionBoundGitHubDraft>[0]['write'],
+          }),
+        ).rejects.toThrow(/Invalid GitHub draft write (abort signal|authorization hook)/);
+        expect(t.journal.get('workspace-1')).toBeNull();
+        expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
+        expect(t.fetcher).not.toHaveBeenCalled();
+      }
+      // A bad server-side adapter configuration must not burn the operator's
+      // approval or prevent a later correctly configured publication.
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('preserves approval and journal when a Draft write is cancelled before reservation', async () => {
     const t = setup();
     const controller = new AbortController();
