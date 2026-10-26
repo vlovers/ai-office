@@ -359,6 +359,51 @@ describe('SQLite cross-stage Git transfer invariants', () => {
     }
   });
 
+  it('rejects cross-process receipt regression after restart without modifying durable rows', () => {
+    const t = setup();
+    try {
+      confirmCommit(t.journal);
+      t.journal.begin('push', identity);
+      t.journal.markUncertain('push', identity);
+      const before = t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY stage').all();
+      const attempts = [
+        "UPDATE delivery_git_transfers SET state='intent' WHERE stage='push'",
+        "UPDATE delivery_git_transfers SET state='confirmed', receipt_sha='ffffffffffffffffffffffffffffffffffffffff' WHERE stage='push'",
+        "UPDATE delivery_git_transfers SET state='confirmed', receipt_sha=NULL WHERE stage='push'",
+      ];
+      for (const sql of attempts) {
+        const result = externalSql(t.path, sql);
+        expect(result.status, result.stderr).toBe(42);
+        expect(result.stderr).toContain('monotonically');
+        expect(t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY stage').all()).toEqual(
+          before,
+        );
+      }
+      const reopened = new DatabaseSync(t.path);
+      try {
+        const journal = new DeliveryGitTransferJournal(reopened);
+        expect(journal.get(identity.workspaceId, 'push')).toMatchObject({
+          state: 'uncertain',
+          receiptSha: null,
+        });
+        expect(journal.confirmVerified('push', identity, identity.headSha).state).toBe('confirmed');
+      } finally {
+        reopened.close();
+      }
+      const regression = externalSql(
+        t.path,
+        "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE stage='push'",
+      );
+      expect(regression.status, regression.stderr).toBe(42);
+      expect(t.journal.get(identity.workspaceId, 'push')).toMatchObject({
+        state: 'confirmed',
+        receiptSha: identity.headSha,
+      });
+    } finally {
+      t.close();
+    }
+  });
+
   it('retains a pre-upgrade orphaned push without adopting or deleting it', () => {
     const t = setup();
     try {
