@@ -97,3 +97,16 @@ Diff inspection confirms the following governance PRs overlap on the same canoni
 3. Keep issue/security intake PRs (#83, #69, #14 Estima) separate from engineering contract consolidation so their templates and security routing can be reviewed independently.
 4. Do not merge based on this diff inventory alone. Verify current head/base, current CI, independent approval, and maintainer authorization.
 
+
+## Shared-file overlap verified (2026-10-27)
+
+Fetched and compared the current PR diff payloads for RuleWitness #82/#85, MutationBoundary #68/#71, and Estima #13/#16. In each pair, the smaller agent-agreement PR changes only files already present in the broader foundation PR; there are **no files unique to the smaller PR**. The shared files differ in content, so this does not prove all safeguards are already present in the foundation candidate.
+
+| Pair | Shared paths | Unique paths in smaller PR | Recommendation |
+| --- | ---: | ---: | --- |
+| RuleWitness #82 / #85 | 5 | 0 | Keep #82 as candidate; compare semantic safeguards in AGENTS, PR template, review and release docs before retiring #85. |
+| MutationBoundary #68 / #71 | 5 | 0 | Keep #68 as candidate; verify #71's project-specific database/diagnostics rules are retained in #68. |
+| Estima #13 / #16 | 5 | 0 | Keep #13 as candidate; verify #16's tenant/auth/migration checks are retained in #13. |
+
+These are candidate selections based on changed-file scope only, not merge-readiness decisions. Before closing any smaller PR, compare the actual added requirements, confirm the foundation candidate is current against its base, check CI, and obtain independent approval. No PR was closed, edited, or merged in this step.
+
