@@ -158,6 +158,11 @@ try {
   });
   assert.equal(alternate.statusCode, 201);
   const otherId = alternate.json().id;
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Workflows' })
+    .click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true }).locator('option')).toHaveCount(2);
   const operationsQueue = board.getByLabel('Workflow operations queue');
