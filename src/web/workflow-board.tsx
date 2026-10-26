@@ -91,12 +91,14 @@ export function WorkflowBoard({
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
   const [selected, setSelected] = useState('');
   useEffect(() => {
     if (inspection) {
       setSelected(inspection.id);
       // Explicit inspection must load the requested checkpoint, including after a pause.
       setPaused(false);
+      setRefreshRequired(true);
     }
   }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
@@ -148,6 +150,7 @@ export function WorkflowBoard({
       setReports(output);
       setDiagnostics(diagnosis);
       setError('');
+      setRefreshRequired(false);
     } catch (cause) {
       if (epoch === refreshEpoch.current)
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -195,6 +198,9 @@ export function WorkflowBoard({
   const staleAction = Boolean(
     action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
   );
+  // Pausing polling is for inspection only, never permission to act on a stale snapshot.
+  // Resume requires a new successful refresh before operator actions are enabled.
+  const mutationUnavailable = loading || Boolean(error) || paused || refreshRequired;
   const unsubmitted =
     dashboard?.tasks.filter(
       (task) =>
@@ -208,7 +214,7 @@ export function WorkflowBoard({
       (profile) => !profile.archived && profile.maximumMode === 'read-only',
     ) ?? [];
   async function perform() {
-    if (!action || !confirmed || staleAction) return;
+    if (!action || !confirmed || staleAction || paused || refreshRequired || error) return;
     const body: Record<string, unknown> = { version: action.version, confirmed: true };
     let endpoint = action.name;
     if (action.name === 'bind-coder-task') {
@@ -239,7 +245,10 @@ export function WorkflowBoard({
             className="secondary"
             type="button"
             aria-pressed={paused}
-            onClick={() => setPaused((current) => !current)}
+            onClick={() => {
+              setRefreshRequired(true);
+              setPaused((current) => !current);
+            }}
           >
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
@@ -248,6 +257,9 @@ export function WorkflowBoard({
           Refresh workflow
         </button>
       </div>
+      {paused && (
+        <p role="status">Live updates are paused. Resume and refresh before changing workflows.</p>
+      )}
       {!taskId && (
         <details>
           <summary>Create workflow</summary>
@@ -301,7 +313,7 @@ export function WorkflowBoard({
             </select>
           </label>
           <button
-            disabled={loading || Boolean(error) || !coderTask || !reviewer}
+            disabled={mutationUnavailable || !coderTask || !reviewer}
             onClick={() =>
               void mutate(async () => {
                 const task = dashboard!.tasks.find((item) => item.id === coderTask)!;
@@ -560,7 +572,7 @@ export function WorkflowBoard({
                       ))}
                     {stage.nextAction && (
                       <button
-                        disabled={loading || Boolean(error)}
+                        disabled={mutationUnavailable}
                         onClick={() => {
                           setAction({
                             name: stage.nextAction!,
@@ -579,7 +591,7 @@ export function WorkflowBoard({
                     {stage.status === 'running' && stage.taskId && (
                       <button
                         className="secondary"
-                        disabled={loading || Boolean(error)}
+                        disabled={mutationUnavailable}
                         onClick={() =>
                           void mutate(() => request(`/tasks/${stage.taskId}/stop`, {}))
                         }
@@ -595,7 +607,7 @@ export function WorkflowBoard({
                 !timeline.stages.some((stage) => stage.status === 'running') && (
                   <button
                     className="secondary"
-                    disabled={loading || Boolean(error)}
+                    disabled={mutationUnavailable}
                     onClick={() => {
                       setAction({
                         name: 'cancel',
@@ -694,8 +706,7 @@ export function WorkflowBoard({
             <div className="button-row">
               <button
                 disabled={
-                  loading ||
-                  Boolean(error) ||
+                  mutationUnavailable ||
                   staleAction ||
                   !confirmed ||
                   (action.name === 'approve-qa' && !commandId) ||
