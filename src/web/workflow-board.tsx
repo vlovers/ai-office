@@ -265,9 +265,7 @@ export function WorkflowBoard({
         </button>
       </div>
       {paused && (
-        <p role="status">
-          Live updates are paused. Resume and refresh before changing workflows.
-        </p>
+        <p role="status">Live updates are paused. Resume and refresh before changing workflows.</p>
       )}
       {!taskId && (
         <details>
@@ -322,9 +320,7 @@ export function WorkflowBoard({
             </select>
           </label>
           <button
-            disabled={
-              mutationUnavailable || !selectedCoder || !selectedReviewer || !selectedQA
-            }
+            disabled={mutationUnavailable || !selectedCoder || !selectedReviewer || !selectedQA}
             onClick={() =>
               void mutate(async () => {
                 if (!selectedCoder || !selectedReviewer || !selectedQA) return;
