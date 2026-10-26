@@ -236,7 +236,8 @@ async function reconcileOnly(
     return {
       status: 'uncertain',
       entry: context.journal.get(context.workspaceId)!,
-      reason: 'Remote PR receipt or final reviewed snapshot failed verification; no write was retried.',
+      reason:
+        'Remote PR receipt or final reviewed snapshot failed verification; no write was retried.',
     };
   }
   return {
