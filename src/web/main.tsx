@@ -341,28 +341,28 @@ function App() {
             AI OFFICE<small>A space for your agents</small>
           </span>
         </a>
-        <div className="nav-label">// MISSION DIRECTORY</div>
+        <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Dashboard sections">
           <a
             className={`nav-item ${view === 'mission' ? 'active' : ''}`}
             href="#overview"
             onClick={() => setView('mission')}
           >
-            <span aria-hidden="true">⌂</span>Office<span className="nav-count">01</span>
-          </a>
-          <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
-            <span aria-hidden="true">♙</span>Agents
-            <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
-            Agent Studio
+            <span aria-hidden="true">⌂</span>Office
           </a>
           <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
-            <span aria-hidden="true">▤</span>Task history
+            <span aria-hidden="true">▤</span>Tasks
             <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
           </a>
-          <a className="nav-item" href="#task-workspace">
-            <span aria-hidden="true">▣</span>Session terminal
+          <a className="nav-item" href="#workflow-timeline" onClick={() => setView('mission')}>
+            <span aria-hidden="true">◇</span>Workflows
+          </a>
+          <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
+            <span aria-hidden="true">♙</span>Team
+            <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
+          </a>
+          <a className="nav-item" href="#repositories" onClick={() => setView('mission')}>
+            <span aria-hidden="true">⚙</span>Settings
           </a>
           <a className="nav-item" href="#compose" onClick={() => setView('mission')}>
             <span aria-hidden="true">＋</span>New task
