@@ -37,6 +37,8 @@ export type SessionBoundDraftContext = {
   approvalId: string;
   /** Server-owned total budget across all PR inventory pages; never a per-page reset. */
   inventoryDeadlineMs?: number;
+  /** Total streamed GitHub inventory bytes, including the verification pass. */
+  inventoryMaxBytes?: number;
   /** Maximum time for each trusted registry refresh while holding the Git lease. */
   refreshDeadlineMs?: number;
   /** Monotonic total budget for all registry refreshes in this publication attempt. */
@@ -221,6 +223,7 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       return listAllGitHubPullRequests(currentPlan, {
         ...refOptions,
         inventoryDeadlineMs: context.inventoryDeadlineMs,
+        inventoryMaxBytes: context.inventoryMaxBytes,
       });
     },
     createDraft: async (currentPlan) => {
@@ -266,6 +269,7 @@ export async function createSessionBoundGitHubDraft(context: SessionBoundDraftCo
       const inventory = await listAllGitHubPullRequests(currentPlan, {
         ...refOptions,
         inventoryDeadlineMs: context.inventoryDeadlineMs,
+        inventoryMaxBytes: context.inventoryMaxBytes,
       });
       const ownership = reconcilePublicationCandidates(currentPlan, inventory.candidates);
       if (ownership.status !== 'confirmed' || ownership.pullRequestUrl !== url) {
