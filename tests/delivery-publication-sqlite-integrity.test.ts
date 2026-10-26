@@ -156,6 +156,58 @@ describe('durable publication SQLite invariants', () => {
     }
   });
 
+  it('preserves an ambiguous publication after a child-process crash and forbids replay', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-draft-crash-'));
+    const file = join(directory, 'delivery.sqlite');
+    try {
+      const first = new DatabaseSync(file);
+      const journal = new DeliveryJournal(first);
+      journal.reserve('workspace-crash', 'operation-crash');
+      first.close();
+
+      const child = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          [
+            "import { DatabaseSync } from 'node:sqlite';",
+            'const db = new DatabaseSync(process.argv[1]);',
+            "db.exec(\"UPDATE delivery_journal SET state='uncertain' WHERE workspace_id='workspace-crash'\");",
+            'db.close();',
+            "process.kill(process.pid, 'SIGKILL');",
+          ].join('\\n'),
+          file,
+        ],
+        { encoding: 'utf8', timeout: 5000 },
+      );
+      expect(child.signal).toBe('SIGKILL');
+
+      const reopened = new DatabaseSync(file);
+      try {
+        const recovered = new DeliveryJournal(reopened);
+        expect(recovered.get('workspace-crash')).toMatchObject({
+          state: 'uncertain',
+          pullRequestUrl: null,
+        });
+        expect(() => recovered.reserve('workspace-crash', 'operation-crash')).toThrow(
+          'already exists',
+        );
+        expect(recovered.confirmUncertain('workspace-crash', 'operation-crash', url)).toMatchObject({
+          state: 'published',
+          pullRequestUrl: url,
+        });
+        expect(() => recovered.reserve('workspace-crash', 'operation-crash')).toThrow(
+          'already exists',
+        );
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('blocks INSERT OR REPLACE replay of confirmed publication and Git transfer receipts', () => {
     const db = new DatabaseSync(':memory:');
     try {
