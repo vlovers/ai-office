@@ -264,6 +264,55 @@ describe('GitHub immutable ref attestation', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it('uses one deadline for both ref GETs and refuses to start the base read with insufficient budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(async (input: string, init: RequestInit) => {
+        expect(init.method).toBe('GET');
+        if (input.endsWith('/main')) throw new Error('Base GET must not start.');
+        await new Promise<void>((resolve) => setTimeout(resolve, 150));
+        return jsonResponse(refBody(plan.branch, headCommitSha));
+      });
+      const attempt = attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 200 });
+      const assertion = expect(attempt).rejects.toThrow('attestation deadline exceeded');
+      await vi.advanceTimersByTimeAsync(150);
+      await assertion;
+      expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out a stalled base GET using only the remaining shared ref budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(async (input: string, init: RequestInit) => {
+        expect(init.method).toBe('GET');
+        if (input.endsWith('/main')) return new Promise<Response>(() => undefined);
+        await new Promise<void>((resolve) => setTimeout(resolve, 120));
+        return jsonResponse(refBody(plan.branch, headCommitSha));
+      });
+      const attempt = attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 300 });
+      const assertion = expect(attempt).rejects.toThrow('GitHub request timed out');
+      await vi.advanceTimersByTimeAsync(310);
+      await assertion;
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects invalid combined ref deadlines before making a GitHub request', async () => {
+    const fetcher = mockRefs();
+    for (const timeoutMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
+      await expect(
+        attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs }),
+      ).rejects.toThrow('Invalid GitHub commit ref attestation deadline');
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('bounds PR detail response parsing after an ambiguous publication', async () => {
     const fetcher = vi.fn(async () => {
       return new Response(
