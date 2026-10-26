@@ -329,9 +329,9 @@ describe('GitHub immutable ref attestation', () => {
   it('rejects invalid combined ref deadlines before making a GitHub request', async () => {
     const fetcher = mockRefs();
     for (const timeoutMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
-      await expect(
-        attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs }),
-      ).rejects.toThrow('Invalid GitHub commit ref attestation deadline');
+      await expect(attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs })).rejects.toThrow(
+        'Invalid GitHub commit ref attestation deadline',
+      );
     }
     expect(fetcher).not.toHaveBeenCalled();
   });
