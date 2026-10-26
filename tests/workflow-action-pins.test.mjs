@@ -285,7 +285,9 @@ test('rejects escaped YAML mapping keys that disguise uses and permissions', () 
 // Regression coverage for local composite-action traversal is tracked in #82.
 
 test('rejects mutable actions nested in a local composite action', async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
+    'node:fs'
+  );
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
@@ -309,7 +311,9 @@ test('rejects mutable actions nested in a local composite action', async () => {
 });
 
 test('rejects missing local composite metadata and recursive local action cycles', async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
+    'node:fs'
+  );
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
@@ -334,7 +338,9 @@ test('rejects missing local composite metadata and recursive local action cycles
 });
 
 test('rejects composite checkout without explicit credential opt-out', async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
+    'node:fs'
+  );
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
@@ -358,7 +364,9 @@ test('rejects composite checkout without explicit credential opt-out', async () 
 });
 
 test('rejects symlinked local composite metadata even when the action directory is in-tree', async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = await import('node:fs');
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = await import(
+    'node:fs'
+  );
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
@@ -372,16 +380,24 @@ test('rejects symlinked local composite metadata even when the action directory 
       'permissions:\n  contents: read\njobs:\n  test:\n    steps:\n      - uses: ./.github/actions/nested\n',
     );
     const outside = join(root, 'unreviewed.yml');
-    writeFileSync(outside, 'runs:\n  using: composite\n  steps:\n    - run: echo bypass\n      shell: bash\n');
+    writeFileSync(
+      outside,
+      'runs:\n  using: composite\n  steps:\n    - run: echo bypass\n      shell: bash\n',
+    );
     symlinkSync(outside, join(action, 'action.yml'));
-    assert.throws(() => auditWorkflowDirectory(workflows), /metadata must be a regular in-repository file/);
+    assert.throws(
+      () => auditWorkflowDirectory(workflows),
+      /metadata must be a regular in-repository file/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
 test('requires composite metadata using and steps inside runs', async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
+    'node:fs'
+  );
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const root = mkdtempSync(join(tmpdir(), 'action-audit-'));
@@ -400,7 +416,10 @@ test('requires composite metadata using and steps inside runs', async () => {
       'runs:\n  using: composite\n  steps:\n    - run: echo okay\n      shell: bash\nruns:\n  using: composite\n  steps:\n    - run: echo bypass\n      shell: bash\n',
     ]) {
       writeFileSync(join(action, 'action.yml'), invalid);
-      assert.throws(() => auditWorkflowDirectory(workflows), /inspectable composite metadata/);
+      assert.throws(
+        () => auditWorkflowDirectory(workflows),
+        /inspectable composite metadata/,
+      );
     }
     writeFileSync(
       join(action, 'action.yml'),
