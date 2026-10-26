@@ -4,6 +4,7 @@ import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/t
 import { AgentStudio } from './agent-studio.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
+import { PortfolioView } from './portfolio-view.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
 import { sceneStatus, workstationTask } from './scene-state.js';
@@ -354,6 +355,9 @@ function App() {
             <span aria-hidden="true">♙</span>Agents
             <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
           </a>
+          <a className="nav-item" href="#portfolio" onClick={() => setView('mission')}>
+            <span aria-hidden="true">▦</span>Portfolio
+          </a>
           <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
             Agent Studio
           </a>
@@ -502,6 +506,7 @@ function App() {
                 : 'Overview / saved profiles · two worker capacity'}
             </span>
           </div>
+          <PortfolioView />
           {dashboard && !dashboard.repositories.length && (
             <section className="onboarding" aria-label="Get started">
               <span className="setup-index" aria-hidden="true">
