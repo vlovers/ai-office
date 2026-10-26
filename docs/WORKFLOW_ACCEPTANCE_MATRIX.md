@@ -40,10 +40,13 @@ the live timeline, with no actionable downstream controls. The
 "Workflow execution requires manual review after server restart." alert is
 an intentional safety notice, not a transient connection error. The current
 browser regression permits that notice and rejects other alerts observed after
-reconnection, but does **not** prove that the notice always appears or that a
-transport error cannot arrive later. Treat persistent notice visibility and
-late asynchronous transport errors as a separate UX acceptance gap; do not
-suppress the notice merely to make a browser test pass.
+reconnection. It also injects a synthetic HTTP 503 during subsequent live
+polling and requires stale Workflow actions to become disabled; after the
+transport recovers, the error must disappear and the controls become available
+again without reloading the page. This does **not** prove that the persistent
+manual-review notice always appears or that arbitrary delayed failures cannot
+arrive after the observation window. Treat those as separate UX acceptance
+gaps; do not suppress the notice merely to make a browser test pass.
 
 ## 4. Crash between recovery transactions
 
