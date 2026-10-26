@@ -1258,10 +1258,12 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         }
         return fetcher(url, init);
       });
-      await expect(createSessionBoundGitHubDraft({
-        ...original,
-        refreshWorkspace: async () => current,
-      })).rejects.toThrow();
+      await expect(
+        createSessionBoundGitHubDraft({
+          ...original,
+          refreshWorkspace: async () => current,
+        }),
+      ).rejects.toThrow();
       expect(baseReads).toBe(2);
       expect(t.journal.get('workspace-1')).toBeNull();
       expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
@@ -1287,10 +1289,12 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         }
         return fetcher(url, init);
       });
-      await expect(createSessionBoundGitHubDraft({
-        ...original,
-        refreshWorkspace: async () => current,
-      })).rejects.toThrow();
+      await expect(
+        createSessionBoundGitHubDraft({
+          ...original,
+          refreshWorkspace: async () => current,
+        }),
+      ).rejects.toThrow();
       expect(baseReads).toBe(2);
       expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
