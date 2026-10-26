@@ -1077,9 +1077,9 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
     try {
       const before = attestLocalReviewedGitState.mock.calls.length;
       expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
-      // The seventh attestation runs after the PR detail GET, immediately
+      // The eighth attestation runs after the PR detail GET, immediately
       // before the durable published receipt is committed.
-      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(7);
+      expect(attestLocalReviewedGitState.mock.calls.length - before).toBe(8);
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
       t.close();
@@ -1100,14 +1100,13 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         if (url.endsWith('/git/ref/heads/main') && ++baseReads === 2) dirty = true;
         return original(url, init);
       });
-      const result = await createSessionBoundGitHubDraft(t.context());
+      await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow();
       expect(baseReads).toBe(2);
-      expect(result.status).toBe('uncertain');
-      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
       dirty = false;
-      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
-      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
       attestLocalReviewedGitState.mockImplementation(async () => ({}));
       t.close();
@@ -1217,10 +1216,9 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         return originalAssert.call(this, identity);
       });
     try {
-      const result = await createSessionBoundGitHubDraft(t.context());
+      await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow();
       expect(checks).toBe(4);
-      expect(result.status).toBe('uncertain');
-      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
     } finally {
       readiness.mockRestore();
@@ -1260,14 +1258,13 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         }
         return fetcher(url, init);
       });
-      const result = await createSessionBoundGitHubDraft({
+      await expect(createSessionBoundGitHubDraft({
         ...original,
         refreshWorkspace: async () => current,
-      });
+      })).rejects.toThrow();
       expect(baseReads).toBe(2);
-      expect(result.status).toBe('uncertain');
-      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
-      expect(approvalConsumedAt(t.db, original.approvalId)).toBe(10_000);
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
     } finally {
       t.close();
@@ -1290,13 +1287,12 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
         }
         return fetcher(url, init);
       });
-      const result = await createSessionBoundGitHubDraft({
+      await expect(createSessionBoundGitHubDraft({
         ...original,
         refreshWorkspace: async () => current,
-      });
+      })).rejects.toThrow();
       expect(baseReads).toBe(2);
-      expect(result.status).toBe('uncertain');
-      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
     } finally {
       t.close();
