@@ -552,6 +552,55 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
+
+    // A fresh Dashboard can invalidate a form selection while the old ID
+    // remains in React state. Do not allow submission of an absent Coder task.
+    await page.route(dashboardUrl, async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...snapshot,
+          tasks: snapshot.tasks.filter((task: { id: string }) => task.id !== unsubmittedCoder.id),
+        },
+      });
+    });
+    await expect(coderChoice.locator(`option[value="${unsubmittedCoder.id}"]`)).toHaveCount(0, {
+      timeout: 20000,
+    });
+    await expect(createWorkflow).toBeDisabled();
+    await page.unroute(dashboardUrl);
+    await expect(coderChoice.locator(`option[value="${unsubmittedCoder.id}"]`)).toHaveCount(1, {
+      timeout: 20000,
+    });
+    await expect(createWorkflow).toBeEnabled();
+
+    // The same fail-closed rule applies to a selected Reviewer profile that
+    // becomes archived or otherwise disappears from eligible profiles.
+    await page.route(dashboardUrl, async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...snapshot,
+          profiles: snapshot.profiles.filter(
+            (profile: { id: string }) => profile.id !== reviewer.id,
+          ),
+        },
+      });
+    });
+    await expect(reviewerChoice.locator(`option[value="${reviewer.id}"]`)).toHaveCount(0, {
+      timeout: 20000,
+    });
+    await expect(createWorkflow).toBeDisabled();
+    await page.unroute(dashboardUrl);
+    await expect(reviewerChoice.locator(`option[value="${reviewer.id}"]`)).toHaveCount(1, {
+      timeout: 20000,
+    });
+    await expect(createWorkflow).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
