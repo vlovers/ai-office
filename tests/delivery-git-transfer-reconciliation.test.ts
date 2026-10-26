@@ -798,6 +798,46 @@ describe('read-only commit/push receipt reconciliation', () => {
     }
   });
 
+  it('aborts a pending remote GET without confirming a late successful response', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+    try {
+      t.journal.begin('commit', t.identity);
+      t.journal.confirmVerified('commit', t.identity, t.identity.headSha);
+      t.journal.begin('push', t.identity);
+      t.fetcher.mockImplementation(async (_url, init) => {
+        expect(init.method).toBe('GET');
+        return pending;
+      });
+      const attempt = reconcileGitTransferReceipts({
+        ...t.context,
+        remote: { fetcher: t.fetcher, signal: controller.signal },
+      });
+      await vi.waitFor(() => expect(t.fetcher).toHaveBeenCalledOnce());
+      controller.abort();
+      expect(await attempt).toMatchObject({ status: 'blocked', stage: 'push' });
+      expect(t.journal.get(t.identity.workspaceId, 'push')).toMatchObject({
+        state: 'uncertain',
+        receiptSha: null,
+      });
+      finish(
+        Response.json({
+          ref: 'refs/heads/' + branch,
+          object: { type: 'commit', sha: t.identity.headSha },
+        }),
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(t.journal.get(t.identity.workspaceId, 'push')?.receiptSha).toBeNull();
+      expect(t.fetcher).toHaveBeenCalledOnce();
+    } finally {
+      t.close();
+    }
+  });
+
   it('rejects a swapped worktree registry binding before touching an intent', async () => {
     const t = setup();
     try {
