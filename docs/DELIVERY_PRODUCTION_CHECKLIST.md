@@ -645,3 +645,33 @@ that a non-cooperating resolver stops consuming external resources; it
 guarantees only that its late promise result cannot authorize the GitHub
 write or durable receipt. Native target-host validation and independent
 security review remain required before any production activation.
+
+## GitHub PR inventory identity and pagination drift (integration PR #79)
+
+GitHub's paginated `state=all` pull-request listing is **not** a
+transactionally consistent snapshot. Concurrent remote PR creation or deletion
+can shift offset-based pages, repeat an earlier PR or hide another one. A
+complete HTTP pagination traversal is not by itself evidence that no remote
+publisher raced with the current attempt.
+
+The read-only adapter now rejects any page containing a PR URL outside the
+exact approved repository, a noncanonical PR URL, or a base repository
+identity inconsistent with the requested repository. A forked **head**
+repository remains representable for duplicate detection. The collector also
+rejects repeated PR URLs within a page or across pages rather than silently
+deduplicating an inconsistent inventory. Such responses are treated as
+incomplete, never as permission to create or confirm a Draft PR.
+
+Before the durable reservation, this failure leaves the one-use approval
+unconsumed and performs no POST. After a POST, the reservation remains
+`uncertain`; later calls may only reconcile through read-only GitHub GETs,
+never replay the write. Integration tests exercise both paths and successful
+GET-only recovery once a stable inventory is available.
+
+**Residual race:** a shifted page can omit a PR without repeating another.
+Neither this detector, the shared *local* Git lease nor the post-write
+uniqueness check provides GitHub-side atomicity. Before production activation,
+run live disposable-repository concurrency tests, independently review the
+remaining remote publication race and decide whether additional
+server-side repository policy or an external coordination mechanism is
+required. Production writes remain disabled.
