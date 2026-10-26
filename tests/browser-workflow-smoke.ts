@@ -227,7 +227,13 @@ try {
     .getByRole('link', { name: 'Office' }).click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
+  await page.getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Workflows' }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await page.getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Office' }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
   await expect(board.getByText(/^State: active/)).toBeVisible();
