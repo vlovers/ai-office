@@ -29,3 +29,17 @@ test('rate limited workflow calls remain unknown', async () => {
   assert.ok(data.rows.every((r) => r.ci === 'unknown'));
   assert.ok(data.rows.every((r) => r.openPrs === 1));
 });
+
+test('API request is bounded and a full PR page is not reported as an exact count', async () => {
+  const seen = [];
+  const fetcher = async (url, options) => {
+    seen.push(options);
+    if (url.includes('/actions/runs')) return { ok: true, json: async () => ({ workflow_runs: [] }) };
+    if (url.includes('/pulls?')) return { ok: true, json: async () => Array.from({ length: 100 }, (_, number) => ({ number })) };
+    return { ok: false, status: 403 };
+  };
+  const data = await buildPortfolio({ fetcher, token: '' });
+  assert.ok(seen.every((options) => options.signal instanceof AbortSignal));
+  assert.ok(data.rows.every((row) => row.openPrs === '100+'));
+  assert.ok(data.rows.every((row) => row.protectedState === 'unverified'));
+});
