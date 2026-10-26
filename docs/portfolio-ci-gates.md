@@ -214,3 +214,24 @@ The diff adds `.github/ISSUE_TEMPLATE/bug_report.md` and `engineering_task.md`. 
 
 This is a static diff review only. No tests were run by this review pass, and current head SHA, current CI and independent approval were not verified. Do not treat either PR as accepted or merge-ready based on this inspection.
 
+
+## Grid Atlas #272 — deeper scanner/test review (2026-10-27)
+
+Reviewed the full added `scripts/check-workflow-action-pins.mjs` and `tests/workflow-action-pins.test.mjs` from PR #272 diff. This was static inspection only; the tests were not executed in this workflow.
+
+### Positive controls present in the diff
+- Scans YAML files directly under `.github/workflows` and fails if no workflows are found.
+- Rejects mutable tags, short SHA, empty/dynamic refs, ambiguous YAML forms, malformed local paths and Docker tags; supports full action SHA and Docker digest pins.
+- Requires checkout `persist-credentials: false` exactly once inside the same step's `with` mapping.
+- Adds negative tests for mutable tags, short SHA, dynamic refs, traversal, duplicate mappings, malformed YAML and checkout credentials placed in later/unrelated steps.
+
+### Remaining review items (not confirmed defects)
+- The scanner is intentionally a line-based constrained YAML parser, not a full YAML parser. Confirm its rejection patterns cover every YAML representation accepted by GitHub Actions, or document and enforce a narrow supported syntax. Add adversarial fixtures for folded/block scalar values and any valid YAML syntax the current regexes do not reject.
+- The repository-wide test only asserts at least 10 workflows are scanned. Consider asserting the expected workflow inventory/count or a fixture that proves adding a nested/otherwise overlooked workflow cannot silently bypass audit scope.
+- Verify all actual workflow references in the full candidate are pinned; the diff also includes mutable references in tests/scripts, which should remain explicitly test fixtures rather than workflow invocations.
+- Validate the pinned SHAs against the upstream repositories/releases and inspect `permissions`, triggers, and any privileged write-token workflows separately; SHA pinning alone is not a complete workflow security review.
+
+### Gate status
+
+Diff review identified strong coverage but cannot establish runtime test success. No tests were executed here, current PR head/base SHA and CI freshness remain unverified, and no independent review approval was observed in the prior review-submission query. PR #272 is therefore not marked accepted or merge-ready.
+
