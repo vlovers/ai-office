@@ -41,7 +41,7 @@ describe('read-only GitHub PR discovery', () => {
             candidate,
             { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
           ])
-        : json([{ ...candidate, state: 'closed' }]);
+        : json([{ ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/125', state: 'closed' }]);
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 2 });
     expect(result.complete).toBe(true);
@@ -59,6 +59,41 @@ describe('read-only GitHub PR discovery', () => {
       listAllGitHubPullRequests(plan, { fetcher, token: 'server-secret' }),
     ).rejects.toThrow('HTTP 403');
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed on duplicate PR identities within a page or across pagination', async () => {
+    for (const acrossPages of [false, true]) {
+      const fetcher = vi.fn(async (url: string) => {
+        const page = Number(new URL(url).searchParams.get('page'));
+        if (!acrossPages) return json([candidate, candidate]);
+        return json(page === 1 ? [candidate] : [candidate]);
+      });
+      await expect(
+        listAllGitHubPullRequests(plan, { fetcher, perPage: 2 }),
+      ).rejects.toThrow('duplicate or invalid PR identity');
+      expect(fetcher).toHaveBeenCalledTimes(acrossPages ? 2 : 1);
+    }
+  });
+
+  it.each([
+    ['foreign PR URL', { ...candidate, html_url: 'https://github.com/foreign/repo/pull/123' }],
+    ['noncanonical PR URL', { ...candidate, html_url: candidate.html_url + '?view=files' }],
+    ['foreign base repository', { ...candidate, base: { ...candidate.base, repo: { full_name: 'foreign/repo' } } }],
+    ['missing base repository', { ...candidate, base: { ...candidate.base, repo: null } }],
+  ])('rejects %s in a supposedly complete repository inventory', async (_name, entry) => {
+    const fetcher = vi.fn(async () => json([entry]));
+    await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow(
+      'foreign or noncanonical PR identity',
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('allows forked head repositories when the PR belongs to the approved base repository', async () => {
+    const forked = { ...candidate, head: { ...candidate.head, repo: { full_name: 'fork/ai-office' } } };
+    const fetcher = vi.fn(async () => json([forked]));
+    const result = await listAllGitHubPullRequests(plan, { fetcher });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]?.head.repo?.full_name).toBe('fork/ai-office');
   });
 
   it('rejects missing repository identities rather than guessing them', () => {
@@ -184,7 +219,9 @@ describe('read-only GitHub PR discovery', () => {
         target.searchParams.set('page', String(targetPage));
         return `<${target.toString()}>; rel="${relation}"`;
       };
-      return new Response(JSON.stringify([candidate]), {
+      return new Response(JSON.stringify([
+        page === 1 ? candidate : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+      ]), {
         status: 200,
         headers: {
           link:
