@@ -101,7 +101,12 @@ describe('durable operator approval in the GitHub draft pipeline', () => {
         t.authorization,
       );
       expect(result.state).toBe('published');
-      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'GET', 'POST']);
+      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual([
+        'GET',
+        'GET',
+        'GET',
+        'POST',
+      ]);
       expect(() =>
         t.ledger.assertPending(t.authorization.approvalId, {
           workspaceId: 'workspace-1',
