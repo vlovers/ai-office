@@ -341,7 +341,7 @@ if (process.argv.includes('--restart-server')) {
         });
         assert.equal(initial.status(), 409);
         const reviewer = await activePage.request.post(base + '/approve-reviewer', {
-          data: { version, confirmed: true, revision: revision.repeat(2) },
+          data: { version, confirmed: true, revision: 'c'.repeat(64) },
         });
         assert.equal(reviewer.status(), 409);
         const preparation = await activePage.request.post(base + '/prepare-reviewer', {
