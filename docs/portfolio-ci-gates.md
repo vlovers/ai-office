@@ -160,3 +160,18 @@ Read-only reviewer pass over the available PR diff payloads for RuleWitness #82,
 
 These are review prompts, not confirmed defects. The available tools expose diff content and historical CI runs but do not provide a reliable current PR head/base SHA snapshot here. Therefore current-head CI, current branch protection, and independent reviewer approval remain **unverified**. Do not mark these candidates accepted or merge-ready until a reviewer checks the current exact diff and GitHub shows the required approval/checks.
 
+
+## Review status refresh (2026-10-27)
+
+Review submissions were re-queried for the open governance PRs. This snapshot confirms no submitted review records for AI Office #88/#89, RuleWitness #85, MutationBoundary #71, Estima #16, or Last Chapter #5/#14. RuleWitness #82, MutationBoundary #68, and Estima #13 each have only a `COMMENTED` submission by the repository owner `vlovers`; none is an independent `APPROVED` review. Grid Atlas review state was not rechecked in this pass.
+
+| Repository | Candidate | Submitted independent approval observed | Next action |
+| --- | --- | --- | --- |
+| AI Office | [#88](https://github.com/vlovers/ai-office/pull/88) | No | Request independent review of exact current diff. Check #89 separately as evidence-ledger support. |
+| RuleWitness | [#82](https://github.com/vlovers/rulewitness/pull/82) | No | Reconcile safeguards from #85, then request independent review. |
+| MutationBoundary | [#68](https://github.com/vlovers/mutation-boundary/pull/68) | No | Verify DB safety gates and unique safeguards from #71, then request independent review. |
+| Estima | [#13](https://github.com/vlovers/estima/pull/13) | No | Verify tenant/migration gates and unique safeguards from #16; target `develop`; request independent review. |
+| Last Chapter | [#5](https://github.com/vlovers/last-chapter/pull/5) | No | Confirm intended base branch and preserve narrative-specific rules; #14 is a separate Claude guidance change. |
+
+Do not mark any candidate accepted/merge-ready on this evidence. Review state, current head SHA and CI must be refreshed immediately before merge; obtain required maintainer authorization. No PR was merged or closed in this pass.
+
