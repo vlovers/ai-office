@@ -139,7 +139,7 @@ describe('credential-scoped GitHub response boundary', () => {
       });
       expect(result.complete).toBe(true);
       expect(result.candidates).toHaveLength(2);
-      expect(calls).toBe(2);
+      expect(calls).toBe(4);
     } finally {
       db.close();
     }
