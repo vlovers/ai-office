@@ -161,9 +161,12 @@ describe('durable publication SQLite invariants', () => {
     const file = join(directory, 'delivery.sqlite');
     try {
       const first = new DatabaseSync(file);
-      const journal = new DeliveryJournal(first);
-      journal.reserve('workspace-crash', 'operation-crash');
-      first.close();
+      try {
+        const journal = new DeliveryJournal(first);
+        journal.reserve('workspace-crash', 'operation-crash');
+      } finally {
+        first.close();
+      }
 
       const child = spawnSync(
         process.execPath,
