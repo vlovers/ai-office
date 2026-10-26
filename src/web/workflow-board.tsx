@@ -122,9 +122,10 @@ export function WorkflowBoard({
   const dialog = useRef<HTMLDialogElement>(null);
   const refreshEpoch = useRef(0);
   const pollingInFlight = useRef(false);
-  const refresh = useCallback(async () => {
-    // Do not invalidate a slow, still-useful response with overlapping polling.
-    if (pollingInFlight.current) return;
+  const refresh = useCallback(async (force = false) => {
+    // Periodic polling is serial. Explicit operator refresh supersedes any
+    // in-flight poll so a mutation never silently skips its fresh read.
+    if (!force && pollingInFlight.current) return;
     pollingInFlight.current = true;
     const epoch = ++refreshEpoch.current;
     try {
@@ -159,7 +160,7 @@ export function WorkflowBoard({
       if (epoch === refreshEpoch.current)
         setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      pollingInFlight.current = false;
+      if (epoch === refreshEpoch.current) pollingInFlight.current = false;
     }
   }, [selected, taskId]);
   useEffect(() => {
@@ -175,7 +176,7 @@ export function WorkflowBoard({
     setError('');
     try {
       await operation();
-      await refresh();
+      await refresh(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -266,7 +267,7 @@ export function WorkflowBoard({
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
         )}
-        <button className="secondary" disabled={loading} onClick={() => void mutate(refresh)}>
+        <button className="secondary" disabled={loading} onClick={() => void mutate(() => refresh(true))}>
           Refresh workflow
         </button>
       </div>
