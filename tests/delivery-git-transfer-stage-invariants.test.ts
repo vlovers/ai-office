@@ -463,6 +463,39 @@ describe('SQLite cross-stage Git transfer invariants', () => {
     }
   });
 
+  it('preserves confirmed receipts against external replay after reopening SQLite', () => {
+    const t = setup();
+    try {
+      confirmCommit(t.journal);
+      t.journal.begin('push', identity);
+      t.journal.confirmVerified('push', identity, identity.headSha);
+      const before = t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY stage').all();
+      const reopened = new DatabaseSync(t.path);
+      try {
+        const journal = new DeliveryGitTransferJournal(reopened);
+        expect(journal.assertConfirmed('commit', identity).receiptSha).toBe(identity.headSha);
+        expect(journal.assertConfirmed('push', identity).receiptSha).toBe(identity.headSha);
+      } finally {
+        reopened.close();
+      }
+      const attempts = [
+        "UPDATE delivery_git_transfers SET state='intent', receipt_sha=NULL WHERE stage='commit'",
+        "UPDATE delivery_git_transfers SET state='uncertain', receipt_sha=NULL WHERE stage='push'",
+        'DELETE FROM delivery_git_transfers',
+      ];
+      for (const sql of attempts) {
+        const result = externalSql(t.path, sql);
+        expect(result.status, result.stderr).toBe(42);
+        expect(t.db.prepare('SELECT * FROM delivery_git_transfers ORDER BY stage').all()).toEqual(
+          before,
+        );
+      }
+      expect(() => t.journal.assertReadyForDraft(identity)).not.toThrow();
+    } finally {
+      t.close();
+    }
+  });
+
   it('retains a pre-upgrade orphaned push without adopting or deleting it', () => {
     const t = setup();
     try {
