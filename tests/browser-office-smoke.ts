@@ -92,7 +92,9 @@ try {
     await navigation.getByRole('link', { name: new RegExp(label) }).click();
     await expect(page.locator('.shell')).toHaveAttribute('data-screen', screen);
     await expect(page.locator(visibleSelector)).toBeVisible();
-    await expect(page.locator('nav[aria-label="Dashboard sections"] a[aria-current="page"]')).toHaveCount(1);
+    await expect(
+      page.locator('nav[aria-label="Dashboard sections"] a[aria-current="page"]'),
+    ).toHaveCount(1);
   }
   // Capture each workspace at desktop and phone sizes; assertions detect hidden
   // destinations and horizontal overflow before any visual review.
@@ -111,7 +113,10 @@ try {
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
         .toBe(true);
       await page.screenshot({
-        path: join(artifacts, `workspace-${screen}-${width === 1440 ? 'desktop' : 'mobile'}.png`),
+        path: join(
+          artifacts,
+          `workspace-${screen}-${width === 1440 ? 'desktop' : 'mobile'}.png`,
+        ),
         fullPage: true,
       });
     }
