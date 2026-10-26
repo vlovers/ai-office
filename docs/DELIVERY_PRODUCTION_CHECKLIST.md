@@ -594,3 +594,25 @@ This narrows the inventory-to-write race; it does **not** make GitHub's PR
 inventory transactional. Independent security review, target-host crash tests,
 least-privilege credential validation and explicit production activation
 remain required. Production remote writes are still disabled.
+
+## Cumulative GitHub PR inventory deadline (integration PR #79)
+
+The read-only PR inventory now has a **60-second total monotonic budget**
+(`inventoryDeadlineMs`, server-only, 100–60,000 ms), shared across all
+open/closed pagination requests. Each page uses the smaller of its configured
+request timeout and the remaining inventory budget; the budget is rechecked
+after response parsing and before returning a complete inventory. A slow
+repository cannot renew a full per-page timeout indefinitely while holding
+the shared Git lease. No partial inventory is ever returned as complete.
+
+The same budget applies independently to preflight discovery and post-write
+ownership verification in the session-bound Draft PR executor. If preflight
+exceeds the budget, the approval remains unconsumed, the journal is not
+reserved and **no POST** occurs. If post-write verification exceeds it, the
+existing reservation stays `uncertain`; later recovery may only perform
+GET-based verification, never another POST. Unit and session-bound SQLite
+integration tests cover both boundaries and safe read-only recovery.
+
+This deadline is **not** proof of atomic GitHub inventory or permission to
+retry an ambiguous remote write. Real-host timing, network failure injection,
+credential scoping, independent review and manual activation remain required.
