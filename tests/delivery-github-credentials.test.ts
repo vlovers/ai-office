@@ -92,7 +92,7 @@ describe('server-only least-privilege GitHub credential boundary', () => {
     const result = await t.request('/workspaces/workspace-a/remote-status', { body: {} });
     expect(result.response.status).toBe(200);
     expect(result.body).toEqual({ headSha, baseSha, remoteWritesEnabled: false });
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     for (const request of requests) {
       expect(request.url).toMatch(
         /^https:\/\/api.github.com\/repos\/vlovers\/ai-office\/git\/ref\/heads\//,
