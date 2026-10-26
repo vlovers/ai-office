@@ -80,3 +80,20 @@ Read-only inspection of review submissions for the principal governance PRs foun
 - Resolve overlap by comparing diffs and target branches before closing or superseding any PR; do not merge automatically.
 - Branch-protection/ruleset status remains **unverified** in this workflow; no configuration changes have been made.
 
+
+## PR overlap analysis (2026-10-27)
+
+Diff inspection confirms the following governance PRs overlap on the same canonical files. They must not be merged together without first selecting/rebasing a canonical version:
+
+- **RuleWitness:** #82 and #85 both add `.github/PULL_REQUEST_TEMPLATE.md`, `AGENTS.md`, `CLAUDE.md`, `docs/engineering/RELEASE_CHECKLIST.md`, and `docs/engineering/REVIEW_POLICY.md`. #82 additionally adds `docs/engineering/DEFINITION_OF_DONE.md`; #83 is a separate issue/security-intake batch. Recommended approach: choose one foundation PR as canonical, then cherry-pick only unique project safeguards from the other after diff review; handle #83 separately.
+- **MutationBoundary:** #68 and #71 overlap on PR template, `AGENTS.md`, `CLAUDE.md`, review policy and release checklist. #68 also changes `CONTRIBUTING.md`, `README.md`, `docs/RELEASING.md`, `docs/SAFETY.md`, and adds Definition of Done. #69 is a separate issue-intake batch. Preserve the broader safety/release documentation in #68; port any unique safeguards from #71 into it rather than merging both file sets.
+- **Estima:** #13 and #16 overlap on PR template, `AGENTS.md`, `CLAUDE.md`, review policy and release checklist. #13 additionally adds Definition of Done; #14 adds contributor/security intake and #15 pins third-party Actions. Target is `develop`. Preserve tenant isolation, auth and migration gates.
+- **Last Chapter:** #5 is the engineering foundation, while #14 adds only `CLAUDE.md` to the active game branch. Do not treat these as interchangeable: confirm base branch strategy and preserve narrative-specific `AGENTS.md` and PR template.
+
+### Safe consolidation recommendation
+
+1. Treat #82, #68, and #13 as the richer foundation candidates for RuleWitness, MutationBoundary, and Estima respectively, subject to current-base and CI checks.
+2. Do not close #85, #71, or #16 until unique changes are diffed and any missing safeguards are copied into the chosen candidate or verified already present.
+3. Keep issue/security intake PRs (#83, #69, #14 Estima) separate from engineering contract consolidation so their templates and security routing can be reviewed independently.
+4. Do not merge based on this diff inventory alone. Verify current head/base, current CI, independent approval, and maintainer authorization.
+
