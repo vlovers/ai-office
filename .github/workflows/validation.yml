@@ -29,6 +29,12 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      # Temporary read-only formatting diagnostic; remove after applying its diff.
+      - name: Diagnose Prettier layout
+        run: |
+          npx prettier --write tests/delivery-git-transfer-recovery-batch.test.ts
+          git diff -- tests/delivery-git-transfer-recovery-batch.test.ts
+          exit 1
       - name: TypeScript
         run: npm run typecheck
       - name: Delivery security lint
