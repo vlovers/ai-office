@@ -265,7 +265,9 @@ export function WorkflowBoard({
         </button>
       </div>
       {paused && (
-        <p role="status">Live updates are paused. Resume and refresh before changing workflows.</p>
+        <p role="status">
+          Live updates are paused. Resume and refresh before changing workflows.
+        </p>
       )}
       {!taskId && (
         <details>
