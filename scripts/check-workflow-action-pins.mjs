@@ -163,7 +163,12 @@ function auditLocalCompositeActions(workflowDirectory, files) {
   function visit(reference, source) {
     const absolute = resolve(root, reference);
     const rel = relative(root, absolute);
-    if (rel === '..' || rel.startsWith('../') || isAbsolute(rel) || !existsSync(absolute)) {
+    if (
+      rel === '..' ||
+      rel.startsWith('../') ||
+      isAbsolute(rel) ||
+      !existsSync(absolute)
+    ) {
       findings.push(`${source}: local action path missing or outside repository: ${reference}`);
       return;
     }
@@ -187,7 +192,9 @@ function auditLocalCompositeActions(workflowDirectory, files) {
       existsSync(join(canonical, name)),
     );
     if (metadata.length !== 1) {
-      findings.push(`${source}: local action requires exactly one action.yml or action.yaml: ${reference}`);
+      findings.push(
+        `${source}: local action requires exactly one action.yml or action.yaml: ${reference}`,
+      );
     } else {
       const file = join(canonical, metadata[0]);
       const content = readFileSync(file, 'utf8');
@@ -196,7 +203,10 @@ function auditLocalCompositeActions(workflowDirectory, files) {
       }
       // Composite metadata uses the same fail-closed YAML restrictions as workflows.
       // A synthetic permission header lets us reuse the syntax and uses scanner.
-      const metadataFindings = auditWorkflowText('permissions:\n  contents: read\n' + content, file);
+      const metadataFindings = auditWorkflowText(
+        'permissions:\n  contents: read\n' + content,
+        file,
+      );
       findings.push(...metadataFindings);
       for (const [index, line] of content.split(/\r?\n/).entries()) {
         const match = USES_DECLARATION.exec(line);
