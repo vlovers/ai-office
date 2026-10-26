@@ -372,7 +372,13 @@ function App() {
       // A later keyboard/pointer action takes precedence while its origin remains mounted.
       // Navigation can unmount the clicked control, moving focus to body; in that case,
       // continue and focus the destination section instead of abandoning navigation.
-      if (document.activeElement !== origin && origin instanceof HTMLElement && origin.isConnected) return;
+      if (
+        document.activeElement !== origin &&
+        origin instanceof HTMLElement &&
+        origin.isConnected
+      ) {
+        return;
+      }
       const section = document.getElementById(id);
       section?.focus();
       section?.scrollIntoView({ block: 'start' });
