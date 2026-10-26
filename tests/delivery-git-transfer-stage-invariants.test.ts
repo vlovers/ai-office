@@ -404,6 +404,65 @@ describe('SQLite cross-stage Git transfer invariants', () => {
     }
   });
 
+  it('rejects cross-process identity reassignment and forged confirmed inserts', () => {
+    const t = setup();
+    try {
+      confirmCommit(t.journal);
+      const before = t.db.prepare('SELECT * FROM delivery_git_transfers').all();
+      const attempts = [
+        {
+          sql: 'UPDATE delivery_git_transfers SET workspace_id=? WHERE stage=?',
+          values: ['foreign-workspace', 'commit'],
+        },
+        {
+          sql: 'UPDATE delivery_git_transfers SET operation_key=? WHERE stage=?',
+          values: ['foreign-operation', 'commit'],
+        },
+        {
+          sql: 'UPDATE delivery_git_transfers SET destination=? WHERE stage=?',
+          values: ['https://github.com/foreign/repo', 'commit'],
+        },
+        {
+          sql: 'UPDATE delivery_git_transfers SET branch=? WHERE stage=?',
+          values: ['ai-office/22345678-1234-1234-1234-123456789abc', 'commit'],
+        },
+        {
+          sql: 'UPDATE delivery_git_transfers SET base_sha=? WHERE stage=?',
+          values: ['f'.repeat(40), 'commit'],
+        },
+        {
+          sql:
+            'INSERT INTO delivery_git_transfers ' +
+            '(workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) ' +
+            "VALUES (?, 'commit', ?, ?, ?, ?, ?, 'confirmed', ?)",
+          values: [
+            'forged-workspace',
+            'forged-operation',
+            identity.destination,
+            'ai-office/32345678-1234-1234-1234-123456789abc',
+            identity.headSha,
+            identity.baseSha,
+            identity.headSha,
+          ],
+        },
+      ];
+      for (const attempt of attempts) {
+        const result = externalSql(t.path, attempt.sql, attempt.values);
+        expect(result.status, result.stderr).toBe(42);
+        expect(t.db.prepare('SELECT * FROM delivery_git_transfers').all()).toEqual(before);
+      }
+      const restarted = new DatabaseSync(t.path);
+      try {
+        const journal = new DeliveryGitTransferJournal(restarted);
+        expect(journal.assertConfirmed('commit', identity).receiptSha).toBe(identity.headSha);
+      } finally {
+        restarted.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
   it('retains a pre-upgrade orphaned push without adopting or deleting it', () => {
     const t = setup();
     try {
