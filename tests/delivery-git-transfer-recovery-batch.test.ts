@@ -210,7 +210,7 @@ describe('bounded Git transfer recovery across workspaces', () => {
         { workspaceId: 'a', status: 'reconciled', result: { status: 'ready' } },
       ]);
       expect(t.journal.get('a', 'push')?.receiptSha).toBe(owner.headSha);
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
       expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
       expect((await recoverUnresolvedGitTransfers(t.journal, resolve)).outcomes).toEqual([]);
     } finally {
@@ -387,7 +387,7 @@ describe('bounded Git transfer recovery across workspaces', () => {
           { workspaceId: 'a', status: 'reconciled', result: { status: 'ready' } },
         ]);
         expect(journal.get('a', 'push')?.state).toBe('confirmed');
-        expect(t.fetcher).toHaveBeenCalledTimes(2);
+        expect(t.fetcher).toHaveBeenCalledTimes(3);
       } finally {
         reopened.close();
       }
