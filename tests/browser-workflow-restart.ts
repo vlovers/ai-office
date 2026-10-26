@@ -229,6 +229,46 @@ if (process.argv.includes('--restart-server')) {
     store.updateTask(stopped.task.id, { state: 'stopped', error: 'QA stopped before restart.' });
     const blocked = stage('qa', 'completed');
     store.updateTask(blocked.task.id, { state: 'completed', result: 'Awaiting approval.' });
+    // Unlike the downstream fixtures, this Coder is bound and queued through
+    // the real atomic approval path. A write-capable task must never be replayed
+    // after the process dies, even when it has not yet started.
+    const coderWorkflow = workflows.create({
+      repositoryId: repository.id,
+      baselineRevision: baseline,
+      stages: [
+        { kind: 'coder', agentId: coder.id, agentRevision: coder.revision, mode: 'write' },
+        {
+          kind: 'reviewer',
+          agentId: reviewer.id,
+          agentRevision: reviewer.revision,
+          mode: 'read-only',
+        },
+      ],
+    });
+    const coderApproval = workflows.transition(coderWorkflow.id, coderWorkflow.version, {
+      type: 'approve',
+      revision: baseline,
+    });
+    const queuedCoderTask = store.createTask({
+      repositoryId: repository.id,
+      agentId: coder.id,
+      title: 'Approved Coder queued before restart',
+      prompt: 'Write-capable fixture; never dispatch',
+      executionMode: 'write',
+    });
+    const coderBinding = workflows.bindApprovedTask(
+      coderWorkflow.id,
+      coderApproval.version,
+      queuedCoderTask.id,
+    );
+    const queuedCoder = workflows.enqueueApprovedTask(
+      store,
+      coderWorkflow.id,
+      coderBinding.version,
+      queuedCoderTask.id,
+      'local-cli-chatgpt',
+      baseline,
+    );
     // A queued continuation is unrelated to the privileged workflow. Its
     // pinned session and private connection binding must survive both crashes.
     const sessionTask = store.createTask({
@@ -272,7 +312,10 @@ if (process.argv.includes('--restart-server')) {
     await page.goto(address);
     const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
     const selector = board.getByLabel('Workflow', { exact: true });
-    await expect(selector.locator('option')).toHaveCount(4, { timeout: 15000 });
+    await expect(selector.locator('option')).toHaveCount(5, { timeout: 15000 });
+    await selector.selectOption(queuedCoder.id);
+    await expect(board.getByText(/^State: active/)).toBeVisible();
+    await expect(board).toContainText('CODER — running');
     await selector.selectOption(interrupted.workflowId);
     await expect(board.getByText(/^State: active/)).toBeVisible();
     await expect(board).toContainText('REVIEWER — running');
@@ -297,6 +340,11 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByText(/^State: blocked/)).toBeVisible();
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
+    await selector.selectOption(queuedCoder.id);
+    await expect(board.getByText(/^State: blocked/)).toBeVisible();
+    await expect(board).toContainText('CODER — interrupted');
+    await expect(board.getByRole('button', { name: 'Start Coder' })).toHaveCount(0);
+    await selector.selectOption(blocked.workflowId);
 
     const dashboardResponse = await page.request.get(address + '/api/dashboard');
     assert.equal(dashboardResponse.status(), 200);
@@ -315,11 +363,18 @@ if (process.argv.includes('--restart-server')) {
     const taskStates = new Map(
       dashboard.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
     );
+    assert.equal(taskStates.get(queuedCoderTask.id), 'interrupted');
     assert.equal(taskStates.get(interrupted.task.id), 'interrupted');
     assert.equal(taskStates.get(failed.task.id), 'failed');
     assert.equal(taskStates.get(stopped.task.id), 'stopped');
     assert.equal(taskStates.get(blocked.task.id), 'completed');
-    const ids = [interrupted.workflowId, failed.workflowId, stopped.workflowId, blocked.workflowId];
+    const ids = [
+      interrupted.workflowId,
+      failed.workflowId,
+      stopped.workflowId,
+      blocked.workflowId,
+      queuedCoder.id,
+    ];
     const activePage = page;
     const versions = await Promise.all(
       ids.map(async (id) => {
@@ -412,6 +467,7 @@ if (process.argv.includes('--restart-server')) {
     const afterTasks = new Map(
       afterDashboard.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
     );
+    assert.equal(afterTasks.get(queuedCoderTask.id), 'interrupted');
     assert.equal(afterTasks.get(interrupted.task.id), 'interrupted');
     assert.equal(afterTasks.get(failed.task.id), 'failed');
     assert.equal(afterTasks.get(stopped.task.id), 'stopped');
@@ -458,6 +514,14 @@ if (process.argv.includes('--restart-server')) {
     const terminalView = await cancelledTimeline.json();
     assert.equal(terminalView.state, 'cancelled');
     assert.equal(terminalView.downstreamExecutable, false);
+    const coderTimeline = await activePage.request.get(
+      address + '/api/workflows/' + queuedCoder.id + '/timeline',
+    );
+    assert.equal(coderTimeline.status(), 200);
+    const coderView = await coderTimeline.json();
+    assert.equal(coderView.state, 'blocked');
+    assert.equal(coderView.stages[0].status, 'interrupted');
+    assert.equal(coderView.downstreamExecutable, false);
 
     const terminalDashboardResponse = await activePage.request.get(address + '/api/dashboard');
     assert.equal(terminalDashboardResponse.status(), 200);
@@ -476,6 +540,7 @@ if (process.argv.includes('--restart-server')) {
     const terminalTasks = new Map(
       terminalDashboard.tasks.map((task: { id: string; state: string }) => [task.id, task.state]),
     );
+    assert.equal(terminalTasks.get(queuedCoderTask.id), 'interrupted');
     assert.equal(terminalTasks.get(interrupted.task.id), 'interrupted');
     assert.equal(terminalTasks.get(failed.task.id), 'failed');
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
