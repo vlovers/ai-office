@@ -281,3 +281,5 @@ test('rejects escaped YAML mapping keys that disguise uses and permissions', () 
     workflow() + 'jobs:\n  extra:\n    "per\\u006dissions":\n      contents: write\n';
   expectFinding(escapedPermissions, /unsupported YAML syntax/);
 });
+
+// Regression coverage for local composite-action traversal is tracked in #82.
