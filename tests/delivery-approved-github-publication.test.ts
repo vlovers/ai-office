@@ -1619,4 +1619,46 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
       t.close();
     }
   });
+  it('preserves the one-use approval when the preflight PR inventory exceeds its byte budget', async () => {
+    const t = setup();
+    try {
+      await expect(
+        createSessionBoundGitHubDraft({ ...t.context(), inventoryMaxBytes: 1 }),
+      ).rejects.toThrow('Remote PR inventory failed');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBeNull();
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+
+      // A complete inventory can still use the original unconsumed approval.
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps a completed POST uncertain after cumulative receipt-inventory exhaustion', async () => {
+    const t = setup();
+    try {
+      const constrained = { ...t.context(), inventoryMaxBytes: 10 };
+      expect((await createSessionBoundGitHubDraft(constrained)).status).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toMatchObject({
+        state: 'uncertain',
+        pullRequestUrl: null,
+      });
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+
+      // Neither an incomplete follow-up GET nor a repeated request permits a POST.
+      expect((await createSessionBoundGitHubDraft(constrained)).status).toBe('uncertain');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+
+      // Only a later complete inventory and independent detail receipt may confirm.
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.journal.get('workspace-1')?.pullRequestUrl).toBe(receipt.html_url);
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
 });
