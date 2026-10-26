@@ -480,8 +480,16 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await assertNoUnexpectedWorkflowAlerts();
     await board.getByText('Create workflow', { exact: true }).click();
-    await board.getByLabel('Coder task', { exact: true }).selectOption(unsubmittedCoder.id);
-    await board.getByLabel('Reviewer profile', { exact: true }).selectOption(reviewer.id);
+    const coderChoice = board.getByRole('combobox', { name: 'Coder task', exact: true });
+    await expect(coderChoice).toBeVisible();
+    await expect(coderChoice.locator(`option[value="${unsubmittedCoder.id}"]`)).toHaveCount(1);
+    await coderChoice.selectOption(unsubmittedCoder.id);
+    const reviewerChoice = board.getByRole('combobox', {
+      name: 'Reviewer profile',
+      exact: true,
+    });
+    await expect(reviewerChoice).toBeVisible();
+    await reviewerChoice.selectOption(reviewer.id);
     const createWorkflow = board.getByRole('button', { name: 'Create gated workflow' });
     await expect(createWorkflow).toBeEnabled();
 
