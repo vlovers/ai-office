@@ -519,13 +519,13 @@ describe('session-bound approved GitHub Draft PR executor (server only)', () => 
           headReads++;
           return json({
             ref: 'refs/heads/' + plan.branch,
-            object: { type: 'commit', sha: headReads === 4 ? 'f'.repeat(40) : headSha },
+            object: { type: 'commit', sha: headReads === 5 ? 'f'.repeat(40) : headSha },
           });
         }
         return original(url, init);
       });
       expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
-      expect(headReads).toBe(4);
+      expect(headReads).toBe(5);
       expect(t.journal.get('workspace-1')).toMatchObject({
         state: 'uncertain',
         pullRequestUrl: null,
