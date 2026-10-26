@@ -426,9 +426,53 @@ describe('bounded Git transfer recovery across workspaces', () => {
         });
         expect(t.fetcher).toHaveBeenCalledTimes(3);
         expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
-        expect((await recoverUnresolvedGitTransfers(journal, async (id) =>
+        const resumed = await recoverUnresolvedGitTransfers(journal, async (id) =>
           t.contextFor(id, journal),
-        )).outcomes).toEqual([]);
+        );
+        expect(resumed.outcomes).toEqual([]);
+      } finally {
+        restored.close();
+      }
+    } finally {
+      t.close();
+    }
+  });
+
+  it('keeps a restored WAL push uncertain after a GitHub rate limit until GET recovery', async () => {
+    const t = setup();
+    const snapshotPath = join(t.root, 'rate-limited-transfer-snapshot.sqlite');
+    try {
+      t.db.exec('PRAGMA journal_mode=WAL');
+      const owner = t.identity('a');
+      t.journal.begin('commit', owner);
+      t.journal.confirmVerified('commit', owner, owner.headSha);
+      t.journal.begin('push', owner);
+      await backup(t.db, snapshotPath);
+
+      const restored = new DatabaseSync(snapshotPath);
+      try {
+        const journal = new DeliveryGitTransferJournal(restored);
+        t.fetcher.mockImplementationOnce(async () => new Response('{}', { status: 429 }));
+        const blocked = await recoverUnresolvedGitTransfers(journal, async (id) =>
+          t.contextFor(id, journal),
+        );
+        expect(blocked.outcomes).toMatchObject([
+          { workspaceId: 'a', status: 'reconciled', result: { status: 'blocked', stage: 'push' } },
+        ]);
+        expect(journal.get('a', 'push')?.state).toBe('uncertain');
+        expect(t.fetcher).toHaveBeenCalledOnce();
+
+        const recovered = await recoverUnresolvedGitTransfers(journal, async (id) =>
+          t.contextFor(id, journal),
+        );
+        expect(recovered.outcomes).toMatchObject([
+          { workspaceId: 'a', status: 'reconciled', result: { status: 'ready' } },
+        ]);
+        expect(journal.get('a', 'push')).toMatchObject({
+          state: 'confirmed',
+          receiptSha: owner.headSha,
+        });
+        expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
       } finally {
         restored.close();
       }
