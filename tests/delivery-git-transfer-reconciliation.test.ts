@@ -130,7 +130,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect(result.status).toBe('ready');
       expect(result.commit?.state).toBe('confirmed');
       expect(result.push?.receiptSha).toBe(t.identity.headSha);
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
       expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
       expect((await reconcileGitTransferReceipts(t.context)).status).toBe('ready');
       expect(() => t.journal.begin('push', t.identity)).toThrow('already exists');
@@ -239,7 +239,7 @@ describe('read-only commit/push receipt reconciliation', () => {
         });
         expect(result.status).toBe('ready');
         expect(journal.get('workspace-1', 'push')?.receiptSha).toBe(t.identity.headSha);
-        expect(calls).toHaveLength(2);
+        expect(calls).toHaveLength(3);
       } finally {
         reopened.close();
       }
@@ -317,7 +317,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('confirmed');
       expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
       expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBeNull();
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
       expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
       rmSync(join(t.context.worktree.path, 'late-untracked.txt'));
       // Restore the normal transport: the injected callback would otherwise
@@ -355,7 +355,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect(refreshes).toBe(3);
       expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
       expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBeNull();
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
       t.git('remote', 'set-url', 'origin', 'git@github.com:vlovers/ai-office.git');
       expect((await reconcileGitTransferReceipts(t.context)).status).toBe('ready');
     } finally {
@@ -567,7 +567,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect(checks).toBe(3);
       expect(t.journal.get('workspace-1', 'commit')?.state).toBe('confirmed');
       expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
     } finally {
       t.close();
     }
@@ -902,7 +902,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
       expect(checks).toBe(3);
       expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
     } finally {
       t.close();
     }
@@ -979,7 +979,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       });
       expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
       expect(refreshes).toBe(3);
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
       expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
     } finally {
       t.close();
@@ -1142,7 +1142,7 @@ describe('read-only commit/push receipt reconciliation', () => {
       expect(result).toMatchObject({ status: 'blocked', stage: 'push' });
       expect(t.journal.get('workspace-1', 'push')?.state).toBe('uncertain');
       expect(t.journal.get('workspace-1', 'push')?.receiptSha).toBeNull();
-      expect(t.fetcher).toHaveBeenCalledTimes(2);
+      expect(t.fetcher).toHaveBeenCalledTimes(3);
       expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
     } finally {
       t.close();
