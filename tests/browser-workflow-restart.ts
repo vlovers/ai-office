@@ -600,6 +600,48 @@ if (process.argv.includes('--restart-server')) {
       timeout: 20000,
     });
     await expect(createWorkflow).toBeEnabled();
+    // A pending Dashboard response must not prevent Pause/Resume from
+    // starting a new polling generation. The old response is released only
+    // after a fresh post-resume response has been observed.
+    let releasePausedPoll: (() => void) | undefined;
+    let markPausedPollStarted: (() => void) | undefined;
+    const pausedPollStarted = new Promise<void>((resolve) => {
+      markPausedPollStarted = resolve;
+    });
+    const pausedPollGate = new Promise<void>((resolve) => {
+      releasePausedPoll = resolve;
+    });
+    let holdPausedPoll = true;
+    await page.route(dashboardUrl, async (route) => {
+      if (holdPausedPoll) {
+        holdPausedPoll = false;
+        markPausedPollStarted?.();
+        await pausedPollGate;
+      }
+      await route.continue();
+    });
+    try {
+      await Promise.race([
+        pausedPollStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Paused polling request never started')), 10000),
+        ),
+      ]);
+      await board.getByRole('button', { name: 'Pause live updates' }).click();
+      await expect(createWorkflow).toBeDisabled();
+      const resumedResponse = page.waitForResponse(
+        (response) => response.url() === dashboardUrl && response.ok(),
+        { timeout: 10000 },
+      );
+      await board.getByRole('button', { name: 'Resume live updates' }).click();
+      await resumedResponse;
+      await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+    } finally {
+      releasePausedPoll?.();
+      await page.unroute(dashboardUrl);
+    }
+    await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+
     // A response slower than the 3s polling interval must not starve the UI.
     // While that poll is pending, an explicit refresh must supersede it.
     let releaseSlowPoll: (() => void) | undefined;
