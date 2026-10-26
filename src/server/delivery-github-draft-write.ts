@@ -79,7 +79,25 @@ export function validateGitHubDraftWrite(
   if (typeof options.token !== 'string' || !options.token || /\s/.test(options.token)) {
     throw new Error('Valid server-side GitHub credentials are required.');
   }
+  // Reject configuration errors and already-cancelled attempts BEFORE the
+  // approval and SQLite journal are atomically reserved. After reservation,
+  // even a failed POST must remain uncertain and cannot be replayed.
   if (
+    options.timeoutMs !== undefined &&
+    (!Number.isSafeInteger(options.timeoutMs) ||
+      options.timeoutMs < 100 ||
+      options.timeoutMs > 60_000)
+  ) {
+    throw new Error('Invalid GitHub draft write deadline.');
+  }
+  if (options.fetcher !== undefined && typeof options.fetcher !== 'function') {
+    throw new Error('Invalid GitHub draft write transport.');
+  }
+  if (options.signal?.aborted) {
+    throw new Error('GitHub draft write aborted before reservation.');
+  }
+  if (
+    typeof options.title !== 'string' ||  if (
     typeof options.title !== 'string' ||
     options.title.trim().length < 1 ||
     options.title.length > 256 ||
