@@ -82,7 +82,16 @@ describe('lease-protected GitHub GET reconciliation', () => {
       const journal = uncertainJournal(db);
       const fetcher = vi.fn(async (url: string) => {
         const page = new URL(url).searchParams.get('page');
-        return page === '1' ? json([candidate, candidate]) : json({ message: 'rate limit' }, 429);
+        return page === '1'
+          ? json([
+              candidate,
+              {
+                ...candidate,
+                html_url: 'https://github.com/vlovers/ai-office/pull/124',
+                head: { ...candidate.head, ref: 'unrelated-branch' },
+              },
+            ])
+          : json({ message: 'rate limit' }, 429);
       });
       await expect(
         reconcileUncertainDraftViaGitHub(context(journal), { fetcher, perPage: 2 }),
