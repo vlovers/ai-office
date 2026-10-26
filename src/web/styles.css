@@ -1906,7 +1906,7 @@ select {
 .unified-workspace[data-screen='settings'] .office-scene {
   display: none !important;
 }
-.unified-workspace[data-screen='tasks'] .view-switch,
+.unified-workspace[data-screen='tasks']:not(.focus-mode) .view-switch,
 .unified-workspace[data-screen='workflows'] .view-switch,
 .unified-workspace[data-screen='team'] .view-switch,
 .unified-workspace[data-screen='settings'] .view-switch {

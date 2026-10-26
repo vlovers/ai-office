@@ -75,7 +75,7 @@ function App() {
       if (hash.startsWith('#task-') || hash === '#compose') return 'tasks';
       if (hash.startsWith('#workflow')) return 'workflows';
       if (hash === '#agent-studio' || hash === '#agent') return 'team';
-      if (hash === '#repositories') return 'settings';
+      if (hash === '#repositories' || hash === '#codex-connection') return 'settings';
       // Restore the active workspace after a reload. A direct deep link takes
       // precedence, and untrusted storage values never become screen selectors.
       try {
@@ -358,7 +358,11 @@ function App() {
       setScreen('workflows');
       setView('mission');
     }
-    if (id === 'agent' || id === 'agent-studio') {
+    if (id === 'agent') {
+      setScreen('office');
+      setView('mission');
+    }
+    if (id === 'agent-studio') {
       setScreen('team');
       setView('mission');
     }
@@ -372,10 +376,16 @@ function App() {
       // A later keyboard/pointer action takes precedence while its origin remains mounted.
       // Navigation can unmount the clicked control, moving focus to body; in that case,
       // continue and focus the destination section instead of abandoning navigation.
+      const active = document.activeElement;
+      // A hidden source can lose focus to body after its screen changes.
+      // Preserve a newer focus target only when it remains visible and connected.
       if (
-        document.activeElement !== origin &&
-        origin instanceof HTMLElement &&
-        origin.isConnected
+        active !== origin &&
+        active instanceof Element &&
+        active !== document.body &&
+        active !== document.documentElement &&
+        active.isConnected &&
+        active.getClientRects().length > 0
       ) {
         return;
       }
