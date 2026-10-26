@@ -175,8 +175,12 @@ try {
   await capture('multiple-agents');
   // Queue and execution use the manager/SDK fixture through the normal UI in browser-smoke.
   // These persisted records exercise the saved outcome view with explicit fixture names.
+  await navigation.getByRole('link', { name: 'Settings' }).click();
+  await expect(page.locator('#repositories')).toBeVisible();
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await navigation.getByRole('link', { name: 'Tasks' }).click();
+  await expect(page.locator('#compose')).toBeVisible();
   await page.getByLabel('Assign to agent').selectOption('codex-1');
   await page.getByLabel('Task title').fill('FIXTURE · held SDK reasoning');
   await page.getByLabel('What should the agent work on?').fill('WAIT_FIXTURE');
