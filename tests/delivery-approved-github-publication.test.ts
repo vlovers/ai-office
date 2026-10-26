@@ -156,6 +156,50 @@ function approvalConsumedAt(db: DatabaseSync, approvalId: string) {
 }
 
 describe('session-bound approved GitHub Draft PR executor (server only)', () => {
+  it('rejects invalid GitHub write deadlines before consuming the one-use approval', async () => {
+    const t = setup();
+    try {
+      for (const timeoutMs of [0, 99, 60_001, -1, 1.5, Number.NaN, Infinity]) {
+        const original = t.context();
+        await expect(
+          createSessionBoundGitHubDraft({
+            ...original,
+            write: { ...original.write, timeoutMs },
+          }),
+        ).rejects.toThrow('Invalid GitHub draft write deadline');
+      }
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, t.context().approvalId)).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('preserves approval and journal when a Draft write is cancelled before reservation', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    try {
+      controller.abort();
+      const original = t.context();
+      await expect(
+        createSessionBoundGitHubDraft({
+          ...original,
+          write: { ...original.write, signal: controller.signal },
+        }),
+      ).rejects.toThrow('GitHub draft write aborted before reservation');
+      expect(t.journal.get('workspace-1')).toBeNull();
+      expect(approvalConsumedAt(t.db, original.approvalId)).toBeNull();
+      expect(t.fetcher).not.toHaveBeenCalled();
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
+    } finally {
+      t.close();
+    }
+  });
+
   it('blocks a drifting preflight inventory before consuming approval or issuing POST', async () => {
     const t = setup();
     const original = t.fetcher.getMockImplementation()!;
