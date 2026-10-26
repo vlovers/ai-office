@@ -41,10 +41,6 @@ jobs:
         run: npm run test:smoke
       - name: Production build
         run: npm run build
-      - name: Show portfolio formatting patch (diagnostic only)
-        run: |
-          npx prettier --write scripts/portfolio-dashboard.mjs tests/portfolio-dashboard.test.mjs
-          git diff -- scripts/portfolio-dashboard.mjs tests/portfolio-dashboard.test.mjs
       - name: Formatting
         run: npm run format:check
       - name: Install Chromium and browser dependencies
