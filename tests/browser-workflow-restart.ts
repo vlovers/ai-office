@@ -436,6 +436,18 @@ if (process.argv.includes('--restart-server')) {
         await assertWorkflowMutationsRejected(id, versions[index]!);
       }
     };
+    const assertNoUnexpectedWorkflowAlerts = async () => {
+      // The manual-review notice may render asynchronously after reconnect.
+      // Its presence is safe; transport or other unexpected errors are not.
+      const alerts = await board.getByRole('alert').allTextContents();
+      for (const alert of alerts) {
+        assert.equal(
+          alert.trim(),
+          'Workflow execution requires manual review after server restart.',
+          'Unexpected Workflow alert after successful timeline reconnect',
+        );
+      }
+    };
     await assertBlockedMutations();
     await page.screenshot({
       path: join(artifacts, 'workflow-process-recovered.png'),
@@ -457,12 +469,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
-    // Recovery intentionally leaves a persistent manual-review safety notice.
-    // A successful reconnect must not hide that warning or leave an additional
-    // transient transport error in the same live Workflow region.
-    // A successful reconnect is established by the fresh timeline response
-    // and the persisted terminal state above. An alert can be a durable
-    // manual-review notice, so its presence alone is not a transport failure.
+    await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
@@ -531,12 +538,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(selector).toHaveValue(interrupted.workflowId);
     await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
-    // Recovery intentionally leaves a persistent manual-review safety notice.
-    // A successful reconnect must not hide that warning or leave an additional
-    // transient transport error in the same live Workflow region.
-    // A successful reconnect is established by the fresh timeline response
-    // and the persisted terminal state above. An alert can be a durable
-    // manual-review notice, so its presence alone is not a transport failure.
+    await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
 
     for (const [index, id] of ids.entries()) {
