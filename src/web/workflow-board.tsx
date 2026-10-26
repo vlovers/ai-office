@@ -122,47 +122,50 @@ export function WorkflowBoard({
   const dialog = useRef<HTMLDialogElement>(null);
   const refreshEpoch = useRef(0);
   const pollingInFlight = useRef(false);
-  const refresh = useCallback(async (force = false) => {
-    // Periodic polling is serial. Explicit operator refresh supersedes any
-    // in-flight poll so a mutation never silently skips its fresh read.
-    if (!force && pollingInFlight.current) return;
-    pollingInFlight.current = true;
-    const epoch = ++refreshEpoch.current;
-    try {
-      const [all, current, choices] = await Promise.all([
-        request<Summary[]>('/workflows'),
-        request<Dashboard>('/dashboard'),
-        request<{ commands: { commandId: string; argv: string[] }[] }>('/workflows/qa-commands'),
-      ]);
-      if (epoch !== refreshEpoch.current) return;
-      const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
-      setItems(workflows);
-      setDashboard(current);
-      setCommands(choices.commands);
-      const next = workflows.some((item) => item.id === selected)
-        ? selected
-        : (workflows[0]?.id ?? '');
-      setSelected(next);
-      const [view, output, diagnosis] = next
-        ? await Promise.all([
-            request<Timeline>(`/workflows/${next}/timeline`),
-            request<Report[]>(`/workflows/${next}/results`),
-            request<Diagnostics>(`/workflows/${next}/diagnostics`),
-          ])
-        : [null, [], null];
-      if (epoch !== refreshEpoch.current) return;
-      setTimeline(view);
-      setReports(output);
-      setDiagnostics(diagnosis);
-      setError('');
-      setRefreshRequired(false);
-    } catch (cause) {
-      if (epoch === refreshEpoch.current)
-        setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      if (epoch === refreshEpoch.current) pollingInFlight.current = false;
-    }
-  }, [selected, taskId]);
+  const refresh = useCallback(
+    async (force = false) => {
+      // Periodic polling is serial. Explicit operator refresh supersedes any
+      // in-flight poll so a mutation never silently skips its fresh read.
+      if (!force && pollingInFlight.current) return;
+      pollingInFlight.current = true;
+      const epoch = ++refreshEpoch.current;
+      try {
+        const [all, current, choices] = await Promise.all([
+          request<Summary[]>('/workflows'),
+          request<Dashboard>('/dashboard'),
+          request<{ commands: { commandId: string; argv: string[] }[] }>('/workflows/qa-commands'),
+        ]);
+        if (epoch !== refreshEpoch.current) return;
+        const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
+        setItems(workflows);
+        setDashboard(current);
+        setCommands(choices.commands);
+        const next = workflows.some((item) => item.id === selected)
+          ? selected
+          : (workflows[0]?.id ?? '');
+        setSelected(next);
+        const [view, output, diagnosis] = next
+          ? await Promise.all([
+              request<Timeline>(`/workflows/${next}/timeline`),
+              request<Report[]>(`/workflows/${next}/results`),
+              request<Diagnostics>(`/workflows/${next}/diagnostics`),
+            ])
+          : [null, [], null];
+        if (epoch !== refreshEpoch.current) return;
+        setTimeline(view);
+        setReports(output);
+        setDiagnostics(diagnosis);
+        setError('');
+        setRefreshRequired(false);
+      } catch (cause) {
+        if (epoch === refreshEpoch.current)
+          setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        if (epoch === refreshEpoch.current) pollingInFlight.current = false;
+      }
+    },
+    [selected, taskId],
+  );
   useEffect(() => {
     if (!paused) void refresh();
     const timer = paused ? undefined : setInterval(() => void refresh(), 3000);

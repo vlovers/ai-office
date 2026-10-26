@@ -710,7 +710,9 @@ if (process.argv.includes('--restart-server')) {
     // the successful operator refresh or leave controls stuck in a stale state.
     await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
-    await expect(board.getByRole('alert').filter({ hasText: 'Obsolete delayed dashboard failure' })).toHaveCount(0);
+    await expect(
+      board.getByRole('alert').filter({ hasText: 'Obsolete delayed dashboard failure' }),
+    ).toHaveCount(0);
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
