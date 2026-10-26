@@ -45,4 +45,15 @@ describe('GitHub deadline cancellation races', () => {
     finish(201);
     await Promise.resolve();
   });
+  it('does not dispatch an adapter after the caller aborts synchronously', async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    const request = withGitHubRequestDeadline(async () => {
+      attempts += 1;
+      return 201;
+    }, { signal: controller.signal, timeoutMs: 1000 });
+    controller.abort();
+    await expect(request).rejects.toThrow('GitHub request aborted');
+    expect(attempts).toBe(0);
+  });
 });
