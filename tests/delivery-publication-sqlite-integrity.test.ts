@@ -199,7 +199,9 @@ describe('durable publication SQLite invariants', () => {
           pullRequestUrl: null,
         });
         expect(() => recovered.reserve('workspace-crash', 'operation-crash')).toThrow('already exists');
-        expect(recovered.confirmUncertain('workspace-crash', 'operation-crash', url)).toMatchObject({
+        expect(
+          recovered.confirmUncertain('workspace-crash', 'operation-crash', url),
+        ).toMatchObject({
           state: 'published',
           pullRequestUrl: url,
         });
