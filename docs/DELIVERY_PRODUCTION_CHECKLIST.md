@@ -22,6 +22,24 @@ Status: **unreleased authorization foundation; remote write activation blocked**
       session persistence and administrator revocation tests.
 - [x] No HTTP commit/push/publication/merge/force/reset/delete/retry path.
 
+### GitHub ref and Draft-write deadline hardening (2026-10-26)
+
+Both exact GitHub commit-ref GETs now share **one monotonic attestation
+budget** (15 seconds by default, configurable 100–60,000 ms). A slow head
+lookup cannot silently renew the entire budget for the base lookup. An
+expired budget, stale ref, abort or malformed response blocks attestation;
+it never authorizes a push or Draft PR POST. Read-only reconciliation
+retains its separate outer deadline and shared Git lease.
+
+The session-bound Draft PR executor also rejects malformed write deadlines,
+invalid injected transports and already-aborted requests **before** consuming
+the one-use approval or creating a durable publication reservation. After
+reservation, an ambiguous remote outcome remains uncertain and must be
+reconciled by GET; no automatic POST retry is allowed. These checks are
+covered by combined-budget and SQLite approval-preservation tests. They
+do not replace target-host crash tests, least-privilege credential review
+or independent security approval, and remote writes remain disabled.
+
 ## Deployment blockers before real operator access
 
 - [ ] Provision and test TLS ingress, exact public Host/Origin, Secure cookies
