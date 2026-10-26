@@ -127,11 +127,14 @@ if (process.argv.includes('--restart-server')) {
       gitDir: join(root, 'disposable', '.git'),
       name: 'restart-fixture',
     });
-    const coder = store.agent('codex-1')!;
-    // This fixture pins a write-capable Coder profile but never starts Codex.
-    store.db
-      .prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
-      .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, coder.revision);
+    const originalCoder = store.agent('codex-1')!;
+    // Use the same revisioned profile-edit path as the operator. Updating only
+    // agent_versions would leave agent_profiles read-only and reject queue pinning.
+    // No provider is authenticated, so this fixture never dispatches Codex.
+    const coder = store.editAgent(originalCoder.id, originalCoder.revision, {
+      ...originalCoder,
+      maximumMode: 'write',
+    });
     const reviewer = store.agent('codex-2')!;
     const workflows = new WorkflowStore(store.db);
     const baseline = 'a'.repeat(40);
