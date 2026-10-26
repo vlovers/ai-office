@@ -329,6 +329,31 @@ if (process.argv.includes('--restart-server')) {
         return (await response.json()).version as number;
       }),
     );
+    // UI buttons are not an authorization boundary. Reuse current versions
+    // against real HTTP mutation routes after recovery, not stale versions.
+    // A blocked Workflow must reject forged approvals and preparations.
+    const assertBlockedMutations = async () => {
+      for (const [index, id] of ids.entries()) {
+        const base = address + '/api/workflows/' + id;
+        const version = versions[index]!;
+        const initial = await activePage.request.post(base + '/approve-initial', {
+          data: { version, confirmed: true },
+        });
+        assert.equal(initial.status(), 409);
+        const reviewer = await activePage.request.post(base + '/approve-reviewer', {
+          data: { version, confirmed: true, revision: revision.repeat(2) },
+        });
+        assert.equal(reviewer.status(), 409);
+        const preparation = await activePage.request.post(base + '/prepare-reviewer', {
+          data: { version, confirmed: true },
+        });
+        assert.equal(preparation.status(), 409);
+        const unchanged = await activePage.request.get(base);
+        assert.equal(unchanged.status(), 200);
+        assert.equal((await unchanged.json()).version, version);
+      }
+    };
+    await assertBlockedMutations();
     await page.screenshot({
       path: join(artifacts, 'workflow-process-recovered.png'),
       fullPage: true,
@@ -360,6 +385,7 @@ if (process.argv.includes('--restart-server')) {
       assert.equal(view.state, 'blocked');
       assert.equal(view.downstreamExecutable, false);
     }
+    await assertBlockedMutations();
     const after = await activePage.request.get(address + '/api/dashboard');
     assert.equal(after.status(), 200);
     const afterDashboard = await after.json();
