@@ -100,6 +100,36 @@ concurrent path-replacement races. A dedicated service account and private,
 trusted parent directory remain deployment requirements. Remote GitHub writes
 stay disabled.
 
+## SQLite online backup and restore evidence (2026-10-26)
+
+An integration fixture now exercises SQLite's native **online backup API** with
+the source database still open in WAL mode. A disposable restored snapshot
+must preserve the consumed one-use publication approval, an `uncertain` Draft
+PR reservation, confirmed commit/push transfer receipts, and the SQL triggers
+that prohibit resetting or deleting durable evidence. A second fixture
+restores a pre-upgrade database with conflicting operation owners and verifies
+that initialization preserves both records and blocks automatic adoption.
+
+**A successful SQLite integrity check is not permission to resume writes.**
+A backup may be older than a successful GitHub POST, push, approval revocation
+or a journal transition. Restoring it could erase the only local evidence of a
+remote write and make a replay appear safe. Never replace a live Delivery
+database with a historical snapshot and immediately enable commit/push/PR
+executors. Quiesce all processes, retain the original database and WAL/SHM
+evidence in private storage, verify the snapshot's provenance and restore into
+an isolated, non-writing environment. Reconcile every potentially affected
+remote operation against complete GitHub GET evidence and independently
+verified receipts before any subsequent authorization. Missing or ambiguous
+remote evidence must remain blocked; do not recreate approvals or POST again.
+
+Use SQLite's online backup facility for an open WAL database; copying only the
+main `.sqlite` file while writers are active can omit committed WAL changes.
+Keep the destination directory private, enforce restrictive ownership and
+permissions, verify `PRAGMA integrity_check` and `PRAGMA foreign_key_check`,
+and exercise recovery on a disposable copy. The tests do **not** prove safe
+live restore, filesystem-level backup confidentiality, target-host crash
+durability or production remote-write readiness. Those remain deployment gates.
+
 ## Draft PR approval integration (PR #69 merged; not production-enabled)
 
 The server-only `createApprovedDraftPublication` composition now joins the
