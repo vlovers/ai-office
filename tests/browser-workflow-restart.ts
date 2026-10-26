@@ -470,6 +470,29 @@ if (process.argv.includes('--restart-server')) {
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await assertNoUnexpectedWorkflowAlerts();
+
+    // Exercise an actual browser-visible transport failure after a successful
+    // reconnect. Persisted state may remain visible, but stale operator actions
+    // must not be executable until the next successful timeline refresh.
+    const timelineUrl = address + '/api/workflows/' + blocked.workflowId + '/timeline';
+    await page.route(timelineUrl, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic timeline outage' }),
+      }),
+    );
+    const transportAlert = board.getByRole('alert').filter({
+      hasText: 'Synthetic timeline outage',
+    });
+    await expect(transportAlert).toBeVisible({ timeout: 20000 });
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
+    await expect(board.getByText(/^State: blocked/)).toBeVisible();
+    await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
+    await page.unroute(timelineUrl);
+    await expect(transportAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
