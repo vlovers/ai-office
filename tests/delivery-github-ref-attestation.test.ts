@@ -59,7 +59,7 @@ function mockRefs(
 }
 
 describe('GitHub immutable ref attestation', () => {
-  it('verifies both reviewed remote commit SHAs with GET-only requests', async () => {
+  it('sandwiches the base ref between two reviewed head GETs', async () => {
     const fetcher = mockRefs();
     const attestation = await attestGitHubCommitRefs(plan, approval, {
       fetcher,
@@ -71,7 +71,13 @@ describe('GitHub immutable ref attestation', () => {
       branch: plan.branch,
       baseBranch: 'main',
     });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls.map((call) => call[0].endsWith('/main'))).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
     expect(fetcher.mock.calls[0]?.[1].headers).toMatchObject({
       Authorization: 'Bearer server-owned-token',
     });
@@ -84,6 +90,61 @@ describe('GitHub immutable ref attestation', () => {
       'head branch moved',
     );
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a managed head that moves while the base GET is pending', async () => {
+    let headReads = 0;
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      expect(init.method).toBe('GET');
+      if (url.endsWith('/main')) return jsonResponse(refBody('main', baseCommitSha));
+      headReads++;
+      return jsonResponse(refBody(plan.branch, headReads === 1 ? headCommitSha : '3'.repeat(40)));
+    });
+    await expect(attestGitHubCommitRefs(plan, approval, { fetcher })).rejects.toThrow(
+      'head branch moved during remote attestation',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(headReads).toBe(2);
+    expect(fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+  });
+
+  it('fails closed when the final head GET is rate limited', async () => {
+    let headReads = 0;
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.endsWith('/main')) return jsonResponse(refBody('main', baseCommitSha));
+      headReads++;
+      return headReads === 2
+        ? jsonResponse({ message: 'rate limited' }, 429)
+        : jsonResponse(refBody(plan.branch, headCommitSha));
+    });
+    await expect(attestGitHubCommitRefs(plan, approval, { fetcher })).rejects.toThrow(
+      'HTTP 429',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not renew the deadline for a stalled final head GET', async () => {
+    vi.useFakeTimers();
+    try {
+      let headReads = 0;
+      const fetcher = vi.fn(async (url: string) => {
+        if (url.endsWith('/main')) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 70));
+          return jsonResponse(refBody('main', baseCommitSha));
+        }
+        headReads++;
+        if (headReads === 2) return new Promise<Response>(() => undefined);
+        await new Promise<void>((resolve) => setTimeout(resolve, 80));
+        return jsonResponse(refBody(plan.branch, headCommitSha));
+      });
+      const attempt = attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 200 });
+      const assertion = expect(attempt).rejects.toThrow('GitHub request timed out');
+      await vi.advanceTimersByTimeAsync(210);
+      await assertion;
+      expect(fetcher).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('blocks stale base after reading both refs', async () => {
@@ -283,7 +344,7 @@ describe('GitHub immutable ref attestation', () => {
     }
   });
 
-  it('accepts both exact refs when the combined reads finish within one deadline', async () => {
+  it('accepts head/base/head only when all three reads fit one deadline', async () => {
     vi.useFakeTimers();
     try {
       const fetcher = vi.fn(async (input: string, init: RequestInit) => {
@@ -294,13 +355,13 @@ describe('GitHub immutable ref attestation', () => {
           refBody(isBase ? plan.baseBranch : plan.branch, isBase ? baseCommitSha : headCommitSha),
         );
       });
-      const attempt = attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 200 });
-      await vi.advanceTimersByTimeAsync(160);
+      const attempt = attestGitHubCommitRefs(plan, approval, { fetcher, timeoutMs: 260 });
+      await vi.advanceTimersByTimeAsync(240);
       await expect(attempt).resolves.toMatchObject({
         headCommitSha,
         baseCommitSha,
       });
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
     }
