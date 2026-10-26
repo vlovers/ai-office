@@ -552,4 +552,190 @@ describe('bounded Git transfer recovery across workspaces', () => {
       t.close();
     }
   });
+  it('stops before the first workspace on operator cancellation and resumes without skipping it', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      t.journal.begin('commit', t.identity('b'));
+      controller.abort();
+      const resolver = vi.fn(async (id: string) => t.contextFor(id));
+      const stopped = await recoverUnresolvedGitTransfers(t.journal, resolver, {
+        signal: controller.signal,
+      });
+      expect(stopped).toMatchObject({
+        outcomes: [],
+        nextCursor: null,
+        hasMore: true,
+        stopReason: 'aborted',
+      });
+      expect(resolver).not.toHaveBeenCalled();
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+      const resumed = await recoverUnresolvedGitTransfers(t.journal, resolver, {
+        afterWorkspaceId: stopped.nextCursor ?? undefined,
+      });
+      expect(resumed.outcomes.map((item) => item.workspaceId)).toEqual(['a', 'b']);
+      expect(resumed.stopReason).toBeNull();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('cancels a stalled registry resolver and ignores its late successful binding', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    let finish!: (value: GitTransferReconciliationContext) => void;
+    const pending = new Promise<GitTransferReconciliationContext>((resolve) => {
+      finish = resolve;
+    });
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      const resolver = vi.fn(async () => pending);
+      const attempt = recoverUnresolvedGitTransfers(t.journal, resolver, {
+        signal: controller.signal,
+        resolveTimeoutMs: 60_000,
+      });
+      await vi.waitFor(() => expect(resolver).toHaveBeenCalledOnce());
+      controller.abort();
+      const stopped = await attempt;
+      expect(stopped).toMatchObject({
+        outcomes: [],
+        nextCursor: null,
+        hasMore: true,
+        stopReason: 'aborted',
+      });
+      finish(t.contextFor('a'));
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+      expect(t.fetcher).not.toHaveBeenCalled();
+    } finally {
+      t.close();
+    }
+  });
+
+  it('stops on a monotonic budget without skipping the unresolved next workspace', async () => {
+    const t = setup();
+    let fakeNow = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => fakeNow);
+    try {
+      for (const id of ['a', 'b', 'c']) t.journal.begin('commit', t.identity(id));
+      const resolver = vi.fn(async (id: string) => {
+        if (id === 'b') fakeNow = 250;
+        return t.contextFor(id);
+      });
+      const stopped = await recoverUnresolvedGitTransfers(t.journal, resolver, {
+        batchBudgetMs: 200,
+      });
+      expect(stopped).toMatchObject({
+        nextCursor: 'a',
+        hasMore: true,
+        stopReason: 'budget-exhausted',
+      });
+      expect(stopped.outcomes).toMatchObject([
+        { workspaceId: 'a', status: 'reconciled' },
+      ]);
+      expect(t.journal.get('a', 'commit')?.state).toBe('confirmed');
+      expect(t.journal.get('b', 'commit')?.state).toBe('intent');
+      expect(t.journal.get('c', 'commit')?.state).toBe('intent');
+      clock.mockRestore();
+      const resumed = await recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+        { afterWorkspaceId: stopped.nextCursor! },
+      );
+      expect(resumed.outcomes.map((item) => item.workspaceId)).toEqual(['b', 'c']);
+      expect(resumed.stopReason).toBeNull();
+      expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+      expect(t.journal.get('c', 'commit')?.state).toBe('confirmed');
+    } finally {
+      clock.mockRestore();
+      t.close();
+    }
+  });
+
+  it('bounds a never-settling resolver by the overall batch budget', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      const resolver = vi.fn(async () => new Promise<GitTransferReconciliationContext>(() => undefined));
+      const stopped = await recoverUnresolvedGitTransfers(t.journal, resolver, {
+        resolveTimeoutMs: 60_000,
+        batchBudgetMs: 100,
+      });
+      expect(stopped).toMatchObject({
+        outcomes: [],
+        nextCursor: null,
+        hasMore: true,
+        stopReason: 'budget-exhausted',
+      });
+      expect(resolver).toHaveBeenCalledOnce();
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('propagates cancellation into a pending remote GET and preserves the next cursor', async () => {
+    const t = setup();
+    const controller = new AbortController();
+    try {
+      const owner = t.identity('a');
+      t.journal.begin('commit', owner);
+      t.journal.confirmVerified('commit', owner, owner.headSha);
+      t.journal.begin('push', owner);
+      t.journal.begin('commit', t.identity('b'));
+      t.fetcher.mockImplementation(async () => new Promise<Response>(() => undefined));
+      const attempt = recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+        { signal: controller.signal },
+      );
+      await vi.waitFor(() => expect(t.fetcher).toHaveBeenCalledOnce());
+      controller.abort();
+      const stopped = await attempt;
+      expect(stopped).toMatchObject({
+        nextCursor: 'a',
+        hasMore: true,
+        stopReason: 'aborted',
+        outcomes: [
+          {
+            workspaceId: 'a',
+            status: 'reconciled',
+            result: { status: 'blocked', stage: 'push' },
+          },
+        ],
+      });
+      expect(t.journal.get('a', 'push')?.state).toBe('uncertain');
+      expect(t.journal.get('a', 'push')?.receiptSha).toBeNull();
+      expect(t.journal.get('b', 'commit')?.state).toBe('intent');
+      expect(t.fetcher.mock.calls.every((call) => call[1].method === 'GET')).toBe(true);
+      const resumed = await recoverUnresolvedGitTransfers(
+        t.journal,
+        async (id) => t.contextFor(id),
+        { afterWorkspaceId: stopped.nextCursor! },
+      );
+      expect(resumed.outcomes.map((item) => item.workspaceId)).toEqual(['b']);
+      expect(t.journal.get('b', 'commit')?.state).toBe('confirmed');
+    } finally {
+      t.close();
+    }
+  });
+
+  it('rejects invalid batch budgets before registry reads or journal mutation', async () => {
+    const t = setup();
+    try {
+      t.journal.begin('commit', t.identity('a'));
+      const resolver = vi.fn(async (id: string) => t.contextFor(id));
+      for (const batchBudgetMs of [0, 99, 600_001, -1, 1.5, Number.NaN, Infinity]) {
+        await expect(
+          recoverUnresolvedGitTransfers(t.journal, resolver, { batchBudgetMs }),
+        ).rejects.toThrow('recovery batch budget');
+      }
+      expect(resolver).not.toHaveBeenCalled();
+      expect(t.journal.get('a', 'commit')?.state).toBe('intent');
+    } finally {
+      t.close();
+    }
+  });
+
 });
