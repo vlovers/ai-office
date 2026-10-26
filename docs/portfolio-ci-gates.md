@@ -110,3 +110,27 @@ Fetched and compared the current PR diff payloads for RuleWitness #82/#85, Mutat
 
 These are candidate selections based on changed-file scope only, not merge-readiness decisions. Before closing any smaller PR, compare the actual added requirements, confirm the foundation candidate is current against its base, check CI, and obtain independent approval. No PR was closed, edited, or merged in this step.
 
+
+## Semantic comparison of overlapping governance files (2026-10-27)
+
+Content comparison of the shared files found meaningful differences, not just duplicate paths. The broader foundation candidates contain more domain-specific detail; the smaller agent-agreement PRs are more concise and add a few explicit safeguards. Consolidation must preserve the stronger combined contract rather than simply close the smaller PR.
+
+### RuleWitness #82 vs #85
+- Keep from #82: explicit limited-scope product contract; `complete: false`, uncertainty/fail-closed behavior and exit-code semantics; never execute analyzed settings/hooks/commands; reviewer focus on false negatives, schema drift, unsafe Git/CI and consumer/package evidence; release-readiness and npm provenance checks.
+- Ensure explicit from #85 remains in canonical docs: Node 24 command list, `test/independent-witness.test.ts` oracle regression for matcher changes, no automatic npm publication, and clear distinction between permitted repository packaging checks and forbidden analyzed third-party lifecycle execution.
+- #82 is the stronger foundation candidate, but its template should include the explicit project checks from #85 before #85 is considered redundant.
+
+### MutationBoundary #68 vs #71
+- Keep from #68: net-state-only product limitation; explicit disposable DB prohibition; secrets/row/key redaction; fail-closed behavior; release verification of packed tarball and real consumer; specific driver/session/concurrency/cleanup review priorities.
+- Ensure explicit from #71 remains: dedicated `mutation_boundary_test`, `mutation_boundary_ci` role and `MUTATION_BOUNDARY_TEST_DATABASE_URL`; every bug fix needs a regression test; broad API/new adapter scope must be discussed before implementation.
+- #68 is the stronger foundation candidate, but its canonical PR template and AGENTS contract must include the dedicated database-role and regression-test requirements.
+
+### Estima #13 vs #16
+- Keep from #13: actual Bun/Nx command discovery; tenant cross-user read/write checks; atomic clarification writes and concurrent retry; refresh JWT lifecycle; migration-chain and rollback checks; E2E and release evidence tied to exact candidate SHA.
+- Ensure explicit from #16 remains: negative cross-tenant/auth tests, atomic update/delete behavior, disposable PostgreSQL for migration checks, and no production credentials.
+- #13 is the stronger foundation candidate, but these concise checks should be explicitly visible in its PR template and agent contract.
+
+### Consolidation status
+
+These findings are recommendations for the PR authors/canonical branches; no pull request has been edited or closed by this audit. Before declaring any smaller PR redundant, confirm the missing safeguards have been added to the selected foundation candidate, check the exact current base/head and CI, and obtain independent review.
+
