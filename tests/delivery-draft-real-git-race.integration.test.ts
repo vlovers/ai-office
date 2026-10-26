@@ -302,13 +302,13 @@ describe('real Git Draft PR late-mutation integration', () => {
         }
         return original(url, init);
       });
-      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
+      await expect(createSessionBoundGitHubDraft(t.context())).rejects.toThrow();
       expect(baseReads).toBe(2);
-      expect(t.journal.get('workspace-1')?.state).toBe('uncertain');
+      expect(t.journal.get('workspace-1')).toBeNull();
       expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
       rmSync(dirtyPath);
-      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('uncertain');
-      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(0);
+      expect((await createSessionBoundGitHubDraft(t.context())).status).toBe('published');
+      expect(t.fetcher.mock.calls.filter((call) => call[1].method === 'POST')).toHaveLength(1);
     } finally {
       t.close();
     }
