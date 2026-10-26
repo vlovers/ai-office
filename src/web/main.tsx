@@ -74,7 +74,8 @@ function App() {
       const hash = window.location.hash;
       if (hash.startsWith('#task-') || hash === '#compose') return 'tasks';
       if (hash.startsWith('#workflow')) return 'workflows';
-      if (hash === '#agent-studio' || hash === '#agent') return 'team';
+      if (hash === '#agent-studio') return 'team';
+      if (hash === '#agent') return 'office';
       if (hash === '#repositories' || hash === '#codex-connection') return 'settings';
       // Restore the active workspace after a reload. A direct deep link takes
       // precedence, and untrusted storage values never become screen selectors.
@@ -125,8 +126,10 @@ function App() {
         setScreen('tasks');
       } else if (hash === '#workflow-timeline' || hash === '#workflows') {
         setScreen('workflows');
-      } else if (hash === '#agent-studio' || hash === '#agent') {
+      } else if (hash === '#agent-studio') {
         setScreen('team');
+      } else if (hash === '#agent') {
+        setScreen('office');
       } else if (hash === '#repositories' || hash === '#codex-connection') {
         setScreen('settings');
       }

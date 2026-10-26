@@ -91,7 +91,6 @@ try {
   await expect(page.locator('svg.pixel-office')).toHaveCount(1);
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await expect(page.getByRole('region', { name: 'Office floor operations' })).toBeVisible();
-  await openScreen('team');
   await expect(page.locator('.studio-agent')).toHaveCount(2);
   await expect(page.locator('.studio-agent[aria-pressed="true"]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Active', exact: true }).click();
@@ -101,7 +100,6 @@ try {
   await expect(page.locator('.studio-agent')).toHaveCount(0);
   await page.getByRole('button', { name: 'All agents', exact: true }).click();
   await expect(page.locator('.studio-agent')).toHaveCount(2);
-  await openScreen('office');
   await expect(page.locator('.isometric-office')).toHaveCount(1);
   await expect(page.locator('.office-environment')).toHaveCount(1);
   await expect(page.locator('.iso-station')).toHaveCount(2);
@@ -122,9 +120,7 @@ try {
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#agent')).toContainText('Codex 02');
   await expect(page.locator('.studio-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
-  await openScreen('team');
   await page.locator('.studio-agent').first().click();
-  await openScreen('office');
   await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
   await secondDesk.focus();
   await page.keyboard.press('Enter');
