@@ -103,6 +103,78 @@ describe('delivery SQLite WAL backup and offline restore safety', () => {
     }
   });
 
+  it('preserves SQL replay guards across WAL backup and independent restored connections', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-delivery-replay-restore-'));
+    const source = new DatabaseSync(join(directory, 'live.sqlite'));
+    const snapshotPath = join(directory, 'snapshot.sqlite');
+    try {
+      source.exec('PRAGMA journal_mode=WAL');
+      const publications = new DeliveryJournal(source);
+      const transfers = new DeliveryGitTransferJournal(source);
+      transfers.begin('commit', identity);
+      transfers.confirmVerified('commit', identity, headSha);
+      transfers.begin('push', identity);
+      transfers.confirmVerified('push', identity, headSha);
+      publications.reserve(identity.workspaceId, identity.operationKey);
+      publications.markUncertain(identity.workspaceId, identity.operationKey);
+      await backup(source, snapshotPath);
+
+      // Both connections reopen the restored file independently. In SQLite,
+      // INSERT OR REPLACE can silently erase a row if only DELETE triggers
+      // protect it and recursive_triggers is disabled (the default).
+      const first = new DatabaseSync(snapshotPath);
+      const second = new DatabaseSync(snapshotPath);
+      try {
+        const restoredPublications = new DeliveryJournal(first);
+        const restoredTransfers = new DeliveryGitTransferJournal(second);
+        expect(() =>
+          first
+            .prepare(
+              "INSERT OR REPLACE INTO delivery_journal (workspace_id, operation_key, state, pull_request_url) VALUES (?, ?, 'reserved', NULL)",
+            )
+            .run(identity.workspaceId, identity.operationKey),
+        ).toThrow('already exists');
+        expect(() =>
+          second
+            .prepare(
+              "INSERT OR REPLACE INTO delivery_git_transfers (workspace_id, stage, operation_key, destination, branch, head_sha, base_sha, state, receipt_sha) VALUES (?, 'push', ?, ?, ?, ?, ?, 'intent', NULL)",
+            )
+            .run(
+              identity.workspaceId,
+              identity.operationKey,
+              identity.destination,
+              identity.branch,
+              identity.headSha,
+              identity.baseSha,
+            ),
+        ).toThrow('already exists');
+        expect(() =>
+          first.exec("DELETE FROM delivery_journal WHERE workspace_id='workspace-backup'"),
+        ).toThrow('cannot be deleted');
+        expect(() =>
+          second.exec("DELETE FROM delivery_git_transfers WHERE workspace_id='workspace-backup'"),
+        ).toThrow('cannot be deleted');
+
+        expect(restoredPublications.get(identity.workspaceId)).toMatchObject({
+          operationKey: identity.operationKey,
+          state: 'uncertain',
+          pullRequestUrl: null,
+        });
+        expect(() => restoredTransfers.assertReadyForDraft(identity)).not.toThrow();
+        expect(restoredTransfers.get(identity.workspaceId, 'push')).toMatchObject({
+          state: 'confirmed',
+          receiptSha: headSha,
+        });
+      } finally {
+        second.close();
+        first.close();
+      }
+    } finally {
+      source.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('fails closed on legacy duplicate owners after backup and restore', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'ai-office-delivery-legacy-backup-'));
     const live = new DatabaseSync(join(directory, 'live.sqlite'));
