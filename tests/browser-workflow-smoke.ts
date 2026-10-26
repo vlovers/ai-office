@@ -131,6 +131,9 @@ try {
   await page.reload();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  await page.getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Tasks' }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
