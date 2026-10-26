@@ -87,20 +87,23 @@ describe('read-only GitHub PR discovery', () => {
     }
   });
 
-  it.each([
-    ['foreign PR URL', { ...candidate, html_url: 'https://github.com/foreign/repo/pull/123' }],
-    ['noncanonical PR URL', { ...candidate, html_url: candidate.html_url + '?view=files' }],
-    [
-      'foreign base repository',
-      { ...candidate, base: { ...candidate.base, repo: { full_name: 'foreign/repo' } } },
-    ],
-    ['missing base repository', { ...candidate, base: { ...candidate.base, repo: null } }],
-  ])('rejects %s in a supposedly complete repository inventory', async (_name, entry) => {
-    const fetcher = vi.fn(async () => json([entry]));
-    await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow(
-      'foreign or noncanonical PR identity',
-    );
-    expect(fetcher).toHaveBeenCalledOnce();
+  it('rejects foreign or noncanonical PR inventory identities', async () => {
+    const entries = [
+      { ...candidate, html_url: 'https://github.com/foreign/repo/pull/123' },
+      { ...candidate, html_url: candidate.html_url + '?view=files' },
+      {
+        ...candidate,
+        base: { ...candidate.base, repo: { full_name: 'foreign/repo' } },
+      },
+      { ...candidate, base: { ...candidate.base, repo: null } },
+    ];
+    for (const entry of entries) {
+      const fetcher = vi.fn(async () => json([entry]));
+      await expect(listAllGitHubPullRequests(plan, { fetcher })).rejects.toThrow(
+        'foreign or noncanonical PR identity',
+      );
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
   });
 
   it('allows forked head repositories when the PR belongs to the approved base repository', async () => {
@@ -250,22 +253,19 @@ describe('read-only GitHub PR discovery', () => {
         target.searchParams.set('page', String(targetPage));
         return `<${target.toString()}>; rel="${relation}"`;
       };
-      return new Response(
-        JSON.stringify([
-          page === 1
-            ? candidate
-            : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
-        ]),
-        {
-          status: 200,
-          headers: {
-            link:
-              page === 1
-                ? [linked(2, 'next'), linked(2, 'last')].join(', ')
-                : [linked(1, 'first'), linked(1, 'prev'), linked(2, 'last')].join(', '),
-          },
+      const item =
+        page === 1
+          ? candidate
+          : { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' };
+      return new Response(JSON.stringify([item]), {
+        status: 200,
+        headers: {
+          link:
+            page === 1
+              ? [linked(2, 'next'), linked(2, 'last')].join(', ')
+              : [linked(1, 'first'), linked(1, 'prev'), linked(2, 'last')].join(', '),
         },
-      );
+      });
     });
     const result = await listAllGitHubPullRequests(plan, { fetcher, perPage: 5 });
     expect(result.candidates).toHaveLength(2);
