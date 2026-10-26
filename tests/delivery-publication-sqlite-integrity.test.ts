@@ -173,7 +173,7 @@ describe('durable publication SQLite invariants', () => {
           [
             "import { DatabaseSync } from 'node:sqlite';",
             'const db = new DatabaseSync(process.argv[1]);',
-            "db.exec(\"UPDATE delivery_journal SET state='uncertain' WHERE workspace_id='workspace-crash'\");",
+            `db.exec("UPDATE delivery_journal SET state='uncertain' WHERE workspace_id='workspace-crash'");`,
             'db.close();',
             "process.kill(process.pid, 'SIGKILL');",
           ].join('\n'),
