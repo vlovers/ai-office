@@ -246,6 +246,8 @@ export function WorkflowBoard({
             type="button"
             aria-pressed={paused}
             onClick={() => {
+              // Discard any in-flight polling response from the previous pause state.
+              refreshEpoch.current++;
               setRefreshRequired(true);
               setPaused((current) => !current);
             }}
