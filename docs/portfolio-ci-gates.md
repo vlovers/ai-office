@@ -59,3 +59,24 @@ This inventory is based on repository file checks and the currently open PR sear
 6. Obtain explicit owner authorization before changing branch protection, merging, publishing, or deploying.
 7. After authorized integration, re-fetch files from the target branch and update this ledger with evidence.
 
+
+## Review evidence snapshot (2026-10-27)
+
+Read-only inspection of review submissions for the principal governance PRs found no submitted review records for AI Office #88/#89, RuleWitness #85, MutationBoundary #71, Estima #16, or Last Chapter #5/#14. RuleWitness #82, MutationBoundary #68 and Estima #13 each have a COMMENTED review authored by `vlovers`; this is useful technical commentary but is not independent approval. This is a snapshot, not proof that no off-platform review occurred.
+
+| Project | Canonical candidate to review first | Overlap / dependency to reconcile |
+| --- | --- | --- |
+| AI Office | #88 | #89 is a supporting evidence ledger; #91 and #80 are separate security/workflow changes. #90/#92 are product features, not governance prerequisites. |
+| Grid Atlas | Existing default-branch governance | #271 and #272 should be reviewed separately for issue intake and immutable Actions pins. |
+| RuleWitness | #82 | Reconcile with #85 agent agreement and #83 issue/security intake; preserve unique safeguards before deciding whether to stack or supersede. |
+| MutationBoundary | #68 | Reconcile with #71 agent agreement and #69 issue intake; preserve database isolation and diagnostics requirements. |
+| Estima | #13 | Reconcile with #16 agent agreement, #14 contributing/security baseline and #15 action pins; target branch is `develop`. |
+| Last Chapter | #5 only after target-branch strategy is confirmed | #14 targets the active game branch and adds Claude guidance; preserve the richer game-specific contract and do not blindly replay onto bootstrap `main`. |
+
+### Required next actions
+
+- Obtain independent review from a reviewer distinct from the author on the exact current head SHA; do not count author-authored COMMENTED reviews as independent approval.
+- Re-check CI for each current head after review comments are addressed.
+- Resolve overlap by comparing diffs and target branches before closing or superseding any PR; do not merge automatically.
+- Branch-protection/ruleset status remains **unverified** in this workflow; no configuration changes have been made.
+
