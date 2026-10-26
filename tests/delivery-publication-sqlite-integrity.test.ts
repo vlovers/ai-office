@@ -176,7 +176,7 @@ describe('durable publication SQLite invariants', () => {
             "db.exec(\"UPDATE delivery_journal SET state='uncertain' WHERE workspace_id='workspace-crash'\");",
             'db.close();',
             "process.kill(process.pid, 'SIGKILL');",
-          ].join('\\n'),
+          ].join('\n'),
           file,
         ],
         { encoding: 'utf8', timeout: 5000 },
