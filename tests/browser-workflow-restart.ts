@@ -646,6 +646,10 @@ if (process.argv.includes('--restart-server')) {
       releaseSlowPoll?.();
       await page.unroute(dashboardUrl);
     }
+    // Once the delayed request completes, its obsolete epoch must not undo
+    // the successful operator refresh or leave controls stuck in a stale state.
+    await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
     for (const [index, id] of ids.entries()) {
