@@ -404,11 +404,9 @@ if (process.argv.includes('--restart-server')) {
     // UI buttons are not an authorization boundary. Reuse current versions
     // against real HTTP mutation routes after recovery, not stale versions.
     // A blocked Workflow must reject forged approvals and preparations.
-    const assertBlockedMutations = async () => {
-      for (const [index, id] of ids.entries()) {
-        const base = address + '/api/workflows/' + id;
-        const version = versions[index]!;
-        const mutations = [
+    const assertWorkflowMutationsRejected = async (id: string, version: number) => {
+      const base = address + '/api/workflows/' + id;
+      const mutations = [
           { action: 'approve-initial', data: { version, confirmed: true } },
           { action: 'bind-task', data: { version, confirmed: true, taskId: sessionTask.id } },
           { action: 'submit-initial', data: { version, confirmed: true, confirmedWrite: true } },
@@ -423,15 +421,19 @@ if (process.argv.includes('--restart-server')) {
           },
           { action: 'prepare-reviewer', data: { version, confirmed: true } },
         ];
-        for (const mutation of mutations) {
-          const response = await activePage.request.post(base + '/' + mutation.action, {
-            data: mutation.data,
-          });
-          assert.equal(response.status(), 409, mutation.action + ' bypassed a blocked Workflow');
-        }
-        const unchanged = await activePage.request.get(base);
-        assert.equal(unchanged.status(), 200);
-        assert.equal((await unchanged.json()).version, version);
+      for (const mutation of mutations) {
+        const response = await activePage.request.post(base + '/' + mutation.action, {
+          data: mutation.data,
+        });
+        assert.equal(response.status(), 409, mutation.action + ' bypassed a terminal Workflow');
+      }
+      const unchanged = await activePage.request.get(base);
+      assert.equal(unchanged.status(), 200);
+      assert.equal((await unchanged.json()).version, version);
+    };
+    const assertBlockedMutations = async () => {
+      for (const [index, id] of ids.entries()) {
+        await assertWorkflowMutationsRejected(id, versions[index]!);
       }
     };
     await assertBlockedMutations();
@@ -541,6 +543,9 @@ if (process.argv.includes('--restart-server')) {
     const terminalView = await cancelledTimeline.json();
     assert.equal(terminalView.state, 'cancelled');
     assert.equal(terminalView.downstreamExecutable, false);
+    // Use the *current* cancelled version, not a stale pre-cancellation token.
+    // All mutation routes must reject the terminal state itself.
+    await assertWorkflowMutationsRejected(interrupted.workflowId, cancelled.version);
     const coderTimeline = await activePage.request.get(
       address + '/api/workflows/' + queuedCoder.id + '/timeline',
     );
