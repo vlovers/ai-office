@@ -46,7 +46,12 @@ Workflow actions **and the Create gated workflow form** to become disabled;
 after transport recovery, errors must disappear and controls become available
 again without reloading the page. Pausing live polling must also disable
 Workflow creation, cancellation, and checkpoint mutations; resuming requires a
-fresh successful refresh before these controls become actionable. This does
+fresh successful refresh before these controls become actionable. A fresh
+Dashboard response must also invalidate previously selected Coder tasks and
+Reviewer/QA profiles that are no longer eligible; the creation button must
+remain disabled rather than submitting stale React form state. The process
+restart browser regression injects filtered Dashboard snapshots to exercise
+missing Coder and Reviewer choices. This does
 **not** prove that the persistent
 manual-review notice always appears or that arbitrary delayed failures cannot
 arrive after the observation window. Treat those as separate UX acceptance
