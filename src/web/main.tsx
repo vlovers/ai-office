@@ -111,6 +111,7 @@ function App() {
   const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
+  const [dashboardConnected, setDashboardConnected] = useState(false);
   const [selected, setSelected] = useState<string>();
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const lastNavigation = useRef('');
@@ -150,8 +151,10 @@ function App() {
     try {
       const data = await api<Dashboard>('/dashboard');
       setDashboard(data);
+      setDashboardConnected(true);
       setConnection('Local server connected');
     } catch (e) {
+      setDashboardConnected(false);
       setConnection('Server disconnected');
       throw e;
     }
@@ -1104,7 +1107,7 @@ function App() {
                             </small>
                           )}
                           <button
-                            disabled={busy || !dashboard?.ready}
+                            disabled={busy || !dashboard?.ready || !dashboardConnected}
                             onClick={() =>
                               void act(async () => {
                                 if (
@@ -1350,7 +1353,7 @@ function App() {
                       <span className="tiny-avatar">⌘</span> Assigned to{' '}
                       {agent?.name ?? 'Select a profile'}
                     </span>
-                    <button disabled={busy || !repositoryId || !canAssign}>
+                    <button disabled={busy || !repositoryId || !canAssign || !dashboardConnected}>
                       Create task <span>→</span>
                     </button>
                   </div>
