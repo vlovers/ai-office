@@ -200,7 +200,12 @@ try {
   // load the completed one first so switching to otherId always triggers a request.
   await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
-  await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  // A just-resumed poll can still be resolving while selection changes.
+  // Explicit operator refresh must load the chosen timeline, not a stale one.
+  await board.getByRole('button', { name: 'Refresh workflow' }).click();
+  await expect(board.getByText(/^State: completed/)).toContainText('State: completed', {
+    timeout: 15000,
+  });
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
