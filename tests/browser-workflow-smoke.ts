@@ -200,9 +200,8 @@ try {
   // load the completed one first so switching to otherId always triggers a request.
   await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
-  // A just-resumed poll can still be resolving while selection changes.
-  // Explicit operator refresh must load the chosen timeline, not a stale one.
-  await board.getByRole('button', { name: 'Refresh workflow' }).click();
+  // Selection must fetch the completed timeline automatically after resume.
+  // A manual Refresh here would mask a broken selection/reconnect effect.
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed', {
     timeout: 15000,
   });
@@ -222,6 +221,8 @@ try {
     );
     await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
     await requested;
+    // Never display the previously selected checkpoint while another one loads.
+    await expect(board.getByText(/^State: completed/)).toHaveCount(0);
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
     const delayed = page.waitForResponse((response) =>
