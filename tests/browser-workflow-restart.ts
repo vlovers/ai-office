@@ -551,9 +551,11 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
     await expect(createWorkflow).toBeDisabled();
     await expect(board.getByText(/^State: blocked/)).toBeVisible();
+    await expect(board.getByText('Last known state — refresh required before acting')).toBeVisible();
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await page.unrouteAll({ behavior: 'wait' });
     await expect(transportAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(board.getByText('Last known state — refresh required before acting')).toHaveCount(0, { timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await expect(createWorkflow).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
