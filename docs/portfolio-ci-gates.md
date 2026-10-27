@@ -311,3 +311,5 @@ Next: confirm exact-head Foundation CI result for #322; if green, review the wor
 
 Next: inspect the three exact-head workflow conclusions, fix any regression without weakening gates, then assess #272 integration after #319/#322 have independent review and confirmed CI.
 
+
+**04:00 CI refresh:** On exact SHA `8682ebca8a4fc8f493b64d81e50d010b7912aa29`, `Stage editorial photo candidates` completed successfully; `Foundation CI` and `Constructor editorial F1DB identity audit` remained in progress at the latest check. This does not exercise the named-branch quarantine push.
