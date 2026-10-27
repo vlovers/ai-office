@@ -300,3 +300,14 @@ Next: inspect CI for #322 on its exact SHA; review the privileged photo-intake c
 Next: confirm exact-head Foundation CI result for #322; if green, review the workflow-level write permission boundary and prepare a separate minimal follow-up or documented security exception without changing product behavior.
 
 **Exact-head CI completion for #322:** [Foundation CI run 40430056332](https://github.com/vlovers/grid-atlas/actions/runs/40430056332) finished **success** on `8c81f67e68febb20fc4d6a0eb8aae6e65852d72b`; its job log confirms **352/352 Node tests passed, 0 failed**. The constructor audit and photo candidate workflows also succeeded on that exact head. PR description updated. The named-branch authenticated quarantine push remains untested, and independent review is still missing.
+
+## 2026-10-27 04:00 — Split photo intake into least-privilege jobs
+
+- Rechecked live PR metadata: [Grid Atlas #319](https://github.com/vlovers/grid-atlas/pull/319) remains draft/mergeable at `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e`; [#322](https://github.com/vlovers/grid-atlas/pull/322) was draft/mergeable at `8c81f67e68febb20fc4d6a0eb8aae6e65852d72b`; [#272](https://github.com/vlovers/grid-atlas/pull/272) remains open/nonmergeable at `5dbec0773952fc417c8cebe40f67e226e2610b9f`.
+- Implemented the previously identified write-token isolation in draft #322: commit `6dd30717e796ef55aad0f271d9542fe592dfbbda` changes workflow-level permissions to `contents: read`, runs `stage` only for non-push events, and introduces a separate `quarantine` job restricted to push events on the named editorial branch with job-scoped `contents: write`. The quarantine job checks out with `persist-credentials: false` and does not execute branch-provided Node scripts. It retains the fixed-path removal and existing step-scoped credential-helper push behavior.
+- Commit `8682ebca8a4fc8f493b64d81e50d010b7912aa29` updates the quarantine auth regression test to assert top-level read-only permissions, job-specific write permission, event restrictions, and no branch script execution in the privileged job. This is the current exact PR head after the two changes.
+- At the latest check, three PR-triggered workflows (Foundation CI, Stage editorial photo candidates, Constructor editorial F1DB identity audit) had appeared for `8682ebca` and were **in progress**. No test success or failure is claimed yet for this new head. An authenticated push on the actual editorial branch remains untested.
+- No merge, publication, ruleset/branch protection mutation, or product PR modification. Independent GitHub approval is still missing.
+
+Next: inspect the three exact-head workflow conclusions, fix any regression without weakening gates, then assess #272 integration after #319/#322 have independent review and confirmed CI.
+
