@@ -511,3 +511,10 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Verified draft [#324](https://github.com/vlovers/grid-atlas/pull/324) head `fbf8239893c8e78244e16e58ece717659896668a` is mergeable according to GitHub and has 20 changed files. [Review listing](https://github.com/vlovers/grid-atlas/pull/324) returned no submitted reviews.
 - Updated PR description with 13/13 successful observed CI runs, explicit missing `Stage editorial photo candidates` run, review checklist covering YAML scanner and scoped photo quarantine push, and a do-not-merge gate until independent review plus privileged push verification. Metadata-only update; head SHA unchanged, PR remains Draft.
 - No merges, releases, ruleset, product PR or privileged push changes.
+
+
+## 2026-10-27 — Grid Atlas #324 photo intake static security regressions
+
+- Prior #324 head `fbf8239893c8e78244e16e58ece717659896668a` remained Draft with 13/13 observed workflows successful; privileged photo quarantine push still untested.
+- Added `tests/editorial-photo-intake-security.test.mjs` in [commit 3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee](https://github.com/vlovers/grid-atlas/commit/3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee) to assert workflow read-only default, event-scoped write, checkout credentials disabled, GH_TOKEN restricted to quarantine step, and `gh auth setup-git` before push. These are static regressions, not an integration test of privileged git push.
+- New head CI result pending at the time of change. Independent review still required; no merge, release, ruleset or product PR edits.
