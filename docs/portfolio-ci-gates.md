@@ -323,3 +323,5 @@ Next: inspect the three exact-head workflow conclusions, fix any regression with
 - No merge, release, branch protection/ruleset change or product PR modification.
 
 Next: verify current-head CI for #322, then safely reconcile #272 with main after #319/#322 have independent review and validated checks. Do not disable existing accessibility gates or overwrite newer workflow behavior.
+
+**05:00 new-head CI refresh:** For Grid Atlas #322 SHA `b76f34f31f87b6d2e0d49866f5b3722b19c8786b`, [Constructor identity 40441631683](https://github.com/vlovers/grid-atlas/actions/runs/40441631683) and [Stage editorial photo candidates 40441631625](https://github.com/vlovers/grid-atlas/actions/runs/40441631625) completed **success**; [Foundation CI 40441631628](https://github.com/vlovers/grid-atlas/actions/runs/40441631628) was still **in progress**. Static readback confirmed both protected paths are present in the push filter and the quarantine removal script. No submitted GitHub reviews were returned for #319, #322 or #272. These checks do not exercise an authenticated quarantine push.
