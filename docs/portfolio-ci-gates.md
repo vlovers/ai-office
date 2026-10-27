@@ -463,3 +463,10 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Re-inspected `scripts/check-workflow-action-pins.mjs` and found a concrete bug introduced in the named-step scanner change: the JavaScript regex literals contained `\\s` (matching a literal backslash plus `s`) instead of `\s` (whitespace). Thus prior claimed named-step support was not yet actually effective.
 - Corrected the two regex occurrences in [commit 832ecc85f5e704c3bf43b17f624d9234964cad3b](https://github.com/vlovers/grid-atlas/commit/832ecc85f5e704c3bf43b17f624d9234964cad3b), on existing draft [#324](https://github.com/vlovers/grid-atlas/pull/324). Existing regression tests should now exercise the intended logic; their passing result is not yet verified.
 - At initial inspection of preceding SHA `936f158c6c145decc1cc9ddb88caf236b7e2089d`, 14 workflow runs were queued. CI and privileged photo quarantine push still unverified on latest head; independent review pending. No merge, release, ruleset or product PR changes.
+
+
+## 2026-10-27 — Grid Atlas #324 named-step scan boundary fix
+
+- Inspected scanner after whitespace regex correction and found a second bug: its step-slicing loop stopped at `with:` when `uses:` and `with:` were siblings within `- name:` step. Thus named checkout credentials were still omitted from analysis.
+- Updated step boundary to use the actual list-item indentation, and keep sibling `with:` inside the named step, in [commit 25014ead381656ae877fce8f71393c99d38ff2b6](https://github.com/vlovers/grid-atlas/commit/25014ead381656ae877fce8f71393c99d38ff2b6). Existing named-step acceptance/rejection tests are intended to cover this; their CI success not yet verified.
+- At SHA `832ecc85f5e704c3bf43b17f624d9234964cad3b`, 14 CI workflows were queued including Foundation CI run 40471949098. Latest #324 head `25014ead381656ae877fce8f71393c99d38ff2b6`. Full CI and privileged photo quarantine push remain unverified; independent review pending. No merge, release, ruleset or product PR edits.
