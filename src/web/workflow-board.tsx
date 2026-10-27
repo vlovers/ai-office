@@ -565,6 +565,9 @@ export function WorkflowBoard({
             <>
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
+                {(error || refreshRequired || paused) && (
+                  <> · Last known state — refresh required before acting</>
+                )}
               </p>
               {diagnostics &&
                 diagnostics.id === timeline.id &&
