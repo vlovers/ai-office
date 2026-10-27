@@ -46,6 +46,7 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await expect(page.locator('#workflows')).toBeFocused();
   const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
@@ -129,7 +130,13 @@ try {
   await expect(diagnostics).toContainText('Persisted checkpoint diagnostics');
   await expect(diagnostics).toContainText('no automatic restart');
   await page.reload();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Tasks' })
+    .click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
@@ -154,6 +161,11 @@ try {
   });
   assert.equal(alternate.statusCode, 201);
   const otherId = alternate.json().id;
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Workflows' })
+    .click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true }).locator('option')).toHaveCount(2);
   const operationsQueue = board.getByLabel('Workflow operations queue');
@@ -184,6 +196,11 @@ try {
     'aria-pressed',
     'false',
   );
+  // A newly mounted board can default to the newer workflow. Explicitly
+  // load the completed one first so switching to otherId always triggers a request.
+  await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
+  await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
+  await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
@@ -219,8 +236,23 @@ try {
     'approval',
     { timeout: 10000 },
   );
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Office' })
+    .click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Workflows' })
+    .click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'workflows');
   await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await page
+    .getByRole('navigation', { name: 'Dashboard sections' })
+    .getByRole('link', { name: 'Office' })
+    .click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
   await expect(board.getByText(/^State: active/)).toBeVisible();

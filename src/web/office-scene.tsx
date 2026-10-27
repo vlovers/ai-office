@@ -165,9 +165,7 @@ export function PixelOffice({
                     }
                   }}
                 >
-                  <title>
-                    {agent.name} · {agent.status.label}
-                  </title>
+                  <title>{`${agent.name} · ${agent.status.label}`}</title>
                   <desc id={`${prefix}-${index}-status`}>
                     {agent.status.label}. {agent.access ?? 'No active access'}.{' '}
                     {agent.taskTitle ?? 'No active assignment'}.

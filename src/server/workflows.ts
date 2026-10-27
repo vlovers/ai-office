@@ -519,7 +519,14 @@ export class WorkflowStore {
             }
             this.db.prepare('DELETE FROM task_queue WHERE task_id=?').run(stage.taskId);
           }
-          stage.state = row?.state === 'completed' ? 'blocked' : 'interrupted';
+          // Preserve terminal failure semantics across restarts. A failed or
+          // stopped task must not appear as a process interruption in the UI.
+          stage.state =
+            row?.state === 'completed'
+              ? 'blocked'
+              : row?.state === 'failed' || row?.state === 'stopped'
+                ? 'failed'
+                : 'interrupted';
           next.state = 'blocked';
         }
         if (next.state !== 'blocked') continue;

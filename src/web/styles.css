@@ -1208,9 +1208,9 @@ footer {
   font-size: 10px;
   letter-spacing: 0.3px;
 }
-.focus-mode .office-scene,
-.focus-mode .mission-board > :not(.output),
-.focus-mode .inspector > :not(.agent-panel) {
+.unified-workspace.focus-mode[data-screen='tasks'] .office-scene,
+.unified-workspace.focus-mode[data-screen='tasks'] .mission-board > :not(.output),
+.unified-workspace.focus-mode[data-screen='tasks'] .inspector > :not(.agent-panel) {
   display: none;
 }
 .focus-mode .mission-grid {
@@ -1874,4 +1874,147 @@ select {
 }
 .task-link-warning p {
   margin: 0 0 8px;
+}
+
+/* Unified workspace: one purpose per screen, shared visual language. */
+.unified-workspace {
+  --workspace-surface: #17232a;
+  --workspace-border: #344b50;
+  --workspace-accent: #a4d8b8;
+}
+.unified-workspace .nav-create-task {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.unified-workspace .content {
+  min-width: 0;
+}
+.unified-workspace .page-heading h1 {
+  letter-spacing: -0.035em;
+}
+.unified-workspace .panel,
+.unified-workspace .studio-heading,
+.unified-workspace .stats {
+  border-color: var(--workspace-border);
+}
+.unified-workspace[data-screen='tasks'] .office-scene,
+.unified-workspace[data-screen='workflows'] .office-scene,
+.unified-workspace[data-screen='team'] .office-scene,
+.unified-workspace[data-screen='settings'] .office-scene {
+  display: none !important;
+}
+.unified-workspace[data-screen='tasks']:not(.focus-mode) .view-switch,
+.unified-workspace[data-screen='workflows'] .view-switch,
+.unified-workspace[data-screen='team'] .view-switch,
+.unified-workspace[data-screen='settings'] .view-switch {
+  display: none !important;
+}
+.unified-workspace[data-screen='tasks']
+  .mission-board
+  > :not(#task-history):not(#task-workspace):not(#compose),
+.unified-workspace[data-screen='workflows'] .mission-board > :not(#workflow-timeline),
+.unified-workspace[data-screen='team'] .mission-board > :not(#agent-studio),
+.unified-workspace[data-screen='settings'] .mission-board > *,
+.unified-workspace[data-screen='office'] .mission-board > #agent-studio,
+.unified-workspace[data-screen='office'] .mission-board > #workflow-timeline,
+.unified-workspace[data-screen='office'] .mission-board > #task-history,
+.unified-workspace[data-screen='office'] .mission-board > #task-workspace,
+.unified-workspace[data-screen='office'] .mission-board > #compose {
+  display: none !important;
+}
+.unified-workspace[data-screen='tasks'] .inspector,
+.unified-workspace[data-screen='workflows'] .inspector,
+.unified-workspace[data-screen='team'] .inspector {
+  display: none !important;
+}
+.unified-workspace[data-screen='settings']
+  .inspector
+  > :not(.connection-panel):not(.repository-panel),
+.unified-workspace[data-screen='office'] .inspector > .connection-panel,
+.unified-workspace[data-screen='office'] .inspector > .repository-panel {
+  display: none !important;
+}
+.unified-workspace[data-screen='settings'] .mission-board {
+  display: none !important;
+}
+.unified-workspace[data-screen='tasks'] .mission-grid,
+.unified-workspace[data-screen='workflows'] .mission-grid,
+.unified-workspace[data-screen='team'] .mission-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.unified-workspace[data-screen='settings'] .mission-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.unified-workspace[data-screen='settings'] .inspector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+.unified-workspace[data-screen='settings'] .inspector > section {
+  min-width: 0;
+}
+.unified-workspace[data-screen='team'] #agent-studio,
+.unified-workspace[data-screen='workflows'] #workflow-timeline,
+.unified-workspace[data-screen='tasks'] #task-history,
+.unified-workspace[data-screen='tasks'] #task-workspace,
+.unified-workspace[data-screen='tasks'] #compose {
+  scroll-margin-top: 24px;
+}
+@media (max-width: 760px) {
+  .unified-workspace[data-screen='settings'] .inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Keep onboarding and optional scene controls in the overview where they belong. */
+.unified-workspace[data-screen='tasks'] .onboarding,
+.unified-workspace[data-screen='workflows'] .onboarding,
+.unified-workspace[data-screen='team'] .onboarding,
+.unified-workspace[data-screen='settings'] .onboarding,
+.unified-workspace[data-screen='tasks'] .motion-toggle,
+.unified-workspace[data-screen='workflows'] .motion-toggle,
+.unified-workspace[data-screen='team'] .motion-toggle,
+.unified-workspace[data-screen='settings'] .motion-toggle,
+.unified-workspace[data-screen='tasks'] .crt-toggle,
+.unified-workspace[data-screen='workflows'] .crt-toggle,
+.unified-workspace[data-screen='team'] .crt-toggle,
+.unified-workspace[data-screen='settings'] .crt-toggle {
+  display: none !important;
+}
+.unified-workspace .sidebar .nav-item[aria-current='page'] {
+  font-weight: 700;
+}
+.unified-workspace .nav-create-task {
+  margin-top: 8px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 8px;
+}
+
+/* Focused screens must not inherit the legacy two-column inspector layout. */
+.unified-workspace.focus-mode:is(
+    [data-screen='tasks'],
+    [data-screen='workflows'],
+    [data-screen='team'],
+    [data-screen='settings']
+  )
+  .mission-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.unified-workspace[data-screen='tasks'].focus-mode .inspector {
+  display: none !important;
+}
+.unified-workspace[data-screen='tasks'] .mission-board > .stats,
+.unified-workspace[data-screen='tasks'] .mission-board > .queue-panel,
+.unified-workspace[data-screen='tasks'] .mission-board > #workflow-timeline {
+  display: none !important;
+}
+.unified-workspace[data-screen='workflows'] .mission-board > #task-history,
+.unified-workspace[data-screen='workflows'] .mission-board > #task-workspace,
+.unified-workspace[data-screen='workflows'] .mission-board > #compose {
+  display: none !important;
 }

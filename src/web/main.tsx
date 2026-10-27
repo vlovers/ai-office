@@ -69,6 +69,39 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
+  const [screen, setScreen] = useState<'office' | 'tasks' | 'workflows' | 'team' | 'settings'>(
+    () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#task-') || hash === '#compose') return 'tasks';
+      if (hash.startsWith('#workflow')) return 'workflows';
+      if (hash === '#agent-studio') return 'team';
+      if (hash === '#agent') return 'office';
+      if (hash === '#repositories' || hash === '#codex-connection') return 'settings';
+      // Restore the active workspace after a reload. A direct deep link takes
+      // precedence, and untrusted storage values never become screen selectors.
+      try {
+        const saved = sessionStorage.getItem('ai-office-workspace-screen');
+        if (
+          saved === 'office' ||
+          saved === 'tasks' ||
+          saved === 'workflows' ||
+          saved === 'team' ||
+          saved === 'settings'
+        )
+          return saved;
+      } catch {
+        /* Session storage is optional (private browsing / disabled storage). */
+      }
+      return 'office';
+    },
+  );
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('ai-office-workspace-screen', screen);
+    } catch {
+      /* Session storage is optional. */
+    }
+  }, [screen]);
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -78,11 +111,30 @@ function App() {
   const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
+  const [dashboardConnected, setDashboardConnected] = useState(false);
   const [selected, setSelected] = useState<string>();
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const lastNavigation = useRef('');
   useEffect(() => {
-    const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
+    const onHashChange = () => {
+      const hash = window.location.hash;
+      setNavigation(decodeTaskNavigation(hash));
+      if (decodeTaskNavigation(hash)) {
+        setScreen('tasks');
+      } else if (hash === '#overview') {
+        setScreen('office');
+      } else if (hash === '#task-history' || hash === '#task-workspace' || hash === '#compose') {
+        setScreen('tasks');
+      } else if (hash === '#workflow-timeline' || hash === '#workflows') {
+        setScreen('workflows');
+      } else if (hash === '#agent-studio') {
+        setScreen('team');
+      } else if (hash === '#agent') {
+        setScreen('office');
+      } else if (hash === '#repositories' || hash === '#codex-connection') {
+        setScreen('settings');
+      }
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
@@ -99,8 +151,10 @@ function App() {
     try {
       const data = await api<Dashboard>('/dashboard');
       setDashboard(data);
+      setDashboardConnected(true);
       setConnection('Local server connected');
     } catch (e) {
+      setDashboardConnected(false);
       setConnection('Server disconnected');
       throw e;
     }
@@ -204,6 +258,7 @@ function App() {
     if (lastNavigation.current === key) return;
     if (selected !== target.id) setSelected(target.id);
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
+    setScreen('tasks');
     if (view !== 'focus') setView('focus');
   }, [navigation, dashboard, selected, selectedAgent, view]);
   useEffect(() => {
@@ -232,6 +287,7 @@ function App() {
     }
   };
   const navigateTask = (item: Task, destination: TaskDestination) => {
+    setScreen('tasks');
     const target = taskNavigationTarget(item, destination);
     if (!target) return;
     setSelected(item.id);
@@ -300,10 +356,45 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
+    if (id === 'compose' || id === 'task-workspace' || id === 'task-history') {
+      setScreen('tasks');
+      if (id === 'compose' || id === 'task-history') setView('mission');
+    }
+    if (id === 'workflows' || id === 'workflow-timeline' || id === 'task-workflow') {
+      setScreen('workflows');
+      setView('mission');
+    }
+    if (id === 'agent') {
+      setScreen('office');
+      setView('mission');
+    }
+    if (id === 'agent-studio') {
+      setScreen('team');
+      setView('mission');
+    }
+    if (id === 'repositories') {
+      setScreen('settings');
+      setView('mission');
+    }
+    if (id === 'overview') setScreen('office');
     const origin = document.activeElement;
     requestAnimationFrame(() => {
-      // A later keyboard/pointer action takes precedence over this deferred navigation.
-      if (document.activeElement !== origin) return;
+      // A later keyboard/pointer action takes precedence while its origin remains mounted.
+      // Navigation can unmount the clicked control, moving focus to body; in that case,
+      // continue and focus the destination section instead of abandoning navigation.
+      const active = document.activeElement;
+      // A hidden source can lose focus to body after its screen changes.
+      // Preserve a newer focus target only when it remains visible and connected.
+      if (
+        active !== origin &&
+        active instanceof Element &&
+        active !== document.body &&
+        active !== document.documentElement &&
+        active.isConnected &&
+        active.getClientRects().length > 0
+      ) {
+        return;
+      }
       const section = document.getElementById(id);
       section?.focus();
       section?.scrollIntoView({ block: 'start' });
@@ -329,44 +420,68 @@ function App() {
   );
   return (
     <div
-      className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
+      className={`shell unified-workspace ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
+      data-screen={screen}
     >
       <a className="skip-link" href="#overview">
         Skip to mission control
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
-        <a className="brand" href="#overview" onClick={() => setView('mission')}>
+        <a
+          className="brand"
+          href="#overview"
+          onClick={() => {
+            setView('mission');
+            setScreen('office');
+          }}
+        >
           <PixelBot />
           <span>
             AI OFFICE<small>A space for your agents</small>
           </span>
         </a>
-        <div className="nav-label">// MISSION DIRECTORY</div>
+        <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Dashboard sections">
-          <a
-            className={`nav-item ${view === 'mission' ? 'active' : ''}`}
-            href="#overview"
-            onClick={() => setView('mission')}
+          {(
+            [
+              ['office', '⌂', 'Office', '#overview'],
+              ['tasks', '▤', 'Tasks', '#task-history'],
+              ['workflows', '◇', 'Workflows', '#workflow-timeline'],
+              ['team', '♙', 'Team', '#agent-studio'],
+              ['settings', '⚙', 'Settings', '#repositories'],
+            ] as const
+          ).map(([destination, icon, label, href]) => (
+            <a
+              key={destination}
+              className={`nav-item ${screen === destination ? 'active' : ''}`}
+              href={href}
+              aria-current={screen === destination ? 'page' : undefined}
+              onClick={() => {
+                setView('mission');
+                setScreen(destination);
+              }}
+            >
+              <span aria-hidden="true">{icon}</span>
+              {label}
+              {destination === 'tasks' && (
+                <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
+              )}
+              {destination === 'team' && (
+                <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
+              )}
+            </a>
+          ))}
+          <button
+            type="button"
+            className="nav-item nav-create-task"
+            onClick={() => {
+              setView('mission');
+              setScreen('tasks');
+              showSection('compose');
+            }}
           >
-            <span aria-hidden="true">⌂</span>Office<span className="nav-count">01</span>
-          </a>
-          <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
-            <span aria-hidden="true">♙</span>Agents
-            <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
-            Agent Studio
-          </a>
-          <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
-            <span aria-hidden="true">▤</span>Task history
-            <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#task-workspace">
-            <span aria-hidden="true">▣</span>Session terminal
-          </a>
-          <a className="nav-item" href="#compose" onClick={() => setView('mission')}>
             <span aria-hidden="true">＋</span>New task
-          </a>
+          </button>
         </nav>
         <div className="sidebar-section">
           <div className="nav-label">
@@ -455,18 +570,41 @@ function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">AI OFFICE / WORKSPACE</div>
+              <div className="eyebrow">AI OFFICE / {screen.toUpperCase()}</div>
               <h1>
-                {view === 'focus' ? 'Focus mode' : 'Office overview'}
+                {view === 'focus'
+                  ? 'Focus mode'
+                  : (
+                      {
+                        office: 'Office overview',
+                        tasks: 'Tasks & activity',
+                        workflows: 'Workflows',
+                        team: 'Your team',
+                        settings: 'Workspace settings',
+                      } as const
+                    )[screen]}
                 <span>_</span>
               </h1>
-              <p>Make room for your next idea. Your agents and their real work, together.</p>
+              <p>
+                {
+                  (
+                    {
+                      office: 'See who is working and what needs your attention.',
+                      tasks: 'Create tasks, follow progress and review results.',
+                      workflows: 'Move work safely through review and QA.',
+                      team: 'Manage the agents who work with you.',
+                      settings: 'Manage repositories, connections and workspace access.',
+                    } as const
+                  )[screen]
+                }
+              </p>
             </div>
             <a
               className="button-link"
               href="#compose"
               onClick={() => {
                 setView('mission');
+                setScreen('tasks');
                 showSection('compose');
               }}
             >
@@ -523,6 +661,9 @@ function App() {
                 className="button-link"
                 href="#repositories"
                 onClick={() => {
+                  // Hashchange may run after the next frame. Show Settings immediately
+                  // so the repository input is visible when the focus callback runs.
+                  setScreen('settings');
                   setView('mission');
                   requestAnimationFrame(() => document.getElementById('path')?.focus());
                 }}
@@ -676,6 +817,7 @@ function App() {
                             setSelected(entry.taskId);
                             setSelectedAgent(entry.agentId);
                             setResumeSessionId('');
+                            showSection('task-workspace');
                           }}
                         >
                           {dashboard.tasks.find((task) => task.id === entry.taskId)?.title} ·{' '}
@@ -699,7 +841,9 @@ function App() {
                   }}
                 />
               )}
-              <WorkflowBoard inspection={workflowInspection} />
+              <section id="workflow-timeline" aria-label="Workflows" tabIndex={-1}>
+                <WorkflowBoard inspection={workflowInspection} />
+              </section>
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
@@ -963,7 +1107,7 @@ function App() {
                             </small>
                           )}
                           <button
-                            disabled={busy || !dashboard?.ready}
+                            disabled={busy || !dashboard?.ready || !dashboardConnected}
                             onClick={() =>
                               void act(async () => {
                                 if (
@@ -1209,7 +1353,7 @@ function App() {
                       <span className="tiny-avatar">⌘</span> Assigned to{' '}
                       {agent?.name ?? 'Select a profile'}
                     </span>
-                    <button disabled={busy || !repositoryId || !canAssign}>
+                    <button disabled={busy || !repositoryId || !canAssign || !dashboardConnected}>
                       Create task <span>→</span>
                     </button>
                   </div>
@@ -1295,7 +1439,11 @@ function App() {
                 </div>
                 {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
-              <section className="panel connection-panel" aria-label="Codex connection">
+              <section
+                className="panel connection-panel"
+                id="codex-connection"
+                aria-label="Codex connection"
+              >
                 <div className="panel-heading">
                   <h2>Codex connection</h2>
                   <span

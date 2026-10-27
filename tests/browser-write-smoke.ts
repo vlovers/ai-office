@@ -50,9 +50,21 @@ try {
   });
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  // Registration lives in Settings, while task creation and Review Center live
+  // in Tasks. Exercise the actual workspace navigation instead of depending
+  // on controls remaining visible on the default Office overview.
+  const openScreen = async (screen: 'tasks' | 'settings') => {
+    await page
+      .getByRole('navigation', { name: 'Dashboard sections' })
+      .getByRole('link', { name: screen === 'tasks' ? 'Tasks' : 'Settings' })
+      .click();
+    await expect(page.locator('.shell')).toHaveAttribute('data-screen', screen);
+  };
   await page.goto(address);
+  await openScreen('settings');
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await openScreen('tasks');
   await page.getByLabel('Execution mode').selectOption('write');
   await page.getByLabel('Task title').fill('Implement isolated change');
   await page.getByLabel('What should the agent work on?').fill('WRITE_FIXTURE');
@@ -77,6 +89,7 @@ try {
   await page.getByRole('button', { name: 'Verify: fixture' }).click();
   await expect(review).toContainText('fixture: Passed');
   await page.reload();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   await page
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
@@ -137,6 +150,7 @@ try {
   await page.getByRole('button', { name: 'Save draft feedback' }).click();
   await expect(review).toHaveAttribute('aria-busy', 'false');
   await page.reload();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   await page
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
@@ -201,6 +215,9 @@ try {
   app = await createApp(manager);
   const restartedAddress = await app.listen({ host: '127.0.0.1', port: 0 });
   await page.goto(restartedAddress);
+  // The restarted fixture uses a new localhost port (a new browser origin),
+  // so the per-tab workspace preference cannot carry over automatically.
+  await openScreen('tasks');
   await page
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
