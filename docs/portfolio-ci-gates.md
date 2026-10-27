@@ -525,3 +525,9 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - On #324 SHA `3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee`, Foundation CI [40476681947](https://github.com/vlovers/grid-atlas/actions/runs/40476681947) succeeded. Next.js web [40476681955](https://github.com/vlovers/grid-atlas/actions/runs/40476681955) failed in `pnpm lint` due to five ESLint `no-regex-spaces` errors in newly added `tests/editorial-photo-intake-security.test.mjs`; no application test failure was indicated by that log.
 - Replaced literal regex space runs with explicit `{N}` quantifiers and corrected the job-level indentation assertion in commits [bff0fbd2](https://github.com/vlovers/grid-atlas/commit/bff0fbd2af1a815f5438ffc9e23082403a967336) and [39e45e22](https://github.com/vlovers/grid-atlas/commit/39e45e22d7240995e73331b59451086ec4a67da8). New head CI not yet confirmed.
 - Privileged quarantine push untested; independent review pending. No merge, release, ruleset or product PR edits.
+
+
+## 2026-10-27 — Grid Atlas #324 lint recovery confirmed, integration pending
+
+- On draft #324 head `39e45e22d7240995e73331b59451086ec4a67da8`, 11 of 13 returned workflows completed **success**, including [Foundation CI run 40476990229](https://github.com/vlovers/grid-atlas/actions/runs/40476990229). Next.js web run [40476990255](https://github.com/vlovers/grid-atlas/actions/runs/40476990255) remained **in_progress** at `Test desktop and mobile archive flows over HTTP and PostgreSQL`, proving prior ESLint lint gate passed. Pinned F1DB real-archive acceptance was also in progress.
+- Do not mark entire CI green until both complete. Photo quarantine privileged push and independent review remain unverified. No merge, release, ruleset or product PR changes.
