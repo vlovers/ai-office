@@ -280,7 +280,14 @@ try {
   await expect(page.locator('.studio-notice').first()).toContainText('Connection interrupted', {
     timeout: 10000,
   });
+  // Disconnected actions must remain disabled in both workspaces. The Office
+  // inspector's "Assign a task" button is not mounted on the Tasks screen.
+  await expect(page.getByRole('button', { name: 'Create task', exact: true })).toBeDisabled();
+  await navigation.getByRole('link', { name: 'Office' }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();
+  await navigation.getByRole('link', { name: 'Tasks' }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
   await capture('disconnected');
   await page.unroute('**/api/dashboard');
   await expect(page.locator('.studio-notice')).toHaveCount(0, { timeout: 10000 });
