@@ -111,16 +111,19 @@ These are candidate selections based on changed-file scope only, not merge-readi
 Content comparison of the shared files found meaningful differences, not just duplicate paths. The broader foundation candidates contain more domain-specific detail; the smaller agent-agreement PRs are more concise and add a few explicit safeguards. Consolidation must preserve the stronger combined contract rather than simply close the smaller PR.
 
 ### RuleWitness #82 vs #85
+
 - Keep from #82: explicit limited-scope product contract; `complete: false`, uncertainty/fail-closed behavior and exit-code semantics; never execute analyzed settings/hooks/commands; reviewer focus on false negatives, schema drift, unsafe Git/CI and consumer/package evidence; release-readiness and npm provenance checks.
 - Ensure explicit from #85 remains in canonical docs: Node 24 command list, `test/independent-witness.test.ts` oracle regression for matcher changes, no automatic npm publication, and clear distinction between permitted repository packaging checks and forbidden analyzed third-party lifecycle execution.
 - #82 is the stronger foundation candidate, but its template should include the explicit project checks from #85 before #85 is considered redundant.
 
 ### MutationBoundary #68 vs #71
+
 - Keep from #68: net-state-only product limitation; explicit disposable DB prohibition; secrets/row/key redaction; fail-closed behavior; release verification of packed tarball and real consumer; specific driver/session/concurrency/cleanup review priorities.
 - Ensure explicit from #71 remains: dedicated `mutation_boundary_test`, `mutation_boundary_ci` role and `MUTATION_BOUNDARY_TEST_DATABASE_URL`; every bug fix needs a regression test; broad API/new adapter scope must be discussed before implementation.
 - #68 is the stronger foundation candidate, but its canonical PR template and AGENTS contract must include the dedicated database-role and regression-test requirements.
 
 ### Estima #13 vs #16
+
 - Keep from #13: actual Bun/Nx command discovery; tenant cross-user read/write checks; atomic clarification writes and concurrent retry; refresh JWT lifecycle; migration-chain and rollback checks; E2E and release evidence tied to exact candidate SHA.
 - Ensure explicit from #16 remains: negative cross-tenant/auth tests, atomic update/delete behavior, disposable PostgreSQL for migration checks, and no production credentials.
 - #13 is the stronger foundation candidate, but these concise checks should be explicitly visible in its PR template and agent contract.
@@ -209,12 +212,14 @@ This is a static diff review only. No tests were run by this review pass, and cu
 Reviewed the full added `scripts/check-workflow-action-pins.mjs` and `tests/workflow-action-pins.test.mjs` from PR #272 diff. This was static inspection only; the tests were not executed in this workflow.
 
 ### Positive controls present in the diff
+
 - Scans YAML files directly under `.github/workflows` and fails if no workflows are found.
 - Rejects mutable tags, short SHA, empty/dynamic refs, ambiguous YAML forms, malformed local paths and Docker tags; supports full action SHA and Docker digest pins.
 - Requires checkout `persist-credentials: false` exactly once inside the same step's `with` mapping.
 - Adds negative tests for mutable tags, short SHA, dynamic refs, traversal, duplicate mappings, malformed YAML and checkout credentials placed in later/unrelated steps.
 
 ### Remaining review items (not confirmed defects)
+
 - The scanner is intentionally a line-based constrained YAML parser, not a full YAML parser. Confirm its rejection patterns cover every YAML representation accepted by GitHub Actions, or document and enforce a narrow supported syntax. Add adversarial fixtures for folded/block scalar values and any valid YAML syntax the current regexes do not reject.
 - The repository-wide test only asserts at least 10 workflows are scanned. Consider asserting the expected workflow inventory/count or a fixture that proves adding a nested/otherwise overlooked workflow cannot silently bypass audit scope.
 - Verify all actual workflow references in the full candidate are pinned; the diff also includes mutable references in tests/scripts, which should remain explicitly test fixtures rather than workflow invocations.
