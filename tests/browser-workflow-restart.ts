@@ -324,13 +324,14 @@ if (process.argv.includes('--restart-server')) {
     await page.goto(address);
     // The unified UI opens Office first. Enter Workflows without reloading
     // so the same mounted React page can observe each backend restart.
-    const navigation = page.getByRole('navigation', { name: 'Dashboard sections' });
+    const activePage: Page = page;
+    const navigation = activePage.getByRole('navigation', { name: 'Dashboard sections' });
     const openScreen = async (
       name: 'Office' | 'Workflows',
       screen: 'office' | 'workflows',
     ) => {
       await navigation.getByRole('link', { name, exact: true }).click();
-      await expect(page.locator('.shell')).toHaveAttribute('data-screen', screen);
+      await expect(activePage.locator('.shell')).toHaveAttribute('data-screen', screen);
     };
     await page.evaluate(() => {
       document.documentElement.dataset.restartPage = 'original';
@@ -433,7 +434,6 @@ if (process.argv.includes('--restart-server')) {
       blocked.workflowId,
       queuedCoder.id,
     ];
-    const activePage = page;
     const versions = await Promise.all(
       ids.map(async (id) => {
         const url = address + '/api/workflows/' + id;
