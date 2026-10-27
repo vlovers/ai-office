@@ -629,7 +629,11 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
-    // A pending Dashboard response must not prevent Pause/Resume from
+    // Only the WorkflowBoard requests qa-commands. The parent Office shell
+    // independently polls /api/dashboard every 2s, so counting Dashboard
+    // requests would falsely report overlapping WorkflowBoard polls.
+    const boardPollUrl = address + '/api/workflows/qa-commands';
+    // A pending WorkflowBoard response must not prevent Pause/Resume from
     // starting a new polling generation. The old response is released only
     // after a fresh post-resume response has been observed.
     let releasePausedPoll: (() => void) | undefined;
@@ -641,7 +645,7 @@ if (process.argv.includes('--restart-server')) {
       releasePausedPoll = resolve;
     });
     let holdPausedPoll = true;
-    await page.route(dashboardUrl, async (route) => {
+    await page.route(boardPollUrl, async (route) => {
       if (holdPausedPoll) {
         holdPausedPoll = false;
         markPausedPollStarted?.();
@@ -659,7 +663,7 @@ if (process.argv.includes('--restart-server')) {
       await board.getByRole('button', { name: 'Pause live updates' }).click();
       await expect(createWorkflow).toBeDisabled();
       const resumedResponse = page.waitForResponse(
-        (response) => response.url() === dashboardUrl && response.ok(),
+        (response) => response.url() === boardPollUrl && response.ok(),
         { timeout: 10000 },
       );
       await board.getByRole('button', { name: 'Resume live updates' }).click();
@@ -682,9 +686,9 @@ if (process.argv.includes('--restart-server')) {
       releaseSlowPoll = resolve;
     });
     let delayOnce = true;
-    let dashboardRequests = 0;
-    await page.route(dashboardUrl, async (route) => {
-      dashboardRequests++;
+    let boardPollRequests = 0;
+    await page.route(boardPollUrl, async (route) => {
+      boardPollRequests++;
       if (delayOnce) {
         delayOnce = false;
         markSlowPollStarted?.();
@@ -693,7 +697,7 @@ if (process.argv.includes('--restart-server')) {
         await route.fulfill({
           status: 503,
           contentType: 'application/json',
-          body: JSON.stringify({ error: 'Obsolete delayed dashboard failure' }),
+          body: JSON.stringify({ error: 'Obsolete delayed workflow polling failure' }),
         });
         return;
       }
@@ -709,17 +713,17 @@ if (process.argv.includes('--restart-server')) {
       ]);
       // Let the next interval tick while the first response is deliberately held.
       await page.waitForTimeout(3500);
-      assert.equal(dashboardRequests, 1, 'Periodic polling must not overlap a slow request');
+      assert.equal(boardPollRequests, 1, 'Periodic polling must not overlap a slow request');
       const freshResponse = page.waitForResponse(
-        (response) => response.url() === dashboardUrl && response.ok(),
+        (response) => response.url() === boardPollUrl && response.ok(),
         { timeout: 10000 },
       );
       await board.getByRole('button', { name: 'Refresh workflow' }).click();
       await freshResponse;
       assert.equal(
-        dashboardRequests,
+        boardPollRequests,
         2,
-        'Explicit refresh must bypass the held poll with exactly one fresh Dashboard request',
+        'Explicit refresh must bypass the held poll with exactly one fresh WorkflowBoard request',
       );
       await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
         timeout: 10000,
@@ -727,7 +731,7 @@ if (process.argv.includes('--restart-server')) {
       await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
       // Register before releasing the held request to avoid missing the 503.
       staleFailure = page.waitForResponse(
-        (response) => response.url() === dashboardUrl && response.status() === 503,
+        (response) => response.url() === boardPollUrl && response.status() === 503,
         { timeout: 10000 },
       );
     } finally {
@@ -740,7 +744,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await expect(
-      board.getByRole('alert').filter({ hasText: 'Obsolete delayed dashboard failure' }),
+      board.getByRole('alert').filter({ hasText: 'Obsolete delayed workflow polling failure' }),
     ).toHaveCount(0);
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
