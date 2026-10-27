@@ -326,10 +326,7 @@ if (process.argv.includes('--restart-server')) {
     // so the same mounted React page can observe each backend restart.
     const activePage: Page = page;
     const navigation = activePage.getByRole('navigation', { name: 'Dashboard sections' });
-    const openScreen = async (
-      name: 'Office' | 'Workflows',
-      screen: 'office' | 'workflows',
-    ) => {
+    const openScreen = async (name: 'Office' | 'Workflows', screen: 'office' | 'workflows') => {
       await navigation.getByRole('link', { name, exact: true }).click();
       await expect(activePage.locator('.shell')).toHaveAttribute('data-screen', screen);
     };
@@ -378,10 +375,7 @@ if (process.argv.includes('--restart-server')) {
     await kill();
     const restarted = await start(port);
     assert.equal(restarted, address);
-    assert.equal(
-      await page.locator('html').getAttribute('data-restart-page'),
-      'original',
-    );
+    assert.equal(await page.locator('html').getAttribute('data-restart-page'), 'original');
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('REVIEWER — interrupted');
     await assertOrdinaryQueueVisible();
@@ -507,10 +501,7 @@ if (process.argv.includes('--restart-server')) {
     );
     await start(port);
     await reconnected;
-    assert.equal(
-      await page.locator('html').getAttribute('data-restart-page'),
-      'original',
-    );
+    assert.equal(await page.locator('html').getAttribute('data-restart-page'), 'original');
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
@@ -702,10 +693,7 @@ if (process.argv.includes('--restart-server')) {
     );
     await start(port);
     await terminalReconnect;
-    assert.equal(
-      await page.locator('html').getAttribute('data-restart-page'),
-      'original',
-    );
+    assert.equal(await page.locator('html').getAttribute('data-restart-page'), 'original');
     await expect(selector).toHaveValue(interrupted.workflowId);
     await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
