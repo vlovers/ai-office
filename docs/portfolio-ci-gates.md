@@ -477,3 +477,10 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Previous #324 SHA `25014ead381656ae877fce8f71393c99d38ff2b6` had 14 workflow runs queued, including Foundation CI run 40472049710, at inspection; no success claim.
 - Improved scanner named-step detection so it locates the list-item beginning when `id`/`if` fields appear between `- name` and `uses`, in commit [06b52925](https://github.com/vlovers/grid-atlas/commit/06b5292571e0de8b32b22c82ef2d7281dbc78559).
 - Added regression tests for metadata-bearing named checkout and rejection of credentials borrowed from a following named step, commit [e109e155](https://github.com/vlovers/grid-atlas/commit/e109e15501b476de0ed1ddcf4892b6b3db716d38). Latest #324 SHA `e109e15501b476de0ed1ddcf4892b6b3db716d38`; tests and CI on this head unverified. Privileged photo quarantine push and independent review remain outstanding. No merges, releases, ruleset or product PR changes.
+
+
+## 2026-10-27 — Grid Atlas #324 queued CI and cross-repository CI spot check
+
+- On Grid Atlas draft #324 SHA `e109e15501b476de0ed1ddcf4892b6b3db716d38`, GitHub returned 14 queued workflow runs. Foundation CI run [40472159739](https://github.com/vlovers/grid-atlas/actions/runs/40472159739) and its `foundation` job (id 122081599657) both remained queued at inspection. No scanner success or test result is established; avoid speculative follow-on code edits while execution is pending.
+- Spot-checked default-branch `.github/workflows/ci.yml` in `vlovers/rulewitness` and `vlovers/mutation-boundary`: both specify `permissions: contents: read` and use full SHA refs for checkout/setup-node. This is a **single-workflow** check, not an all-workflows audit. The same path was not found in AI Office, Estima or Last Chapter; absence of `ci.yml` does not imply absence of CI elsewhere.
+- Outstanding #324: actual Foundation CI and regression-test outcomes, privileged photo quarantine push verification, independent review. No merge, release, branch-protection, or product PR changes.
