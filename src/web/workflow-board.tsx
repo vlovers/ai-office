@@ -167,7 +167,9 @@ export function WorkflowBoard({
     [selected, taskId],
   );
   useEffect(() => {
-    if (!paused) void refresh();
+    // Selection changes and resume must load their own snapshot even if a
+    // previous generation's slow poll has not settled yet.
+    if (!paused) void refresh(true);
     const timer = paused ? undefined : setInterval(() => void refresh(), 3000);
     return () => {
       if (timer) clearInterval(timer);
