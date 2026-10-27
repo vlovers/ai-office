@@ -124,6 +124,9 @@ export function WorkflowBoard({
   const pollingInFlight = useRef(false);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  // A user selection must trigger a fresh read even when the selected ID
+  // equals the value already held in React state.
+  const [selectionRevision, setSelectionRevision] = useState(0);
   const refresh = useCallback(
     async (force = false) => {
       // Periodic polling is serial. Explicit operator refresh supersedes any
@@ -186,7 +189,7 @@ export function WorkflowBoard({
       // cannot clear the new epoch's lock, so reset it on effect teardown.
       pollingInFlight.current = false;
     };
-  }, [refresh, paused]);
+  }, [refresh, paused, selectionRevision]);
   async function refreshNow() {
     // A manual read is not a mutation: do not invoke mutate(), which would
     // run the supplied refresh and then issue a second forced refresh.
@@ -484,7 +487,9 @@ export function WorkflowBoard({
                       setTimeline(null);
                       setReports([]);
                       setDiagnostics(null);
+                      selectedRef.current = item.id;
                       setSelected(item.id);
+                      setSelectionRevision((revision) => revision + 1);
                     }}
                   >
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
@@ -536,7 +541,9 @@ export function WorkflowBoard({
                 setTimeline(null);
                 setReports([]);
                 setDiagnostics(null);
+                selectedRef.current = event.target.value;
                 setSelected(event.target.value);
+                setSelectionRevision((revision) => revision + 1);
               }}
             >
               {selected && !workflowChoices.some((item) => item.id === selected) && (
