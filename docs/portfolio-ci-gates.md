@@ -518,3 +518,10 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Prior #324 head `fbf8239893c8e78244e16e58ece717659896668a` remained Draft with 13/13 observed workflows successful; privileged photo quarantine push still untested.
 - Added `tests/editorial-photo-intake-security.test.mjs` in [commit 3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee](https://github.com/vlovers/grid-atlas/commit/3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee) to assert workflow read-only default, event-scoped write, checkout credentials disabled, GH_TOKEN restricted to quarantine step, and `gh auth setup-git` before push. These are static regressions, not an integration test of privileged git push.
 - New head CI result pending at the time of change. Independent review still required; no merge, release, ruleset or product PR edits.
+
+
+## 2026-10-27 — Grid Atlas #324 web lint failure in new security test
+
+- On #324 SHA `3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee`, Foundation CI [40476681947](https://github.com/vlovers/grid-atlas/actions/runs/40476681947) succeeded. Next.js web [40476681955](https://github.com/vlovers/grid-atlas/actions/runs/40476681955) failed in `pnpm lint` due to five ESLint `no-regex-spaces` errors in newly added `tests/editorial-photo-intake-security.test.mjs`; no application test failure was indicated by that log.
+- Replaced literal regex space runs with explicit `{N}` quantifiers and corrected the job-level indentation assertion in commits [bff0fbd2](https://github.com/vlovers/grid-atlas/commit/bff0fbd2af1a815f5438ffc9e23082403a967336) and [39e45e22](https://github.com/vlovers/grid-atlas/commit/39e45e22d7240995e73331b59451086ec4a67da8). New head CI not yet confirmed.
+- Privileged quarantine push untested; independent review pending. No merge, release, ruleset or product PR edits.
