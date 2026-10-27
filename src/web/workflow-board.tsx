@@ -122,6 +122,8 @@ export function WorkflowBoard({
   const dialog = useRef<HTMLDialogElement>(null);
   const refreshEpoch = useRef(0);
   const pollingInFlight = useRef(false);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   const refresh = useCallback(
     async (force = false) => {
       // Periodic polling is serial. Explicit operator refresh supersedes any
@@ -140,10 +142,16 @@ export function WorkflowBoard({
         setItems(workflows);
         setDashboard(current);
         setCommands(choices.commands);
-        const next = workflows.some((item) => item.id === selected)
-          ? selected
+        // Read the latest selection after the async list request. A poll started
+        // before a user switched workflows must not restore its old selection.
+        const currentSelection = selectedRef.current;
+        const next = workflows.some((item) => item.id === currentSelection)
+          ? currentSelection
           : (workflows[0]?.id ?? '');
-        setSelected(next);
+        if (next !== currentSelection) {
+          selectedRef.current = next;
+          setSelected(next);
+        }
         const [view, output, diagnosis] = next
           ? await Promise.all([
               request<Timeline>(`/workflows/${next}/timeline`),
@@ -151,7 +159,7 @@ export function WorkflowBoard({
               request<Diagnostics>(`/workflows/${next}/diagnostics`),
             ])
           : [null, [], null];
-        if (epoch !== refreshEpoch.current) return;
+        if (epoch !== refreshEpoch.current || next !== selectedRef.current) return;
         setTimeline(view);
         setReports(output);
         setDiagnostics(diagnosis);
