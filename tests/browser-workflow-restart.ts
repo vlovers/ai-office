@@ -561,7 +561,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeDisabled();
     await expect(board.getByText(/^State: blocked/)).toBeVisible();
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
-    await page.unroute(timelineUrl);
+    await page.unrouteAll({ behavior: 'wait' });
     await expect(transportAlert).toHaveCount(0, { timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await expect(createWorkflow).toBeEnabled();
@@ -583,7 +583,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(dashboardAlert).toBeVisible({ timeout: 20000 });
     await expect(createWorkflow).toBeDisabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
-    await page.unroute(dashboardUrl);
+    await page.unrouteAll({ behavior: 'wait' });
     await expect(dashboardAlert).toHaveCount(0, { timeout: 20000 });
     await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
@@ -606,7 +606,7 @@ if (process.argv.includes('--restart-server')) {
       timeout: 20000,
     });
     await expect(createWorkflow).toBeDisabled();
-    await page.unroute(dashboardUrl);
+    await page.unrouteAll({ behavior: 'wait' });
     await expect(coderChoice.locator(`option[value="${unsubmittedCoder.id}"]`)).toHaveCount(1, {
       timeout: 20000,
     });
@@ -631,7 +631,7 @@ if (process.argv.includes('--restart-server')) {
       timeout: 20000,
     });
     await expect(createWorkflow).toBeDisabled();
-    await page.unroute(dashboardUrl);
+    await page.unrouteAll({ behavior: 'wait' });
     await expect(reviewerChoice.locator(`option[value="${reviewer.id}"]`)).toHaveCount(1, {
       timeout: 20000,
     });
