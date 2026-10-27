@@ -814,6 +814,7 @@ function App() {
                             setSelected(entry.taskId);
                             setSelectedAgent(entry.agentId);
                             setResumeSessionId('');
+                            showSection('task-workspace');
                           }}
                         >
                           {dashboard.tasks.find((task) => task.id === entry.taskId)?.title} ·{' '}
