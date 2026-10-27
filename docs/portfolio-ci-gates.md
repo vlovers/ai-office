@@ -35,7 +35,6 @@ This is a **read-only planning inventory**, not proof that GitHub branch protect
 - [ ] Get explicit owner approval for changes to protection/rulesets.
 - [ ] Enable gates in small batches, verify with a test PR, and record results in #87.
 
-
 ## Governance rollout inventory (refreshed 2026-10-27)
 
 This inventory is based on repository file checks and the currently open PR search. It does not assert that any PR is approved, mergeable, or that branch protection is enabled. Do not create duplicate PRs or merge without current checks and independent review.
@@ -59,7 +58,6 @@ This inventory is based on repository file checks and the currently open PR sear
 6. Obtain explicit owner authorization before changing branch protection, merging, publishing, or deploying.
 7. After authorized integration, re-fetch files from the target branch and update this ledger with evidence.
 
-
 ## Review evidence snapshot (2026-10-27)
 
 Read-only inspection of review submissions for the principal governance PRs found no submitted review records for AI Office #88/#89, RuleWitness #85, MutationBoundary #71, Estima #16, or Last Chapter #5/#14. RuleWitness #82, MutationBoundary #68 and Estima #13 each have a COMMENTED review authored by `vlovers`; this is useful technical commentary but is not independent approval. This is a snapshot, not proof that no off-platform review occurred.
@@ -80,7 +78,6 @@ Read-only inspection of review submissions for the principal governance PRs foun
 - Resolve overlap by comparing diffs and target branches before closing or superseding any PR; do not merge automatically.
 - Branch-protection/ruleset status remains **unverified** in this workflow; no configuration changes have been made.
 
-
 ## PR overlap analysis (2026-10-27)
 
 Diff inspection confirms the following governance PRs overlap on the same canonical files. They must not be merged together without first selecting/rebasing a canonical version:
@@ -97,7 +94,6 @@ Diff inspection confirms the following governance PRs overlap on the same canoni
 3. Keep issue/security intake PRs (#83, #69, #14 Estima) separate from engineering contract consolidation so their templates and security routing can be reviewed independently.
 4. Do not merge based on this diff inventory alone. Verify current head/base, current CI, independent approval, and maintainer authorization.
 
-
 ## Shared-file overlap verified (2026-10-27)
 
 Fetched and compared the current PR diff payloads for RuleWitness #82/#85, MutationBoundary #68/#71, and Estima #13/#16. In each pair, the smaller agent-agreement PR changes only files already present in the broader foundation PR; there are **no files unique to the smaller PR**. The shared files differ in content, so this does not prove all safeguards are already present in the foundation candidate.
@@ -109,7 +105,6 @@ Fetched and compared the current PR diff payloads for RuleWitness #82/#85, Mutat
 | Estima #13 / #16 | 5 | 0 | Keep #13 as candidate; verify #16's tenant/auth/migration checks are retained in #13. |
 
 These are candidate selections based on changed-file scope only, not merge-readiness decisions. Before closing any smaller PR, compare the actual added requirements, confirm the foundation candidate is current against its base, check CI, and obtain independent approval. No PR was closed, edited, or merged in this step.
-
 
 ## Semantic comparison of overlapping governance files (2026-10-27)
 
@@ -134,7 +129,6 @@ Content comparison of the shared files found meaningful differences, not just du
 
 These findings are recommendations for the PR authors/canonical branches; no pull request has been edited or closed by this audit. Before declaring any smaller PR redundant, confirm the missing safeguards have been added to the selected foundation candidate, check the exact current base/head and CI, and obtain independent review.
 
-
 ## Candidate CI evidence rechecked (2026-10-27)
 
 Requeried PR-triggered workflow runs for the exact head SHAs recorded in the three foundation PR descriptions. These results confirm historical evidence on those SHAs only; they do **not** establish that each PR still has the same head SHA or that CI is current after subsequent changes.
@@ -147,7 +141,6 @@ Requeried PR-triggered workflow runs for the exact head SHAs recorded in the thr
 
 Review submissions previously inspected showed no non-author APPROVED review on these candidates. Workflow success does not replace independent approval, and these results do not prove required branch protection is enabled. Next gate: obtain current PR head/base SHA and current checks, then independent review on that exact diff.
 
-
 ## Independent content review notes (2026-10-27)
 
 Read-only reviewer pass over the available PR diff payloads for RuleWitness #82, MutationBoundary #68 and Estima #13 found the following concrete items to validate before acceptance. This is an assistant technical assessment, not an authorized GitHub review submission.
@@ -159,7 +152,6 @@ Read-only reviewer pass over the available PR diff payloads for RuleWitness #82,
 ### Acceptance status
 
 These are review prompts, not confirmed defects. The available tools expose diff content and historical CI runs but do not provide a reliable current PR head/base SHA snapshot here. Therefore current-head CI, current branch protection, and independent reviewer approval remain **unverified**. Do not mark these candidates accepted or merge-ready until a reviewer checks the current exact diff and GitHub shows the required approval/checks.
-
 
 ## Review status refresh (2026-10-27)
 
@@ -175,7 +167,6 @@ Review submissions were re-queried for the open governance PRs. This snapshot co
 
 Do not mark any candidate accepted/merge-ready on this evidence. Review state, current head SHA and CI must be refreshed immediately before merge; obtain required maintainer authorization. No PR was merged or closed in this pass.
 
-
 ## Grid Atlas and remaining AI Office review snapshot (2026-10-27)
 
 Rechecked review submissions for Grid Atlas #271/#272 and AI Office #88/#89. All four returned zero submitted review records. Last Chapter #5/#14 also returned zero in the previous pass. This is evidence only about submitted GitHub reviews, not private/off-platform review.
@@ -190,7 +181,6 @@ Rechecked review submissions for Grid Atlas #271/#272 and AI Office #88/#89. All
 ### Practical review handoff
 
 Before assigning reviewers, choose a reviewer account/team with repository access and no authorship conflict. This workflow has not requested a reviewer because no suitable reviewer identity was established. Do not use the repository owner as a substitute for independent review. Branch protection/ruleset enforcement remains unverified because the available connector did not expose an authoritative read action in this pass.
-
 
 ## Grid Atlas workflow-pin and issue-intake review (2026-10-27)
 
@@ -214,7 +204,6 @@ The diff adds `.github/ISSUE_TEMPLATE/bug_report.md` and `engineering_task.md`. 
 
 This is a static diff review only. No tests were run by this review pass, and current head SHA, current CI and independent approval were not verified. Do not treat either PR as accepted or merge-ready based on this inspection.
 
-
 ## Grid Atlas #272 — deeper scanner/test review (2026-10-27)
 
 Reviewed the full added `scripts/check-workflow-action-pins.mjs` and `tests/workflow-action-pins.test.mjs` from PR #272 diff. This was static inspection only; the tests were not executed in this workflow.
@@ -235,7 +224,6 @@ Reviewed the full added `scripts/check-workflow-action-pins.mjs` and `tests/work
 
 Diff review identified strong coverage but cannot establish runtime test success. No tests were executed here, current PR head/base SHA and CI freshness remain unverified, and no independent review approval was observed in the prior review-submission query. PR #272 is therefore not marked accepted or merge-ready.
 
-
 ## Grid Atlas #272 current integration blocker confirmed (2026-10-27)
 
 Fetched the live PR metadata and the current default-branch `.github/workflows/commons-original-review.yml`.
@@ -248,7 +236,6 @@ Fetched the live PR metadata and the current default-branch `.github/workflows/c
 
 This is a live metadata and default-branch file check, not a branch modification. No PR files or workflows were changed in this step.
 
-
 ## Follow-up implementation for current-main Actions gap (2026-10-27)
 
 Created a separate draft PR against current `main` rather than modifying the stale #272 branch directly:
@@ -258,7 +245,6 @@ Created a separate draft PR against current `main` rather than modifying the sta
 - Change: pin checkout/setup-node/upload-artifact to full SHA and set checkout `persist-credentials: false`; preserve read-only `contents` permission, research-only artifact behavior and fail-closed check.
 
 This is a focused integration follow-up created from current `main`, not a merge or replacement of #272. The PR is draft; tests and CI have not been run on this new head. Keep it unapproved until CI and independent review pass. The older #272 remains blocked until safely reconciled with the newer main history and all workflows are covered.
-
 
 ## 2026-10-27 01:00 — Grid Atlas #319 CI failure triage and fix
 
@@ -270,9 +256,7 @@ This is a focused integration follow-up created from current `main`, not a merge
 
 Next: inspect the completed exact-head CI; if green, check version tag-to-commit mapping and remaining security review. Then proceed to #272 branch reconciliation.
 
-
 **CI follow-up (same checkpoint):** [Foundation CI run 40417012847](https://github.com/vlovers/grid-atlas/actions/runs/40417012847) completed with **success** on exact PR #319 head `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e`. This confirms Foundation CI only, not the Commons originals research workflow or the full repository CI matrix. Independent approval and exact release-tag mapping remain unverified; keep PR draft.
-
 
 ## 2026-10-27 02:00 — Grid Atlas #272 divergence and new-workflow pin follow-up
 
@@ -286,7 +270,6 @@ Next: inspect the completed exact-head CI; if green, check version tag-to-commit
 Next: inspect CI for #322 on its exact SHA; review the privileged photo-intake checkout/push boundary, then prepare a conflict-safe #272 reconciliation preserving current-main workflows. Independent reviewer identity and branch protection enforcement remain unverified.
 
 **Exact-head CI follow-up for #322 (same checkpoint):** GitHub Actions subsequently returned **success** for all three observed PR-triggered runs on `458efdb4c942b2e9298eec747e5e9bbcb9756243`: [Foundation CI 40424061724](https://github.com/vlovers/grid-atlas/actions/runs/40424061724), [Constructor editorial F1DB identity audit 40424061748](https://github.com/vlovers/grid-atlas/actions/runs/40424061748), and [Stage editorial photo candidates 40424061656](https://github.com/vlovers/grid-atlas/actions/runs/40424061656). PR description updated with evidence. These runs do not prove every repository workflow or SHA-to-tag mapping. Independent approval and privileged checkout redesign remain outstanding; PR remains draft.
-
 
 ## 2026-10-27 03:00 — Step-scoped quarantine push credentials and upstream pin verification
 
@@ -310,7 +293,6 @@ Next: confirm exact-head Foundation CI result for #322; if green, review the wor
 - No merge, publication, ruleset/branch protection mutation, or product PR modification. Independent GitHub approval is still missing.
 
 Next: inspect the three exact-head workflow conclusions, fix any regression without weakening gates, then assess #272 integration after #319/#322 have independent review and confirmed CI.
-
 
 **04:00 CI refresh:** On exact SHA `8682ebca8a4fc8f493b64d81e50d010b7912aa29`, `Stage editorial photo candidates` completed successfully; `Foundation CI` and `Constructor editorial F1DB identity audit` remained in progress at the latest check. This does not exercise the named-branch quarantine push.
 
@@ -339,7 +321,6 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 
 **Next:** independently review #319/#322 and validate the named-branch quarantine behavior in a safe controlled scenario before merge; then reconcile #272 against current main with a full workflow inventory and current-head CI. Do not claim complete security coverage from partial workflow success.
 
-
 ## 2026-10-27 07:00 — Grid Atlas #272 YAML key-escape hardening
 
 - Verified current exact heads and PR-triggered CI: [#319](https://github.com/vlovers/grid-atlas/pull/319) remains draft at `6fd8ef4d` with Foundation CI success; [#322](https://github.com/vlovers/grid-atlas/pull/322) remains draft at `047b24aa` with three successful relevant runs; [#272](https://github.com/vlovers/grid-atlas/pull/272) was at `5dbec077` before this fix, had no exact-head PR-triggered runs, and remained nonmergeable. No submitted reviews for any of these three.
@@ -351,7 +332,6 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 
 **Next:** run Node tests and full CI on the exact #272 head once safely reconciled with `main`; preserve all newer workflow behavior and privileged photo-quarantine isolation; request independent review. No merge, branch protection change, product PR modification or release occurred in this run.
 
-
 ## 2026-10-27 08:00 — Grid Atlas #272 checkout YAML override hardening
 
 - Rechecked live PRs [#319](https://github.com/vlovers/grid-atlas/pull/319), [#322](https://github.com/vlovers/grid-atlas/pull/322), and [#272](https://github.com/vlovers/grid-atlas/pull/272). Exact-head PR-triggered runs remain Foundation CI **success** on #319 SHA `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e`, and three relevant workflows **success** on #322 SHA `047b24aafdacc83f0da13717fe2522553ccc59fc`; none has submitted reviews. This does not validate #322's skipped privileged quarantine push.
@@ -361,8 +341,6 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - #272 exact head `fb5712571a45f3ae61f49f4ec05208e00ebe31cb`: **22 ahead / 31 behind** current `main`, `mergeable=false`, no PR-triggered runs for this SHA, no independent reviews. No merge, release, branch protection/ruleset change, or product PR edit.
 - Next: reconcile the old #272 branch safely with current `main`, preserve new workflows and photo quarantine privilege separation, run real Node/CI on exact reconciled SHA, and obtain independent review. Until then do not claim complete repository-wide pin enforcement.
 
-
-
 ## 2026-10-27 09:00 — Grid Atlas #272 mixed-case checkout bypass
 
 - Read-only recheck of [#319](https://github.com/vlovers/grid-atlas/pull/319), [#322](https://github.com/vlovers/grid-atlas/pull/322), [#272](https://github.com/vlovers/grid-atlas/pull/272), their exact-head PR-triggered runs, and submitted reviews. #319 SHA `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e`: Foundation CI success; #322 SHA `047b24aafdacc83f0da13717fe2522553ccc59fc`: Foundation CI, constructor identity, and photo staging success. All three have **zero submitted reviews**; #322's privileged quarantine push remains untested.
@@ -371,13 +349,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Executed actual scanner and 24 test callbacks in a V8 harness: **24 passed, 1 filesystem-dependent test skipped, 0 failures**. This is not Node test execution or GitHub Actions CI. Exact #272 head `f9fa229de9f63ed230a6f34e2ac5250b1b3c1ca4`: **25 ahead / 31 behind** `main`, `mergeable=false`, no PR-triggered runs at that head. No independent approval.
 - Next: reconcile #272 with current `main` without dropping newer workflows or photo-quarantine privilege separation; run full Node CI and independent review before merging. No merge, release, product PR changes, or branch protection/ruleset modifications.
 
-
 ## 2026-10-27 09:38 — Grid Atlas governance status and reconciliation blocker
 
 - Rechecked exact heads: #319 `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e` (draft, mergeable, Foundation CI success); #322 `047b24aafdacc83f0da13717fe2522553ccc59fc` (draft, mergeable, Foundation CI / constructor audit / photo staging success); #272 `f9fa229de9f63ed230a6f34e2ac5250b1b3c1ca4` (not mergeable, no PR-triggered runs). All three have zero submitted reviews and no requested reviewers.
 - Fresh `main...ci/pin-foundation-actions` comparison: diverged, 25 commits ahead and 31 behind; 14 changed files, including 11 workflow files, scanner, and tests. Reconciliation must preserve newly introduced workflows and privileged photo quarantine separation. Existing #322 successes do not validate the skipped privileged quarantine push.
 - No source edits or CI reruns this pass: unsafe to blindly rebase a conflicting security branch or claim independent approval. Next: prepare a conflict-aware reconciliation in a separate branch, validate all workflow pins/permissions and Node tests, then request independent review from an authorized maintainer. No merges, releases, ruleset changes, or product PR modifications.
-
 
 ## 2026-10-27 09:56 — RuleWitness governance PR #85: concrete CI blocker and template consolidation
 
@@ -387,13 +363,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Consolidated duplicate checklists in the existing RuleWitness [governance PR #85](https://github.com/vlovers/rulewitness/pull/85), preserving real `package.json` commands, independent oracle/exit-code safeguards, release prohibition, and checked relative doc links. Commit [`f887da590bd3a667c0fac80c2911714d82ad7ac2`](https://github.com/vlovers/rulewitness/commit/f887da590bd3a667c0fac80c2911714d82ad7ac2). New exact-head runs subsequently appeared: [RuleWitness permissions review #40470365862](https://github.com/vlovers/rulewitness/actions/runs/40470365862) and [RuleWitness CI #40470366045](https://github.com/vlovers/rulewitness/actions/runs/40470366045), both **in progress** at recheck; no formatting pass claimed. Remaining formatting issues in other three docs require separate repair.
 - Next: finish RuleWitness #85 Prettier failures and verify exact-head CI; then continue Grid Atlas #272 conflict-aware reconciliation and other governance PR audits. No merges, branch protection/ruleset changes, releases, or product PR modifications.
 
-
 ## 2026-10-27 09:40 — Grid Atlas current-main reconciliation PR #324
 
 - Confirmed #319 `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e` and #322 `047b24aafdacc83f0da13717fe2522553ccc59fc` remain mergeable drafts with prior successful PR CI; #272 `f9fa229de9f63ed230a6f34e2ac5250b1b3c1ca4` remains nonmergeable and has no PR CI at that SHA. #272 was 25 ahead / 31 behind `main` at inspection.
 - Opened [draft #324](https://github.com/vlovers/grid-atlas/pull/324) from current `main` on `security/workflow-pin-guard-reconcile-20261027`, porting only the scanner (`91ff6828a03ccf9004f4de574ae611a67c5f36af`), its tests (`94a7f456f5039571017ede481cd75e42e76785e8`), and Foundation integration (`c37947d53e3f07ac37a7026f27b00ab2877ba896`). Did not overwrite newer workflow YAML or change #272.
 - Exact #324 head `c37947d53e3f07ac37a7026f27b00ab2877ba896`. CI result pending/unverified at ledger write; no independent review or privileged quarantine push evidence. Next: inspect CI on exact SHA, fix any scanner findings against current workflows in this separate PR, request independent review, and preserve #272 unchanged until reconciliation is verified. No merges/releases/ruleset changes.
-
 
 ## 2026-10-27 10:00 — Grid Atlas #324 CI failure and scoped checkout hardening
 
@@ -401,13 +375,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Inspected `race-editorial-research.yml`: read-only `contents: read`, no Git push or credential-dependent steps. Safely added `with: persist-credentials: false` to its SHA-pinned checkout in [commit 3ac282d](https://github.com/vlovers/grid-atlas/commit/3ac282d530da0f7a7f707cb69c7156a9f1423e42), in existing draft [#324](https://github.com/vlovers/grid-atlas/pull/324). No CI result yet confirmed on this new SHA.
 - Remaining: resolve all other scanner findings with verified immutable action SHAs; inspect any write-dependent checkout workflows individually rather than blindly disabling credentials; obtain passing CI on exact final SHA and independent review. No merge, product PR edits, releases, or protection changes.
 
-
 ## 2026-10-27 — Grid Atlas #324 follow-up CI and Foundation pin hardening
 
 - On #324 head `3ac282d530da0f7a7f707cb69c7156a9f1423e42`, [Race story editorial research checks 40470571755](https://github.com/vlovers/grid-atlas/actions/runs/40470571755) completed **success**; [Foundation CI 40470571893](https://github.com/vlovers/grid-atlas/actions/runs/40470571893) completed **failure** (repository-wide scanner still flags other workflows). Do not interpret the research success as full governance clearance.
 - Inspected `.github/workflows/ci.yml`: read-only `contents: read`, no Git push. In [commit 185ae36b7907edd08e90f6a1d87cf4335fa09f32](https://github.com/vlovers/grid-atlas/commit/185ae36b7907edd08e90f6a1d87cf4335fa09f32), pinned checkout to `11bd71901bbe5b1630ceea73d27597364c9af683` and setup-node to `49933ea5288caeca8642d1e84afbd3f7d6820020`, added `persist-credentials: false`.
 - CI on new exact SHA `185ae36b7907edd08e90f6a1d87cf4335fa09f32` not yet verified; no independent review. Next: handle remaining workflow findings with permissions-aware edits; validate complete Node CI and review. No merge, releases, ruleset or product PR changes.
-
 
 ## 2026-10-27 — Grid Atlas #324 four read-only workflows hardened
 
@@ -415,13 +387,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Inspected `api.yml`, `database.yml`, `web.yml`, `unified-experience.yml`: each declares `contents: read`, and no git push/commit or PR write operation was found in inspected workflow text. Updated all four on existing draft [#324](https://github.com/vlovers/grid-atlas/pull/324) to pin checkout (`11bd71901bbe5b1630ceea73d27597364c9af683`), setup-node (`49933ea5288caeca8642d1e84afbd3f7d6820020`) and upload-artifact (`ea165f8d65b6e75b540449e92b4886f43607fa02`) where used, and set checkout `persist-credentials: false`.
 - Commits: `f44a980f981f088175d0e0abfa0123446d558031` (API), `738e43896c1e5a5fbcd2964ec8d97c54174ece3b` (database), `2fe3c3ebacda64a425ca71ed94b7040a7cf73ec4` (web), `b003f3197334ed4464deb73751846867002c3050` (unified experience). CI on final SHA not yet confirmed successful; remaining workflows require credential-aware review and independent approval. No merges, product PR edits, releases, or branch-protection changes.
 
-
 ## 2026-10-27 — Grid Atlas #324 additional read-only workflow hardening
 
 - On #324 prior SHA `b003f3197334ed4464deb73751846867002c3050`, exact-head PR runs: Database integration `40470892969` **success**, Race story editorial research `40470892349` **success**, Foundation CI `40470892329` **failure**; Historical API, Next.js web, Unified archive experience still in progress at inspection. Do not claim these pending runs passed.
 - Inspected three more `contents: read` workflows without detected git push/commit or PR write operations, and pinned their checkout/setup-node/upload-artifact references to full SHAs with checkout `persist-credentials: false` in existing draft [#324](https://github.com/vlovers/grid-atlas/pull/324): `f1db-audit.yml` commit `b9eeae3fd79645ad3687895a1b678242e79d5a7f`, `driver-biography-batch2.yml` commit `c043356133a92a3cdc4921b0f9243e8cd0cfeb2a`, `commons-original-sha256-research.yml` commit `d8f3ac132fe0ac232f6e75f07234529429326511`.
 - Exact new head `d8f3ac132fe0ac232f6e75f07234529429326511`; CI on this head not yet verified. Remaining mutable actions and any write-dependent checkout require case-by-case review, full Foundation CI, independent approval. No merges/releases/ruleset or product PR changes.
-
 
 ## 2026-10-27 — Grid Atlas #324 editorial/import/archive workflow hardening
 
@@ -429,13 +399,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Inspected `editorial-release.yml`, `f1db-import.yml`, `real-archive.yml`: declared `contents: read`, with no git push/commit or PR write operations detected in their workflow text. In existing draft [#324](https://github.com/vlovers/grid-atlas/pull/324), pinned applicable checkout/setup-node/upload-artifact refs to immutable SHAs and added `persist-credentials: false` to checkout. Commits: `94b9bf76d15c09c048d84da27d29774bd54b5288`, `a5fee70dc169f71d08f41004d7be3d3bd8a38595`, `0d70f51e21062496961b5657926f45834a22f81c`.
 - New exact head `0d70f51e21062496961b5657926f45834a22f81c`. CI on this head pending/unverified; remaining workflow security findings, full Foundation CI, and independent review must be checked before readiness. No merge, release, product PR changes, or branch protection edits.
 
-
 ## 2026-10-27 — Grid Atlas #324 scanner failure and duplicate mapping correction
 
 - Exact head `0d70f51e21062496961b5657926f45834a22f81c`: Foundation CI run [40471127392](https://github.com/vlovers/grid-atlas/actions/runs/40471127392) **failure**; logs still flag mutable action references and checkout persistence in `commons-original-review.yml`, `constructor-editorial-audit.yml`, `editorial-photo-intake.yml`, plus checkout persistence in several research workflows.
 - Inspection found a duplicate `with:` mapping introduced by earlier batch editing in `commons-original-sha256-research.yml`. Removed duplicate in [commit 062f3bd](https://github.com/vlovers/grid-atlas/commit/062f3bd9621c92be78c84aeb7b5dd766d6489d39). Added `persist-credentials: false` to driver research checkout in [commit ec3b48f](https://github.com/vlovers/grid-atlas/commit/ec3b48febcd6fad1b83bb3a6377ff934eb3e72b0).
 - Note: `constructor-outsider-research.yml` already has `with: persist-credentials: false` on a named checkout step but scanner flagged it; requires investigation for false positives before further broad changes. CI on new SHA `ec3b48febcd6fad1b83bb3a6377ff934eb3e72b0` unverified. No merges, releases, ruleset edits, or independent approval.
-
 
 ## 2026-10-27 — Grid Atlas #324 named-step checkout scanner regression
 
@@ -443,13 +411,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Added two regression tests for named checkout with `persist-credentials: false` accepted and `true` rejected in [commit 27ed5159ff5a61ed5a6504190ae5ec677cf78815](https://github.com/vlovers/grid-atlas/commit/27ed5159ff5a61ed5a6504190ae5ec677cf78815). This fixes scanner behavior; it is not an exemption for mutable refs or retained credentials.
 - Latest exact #324 head `27ed5159ff5a61ed5a6504190ae5ec677cf78815`; CI outcome on this head not yet confirmed. Need inspect full Node test suite and remaining real workflow findings, then independent review. No merge, release, ruleset or product PR change.
 
-
 ## 2026-10-27 — Grid Atlas #324 Commons and constructor audit pinning
 
 - Exact #324 SHA `27ed5159ff5a61ed5a6504190ae5ec677cf78815`: 12 PR workflow runs queued at initial inspection; no claim of green scanner tests. Updated `commons-original-review.yml` with immutable checkout/setup-node/upload-artifact SHAs and `persist-credentials: false` in commit `af17379849203a31b6a2ec5bde10e471ab1d964e`; updated `constructor-editorial-audit.yml` with immutable checkout/upload-artifact SHAs while preserving existing disabled credential persistence in commit `796cfbb93429d194de0270b61d072207bc128c6f`.
 - Inspected `editorial-photo-intake.yml` separately: `contents: write`, a conditional push path commits quarantine removal to `editorial/people-who-changed-f1-20261025` using `git push origin`. Disabling checkout credentials without designing a safe scoped write-auth flow would break this safety cleanup. Left privileged workflow unchanged; requires deliberate credentials and least-privilege design plus privileged push test, not bulk rewrite.
 - Current exact #324 head `796cfbb93429d194de0270b61d072207bc128c6f`; CI on new head unverified. Need finish scanner fixes, verify full CI and independent review. No merges, releases, ruleset or product PR edits.
-
 
 ## 2026-10-27 — Grid Atlas #324 privileged photo-intake checkout credentials isolation
 
@@ -457,13 +423,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - In existing draft [#324](https://github.com/vlovers/grid-atlas/pull/324), commit [936f158c](https://github.com/vlovers/grid-atlas/commit/936f158c6c145decc1cc9ddb88caf236b7e2089d) pins checkout/setup-node/upload-artifact to full immutable SHAs, sets checkout `persist-credentials: false`, and uses `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` scoped to the quarantine cleanup step with `gh auth setup-git` immediately before `git push`. Other steps do not receive this explicit token env var. This does **not** demonstrate a real privileged push success.
 - Exact new head `936f158c6c145decc1cc9ddb88caf236b7e2089d`; CI on this SHA and privileged quarantine push not yet verified. Need inspect CI/scanner, independently review token scope and push conditions, and test privileged cleanup in safe controlled conditions. No merge, releases, branch protection or product PR changes.
 
-
 ## 2026-10-27 — Grid Atlas #324 named-step regex escape correction
 
 - Re-inspected `scripts/check-workflow-action-pins.mjs` and found a concrete bug introduced in the named-step scanner change: the JavaScript regex literals contained `\\s` (matching a literal backslash plus `s`) instead of `\s` (whitespace). Thus prior claimed named-step support was not yet actually effective.
 - Corrected the two regex occurrences in [commit 832ecc85f5e704c3bf43b17f624d9234964cad3b](https://github.com/vlovers/grid-atlas/commit/832ecc85f5e704c3bf43b17f624d9234964cad3b), on existing draft [#324](https://github.com/vlovers/grid-atlas/pull/324). Existing regression tests should now exercise the intended logic; their passing result is not yet verified.
 - At initial inspection of preceding SHA `936f158c6c145decc1cc9ddb88caf236b7e2089d`, 14 workflow runs were queued. CI and privileged photo quarantine push still unverified on latest head; independent review pending. No merge, release, ruleset or product PR changes.
-
 
 ## 2026-10-27 — Grid Atlas #324 named-step scan boundary fix
 
@@ -471,13 +435,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Updated step boundary to use the actual list-item indentation, and keep sibling `with:` inside the named step, in [commit 25014ead381656ae877fce8f71393c99d38ff2b6](https://github.com/vlovers/grid-atlas/commit/25014ead381656ae877fce8f71393c99d38ff2b6). Existing named-step acceptance/rejection tests are intended to cover this; their CI success not yet verified.
 - At SHA `832ecc85f5e704c3bf43b17f624d9234964cad3b`, 14 CI workflows were queued including Foundation CI run 40471949098. Latest #324 head `25014ead381656ae877fce8f71393c99d38ff2b6`. Full CI and privileged photo quarantine push remain unverified; independent review pending. No merge, release, ruleset or product PR edits.
 
-
 ## 2026-10-27 — Grid Atlas #324 named checkout metadata and step isolation
 
 - Previous #324 SHA `25014ead381656ae877fce8f71393c99d38ff2b6` had 14 workflow runs queued, including Foundation CI run 40472049710, at inspection; no success claim.
 - Improved scanner named-step detection so it locates the list-item beginning when `id`/`if` fields appear between `- name` and `uses`, in commit [06b52925](https://github.com/vlovers/grid-atlas/commit/06b5292571e0de8b32b22c82ef2d7281dbc78559).
 - Added regression tests for metadata-bearing named checkout and rejection of credentials borrowed from a following named step, commit [e109e155](https://github.com/vlovers/grid-atlas/commit/e109e15501b476de0ed1ddcf4892b6b3db716d38). Latest #324 SHA `e109e15501b476de0ed1ddcf4892b6b3db716d38`; tests and CI on this head unverified. Privileged photo quarantine push and independent review remain outstanding. No merges, releases, ruleset or product PR changes.
-
 
 ## 2026-10-27 — Grid Atlas #324 queued CI and cross-repository CI spot check
 
@@ -485,13 +447,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Spot-checked default-branch `.github/workflows/ci.yml` in `vlovers/rulewitness` and `vlovers/mutation-boundary`: both specify `permissions: contents: read` and use full SHA refs for checkout/setup-node. This is a **single-workflow** check, not an all-workflows audit. The same path was not found in AI Office, Estima or Last Chapter; absence of `ci.yml` does not imply absence of CI elsewhere.
 - Outstanding #324: actual Foundation CI and regression-test outcomes, privileged photo quarantine push verification, independent review. No merge, release, branch-protection, or product PR changes.
 
-
 ## 2026-10-27 — Grid Atlas #324 Foundation CI actual test failure
 
 - On draft #324 SHA `e109e15501b476de0ed1ddcf4892b6b3db716d38`, Foundation CI [run 40472159739](https://github.com/vlovers/grid-atlas/actions/runs/40472159739) completed **failure**. The failing log from job 122081599657 identified `tests/commons-original-review-workflow.test.mjs:16`, which still asserted mutable `actions/upload-artifact@v4` after workflow was hardened to immutable SHA `ea165f8d65b6e75b540449e92b4886f43607fa02`. This is an obsolete test expectation, not evidence of an unpinned action in the updated workflow.
 - Updated test to assert the pinned upload-artifact SHA in [commit eac862cf7e2492fdeb78a5ed2977d47b0431ec2d](https://github.com/vlovers/grid-atlas/commit/eac862cf7e2492fdeb78a5ed2977d47b0431ec2d). Previous same-SHA runs Editorial release preflight, Historical API, and Driver biography batch 2 completed success; others were queued at inspection. New head CI not yet verified.
 - Privileged photo quarantine push and independent review still outstanding. No merge, release, ruleset or product PR edits.
-
 
 ## 2026-10-27 — Grid Atlas #324 Foundation CI green; photo intake least privilege
 
@@ -499,12 +459,10 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Reviewed `.github/workflows/editorial-photo-intake.yml`: workflow-level `permissions: contents: write` was granted on PR/manual discovery runs despite write being needed only for quarantine push. In [commit fbf8239893c8e78244e16e58ece717659896668a](https://github.com/vlovers/grid-atlas/commit/fbf8239893c8e78244e16e58ece717659896668a), set workflow default `contents: read` and job `contents: ${{ github.event_name == 'push' && 'write' || 'read' }}`. This retains write for push-triggered quarantine and read for PR/manual. The actual privileged git push remains untested; new head CI not yet verified.
 - Independent review still pending. No merges, releases, ruleset or product PR edits.
 
-
 ## 2026-10-27 — Grid Atlas #324 all observed CI runs green
 
 - Draft #324 head `fbf8239893c8e78244e16e58ece717659896668a`: GitHub returned **13 completed successful** workflow runs, with zero failures in that returned set. Foundation CI [40474049515](https://github.com/vlovers/grid-atlas/actions/runs/40474049515), Next.js web, Historical API, Database integration, F1DB import/audit, editorial release preflight, biography/story and constructor checks all succeeded.
 - `Stage editorial photo candidates` was **not** among the 13 runs returned for this commit; its absence is not evidence that the privileged quarantine push was tested. The push-only quarantine branch scenario remains explicitly unverified. Independent review remains pending; keep draft, do not merge or alter branch protection.
-
 
 ## 2026-10-27 — Grid Atlas #324 review handoff prepared
 
@@ -512,13 +470,11 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Updated PR description with 13/13 successful observed CI runs, explicit missing `Stage editorial photo candidates` run, review checklist covering YAML scanner and scoped photo quarantine push, and a do-not-merge gate until independent review plus privileged push verification. Metadata-only update; head SHA unchanged, PR remains Draft.
 - No merges, releases, ruleset, product PR or privileged push changes.
 
-
 ## 2026-10-27 — Grid Atlas #324 photo intake static security regressions
 
 - Prior #324 head `fbf8239893c8e78244e16e58ece717659896668a` remained Draft with 13/13 observed workflows successful; privileged photo quarantine push still untested.
 - Added `tests/editorial-photo-intake-security.test.mjs` in [commit 3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee](https://github.com/vlovers/grid-atlas/commit/3e884be5ecb1a8f44f6b7b1635421540e1a9a0ee) to assert workflow read-only default, event-scoped write, checkout credentials disabled, GH_TOKEN restricted to quarantine step, and `gh auth setup-git` before push. These are static regressions, not an integration test of privileged git push.
 - New head CI result pending at the time of change. Independent review still required; no merge, release, ruleset or product PR edits.
-
 
 ## 2026-10-27 — Grid Atlas #324 web lint failure in new security test
 
@@ -526,12 +482,10 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Replaced literal regex space runs with explicit `{N}` quantifiers and corrected the job-level indentation assertion in commits [bff0fbd2](https://github.com/vlovers/grid-atlas/commit/bff0fbd2af1a815f5438ffc9e23082403a967336) and [39e45e22](https://github.com/vlovers/grid-atlas/commit/39e45e22d7240995e73331b59451086ec4a67da8). New head CI not yet confirmed.
 - Privileged quarantine push untested; independent review pending. No merge, release, ruleset or product PR edits.
 
-
 ## 2026-10-27 — Grid Atlas #324 lint recovery confirmed, integration pending
 
 - On draft #324 head `39e45e22d7240995e73331b59451086ec4a67da8`, 11 of 13 returned workflows completed **success**, including [Foundation CI run 40476990229](https://github.com/vlovers/grid-atlas/actions/runs/40476990229). Next.js web run [40476990255](https://github.com/vlovers/grid-atlas/actions/runs/40476990255) remained **in_progress** at `Test desktop and mobile archive flows over HTTP and PostgreSQL`, proving prior ESLint lint gate passed. Pinned F1DB real-archive acceptance was also in progress.
 - Do not mark entire CI green until both complete. Photo quarantine privileged push and independent review remain unverified. No merge, release, ruleset or product PR changes.
-
 
 ## 2026-10-27 — Governance audit: #319 exact SHA checks and cross-repo CI blockers
 
@@ -540,20 +494,17 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Cross-repo draft governance CI at inspected heads: [AI Office #88](https://github.com/vlovers/ai-office/pull/88) **success** (run 40309766851); [#89](https://github.com/vlovers/ai-office/pull/89) **in progress** (40477508100); [RuleWitness #85](https://github.com/vlovers/rulewitness/pull/85) **failure** in `npm run format:check` (run 40470366045: `AGENTS.md`, `docs/engineering/DEFINITION_OF_DONE.md`, `docs/engineering/REVIEW_POLICY.md`), permissions review **success** (40470365862); [MutationBoundary #71](https://github.com/vlovers/mutation-boundary/pull/71) **success** (40412935127); [Estima #16](https://github.com/vlovers/estima/pull/16) both Bun and PostgreSQL **success** (40412945794, 40412945692); [Last Chapter #14](https://github.com/vlovers/last-chapter/pull/14) Browser QA **success** (40308469717), CI **failure** (40308469474: eight existing narrative docs failed Prettier). All inspected governance PRs lacked submitted independent reviews. Last Chapter #14 targets game branch, not `main`; no game/product changes made.
 - Verified AGENTS relative links to engineering docs exist on RuleWitness, MutationBoundary and Estima governance branches. Branch protection/ruleset configuration remains **not verified** (no read evidence obtained), not asserted absent. **Next:** fix RuleWitness #85 formatting with its repo's Prettier version, recheck exact-head CI and independent reviewer availability; investigate Last Chapter's unrelated formatting without editing product PRs. No merge, release, ruleset, or branch protection changes.
 
-
 ## 2026-10-27 — Last Chapter governance baseline draft #27
 
 - Confirmed default branch `main`; no `CODEOWNERS` in root, `.github/`, or `docs/`, no `.github/pull_request_template.md` or root `PULL_REQUEST_TEMPLATE.md`, and no `SECURITY.md` at root or `.github/` on main at inspection.
 - Created [Draft PR #27](https://github.com/vlovers/last-chapter/pull/27), branch `docs/governance-baseline-20261027`, head `7126829a9ba6c78f81fba439dfb92083f76acd78`, adding a non-SLA, private-disclosure-oriented `SECURITY.md` and PR template with CI, manual narrative QA, save compatibility, media rights and independent review checks. No CODEOWNERS added without verified owner/reviewer identities.
 - CI and independent review pending. No merges, releases, branch protection or product PR changes.
 
-
 ## 2026-10-27 — Grid Atlas #324 CI complete; Estima governance draft #17
 
 - Grid Atlas draft [#324](https://github.com/vlovers/grid-atlas/pull/324) SHA `39e45e22d7240995e73331b59451086ec4a67da8`: **13/13 observed workflow runs completed success**, including [Next.js web 40476990255](https://github.com/vlovers/grid-atlas/actions/runs/40476990255) and [real-archive acceptance 40476990349](https://github.com/vlovers/grid-atlas/actions/runs/40476990349). This does not verify privileged photo quarantine push or independent review.
 - Verified Estima default branch `develop`, no root or `.github/SECURITY.md`, no standard PR template at `.github/pull_request_template.md` or root `PULL_REQUEST_TEMPLATE.md`. Created [Draft PR #17](https://github.com/vlovers/estima/pull/17) head `c1f88439bc2e2075db0209cd89c9cd4105655a49` adding security disclosure guidance and a PR template covering auth, tenant isolation, migrations, CI and rollback. No product code changed.
 - Last Chapter draft #27 still had no commit workflow runs returned when checked. Estima #17 CI and independent review pending. No merges, releases, ruleset or product PR changes.
-
 
 ## 2026-10-27 — Grid Atlas workflow coverage gap closed in draft #330
 
