@@ -522,6 +522,9 @@ export function WorkflowBoard({
               value={selected}
               onChange={(event) => {
                 refreshEpoch.current++;
+                // A different selection invalidates the operator's verified snapshot.
+                // Keep privileged actions fail-closed until its own timeline loads.
+                setRefreshRequired(true);
                 setTimeline(null);
                 setReports([]);
                 setDiagnostics(null);
