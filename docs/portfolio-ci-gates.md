@@ -498,3 +498,9 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Foundation CI [run 40473871605](https://github.com/vlovers/grid-atlas/actions/runs/40473871605) **success** on #324 SHA `eac862cf7e2492fdeb78a5ed2977d47b0431ec2d` after correcting stale upload-artifact test expectation. Thirteen other workflows on that SHA were queued at inspection.
 - Reviewed `.github/workflows/editorial-photo-intake.yml`: workflow-level `permissions: contents: write` was granted on PR/manual discovery runs despite write being needed only for quarantine push. In [commit fbf8239893c8e78244e16e58ece717659896668a](https://github.com/vlovers/grid-atlas/commit/fbf8239893c8e78244e16e58ece717659896668a), set workflow default `contents: read` and job `contents: ${{ github.event_name == 'push' && 'write' || 'read' }}`. This retains write for push-triggered quarantine and read for PR/manual. The actual privileged git push remains untested; new head CI not yet verified.
 - Independent review still pending. No merges, releases, ruleset or product PR edits.
+
+
+## 2026-10-27 — Grid Atlas #324 all observed CI runs green
+
+- Draft #324 head `fbf8239893c8e78244e16e58ece717659896668a`: GitHub returned **13 completed successful** workflow runs, with zero failures in that returned set. Foundation CI [40474049515](https://github.com/vlovers/grid-atlas/actions/runs/40474049515), Next.js web, Historical API, Database integration, F1DB import/audit, editorial release preflight, biography/story and constructor checks all succeeded.
+- `Stage editorial photo candidates` was **not** among the 13 runs returned for this commit; its absence is not evidence that the privileged quarantine push was tested. The push-only quarantine branch scenario remains explicitly unverified. Independent review remains pending; keep draft, do not merge or alter branch protection.
