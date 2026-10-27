@@ -296,7 +296,7 @@ export function WorkflowBoard({
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
         )}
-        <button className="secondary" disabled={loading} onClick={() => void mutate(refresh)}>
+        <button className="secondary" disabled={loading} onClick={() => void refreshNow()}>
           Refresh workflow
         </button>
       </div>
