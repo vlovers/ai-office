@@ -484,6 +484,9 @@ export function WorkflowBoard({
                     aria-current={item.id === selected ? 'true' : undefined}
                     onClick={() => {
                       refreshEpoch.current++;
+                      // Queue selection is also a checkpoint switch: require a
+                      // successful fresh read before privileged actions resume.
+                      setRefreshRequired(true);
                       setTimeline(null);
                       setReports([]);
                       setDiagnostics(null);
