@@ -313,3 +313,13 @@ Next: inspect the three exact-head workflow conclusions, fix any regression with
 
 
 **04:00 CI refresh:** On exact SHA `8682ebca8a4fc8f493b64d81e50d010b7912aa29`, `Stage editorial photo candidates` completed successfully; `Foundation CI` and `Constructor editorial F1DB identity audit` remained in progress at the latest check. This does not exercise the named-branch quarantine push.
+
+## 2026-10-27 05:00 — Fix photo quarantine trigger coverage
+
+- Rechecked Grid Atlas [#319](https://github.com/vlovers/grid-atlas/pull/319) (draft, mergeable, head `6fd8ef4d`), [#322](https://github.com/vlovers/grid-atlas/pull/322) (draft, mergeable), and [#272](https://github.com/vlovers/grid-atlas/pull/272) (open, nonmergeable, head `5dbec077`). The #272 branch is currently **18 commits ahead / 31 behind** main, so the old workflow set cannot be considered comprehensive.
+- Verified the three exact-head PR-triggered runs for previous #322 SHA `8682ebca8a4fc8f493b64d81e50d010b7912aa29` all completed **success**: [Foundation CI 40436257526](https://github.com/vlovers/grid-atlas/actions/runs/40436257526), [Constructor identity 40436257589](https://github.com/vlovers/grid-atlas/actions/runs/40436257589), and [Stage editorial photo candidates 40436257528](https://github.com/vlovers/grid-atlas/actions/runs/40436257528). These do **not** validate subsequent changes.
+- Found a real quarantine bypass in #322: `push.paths` excluded the two public image files the quarantine job removes. Pushing only an unreviewed image would not trigger quarantine. Commit `ebb071fed6d622cb7b4906e9a9e38a9e0ebc91a8` adds both image paths to the branch-restricted push trigger. Commit `b76f34f31f87b6d2e0d49866f5b3722b19c8786b` adds regression coverage for the trigger/removal path correspondence and nonpersistent stage checkout credentials.
+- Updated #322 description with the cause, fix, evidence and limitations. No PR-triggered runs were returned yet for new head `b76f34f31f87b6d2e0d49866f5b3722b19c8786b` at the time of this check; do not mark new-head CI green. Actual authenticated quarantine push on the editorial branch and independent review remain outstanding.
+- No merge, release, branch protection/ruleset change or product PR modification.
+
+Next: verify current-head CI for #322, then safely reconcile #272 with main after #319/#322 have independent review and validated checks. Do not disable existing accessibility gates or overwrite newer workflow behavior.
