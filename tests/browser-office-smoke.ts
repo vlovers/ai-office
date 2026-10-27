@@ -282,7 +282,7 @@ try {
   });
   // Disconnected actions must remain disabled in both workspaces. The Office
   // inspector's "Assign a task" button is not mounted on the Tasks screen.
-  await expect(page.getByRole('button', { name: 'Create task', exact: true })).toBeDisabled();
+  await expect(page.locator('#compose').getByRole('button', { name: /^Create task/ })).toBeDisabled();
   await navigation.getByRole('link', { name: 'Office' }).click();
   await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
   await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();

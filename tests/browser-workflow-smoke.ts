@@ -196,6 +196,11 @@ try {
     'aria-pressed',
     'false',
   );
+  // A newly mounted board can default to the newer workflow. Explicitly
+  // load the completed one first so switching to otherId always triggers a request.
+  await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
+  await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
+  await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
