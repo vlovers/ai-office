@@ -470,3 +470,10 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Inspected scanner after whitespace regex correction and found a second bug: its step-slicing loop stopped at `with:` when `uses:` and `with:` were siblings within `- name:` step. Thus named checkout credentials were still omitted from analysis.
 - Updated step boundary to use the actual list-item indentation, and keep sibling `with:` inside the named step, in [commit 25014ead381656ae877fce8f71393c99d38ff2b6](https://github.com/vlovers/grid-atlas/commit/25014ead381656ae877fce8f71393c99d38ff2b6). Existing named-step acceptance/rejection tests are intended to cover this; their CI success not yet verified.
 - At SHA `832ecc85f5e704c3bf43b17f624d9234964cad3b`, 14 CI workflows were queued including Foundation CI run 40471949098. Latest #324 head `25014ead381656ae877fce8f71393c99d38ff2b6`. Full CI and privileged photo quarantine push remain unverified; independent review pending. No merge, release, ruleset or product PR edits.
+
+
+## 2026-10-27 — Grid Atlas #324 named checkout metadata and step isolation
+
+- Previous #324 SHA `25014ead381656ae877fce8f71393c99d38ff2b6` had 14 workflow runs queued, including Foundation CI run 40472049710, at inspection; no success claim.
+- Improved scanner named-step detection so it locates the list-item beginning when `id`/`if` fields appear between `- name` and `uses`, in commit [06b52925](https://github.com/vlovers/grid-atlas/commit/06b5292571e0de8b32b22c82ef2d7281dbc78559).
+- Added regression tests for metadata-bearing named checkout and rejection of credentials borrowed from a following named step, commit [e109e155](https://github.com/vlovers/grid-atlas/commit/e109e15501b476de0ed1ddcf4892b6b3db716d38). Latest #324 SHA `e109e15501b476de0ed1ddcf4892b6b3db716d38`; tests and CI on this head unverified. Privileged photo quarantine push and independent review remain outstanding. No merges, releases, ruleset or product PR changes.
