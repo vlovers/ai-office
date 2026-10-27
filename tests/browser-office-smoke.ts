@@ -223,10 +223,16 @@ try {
   await page.getByLabel('What should the agent work on?').fill('Review later');
   await page.getByRole('button', { name: 'Create task' }).click();
   await page.getByRole('button', { name: 'Start task' }).click();
-  const queue = page.getByRole('region', { name: 'Live task queue' });
+  // The submitted queue belongs to Office; selecting an entry must open
+  // its task workspace rather than leave the user on the overview.
+  await navigation.getByRole('link', { name: 'Office' }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'office');
+  const queue = page.getByRole('region', { name: 'Submitted queue' });
   await expect(queue).toContainText('FIXTURE · submitted queue');
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute('data-state', 'queued');
   await queue.getByRole('button', { name: /FIXTURE · submitted queue/ }).click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-screen', 'tasks');
+  await expect(page.locator('#task-workspace')).toBeVisible();
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   await capture('queued');
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
