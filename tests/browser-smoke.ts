@@ -18,6 +18,19 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
+  const workspaceLinks = {
+    office: '#overview',
+    tasks: '#task-history',
+    workflows: '#workflow-timeline',
+    team: '#agent-studio',
+    settings: '#repositories',
+  } as const;
+  const openScreen = async (screen: keyof typeof workspaceLinks) => {
+    await page
+      .locator(`nav[aria-label="Dashboard sections"] a[href="${workspaceLinks[screen]}"]`)
+      .click();
+    await expect(page.locator('.shell')).toHaveAttribute('data-screen', screen);
+  };
   const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
   await page.getByRole('heading', { name: 'Office overview_' }).waitFor();
   await expect(page.getByRole('region', { name: 'Get started' })).toBeVisible();
@@ -26,7 +39,8 @@ try {
     path: join(screenshotDir, 'ai-office-phosphor-onboarding.png'),
     fullPage: true,
   });
-  await page.getByTestId('codex-connection-status').filter({ hasText: 'Available' }).waitFor();
+  // Connection diagnostics now live on Settings; readiness remains in the DOM.
+  await expect(page.getByTestId('codex-connection-status')).toHaveText('Available');
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to mission control' })).toBeFocused();
   await page.keyboard.press('Enter');
@@ -130,7 +144,10 @@ try {
   assert.equal(env.store.tasks().length, 0, 'Workstation invented a task');
   await page.getByRole('link', { name: 'Register local worktree' }).click();
   await expect(page.getByLabel('Absolute repository path')).toBeFocused();
+  await openScreen('office');
   await crt.click();
+  await openScreen('settings');
+  await expect(page.getByTestId('codex-connection-status')).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.getByLabel('Authentication mode').selectOption('api-key');
   await page
@@ -141,7 +158,9 @@ try {
   await page.getByTestId('codex-connection-status').filter({ hasText: 'Available' }).waitFor();
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await openScreen('office');
   await expect(page.getByRole('region', { name: 'Get started' })).toHaveCount(0);
+  await openScreen('tasks');
   await page.getByLabel('Task title').fill('Review the example project');
   await page.getByLabel('What should the agent work on?').fill('Review the README.');
   await page.getByRole('button', { name: 'Create task' }).click();
@@ -158,6 +177,7 @@ try {
     path: join(screenshotDir, 'ai-office-phosphor-desktop.png'),
     fullPage: true,
   });
+  await openScreen('office');
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.locator('.result')).toContainText('Reviewed the disposable repository');
   await page.getByRole('button', { name: 'Office overview', exact: true }).click();
@@ -202,6 +222,7 @@ try {
     'data-state',
     'thinking',
   );
+  await openScreen('office');
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Office overview', exact: true })).toHaveAttribute(
@@ -239,9 +260,10 @@ try {
     'aria-pressed',
     'true',
   );
-  await page.locator('nav a[href="#agent"]').click();
+  await openScreen('office');
   await expect(page.locator('#agent')).toBeVisible();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
+  await openScreen('tasks');
   await createTask('Failed review', 'FAIL_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('failed');
@@ -254,14 +276,17 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskA = env.store.tasks().find((task) => task.title === 'Agent A concurrent')!;
+  await openScreen('settings');
   await page.getByLabel('Absolute repository path').fill(secondEnv.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await openScreen('tasks');
   await page.getByLabel('Assign to agent').selectOption('codex-2');
   await createTask('Agent B concurrent', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
-  // Reload resets history disclosure. Reopen it before checking persisted activity.
+  // The activity disclosure and inspector belong to the Office screen.
+  await openScreen('office');
   const history = page.getByRole('button', { name: /Recent task activity/ });
   if ((await history.getAttribute('aria-expanded')) === 'false') await history.click();
   await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText(
@@ -298,13 +323,17 @@ try {
   assert.equal(env.store.task(taskA.id)?.state, 'running');
   assert.equal(env.store.task(taskB.id)?.state, 'running');
   // A queued task is visible/cancellable without interrupting B's active task.
+  await openScreen('tasks');
   await createTask('Agent B queue', 'Review later');
   await page.getByRole('button', { name: 'Start task' }).click();
+  await openScreen('office');
   await expect(page.getByRole('region', { name: 'Submitted queue' })).toContainText(
     'Agent B queue',
   );
+  await openScreen('tasks');
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
+  await openScreen('office');
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
   await expect(page.locator('#task-workspace')).toContainText('Agent A concurrent');
   await page.getByRole('button', { name: /Stop agent/ }).click();
@@ -317,8 +346,10 @@ try {
   await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
   await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
+  await openScreen('tasks');
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   await page.setViewportSize({ width: 1440, height: 1100 });
+  await openScreen('office');
   await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
