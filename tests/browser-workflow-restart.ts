@@ -322,6 +322,20 @@ if (process.argv.includes('--restart-server')) {
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.goto(address);
+    // The unified UI opens Office first. Enter Workflows without reloading
+    // so the same mounted React page can observe each backend restart.
+    const navigation = page.getByRole('navigation', { name: 'Dashboard sections' });
+    const openScreen = async (
+      name: 'Office' | 'Workflows',
+      screen: 'office' | 'workflows',
+    ) => {
+      await navigation.getByRole('link', { name, exact: true }).click();
+      await expect(page.locator('.shell')).toHaveAttribute('data-screen', screen);
+    };
+    await page.evaluate(() => {
+      document.documentElement.dataset.restartPage = 'original';
+    });
+    await openScreen('Workflows', 'workflows');
     const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
     const selector = board.getByLabel('Workflow', { exact: true });
     await expect(selector.locator('option')).toHaveCount(5, { timeout: 15000 });
@@ -331,24 +345,42 @@ if (process.argv.includes('--restart-server')) {
     await selector.selectOption(interrupted.workflowId);
     await expect(board.getByText(/^State: active/)).toBeVisible();
     await expect(board).toContainText('REVIEWER — running');
-    const liveQueue = page.getByRole('region', { name: 'Live task queue' });
-    await expect(liveQueue).toContainText('Approved Coder queued before restart');
-    const assertOrdinaryQueueVisible = async () => {
-      await expect(liveQueue.locator('li')).toHaveCount(3, { timeout: 20000 });
-      for (const [index, title] of [
-        'Queued session continuation',
-        'Ordinary first',
-        'Ordinary second',
-      ].entries()) {
-        await expect(liveQueue.locator('li').nth(index)).toContainText(title);
+    const liveQueue = page.getByRole('region', { name: 'Submitted queue' });
+    const inspectOfficeQueue = async (check: () => Promise<void>) => {
+      await openScreen('Office', 'office');
+      await expect(liveQueue).toBeVisible();
+      try {
+        await check();
+      } finally {
+        await openScreen('Workflows', 'workflows');
+        await expect(board).toBeVisible();
       }
-      await expect(liveQueue).not.toContainText('Approved Coder queued before restart');
+    };
+    await inspectOfficeQueue(async () => {
+      await expect(liveQueue).toContainText('Approved Coder queued before restart');
+    });
+    const assertOrdinaryQueueVisible = async () => {
+      await inspectOfficeQueue(async () => {
+        await expect(liveQueue.locator('li')).toHaveCount(3, { timeout: 20000 });
+        for (const [index, title] of [
+          'Queued session continuation',
+          'Ordinary first',
+          'Ordinary second',
+        ].entries()) {
+          await expect(liveQueue.locator('li').nth(index)).toContainText(title);
+        }
+        await expect(liveQueue).not.toContainText('Approved Coder queued before restart');
+      });
     };
 
     // No reload: the same React page must observe a real process death and new backend.
     await kill();
     const restarted = await start(port);
     assert.equal(restarted, address);
+    assert.equal(
+      await page.locator('html').getAttribute('data-restart-page'),
+      'original',
+    );
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('REVIEWER — interrupted');
     await assertOrdinaryQueueVisible();
@@ -475,6 +507,10 @@ if (process.argv.includes('--restart-server')) {
     );
     await start(port);
     await reconnected;
+    assert.equal(
+      await page.locator('html').getAttribute('data-restart-page'),
+      'original',
+    );
     await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
     await expect(board).toContainText('QA — blocked');
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
@@ -666,6 +702,10 @@ if (process.argv.includes('--restart-server')) {
     );
     await start(port);
     await terminalReconnect;
+    assert.equal(
+      await page.locator('html').getAttribute('data-restart-page'),
+      'original',
+    );
     await expect(selector).toHaveValue(interrupted.workflowId);
     await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
     await expect(board.getByRole('button', { name: 'Start Reviewer' })).toHaveCount(0);
