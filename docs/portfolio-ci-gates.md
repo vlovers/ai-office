@@ -350,3 +350,14 @@ Next: verify current-head CI for #322, then safely reconcile #272 with main afte
 - Read-only current-main workflow inspection confirms mutable `actions/*@v4` references remain in `commons-original-review.yml`, `constructor-editorial-audit.yml`, `editorial-photo-intake.yml`, `f1db-import.yml`, `real-archive.yml`, and `unified-experience.yml`; the already-open #319/#322 address subsets but are not merged. Three newer editorial-research workflows use pinned checkout SHA already. Do not equate successful draft PR CI with current-main enforcement.
 
 **Next:** run Node tests and full CI on the exact #272 head once safely reconciled with `main`; preserve all newer workflow behavior and privileged photo-quarantine isolation; request independent review. No merge, branch protection change, product PR modification or release occurred in this run.
+
+
+## 2026-10-27 08:00 — Grid Atlas #272 checkout YAML override hardening
+
+- Rechecked live PRs [#319](https://github.com/vlovers/grid-atlas/pull/319), [#322](https://github.com/vlovers/grid-atlas/pull/322), and [#272](https://github.com/vlovers/grid-atlas/pull/272). Exact-head PR-triggered runs remain Foundation CI **success** on #319 SHA `6fd8ef4d6ac64acb2d3ad9979abfb05a09583f2e`, and three relevant workflows **success** on #322 SHA `047b24aafdacc83f0da13717fe2522553ccc59fc`; none has submitted reviews. This does not validate #322's skipped privileged quarantine push.
+- Found a further checkout-guard bypass on the #272 branch: after a valid `persist-credentials: false`, a YAML key `persist-credentials : true` was ignored by the line scanner; the scanner returned no findings. Explicit YAML mapping keys (`? with`, `? persist-credentials`) were likewise not reliably rejected as overrides.
+- Fixed credential-key counting and rejected explicit security-sensitive YAML keys in [commit 6b3a1b7](https://github.com/vlovers/grid-atlas/commit/6b3a1b71eab57e8139c9df0a33015f5c329e46f3); added negative tests in [commit fb57125](https://github.com/vlovers/grid-atlas/commit/fb5712571a45f3ae61f49f4ec05208e00ebe31cb).
+- Verified the actual updated source and test callbacks in an isolated V8 harness: **23 passed, 1 filesystem-dependent test skipped**, 0 failed. Also fetched all **11** workflow YAML files on the #272 branch and evaluated the updated audit function against each: **zero findings**. Neither check is a substitute for Node tests or CI.
+- #272 exact head `fb5712571a45f3ae61f49f4ec05208e00ebe31cb`: **22 ahead / 31 behind** current `main`, `mergeable=false`, no PR-triggered runs for this SHA, no independent reviews. No merge, release, branch protection/ruleset change, or product PR edit.
+- Next: reconcile the old #272 branch safely with current `main`, preserve new workflows and photo quarantine privilege separation, run real Node/CI on exact reconciled SHA, and obtain independent review. Until then do not claim complete repository-wide pin enforcement.
+
