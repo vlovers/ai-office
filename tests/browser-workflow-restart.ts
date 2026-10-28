@@ -587,6 +587,44 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
 
+    // Independent list/timeline/diagnostics requests can succeed but carry
+    // different checkpoint versions during a concurrent transition. Fail closed.
+    const mixedCheckpointAlert = board.getByRole('alert').filter({
+      hasText: 'Workflow checkpoint changed while loading; retry refresh.',
+    });
+    const timelineVersionUrl = address + '/api/workflows/' + blocked.workflowId + '/timeline';
+    await page.route(timelineVersionUrl, async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      await route.fulfill({ response, json: { ...snapshot, version: snapshot.version + 1 } });
+    });
+    await board.getByRole('button', { name: 'Refresh workflow' }).click();
+    await expect(mixedCheckpointAlert).toBeVisible({ timeout: 20000 });
+    await expect(createWorkflow).toBeDisabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
+    await page.unrouteAll({ behavior: 'wait' });
+    await expect(mixedCheckpointAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(createWorkflow).toBeEnabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+
+    // A stale diagnostics read must also block actions, not merely hide the
+    // diagnostics panel while permitting approval from another version.
+    const diagnosticsUrl = address + '/api/workflows/' + blocked.workflowId + '/diagnostics';
+    await page.route(diagnosticsUrl, async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      await route.fulfill({ response, json: { ...snapshot, version: snapshot.version + 1 } });
+    });
+    await board.getByRole('button', { name: 'Refresh workflow' }).click();
+    await expect(mixedCheckpointAlert).toBeVisible({ timeout: 20000 });
+    await expect(createWorkflow).toBeDisabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
+    await page.unrouteAll({ behavior: 'wait' });
+    await expect(mixedCheckpointAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(createWorkflow).toBeEnabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
+
     // A fresh Dashboard can invalidate a form selection while the old ID
     // remains in React state. Do not allow submission of an absent Coder task.
     await page.route(dashboardUrl, async (route) => {

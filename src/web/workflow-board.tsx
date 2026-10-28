@@ -171,6 +171,25 @@ export function WorkflowBoard({
             ])
           : [null, [], null];
         if (epoch !== refreshEpoch.current || next !== selectedRef.current) return;
+        // The list, timeline and diagnostics are independent HTTP reads. A
+        // concurrent transition can make them describe different checkpoints
+        // even when every request succeeds. Fail closed on a mixed snapshot.
+        if (next) {
+          const summary = workflows.find((item) => item.id === next);
+          if (
+            !summary ||
+            !view ||
+            !diagnosis ||
+            view.id !== next ||
+            diagnosis.id !== next ||
+            summary.version !== view.version ||
+            diagnosis.version !== view.version ||
+            summary.state !== view.state ||
+            diagnosis.state !== view.state
+          ) {
+            throw new Error('Workflow checkpoint changed while loading; retry refresh.');
+          }
+        }
         setTimeline(view);
         setReports(output);
         setDiagnostics(diagnosis);
