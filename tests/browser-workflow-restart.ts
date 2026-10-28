@@ -467,7 +467,7 @@ if (process.argv.includes('--restart-server')) {
       assert.equal((await unchanged.json()).version, version);
     };
     const assertBlockedMutations = async () => {
-    for (const [index, id] of ids.entries()) {
+      for (const [index, id] of ids.entries()) {
         await assertWorkflowMutationsRejected(id, versions[index]!);
       }
     };
@@ -953,6 +953,53 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(terminalTasks.get(failed.task.id), 'failed');
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
     assert.equal(terminalTasks.get(blocked.task.id), 'completed');
+
+    // Creating a workflow must switch the async selection cursor immediately.
+    // If the post-write read fails, controls remain fail-closed until recovery.
+    let createdWorkflowId = '';
+    let createRequests = 0;
+    await page.route(address + '/api/workflows', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      createRequests++;
+      const response = await route.fetch();
+      assert.equal(response.ok(), true);
+      createdWorkflowId = (await response.json()).id as string;
+      await route.fulfill({ response });
+    });
+    await page.route(boardPollUrl, async (route) => {
+      if (!createdWorkflowId) {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic post-create refresh outage' }),
+      });
+    });
+    await expect(createWorkflow).toBeEnabled();
+    await createWorkflow.click();
+    await expect(
+      board.getByRole('alert').filter({ hasText: 'Synthetic post-create refresh outage' }),
+    ).toBeVisible({ timeout: 15000 });
+    assert.equal(createRequests, 1, 'Workflow creation must issue exactly one POST');
+    assert.ok(createdWorkflowId);
+    await expect(createWorkflow).toBeDisabled();
+    await page.unrouteAll({ behavior: 'wait' });
+    const freshCreatedTimeline = page.waitForResponse(
+      (response) =>
+        response.url() === address + '/api/workflows/' + createdWorkflowId + '/timeline' &&
+        response.ok(),
+      { timeout: 15000 },
+    );
+    await board.getByRole('button', { name: 'Refresh workflow' }).click();
+    await freshCreatedTimeline;
+    await expect(selector).toHaveValue(createdWorkflowId);
+    await expect(board.getByText(/^State: ready/)).toBeVisible();
+    await expect(createWorkflow).toBeEnabled();
     assert.deepEqual(pageErrors, []);
     passed = true;
     console.log(

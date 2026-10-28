@@ -93,14 +93,6 @@ export function WorkflowBoard({
   const [paused, setPaused] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
   const [selected, setSelected] = useState('');
-  useEffect(() => {
-    if (inspection) {
-      setSelected(inspection.id);
-      // Explicit inspection must load the requested checkpoint, including after a pause.
-      setPaused(false);
-      setRefreshRequired(true);
-    }
-  }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
@@ -124,6 +116,16 @@ export function WorkflowBoard({
   const pollingInFlight = useRef(false);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  useEffect(() => {
+    if (inspection) {
+      // Inspection requests are external selection changes. Keep the async
+      // refresh cursor in sync so a slow poll cannot restore the previous ID.
+      selectedRef.current = inspection.id;
+      setSelected(inspection.id);
+      setPaused(false);
+      setRefreshRequired(true);
+    }
+  }, [inspection]);
   // A user selection must trigger a fresh read even when the selected ID
   // equals the value already held in React state.
   const [selectionRevision, setSelectionRevision] = useState(0);
@@ -378,6 +380,8 @@ export function WorkflowBoard({
                   reviewerAgentId: reviewer,
                   ...(qa ? { qaAgentId: qa } : {}),
                 });
+                // Keep the in-flight refresh aligned with the new checkpoint.
+                selectedRef.current = created.id;
                 setSelected(created.id);
               })
             }
