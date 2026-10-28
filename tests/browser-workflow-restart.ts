@@ -646,6 +646,8 @@ if (process.argv.includes('--restart-server')) {
       label: string;
       change: (report: BrowserReport) => BrowserReport;
     }[] = [
+      { label: 'workflow identity', change: (report) => ({ ...report, workflowId: 'obsolete-workflow' }) },
+      { label: 'stage kind', change: (report) => ({ ...report, kind: 'coder' }) },
       { label: 'version', change: (report) => ({ ...report, version: report.version + 1 }) },
       { label: 'task identity', change: (report) => ({ ...report, taskId: 'obsolete-task' }) },
       { label: 'stage state', change: (report) => ({ ...report, state: 'running' }) },
@@ -658,7 +660,10 @@ if (process.argv.includes('--restart-server')) {
       await page.route(resultsUrl, async (route) => {
         const response = await route.fetch();
         const rows = (await response.json()) as BrowserReport[];
-        assert.ok(rows.some((row) => row.kind === 'qa'), 'QA result fixture must exist');
+        assert.ok(
+          rows.some((row) => row.kind === 'qa'),
+          'QA result fixture must exist',
+        );
         await route.fulfill({
           response,
           json: rows.map((row) =>
@@ -678,6 +683,34 @@ if (process.argv.includes('--restart-server')) {
       await expect(mixedResultsAlert, label).toHaveCount(0, { timeout: 20000 });
       await expect(createWorkflow, label).toBeEnabled();
       await expect(board.getByRole('button', { name: 'Cancel workflow' }), label).toBeEnabled();
+    }
+    // A partial or duplicated result array must not be accepted as a valid
+    // checkpoint even if every remaining row has the correct metadata.
+    for (const shape of ['missing downstream result', 'duplicate downstream result'] as const) {
+      await page.route(resultsUrl, async (route) => {
+        const response = await route.fetch();
+        const rows = (await response.json()) as BrowserReport[];
+        const qaRow = rows.find((row) => row.kind === 'qa');
+        assert.ok(qaRow, 'QA result fixture must exist');
+        await route.fulfill({
+          response,
+          json:
+            shape === 'missing downstream result'
+              ? rows.filter((row) => row.kind !== 'qa')
+              : [...rows, qaRow],
+        });
+      });
+      try {
+        await board.getByRole('button', { name: 'Refresh workflow' }).click();
+        await expect(mixedResultsAlert, shape).toBeVisible({ timeout: 20000 });
+        await expect(createWorkflow, shape).toBeDisabled();
+        await expect(board.getByRole('button', { name: 'Cancel workflow' }), shape).toBeDisabled();
+      } finally {
+        await page.unrouteAll({ behavior: 'wait' });
+      }
+      await expect(mixedResultsAlert, shape).toHaveCount(0, { timeout: 20000 });
+      await expect(createWorkflow, shape).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' }), shape).toBeEnabled();
     }
     await expect(board.getByText('Awaiting approval.', { exact: true })).toBeVisible();
     await assertNoUnexpectedWorkflowAlerts();
