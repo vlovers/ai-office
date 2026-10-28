@@ -41,6 +41,14 @@ type Report = {
   result: string;
   error: string | null;
 };
+type WorkflowSnapshot = {
+  workflowId: string;
+  version: number;
+  state: string;
+  timeline: Timeline;
+  diagnostics: Diagnostics;
+  results: Report[];
+};
 type Diagnostics = {
   id: string;
   version: number;
@@ -172,17 +180,15 @@ export function WorkflowBoard({
           selectedRef.current = next;
           setSelected(next);
         }
-        const [view, output, diagnosis] = next
-          ? await Promise.all([
-              request<Timeline>(`/workflows/${next}/timeline`),
-              request<Report[]>(`/workflows/${next}/results`),
-              request<Diagnostics>(`/workflows/${next}/diagnostics`),
-            ])
-          : [null, [], null];
+        const snapshot = next
+          ? await request<WorkflowSnapshot>(`/workflows/${next}/snapshot`)
+          : null;
+        const view = snapshot?.timeline ?? null;
+        const output = snapshot?.results ?? [];
+        const diagnosis = snapshot?.diagnostics ?? null;
         if (epoch !== refreshEpoch.current || next !== selectedRef.current) return;
-        // The list, timeline and diagnostics are independent HTTP reads. A
-        // concurrent transition can make them describe different checkpoints
-        // even when every request succeeds. Fail closed on a mixed snapshot.
+        // The workflow list and atomic snapshot are separate reads. A concurrent
+        // transition between them must fail closed before operator actions.
         if (next) {
           const summary = workflows.find((item) => item.id === next);
           if (
@@ -199,9 +205,8 @@ export function WorkflowBoard({
             throw new Error('Workflow checkpoint changed while loading; retry refresh.');
           }
         }
-        // Results are fetched independently from the timeline. Even when all
-        // requests succeed, a transition may have replaced a downstream task
-        // between reads. Never associate its report with another checkpoint.
+        // Validate snapshot integrity before associating reports with stages.
+        // Fail closed if a malformed server response violates its contract.
         if (view) {
           const downstreamStages = view.stages.slice(1);
           if (
