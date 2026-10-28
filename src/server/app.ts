@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { TaskManager } from './manager.js';
 import { agentIdSchema, agentSettingsSchema } from './agents.js';
 import { AppError } from './errors.js';
-import { WorkflowStore } from './workflows.js';
+import { WorkflowStore, type Workflow } from './workflows.js';
 import { workflowTimeline } from './workflow-timeline.js';
 import { diagnoseWorkflow } from './workflow-diagnostics.js';
 import { deliveryPreflight } from './delivery-preflight.js';
@@ -138,23 +138,53 @@ export async function createApp(manager: TaskManager) {
       .parse(request.body);
     return manager.prepareWorkflowReviewer(workflowId, input.version);
   });
+  // Reuse the exact result projection for legacy reads and the atomic snapshot.
+  // Keep all synchronous SQLite reads inside the caller's transaction.
+  const workflowResults = (workflow: Workflow) =>
+    workflow.stages.slice(1).map((stage) => {
+      const task = stage.taskId ? manager.store.task(stage.taskId) : undefined;
+      return {
+        workflowId: workflow.id,
+        version: workflow.version,
+        kind: stage.kind,
+        state: stage.state,
+        taskId: stage.taskId,
+        report: stage.report ?? null,
+        result: task?.result ?? '',
+        error: task?.error ?? null,
+        qaPlan: stage.qaPlan ?? null,
+      };
+    });
   app.get('/api/workflows/:id/results', async (request) => {
     const workflowId = id.parse((request.params as { id: string }).id);
     const workflow = new WorkflowStore(manager.store.db).get(workflowId);
     if (!workflow) throw new AppError(404, 'Workflow not found.');
-    return workflow.stages.slice(1).map((stage) => ({
-      // Bind each result to its persisted workflow checkpoint without changing
-      // the existing array response contract.
-      workflowId: workflow.id,
-      version: workflow.version,
-      kind: stage.kind,
-      state: stage.state,
-      taskId: stage.taskId,
-      report: stage.report ?? null,
-      result: stage.taskId ? (manager.store.task(stage.taskId)?.result ?? '') : '',
-      error: stage.taskId ? (manager.store.task(stage.taskId)?.error ?? null) : null,
-      qaPlan: stage.qaPlan ?? null,
-    }));
+    return workflowResults(workflow);
+  });
+  // One read transaction pins workflow, task outputs, timeline and diagnostics
+  // to the same SQLite snapshot, even if another connection commits mid-read.
+  // The existing endpoints remain available for backward compatibility.
+  app.get('/api/workflows/:id/snapshot', async (request) => {
+    const workflowId = id.parse((request.params as { id: string }).id);
+    const db = manager.store.db;
+    db.exec('BEGIN');
+    try {
+      const workflow = new WorkflowStore(db).get(workflowId);
+      if (!workflow) throw new AppError(404, 'Workflow not found.');
+      const snapshot = {
+        workflowId: workflow.id,
+        version: workflow.version,
+        state: workflow.state,
+        timeline: workflowTimeline(workflow),
+        diagnostics: diagnoseWorkflow(workflow),
+        results: workflowResults(workflow),
+      };
+      db.exec('COMMIT');
+      return snapshot;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   });
   // Workflow creation persists only inert stage definitions; executable mutation
   // actions remain disabled until TaskManager enforces approvals and leases.
