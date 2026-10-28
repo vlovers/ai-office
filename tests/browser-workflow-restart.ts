@@ -973,18 +973,22 @@ if (process.argv.includes('--restart-server')) {
       '-m',
       'Isolated browser restart baseline',
     ]);
-    const creationRepository = store.register({
+    // The original fixture Store was closed during the restart sequence.
+    // Open a short-lived connection rather than reusing its closed handle.
+    const creationStore = new Store(db);
+    const creationRepository = creationStore.register({
       path: creationPath,
       gitDir: join(creationPath, '.git'),
       name: 'creation-fixture',
     });
-    const creationTask = store.createTask({
+    const creationTask = creationStore.createTask({
       repositoryId: creationRepository.id,
       agentId: coder.id,
       title: 'Isolated workflow creation regression',
       prompt: 'Never dispatch a provider in this fixture.',
       executionMode: 'write',
     });
+    creationStore.db.close();
     await expect(coderChoice.locator(`option[value="${creationTask.id}"]`)).toHaveCount(1, {
       timeout: 15000,
     });
@@ -1001,8 +1005,7 @@ if (process.argv.includes('--restart-server')) {
       }
       createRequests++;
       const response = await route.fetch();
-      assert.equal(response.ok(), true);
-      createdWorkflowId = (await response.json()).id as string;
+      if (response.ok()) createdWorkflowId = (await response.json()).id as string;
       await route.fulfill({ response });
     });
     await page.route(boardPollUrl, async (route) => {
@@ -1017,7 +1020,15 @@ if (process.argv.includes('--restart-server')) {
       });
     });
     await expect(createWorkflow).toBeEnabled();
+    const creationResponse = page.waitForResponse(
+      (response) =>
+        response.url() === address + '/api/workflows' &&
+        response.request().method() === 'POST',
+      { timeout: 15000 },
+    );
     await createWorkflow.click();
+    const posted = await creationResponse;
+    assert.equal(posted.status(), 201, await posted.text());
     await expect(
       board.getByRole('alert').filter({ hasText: 'Synthetic post-create refresh outage' }),
     ).toBeVisible({ timeout: 15000 });
