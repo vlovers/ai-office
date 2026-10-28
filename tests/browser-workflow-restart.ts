@@ -646,7 +646,10 @@ if (process.argv.includes('--restart-server')) {
       label: string;
       change: (report: BrowserReport) => BrowserReport;
     }[] = [
-      { label: 'workflow identity', change: (report) => ({ ...report, workflowId: 'obsolete-workflow' }) },
+      {
+        label: 'workflow identity',
+        change: (report) => ({ ...report, workflowId: 'obsolete-workflow' }),
+      },
       { label: 'stage kind', change: (report) => ({ ...report, kind: 'coder' }) },
       { label: 'version', change: (report) => ({ ...report, version: report.version + 1 }) },
       { label: 'task identity', change: (report) => ({ ...report, taskId: 'obsolete-task' }) },
