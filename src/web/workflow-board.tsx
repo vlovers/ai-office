@@ -713,7 +713,9 @@ export function WorkflowBoard({
                       </p>
                     )}
                     {reports
-                      .filter((report) => report.kind === stage.kind && report.taskId === stage.taskId)
+                      .filter(
+                        (report) => report.kind === stage.kind && report.taskId === stage.taskId,
+                      )
                       .map((report) => (
                         <div key={report.kind}>
                           {report.result && (
