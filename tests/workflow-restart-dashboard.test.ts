@@ -353,6 +353,32 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id, ordinaryAfter.id]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
 
+    // Two operator tabs may submit the same version concurrently. Exactly one
+    // cancellation may commit; the loser must get 409 and must not alter the
+    // durable checkpoint or discard the failed QA report.
+    const cancelUrl = `/api/workflows/${qaFailed.workflowId}/cancel`;
+    const beforeCancel = (await get(`/api/workflows/${qaFailed.workflowId}/snapshot`)).json();
+    const attempts = await Promise.all([
+      post(cancelUrl, { version: beforeCancel.version, confirmed: true }),
+      post(cancelUrl, { version: beforeCancel.version, confirmed: true }),
+    ]);
+    expect(attempts.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    const afterCancel = (await get(`/api/workflows/${qaFailed.workflowId}/snapshot`)).json();
+    expect(afterCancel.version).toBe(beforeCancel.version + 1);
+    expect(afterCancel.state).toBe('cancelled');
+    expect(afterCancel.timeline.state).toBe('cancelled');
+    expect(afterCancel.diagnostics.state).toBe('cancelled');
+    expect(afterCancel.results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+      expect.objectContaining({ taskId: qaFailed.task.id, error: 'QA failed before restart.' }),
+    );
+    const staleReplay = await post(cancelUrl, {
+      version: beforeCancel.version,
+      confirmed: true,
+    });
+    expect(staleReplay.statusCode).toBe(409);
+    expect((await get(`/api/workflows/${qaFailed.workflowId}/snapshot`)).json()).toEqual(
+      afterCancel,
+    );
     const versions = cases.map((entry) => new WorkflowStore(store.db).get(entry.id)!.version);
     await app.close();
     app = undefined;
