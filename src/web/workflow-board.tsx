@@ -200,7 +200,12 @@ export function WorkflowBoard({
       setLoading(false);
     }
   }
+  // React state disables controls on the next render; this synchronous guard
+  // also prevents two operator events from submitting the same checkpoint.
+  const mutationInFlight = useRef(false);
   async function mutate(operation: () => Promise<unknown>) {
+    if (mutationInFlight.current) return;
+    mutationInFlight.current = true;
     setLoading(true);
     setError('');
     try {
@@ -209,6 +214,7 @@ export function WorkflowBoard({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
+      mutationInFlight.current = false;
       setLoading(false);
     }
   }
