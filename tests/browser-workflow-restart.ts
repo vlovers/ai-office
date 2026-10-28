@@ -776,7 +776,12 @@ if (process.argv.includes('--restart-server')) {
     });
     try {
       await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
-      await manualRefreshStarted;
+      await Promise.race([
+        manualRefreshStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Manual refresh request never started')), 10000),
+        ),
+      ]);
       await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
       assert.equal(manualRefreshRequests, 1, 'Duplicate manual refresh must be ignored');
     } finally {
