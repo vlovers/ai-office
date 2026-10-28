@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { fork, type ChildProcess } from 'node:child_process';
+import { execFileSync, fork, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -954,6 +954,42 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
     assert.equal(terminalTasks.get(blocked.task.id), 'completed');
 
+    // Use a separate disposable Git repository for the creation test. The
+    // recovery fixtures above intentionally reference a nonexistent worktree;
+    // the HTTP creation endpoint correctly requires a real, verifiable HEAD.
+    const creationPath = join(root, 'creation-fixture');
+    await mkdir(creationPath);
+    execFileSync('/usr/bin/git', ['-C', creationPath, 'init', '--quiet']);
+    execFileSync('/usr/bin/git', [
+      '-C',
+      creationPath,
+      '-c',
+      'user.name=AI Office fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '--allow-empty',
+      '--quiet',
+      '-m',
+      'Isolated browser restart baseline',
+    ]);
+    const creationRepository = store.register({
+      path: creationPath,
+      gitDir: join(creationPath, '.git'),
+      name: 'creation-fixture',
+    });
+    const creationTask = store.createTask({
+      repositoryId: creationRepository.id,
+      agentId: coder.id,
+      title: 'Isolated workflow creation regression',
+      prompt: 'Never dispatch a provider in this fixture.',
+      executionMode: 'write',
+    });
+    await expect(coderChoice.locator(`option[value="${creationTask.id}"]`)).toHaveCount(1, {
+      timeout: 15000,
+    });
+    await coderChoice.selectOption(creationTask.id);
+
     // Creating a workflow must switch the async selection cursor immediately.
     // If the post-write read fails, controls remain fail-closed until recovery.
     let createdWorkflowId = '';
@@ -998,7 +1034,7 @@ if (process.argv.includes('--restart-server')) {
     await board.getByRole('button', { name: 'Refresh workflow' }).click();
     await freshCreatedTimeline;
     await expect(selector).toHaveValue(createdWorkflowId);
-    await expect(board.getByText(/^State: ready/)).toBeVisible();
+    await expect(board.getByText(/^State: active/)).toBeVisible();
     await expect(createWorkflow).toBeEnabled();
     assert.deepEqual(pageErrors, []);
     passed = true;

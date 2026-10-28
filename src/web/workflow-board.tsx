@@ -116,6 +116,9 @@ export function WorkflowBoard({
   const pollingInFlight = useRef(false);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  // A user selection must trigger a fresh read even when the selected ID
+  // equals the value already held in React state.
+  const [selectionRevision, setSelectionRevision] = useState(0);
   useEffect(() => {
     if (inspection) {
       // Inspection requests are external selection changes. Keep the async
@@ -124,11 +127,9 @@ export function WorkflowBoard({
       setSelected(inspection.id);
       setPaused(false);
       setRefreshRequired(true);
+      setSelectionRevision((revision) => revision + 1);
     }
   }, [inspection]);
-  // A user selection must trigger a fresh read even when the selected ID
-  // equals the value already held in React state.
-  const [selectionRevision, setSelectionRevision] = useState(0);
   const refresh = useCallback(
     async (force = false) => {
       // Periodic polling is serial. Explicit operator refresh supersedes any
