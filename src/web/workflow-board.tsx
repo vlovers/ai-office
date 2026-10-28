@@ -209,6 +209,9 @@ export function WorkflowBoard({
   async function mutate(operation: () => Promise<unknown>) {
     if (operatorInFlight.current) return;
     operatorInFlight.current = true;
+    // Invalidate the verified snapshot before the server-side write begins.
+    // A failed post-mutation read must never re-enable privileged actions.
+    setRefreshRequired(true);
     setLoading(true);
     setError('');
     try {
