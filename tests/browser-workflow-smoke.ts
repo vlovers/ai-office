@@ -88,6 +88,15 @@ try {
     assert.equal(approveRequests, 1);
     releaseApprove();
     await pendingApproval;
+    // The first approval advances the persisted workflow exactly once.
+    // Replaying the old checkpoint version must fail closed without changing it.
+    const approved = await env.get();
+    assert.equal(approved.stages[0]!.state, 'awaiting_task');
+    const replay = await page.request.post(address + env.url + '/approve-initial', {
+      data: { version: approved.version - 1, confirmed: true },
+    });
+    assert.equal(replay.status(), 409);
+    assert.equal((await env.get()).version, approved.version);
   } finally {
     releaseApprove();
     await page.unroute(approveRoute);
