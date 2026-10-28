@@ -592,20 +592,28 @@ if (process.argv.includes('--restart-server')) {
     const mixedCheckpointAlert = board.getByRole('alert').filter({
       hasText: 'Workflow checkpoint changed while loading; retry refresh.',
     });
-    const timelineVersionUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
-    await page.route(timelineVersionUrl, async (route) => {
-      const response = await route.fetch();
-      const snapshot = await response.json();
-      await route.fulfill({ response, json: { ...snapshot, version: snapshot.version + 1 } });
-    });
-    await board.getByRole('button', { name: 'Refresh workflow' }).click();
-    await expect(mixedCheckpointAlert).toBeVisible({ timeout: 20000 });
-    await expect(createWorkflow).toBeDisabled();
-    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
-    await page.unrouteAll({ behavior: 'wait' });
-    await expect(mixedCheckpointAlert).toHaveCount(0, { timeout: 20000 });
-    await expect(createWorkflow).toBeEnabled();
-    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    const snapshotUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
+    for (const field of ['workflowId', 'version', 'state'] as const) {
+      await page.route(snapshotUrl, async (route) => {
+        const response = await route.fetch();
+        const snapshot = await response.json();
+        if (field === 'workflowId') snapshot.workflowId = 'obsolete-workflow';
+        if (field === 'version') snapshot.version += 1;
+        if (field === 'state') snapshot.state = 'obsolete-state';
+        await route.fulfill({ response, json: snapshot });
+      });
+      try {
+        await board.getByRole('button', { name: 'Refresh workflow' }).click();
+        await expect(mixedCheckpointAlert, field).toBeVisible({ timeout: 20000 });
+        await expect(createWorkflow, field).toBeDisabled();
+        await expect(board.getByRole('button', { name: 'Cancel workflow' }), field).toBeDisabled();
+      } finally {
+        await page.unrouteAll({ behavior: 'wait' });
+      }
+      await expect(mixedCheckpointAlert, field).toHaveCount(0, { timeout: 20000 });
+      await expect(createWorkflow, field).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' }), field).toBeEnabled();
+    }
 
     // A malformed atomic snapshot with inconsistent diagnostics metadata
     // must block actions instead of permitting approval from another version.
