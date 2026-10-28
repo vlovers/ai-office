@@ -176,18 +176,21 @@ try {
   await dialog.getByLabel('Approved QA command').selectOption('source');
   await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
   await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeEnabled();
+  // The modal makes the board inert for pointer interaction. Dispatch the
+  // refresh event directly to exercise the live-update guard while it is open.
+  const refreshWhileDialogOpen = board.locator('button').filter({ hasText: 'Refresh workflow' });
   const qaCommandsRoute = '**/api/workflows/qa-commands';
   await page.route(qaCommandsRoute, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"commands":[]}' }),
   );
   try {
-    await board.getByRole('button', { name: 'Refresh workflow' }).click();
+    await refreshWhileDialogOpen.dispatchEvent('click');
     await expect(dialog.getByLabel('Approved QA command')).toHaveValue('');
     await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
   } finally {
     await page.unroute(qaCommandsRoute);
   }
-  await board.getByRole('button', { name: 'Refresh workflow' }).click();
+  await refreshWhileDialogOpen.dispatchEvent('click');
   await expect(
     dialog.getByLabel('Approved QA command').locator('option[value="source"]'),
   ).toHaveCount(1);
