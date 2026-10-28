@@ -467,7 +467,7 @@ if (process.argv.includes('--restart-server')) {
       assert.equal((await unchanged.json()).version, version);
     };
     const assertBlockedMutations = async () => {
-    for (const [index, id] of ids.entries()) {
+      for (const [index, id] of ids.entries()) {
         await assertWorkflowMutationsRejected(id, versions[index]!);
       }
     };
