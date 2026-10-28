@@ -833,11 +833,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
       timeout: 10000,
     });
-    assert.equal(
-      attemptedCreates,
-      0,
-      'Blocked mutation must not be submitted after refresh',
-    );
+    assert.equal(attemptedCreates, 0, 'Blocked mutation must not be submitted after refresh');
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
