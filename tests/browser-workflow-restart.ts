@@ -495,7 +495,7 @@ if (process.argv.includes('--restart-server')) {
     const reconnected = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url() === address + '/api/workflows/' + blocked.workflowId + '/timeline' &&
+        response.url() === address + '/api/workflows/' + blocked.workflowId + '/snapshot' &&
         response.ok(),
       { timeout: 20000 },
     );
@@ -536,7 +536,7 @@ if (process.argv.includes('--restart-server')) {
     // Exercise an actual browser-visible transport failure after a successful
     // reconnect. Persisted state may remain visible, but stale operator actions
     // must not be executable until the next successful timeline refresh.
-    const timelineUrl = address + '/api/workflows/' + blocked.workflowId + '/timeline';
+    const timelineUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
     await page.route(timelineUrl, (route) =>
       route.fulfill({
         status: 503,
@@ -587,12 +587,12 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
 
-    // Independent list/timeline/diagnostics requests can succeed but carry
-    // different checkpoint versions during a concurrent transition. Fail closed.
+    // The list and atomic checkpoint can still describe different versions
+    // after a concurrent transition. Reject inconsistent snapshot metadata.
     const mixedCheckpointAlert = board.getByRole('alert').filter({
       hasText: 'Workflow checkpoint changed while loading; retry refresh.',
     });
-    const timelineVersionUrl = address + '/api/workflows/' + blocked.workflowId + '/timeline';
+    const timelineVersionUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
     await page.route(timelineVersionUrl, async (route) => {
       const response = await route.fetch();
       const snapshot = await response.json();
@@ -607,13 +607,19 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
 
-    // A stale diagnostics read must also block actions, not merely hide the
-    // diagnostics panel while permitting approval from another version.
-    const diagnosticsUrl = address + '/api/workflows/' + blocked.workflowId + '/diagnostics';
+    // A malformed atomic snapshot with inconsistent diagnostics metadata
+    // must block actions instead of permitting approval from another version.
+    const diagnosticsUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
     await page.route(diagnosticsUrl, async (route) => {
       const response = await route.fetch();
       const snapshot = await response.json();
-      await route.fulfill({ response, json: { ...snapshot, version: snapshot.version + 1 } });
+      await route.fulfill({
+        response,
+        json: {
+          ...snapshot,
+          diagnostics: { ...snapshot.diagnostics, version: snapshot.diagnostics.version + 1 },
+        },
+      });
     });
     await board.getByRole('button', { name: 'Refresh workflow' }).click();
     await expect(mixedCheckpointAlert).toBeVisible({ timeout: 20000 });
@@ -624,8 +630,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
 
-    // Results come from a separate endpoint and may represent another task or
-    // workflow version even when the list, timeline and diagnostics agree.
+    // A malformed snapshot may contain results from another task or version.
     // Reject mismatched result identity, state and persisted report digest.
     type BrowserReport = {
       workflowId: string;
@@ -637,7 +642,7 @@ if (process.argv.includes('--restart-server')) {
       result: string;
       error: string | null;
     };
-    const resultsUrl = address + '/api/workflows/' + blocked.workflowId + '/results';
+    const resultsUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
     const mixedResultsAlert = board.getByRole('alert').filter({
       hasText: 'Workflow results changed while loading; retry refresh.',
     });
@@ -662,16 +667,20 @@ if (process.argv.includes('--restart-server')) {
     for (const { label, change } of corruptions) {
       await page.route(resultsUrl, async (route) => {
         const response = await route.fetch();
-        const rows = (await response.json()) as BrowserReport[];
+        const snapshot = (await response.json()) as { results: BrowserReport[] };
+        const rows = snapshot.results;
         assert.ok(
           rows.some((row) => row.kind === 'qa'),
           'QA result fixture must exist',
         );
         await route.fulfill({
           response,
-          json: rows.map((row) =>
-            row.kind === 'qa' ? { ...change(row), result: staleReportText } : row,
-          ),
+          json: {
+            ...snapshot,
+            results: rows.map((row) =>
+              row.kind === 'qa' ? { ...change(row), result: staleReportText } : row,
+            ),
+          },
         });
       });
       try {
@@ -692,15 +701,19 @@ if (process.argv.includes('--restart-server')) {
     for (const shape of ['missing downstream result', 'duplicate downstream result'] as const) {
       await page.route(resultsUrl, async (route) => {
         const response = await route.fetch();
-        const rows = (await response.json()) as BrowserReport[];
+        const snapshot = (await response.json()) as { results: BrowserReport[] };
+        const rows = snapshot.results;
         const qaRow = rows.find((row) => row.kind === 'qa');
         assert.ok(qaRow, 'QA result fixture must exist');
         await route.fulfill({
           response,
-          json:
-            shape === 'missing downstream result'
-              ? rows.filter((row) => row.kind !== 'qa')
-              : [...rows, qaRow],
+          json: {
+            ...snapshot,
+            results:
+              shape === 'missing downstream result'
+                ? rows.filter((row) => row.kind !== 'qa')
+                : [...rows, qaRow],
+          },
         });
       });
       try {
@@ -1023,7 +1036,7 @@ if (process.argv.includes('--restart-server')) {
     const terminalReconnect = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url() === address + '/api/workflows/' + interrupted.workflowId + '/timeline' &&
+        response.url() === address + '/api/workflows/' + interrupted.workflowId + '/snapshot' &&
         response.ok(),
       { timeout: 20000 },
     );
@@ -1171,7 +1184,7 @@ if (process.argv.includes('--restart-server')) {
     await page.unrouteAll({ behavior: 'wait' });
     const freshCreatedTimeline = page.waitForResponse(
       (response) =>
-        response.url() === address + '/api/workflows/' + createdWorkflowId + '/timeline' &&
+        response.url() === address + '/api/workflows/' + createdWorkflowId + '/snapshot' &&
         response.ok(),
       { timeout: 15000 },
     );
