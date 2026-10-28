@@ -467,7 +467,38 @@ if (process.argv.includes('--restart-server')) {
       assert.equal((await unchanged.json()).version, version);
     };
     const assertBlockedMutations = async () => {
-      for (const [index, id] of ids.entries()) {
+      // Dispatch two refresh events in the same browser task while the first
+    // request is held. The second event must not start another board read.
+    let releaseManualRefresh!: () => void;
+    let markManualRefreshStarted!: () => void;
+    const manualRefreshStarted = new Promise<void>((resolve) => {
+      markManualRefreshStarted = resolve;
+    });
+    const manualRefreshGate = new Promise<void>((resolve) => {
+      releaseManualRefresh = resolve;
+    });
+    let manualRefreshRequests = 0;
+    await page.route(boardPollUrl, async (route) => {
+      manualRefreshRequests++;
+      if (manualRefreshRequests === 1) {
+        markManualRefreshStarted();
+        await manualRefreshGate;
+      }
+      await route.continue();
+    });
+    try {
+      await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
+      await manualRefreshStarted;
+      await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
+      assert.equal(manualRefreshRequests, 1, 'Duplicate manual refresh must be ignored');
+    } finally {
+      releaseManualRefresh();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
+      timeout: 10000,
+    });
+    for (const [index, id] of ids.entries()) {
         await assertWorkflowMutationsRejected(id, versions[index]!);
       }
     };
