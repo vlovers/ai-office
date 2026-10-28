@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, fork, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -976,9 +976,12 @@ if (process.argv.includes('--restart-server')) {
     // The original fixture Store was closed during the restart sequence.
     // Open a short-lived connection rather than reusing its closed handle.
     const creationStore = new Store(db);
+    // macOS resolves /var to /private/var. Store the canonical identity that
+    // revalidateRepository() compares against before allowing an HTTP create.
+    const canonicalCreationPath = await realpath(creationPath);
     const creationRepository = creationStore.register({
-      path: creationPath,
-      gitDir: join(creationPath, '.git'),
+      path: canonicalCreationPath,
+      gitDir: join(canonicalCreationPath, '.git'),
       name: 'creation-fixture',
     });
     const creationTask = creationStore.createTask({
