@@ -467,49 +467,6 @@ if (process.argv.includes('--restart-server')) {
       assert.equal((await unchanged.json()).version, version);
     };
     const assertBlockedMutations = async () => {
-      // A manual refresh and a privileged Create workflow event must share one
-    // synchronous operator lock, even when dispatched before React re-renders.
-    // Hold the read, attempt the mutation, and verify no POST reached the API.
-    let releaseOperatorRefresh!: () => void;
-    let markOperatorRefreshStarted!: () => void;
-    const operatorRefreshStarted = new Promise<void>((resolve) => {
-      markOperatorRefreshStarted = resolve;
-    });
-    const operatorRefreshGate = new Promise<void>((resolve) => {
-      releaseOperatorRefresh = resolve;
-    });
-    let holdOperatorRefresh = true;
-    let attemptedCreates = 0;
-    await page.route(address + '/api/workflows', async (route) => {
-      if (route.request().method() === 'POST') attemptedCreates++;
-      await route.continue();
-    });
-    await page.route(boardPollUrl, async (route) => {
-      if (holdOperatorRefresh) {
-        holdOperatorRefresh = false;
-        markOperatorRefreshStarted();
-        await operatorRefreshGate;
-      }
-      await route.continue();
-    });
-    try {
-      await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
-      await Promise.race([
-        operatorRefreshStarted,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Operator refresh request never started')), 10000),
-        ),
-      ]);
-      await createWorkflow.dispatchEvent('click');
-      assert.equal(attemptedCreates, 0, 'Mutation must not overlap manual refresh');
-    } finally {
-      releaseOperatorRefresh();
-      await page.unrouteAll({ behavior: 'wait' });
-    }
-    await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
-      timeout: 10000,
-    });
-    assert.equal(attemptedCreates, 0, 'Blocked mutation must not be submitted after refresh');
     for (const [index, id] of ids.entries()) {
         await assertWorkflowMutationsRejected(id, versions[index]!);
       }
@@ -905,6 +862,49 @@ if (process.argv.includes('--restart-server')) {
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
 
+    // A manual refresh and a privileged Create workflow event must share one
+    // synchronous operator lock, even when dispatched before React re-renders.
+    // Hold the read, attempt the mutation, and verify no POST reached the API.
+    let releaseOperatorRefresh!: () => void;
+    let markOperatorRefreshStarted!: () => void;
+    const operatorRefreshStarted = new Promise<void>((resolve) => {
+      markOperatorRefreshStarted = resolve;
+    });
+    const operatorRefreshGate = new Promise<void>((resolve) => {
+      releaseOperatorRefresh = resolve;
+    });
+    let holdOperatorRefresh = true;
+    let attemptedCreates = 0;
+    await page.route(address + '/api/workflows', async (route) => {
+      if (route.request().method() === 'POST') attemptedCreates++;
+      await route.continue();
+    });
+    await page.route(boardPollUrl, async (route) => {
+      if (holdOperatorRefresh) {
+        holdOperatorRefresh = false;
+        markOperatorRefreshStarted();
+        await operatorRefreshGate;
+      }
+      await route.continue();
+    });
+    try {
+      await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
+      await Promise.race([
+        operatorRefreshStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Operator refresh request never started')), 10000),
+        ),
+      ]);
+      await createWorkflow.dispatchEvent('click');
+      assert.equal(attemptedCreates, 0, 'Mutation must not overlap manual refresh');
+    } finally {
+      releaseOperatorRefresh();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
+      timeout: 10000,
+    });
+    assert.equal(attemptedCreates, 0, 'Blocked mutation must not be submitted after refresh');
     for (const [index, id] of ids.entries()) {
       const response = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
