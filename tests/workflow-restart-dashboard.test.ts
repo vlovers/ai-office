@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { createApp } from '../src/server/app.js';
 import { profileConfiguration } from '../src/server/execution-config.js';
 import { TaskManager } from '../src/server/manager.js';
@@ -304,6 +305,46 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
         result: 'Output not yet approved or checkpointed',
       }),
     );
+    // A second SQLite connection may commit task output after the workflow row
+    // has been read but before the result projection is built. The atomic API
+    // must return one pinned read snapshot, not a newer result mixed into the
+    // earlier workflow checkpoint. This is a deterministic cross-connection
+    // write during the actual HTTP request, without sleeps or a live provider.
+    const writer = new DatabaseSync(path);
+    const originalTask = store.task;
+    const oldResult = 'Output not yet approved or checkpointed';
+    const newResult = 'Result committed concurrently on another connection';
+    let wroteDuringSnapshot = false;
+    try {
+      store.task = (taskId) => {
+        if (taskId === qaCompleted.task.id && !wroteDuringSnapshot) {
+          wroteDuringSnapshot = true;
+          const task = originalTask.call(store, taskId)!;
+          writer
+            .prepare('UPDATE tasks SET json=? WHERE id=?')
+            .run(JSON.stringify({ ...task, result: newResult }), taskId);
+        }
+        return originalTask.call(store, taskId);
+      };
+      const pinned = await get(`/api/workflows/${qaCompleted.workflowId}/snapshot`);
+      expect(pinned.statusCode).toBe(200);
+      expect(wroteDuringSnapshot).toBe(true);
+      expect(pinned.json().results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+        expect.objectContaining({ result: oldResult }),
+      );
+    } finally {
+      store.task = originalTask;
+      writer.close();
+    }
+    const fresh = await get(`/api/workflows/${qaCompleted.workflowId}/snapshot`);
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json().results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+      expect.objectContaining({ result: newResult }),
+    );
+    // Read-only snapshots must not advance workflow versions or mutate stages.
+    expect(fresh.json().version).toBe(completedSnapshot.version);
+    expect(fresh.json().timeline).toEqual(completedSnapshot.timeline);
+    expect(fresh.json().diagnostics).toEqual(completedSnapshot.diagnostics);
     const listed = await get('/api/workflows');
     expect(listed.statusCode).toBe(200);
     expect(
