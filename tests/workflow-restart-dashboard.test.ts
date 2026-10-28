@@ -295,7 +295,9 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(stoppedSnapshot.results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
       expect.objectContaining({ taskId: qaStopped.task.id, error: 'QA stopped before restart.' }),
     );
-    const completedSnapshot = (await get(`/api/workflows/${qaCompleted.workflowId}/snapshot`)).json();
+    const completedSnapshot = (
+      await get(`/api/workflows/${qaCompleted.workflowId}/snapshot`)
+    ).json();
     expect(completedSnapshot.results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
       expect.objectContaining({
         taskId: qaCompleted.task.id,
