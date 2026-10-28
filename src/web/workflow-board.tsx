@@ -31,7 +31,16 @@ type Summary = {
   updatedAt?: string;
   stages: { kind?: string; state?: string; taskId: string | null; agentId: string }[];
 };
-type Report = { kind: string; taskId: string | null; result: string; error: string | null };
+type Report = {
+  workflowId: string;
+  version: number;
+  kind: string;
+  state: string;
+  taskId: string | null;
+  report: { digest: string } | null;
+  result: string;
+  error: string | null;
+};
 type Diagnostics = {
   id: string;
   version: number;
@@ -190,14 +199,40 @@ export function WorkflowBoard({
             throw new Error('Workflow checkpoint changed while loading; retry refresh.');
           }
         }
+        // Results are fetched independently from the timeline. Even when all
+        // requests succeed, a transition may have replaced a downstream task
+        // between reads. Never associate its report with another checkpoint.
+        if (view) {
+          const downstreamStages = view.stages.slice(1);
+          if (
+            output.length !== downstreamStages.length ||
+            output.some((report, index) => {
+              const stage = downstreamStages[index];
+              return (
+                !stage ||
+                report.workflowId !== view.id ||
+                report.version !== view.version ||
+                report.kind !== stage.kind ||
+                report.state !== stage.status ||
+                report.taskId !== stage.taskId ||
+                (report.report?.digest ?? null) !== stage.reportDigest
+              );
+            })
+          ) {
+            throw new Error('Workflow results changed while loading; retry refresh.');
+          }
+        }
         setTimeline(view);
         setReports(output);
         setDiagnostics(diagnosis);
         setError('');
         setRefreshRequired(false);
       } catch (cause) {
-        if (epoch === refreshEpoch.current)
+        if (epoch === refreshEpoch.current) {
+          // A failed read must not leave a previous task's report on screen.
+          setReports([]);
           setError(cause instanceof Error ? cause.message : String(cause));
+        }
       } finally {
         if (epoch === refreshEpoch.current) pollingInFlight.current = false;
       }
@@ -678,7 +713,7 @@ export function WorkflowBoard({
                       </p>
                     )}
                     {reports
-                      .filter((report) => report.kind === stage.kind)
+                      .filter((report) => report.kind === stage.kind && report.taskId === stage.taskId)
                       .map((report) => (
                         <div key={report.kind}>
                           {report.result && (

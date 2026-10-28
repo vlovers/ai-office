@@ -143,6 +143,10 @@ export async function createApp(manager: TaskManager) {
     const workflow = new WorkflowStore(manager.store.db).get(workflowId);
     if (!workflow) throw new AppError(404, 'Workflow not found.');
     return workflow.stages.slice(1).map((stage) => ({
+      // Bind each result to its persisted workflow checkpoint without changing
+      // the existing array response contract.
+      workflowId: workflow.id,
+      version: workflow.version,
       kind: stage.kind,
       state: stage.state,
       taskId: stage.taskId,

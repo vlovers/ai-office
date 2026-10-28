@@ -623,6 +623,63 @@ if (process.argv.includes('--restart-server')) {
     await expect(mixedCheckpointAlert).toHaveCount(0, { timeout: 20000 });
     await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+
+    // Results come from a separate endpoint and may represent another task or
+    // workflow version even when the list, timeline and diagnostics agree.
+    // Reject mismatched result identity, state and persisted report digest.
+    type BrowserReport = {
+      workflowId: string;
+      version: number;
+      kind: string;
+      state: string;
+      taskId: string | null;
+      report: { digest: string } | null;
+      result: string;
+      error: string | null;
+    };
+    const resultsUrl = address + '/api/workflows/' + blocked.workflowId + '/results';
+    const mixedResultsAlert = board.getByRole('alert').filter({
+      hasText: 'Workflow results changed while loading; retry refresh.',
+    });
+    const staleReportText = 'Obsolete result from a different checkpoint';
+    const corruptions: {
+      label: string;
+      change: (report: BrowserReport) => BrowserReport;
+    }[] = [
+      { label: 'version', change: (report) => ({ ...report, version: report.version + 1 }) },
+      { label: 'task identity', change: (report) => ({ ...report, taskId: 'obsolete-task' }) },
+      { label: 'stage state', change: (report) => ({ ...report, state: 'running' }) },
+      {
+        label: 'report digest',
+        change: (report) => ({ ...report, report: { digest: 'obsolete-digest' } }),
+      },
+    ];
+    for (const { label, change } of corruptions) {
+      await page.route(resultsUrl, async (route) => {
+        const response = await route.fetch();
+        const rows = (await response.json()) as BrowserReport[];
+        assert.ok(rows.some((row) => row.kind === 'qa'), 'QA result fixture must exist');
+        await route.fulfill({
+          response,
+          json: rows.map((row) =>
+            row.kind === 'qa' ? { ...change(row), result: staleReportText } : row,
+          ),
+        });
+      });
+      try {
+        await board.getByRole('button', { name: 'Refresh workflow' }).click();
+        await expect(mixedResultsAlert, label).toBeVisible({ timeout: 20000 });
+        await expect(createWorkflow, label).toBeDisabled();
+        await expect(board.getByRole('button', { name: 'Cancel workflow' }), label).toBeDisabled();
+        await expect(board.getByText(staleReportText), label).toHaveCount(0);
+      } finally {
+        await page.unrouteAll({ behavior: 'wait' });
+      }
+      await expect(mixedResultsAlert, label).toHaveCount(0, { timeout: 20000 });
+      await expect(createWorkflow, label).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' }), label).toBeEnabled();
+    }
+    await expect(board.getByText('Awaiting approval.', { exact: true })).toBeVisible();
     await assertNoUnexpectedWorkflowAlerts();
 
     // A fresh Dashboard can invalidate a form selection while the old ID
