@@ -192,24 +192,23 @@ export function WorkflowBoard({
   }, [refresh, paused, selectionRevision]);
   // A synchronous guard covers rapid consecutive events before React can
   // render the disabled state. Manual reads remain distinct from mutations.
-  const manualRefreshInFlight = useRef(false);
+  const operatorInFlight = useRef(false);
   async function refreshNow() {
-    if (manualRefreshInFlight.current) return;
-    manualRefreshInFlight.current = true;
+    if (operatorInFlight.current) return;
+    operatorInFlight.current = true;
     setLoading(true);
     try {
       await refresh(true);
     } finally {
-      manualRefreshInFlight.current = false;
+      operatorInFlight.current = false;
       setLoading(false);
     }
   }
-  // React state disables controls on the next render; this synchronous guard
-  // also prevents two operator events from submitting the same checkpoint.
-  const mutationInFlight = useRef(false);
+  // Share the synchronous operator lock with manual refresh. Otherwise a
+  // refresh and a privileged mutation can overlap before React disables controls.
   async function mutate(operation: () => Promise<unknown>) {
-    if (mutationInFlight.current) return;
-    mutationInFlight.current = true;
+    if (operatorInFlight.current) return;
+    operatorInFlight.current = true;
     setLoading(true);
     setError('');
     try {
@@ -218,7 +217,7 @@ export function WorkflowBoard({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      mutationInFlight.current = false;
+      operatorInFlight.current = false;
       setLoading(false);
     }
   }
