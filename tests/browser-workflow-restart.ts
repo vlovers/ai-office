@@ -1025,8 +1025,7 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeEnabled();
     const creationResponse = page.waitForResponse(
       (response) =>
-        response.url() === address + '/api/workflows' &&
-        response.request().method() === 'POST',
+        response.url() === address + '/api/workflows' && response.request().method() === 'POST',
       { timeout: 15000 },
     );
     await createWorkflow.click();

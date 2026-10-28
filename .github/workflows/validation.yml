@@ -44,8 +44,8 @@ jobs:
         # Temporary diagnostic: print the formatter's exact patch in CI logs.
         # Restore the strict check after applying that patch to the source.
         run: |
-          npx prettier --write tests/browser-workflow-restart.ts
-          git diff -- tests/browser-workflow-restart.ts
+          npx prettier --write src/web/workflow-board.tsx tests/browser-workflow-smoke.ts tests/browser-workflow-restart.ts
+          git diff -- src/web/workflow-board.tsx tests/browser-workflow-smoke.ts tests/browser-workflow-restart.ts
           npm run format:check
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium

@@ -101,6 +101,15 @@ try {
     releaseApprove();
     await page.unroute(approveRoute);
   }
+  // A cancelled bind must not retain its task choice for the next approval.
+  await board.getByRole('button', { name: 'Bind Coder task' }).click();
+  await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await board.getByRole('button', { name: 'Bind Coder task' }).click();
+  await expect(dialog.getByLabel('Bind Coder task')).toHaveValue('');
+  await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await gate('Bind Coder task', async () => {
     await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
   });
@@ -150,6 +159,38 @@ try {
   );
   assert.equal(concurrentApproval.status(), 200);
   await expect(dialog.getByRole('alert')).toContainText('The workflow changed', { timeout: 10000 });
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  // QA approval must not reuse a command selected in a cancelled dialog.
+  await board.getByRole('button', { name: 'Approve QA command' }).click();
+  await dialog.getByLabel('Approved QA command').selectOption('source');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await board.getByRole('button', { name: 'Approve QA command' }).click();
+  await expect(dialog.getByLabel('Approved QA command')).toHaveValue('');
+  await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  // If an allowlisted command disappears during refresh, restoring the list
+  // must not silently reactivate the old operator choice.
+  await board.getByRole('button', { name: 'Approve QA command' }).click();
+  await dialog.getByLabel('Approved QA command').selectOption('source');
+  await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeEnabled();
+  const qaCommandsRoute = '**/api/workflows/qa-commands';
+  await page.route(qaCommandsRoute, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"commands":[]}' }),
+  );
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow' }).click();
+    await expect(dialog.getByLabel('Approved QA command')).toHaveValue('');
+    await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  } finally {
+    await page.unroute(qaCommandsRoute);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow' }).click();
+  await expect(
+    dialog.getByLabel('Approved QA command').locator('option[value="source"]'),
+  ).toHaveCount(1);
   await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await gate('Approve QA command', async () => {

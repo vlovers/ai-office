@@ -100,6 +100,7 @@ export function WorkflowBoard({
   const [commands, setCommands] = useState<{ commandId: string; argv: string[] }[]>([]);
   const [commandId, setCommandId] = useState('');
   const [coderTask, setCoderTask] = useState('');
+  const [bindTaskId, setBindTaskId] = useState('');
   const [reviewer, setReviewer] = useState('');
   const [qa, setQA] = useState('');
   const [error, setError] = useState('');
@@ -148,6 +149,10 @@ export function WorkflowBoard({
         setItems(workflows);
         setDashboard(current);
         setCommands(choices.commands);
+        // Removed commands must not remain implicitly selected when they reappear.
+        setCommandId((current) =>
+          choices.commands.some((command) => command.commandId === current) ? current : '',
+        );
         // Read the latest selection after the async list request. A poll started
         // before a user switched workflows must not restore its old selection.
         const currentSelection = selectedRef.current;
@@ -269,13 +274,36 @@ export function WorkflowBoard({
   const selectedCoder = unsubmitted.find((task) => task.id === coderTask);
   const selectedReviewer = profiles.some((profile) => profile.id === reviewer);
   const selectedQA = !qa || profiles.some((profile) => profile.id === qa);
+  const eligibleBindTasks =
+    action?.name === 'bind-coder-task'
+      ? unsubmitted.filter(
+          (task) =>
+            task.agentId === action.stage.agentId && task.repositoryId === chosen?.repositoryId,
+        )
+      : [];
+  const validBindTask = eligibleBindTasks.some((task) => task.id === bindTaskId);
+  const validQACommand = commands.some((command) => command.commandId === commandId);
+  useEffect(() => {
+    // A refreshed dashboard can invalidate an earlier task choice.
+    if (bindTaskId && !validBindTask) setBindTaskId('');
+  }, [bindTaskId, validBindTask]);
   async function perform() {
-    if (!action || !confirmed || staleAction || paused || refreshRequired || error) return;
+    if (
+      !action ||
+      !confirmed ||
+      staleAction ||
+      paused ||
+      refreshRequired ||
+      error ||
+      (action.name === 'bind-coder-task' && !validBindTask) ||
+      (action.name === 'approve-qa' && !validQACommand)
+    )
+      return;
     const body: Record<string, unknown> = { version: action.version, confirmed: true };
     let endpoint = action.name;
     if (action.name === 'bind-coder-task') {
       endpoint = 'bind-task';
-      body.taskId = coderTask;
+      body.taskId = bindTaskId;
     }
     if (action.name === 'submit-initial') body.confirmedWrite = true;
     if (['approve-coder-evidence', 'approve-reviewer', 'approve-qa'].includes(action.name))
@@ -647,6 +675,9 @@ export function WorkflowBoard({
                       <button
                         disabled={mutationUnavailable}
                         onClick={() => {
+                          // Never carry approval-specific choices into a new dialog.
+                          setBindTaskId('');
+                          setCommandId('');
                           setAction({
                             name: stage.nextAction!,
                             stage,
@@ -728,15 +759,9 @@ export function WorkflowBoard({
             {action.name === 'bind-coder-task' && (
               <label>
                 Bind Coder task
-                <select value={coderTask} onChange={(event) => setCoderTask(event.target.value)}>
+                <select value={bindTaskId} onChange={(event) => setBindTaskId(event.target.value)}>
                   <option value="">Select task</option>
-                  {unsubmitted
-                    .filter(
-                      (task) =>
-                        task.agentId === action.stage.agentId &&
-                        task.repositoryId === chosen?.repositoryId,
-                    )
-                    .map((task) => (
+                  {eligibleBindTasks.map((task) => (
                       <option key={task.id} value={task.id}>
                         {task.title}
                       </option>
@@ -782,8 +807,8 @@ export function WorkflowBoard({
                   mutationUnavailable ||
                   staleAction ||
                   !confirmed ||
-                  (action.name === 'approve-qa' && !commandId) ||
-                  (action.name === 'bind-coder-task' && !coderTask)
+                  (action.name === 'approve-qa' && !validQACommand) ||
+                  (action.name === 'bind-coder-task' && !validBindTask)
                 }
                 onClick={() => void mutate(perform)}
               >
