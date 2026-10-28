@@ -193,6 +193,10 @@ export function WorkflowBoard({
           const summary = workflows.find((item) => item.id === next);
           if (
             !summary ||
+            !snapshot ||
+            snapshot.workflowId !== next ||
+            snapshot.version !== view?.version ||
+            snapshot.state !== view?.state ||
             !view ||
             !diagnosis ||
             view.id !== next ||
