@@ -67,7 +67,36 @@ try {
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal((await env.get()).stages[0]!.state, 'awaiting_approval');
   assert.equal(env.store.queue().length, 0);
-  await gate('Approve Coder baseline');
+  // Hold the first privileged request while a second click is dispatched.
+  // React's disabled state is not the only defence: the mutation handler must
+  // synchronously reject duplicate operator events.
+  let approveRequests = 0;
+  let approveStarted!: () => void;
+  let releaseApprove!: () => void;
+  const approveSeen = new Promise<void>((resolve) => { approveStarted = resolve; });
+  const approveGate = new Promise<void>((resolve) => { releaseApprove = resolve; });
+  const approveRoute = '**/api/workflows/*/approve-coder-baseline';
+  await page.route(approveRoute, async (route) => {
+    approveRequests++;
+    approveStarted();
+    await approveGate;
+    await route.continue();
+  });
+  try {
+    const pendingApproval = gate('Approve Coder baseline');
+    await Promise.race([
+      approveSeen,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Approval request did not start')), 10000)),
+    ]);
+    await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+    await dialog.getByRole('button', { name: 'Confirm checkpoint' }).dispatchEvent('click');
+    assert.equal(approveRequests, 1, 'Duplicate checkpoint event must not issue another request');
+    releaseApprove();
+    await pendingApproval;
+  } finally {
+    releaseApprove();
+    await page.unroute(approveRoute);
+  }
   await gate('Bind Coder task', async () => {
     await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
   });
