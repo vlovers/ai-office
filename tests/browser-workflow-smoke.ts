@@ -286,7 +286,7 @@ try {
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const routePattern = `**/api/workflows/${otherId}/timeline`;
+  const routePattern = `**/api/workflows/${otherId}/snapshot`;
   await page.route(routePattern, async (route) => {
     const response = await route.fetch();
     await held;
@@ -294,7 +294,7 @@ try {
   });
   try {
     const requested = page.waitForRequest((request) =>
-      request.url().endsWith(`/workflows/${otherId}/timeline`),
+      request.url().endsWith(`/workflows/${otherId}/snapshot`),
     );
     await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
     await requested;
@@ -303,7 +303,7 @@ try {
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
     const delayed = page.waitForResponse((response) =>
-      response.url().endsWith(`/workflows/${otherId}/timeline`),
+      response.url().endsWith(`/workflows/${otherId}/snapshot`),
     );
     release();
     await (await delayed).finished();
