@@ -762,10 +762,10 @@ export function WorkflowBoard({
                 <select value={bindTaskId} onChange={(event) => setBindTaskId(event.target.value)}>
                   <option value="">Select task</option>
                   {eligibleBindTasks.map((task) => (
-                      <option key={task.id} value={task.id}>
-                        {task.title}
-                      </option>
-                    ))}
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                    </option>
+                  ))}
                 </select>
               </label>
             )}
