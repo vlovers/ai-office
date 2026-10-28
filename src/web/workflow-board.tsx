@@ -190,13 +190,17 @@ export function WorkflowBoard({
       pollingInFlight.current = false;
     };
   }, [refresh, paused, selectionRevision]);
+  // A synchronous guard covers rapid consecutive events before React can
+  // render the disabled state. Manual reads remain distinct from mutations.
+  const manualRefreshInFlight = useRef(false);
   async function refreshNow() {
-    // A manual read is not a mutation: do not invoke mutate(), which would
-    // run the supplied refresh and then issue a second forced refresh.
+    if (manualRefreshInFlight.current) return;
+    manualRefreshInFlight.current = true;
     setLoading(true);
     try {
       await refresh(true);
     } finally {
+      manualRefreshInFlight.current = false;
       setLoading(false);
     }
   }
