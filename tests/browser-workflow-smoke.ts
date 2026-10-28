@@ -73,9 +73,13 @@ try {
   let approveRequests = 0;
   let approveStarted!: () => void;
   let releaseApprove!: () => void;
-  const approveSeen = new Promise<void>((resolve) => { approveStarted = resolve; });
-  const approveGate = new Promise<void>((resolve) => { releaseApprove = resolve; });
-  const approveRoute = '**/api/workflows/*/approve-coder-baseline';
+  const approveSeen = new Promise<void>((resolve) => {
+    approveStarted = resolve;
+  });
+  const approveGate = new Promise<void>((resolve) => {
+    releaseApprove = resolve;
+  });
+  const approveRoute = '**/api/workflows/*/approve-initial';
   await page.route(approveRoute, async (route) => {
     approveRequests++;
     approveStarted();
@@ -86,11 +90,17 @@ try {
     const pendingApproval = gate('Approve Coder baseline');
     await Promise.race([
       approveSeen,
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Approval request did not start')), 10000)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Approval request did not start')), 10000),
+      ),
     ]);
     await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
     await dialog.getByRole('button', { name: 'Confirm checkpoint' }).dispatchEvent('click');
-    assert.equal(approveRequests, 1, 'Duplicate checkpoint event must not issue another request');
+    assert.equal(
+      approveRequests,
+      1,
+      'Duplicate checkpoint event must not issue another request',
+    );
     releaseApprove();
     await pendingApproval;
   } finally {
