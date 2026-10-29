@@ -184,6 +184,7 @@ try {
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Tasks' })
     .click();
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Task title').fill('Review the example project');
   await page.getByLabel('What should the agent work on?').fill('Review the README.');
   await page.getByRole('button', { name: 'Create task' }).click();
