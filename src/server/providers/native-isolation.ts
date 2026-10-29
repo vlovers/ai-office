@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
+import { randomBytes } from 'node:crypto';
 import { codexOptions } from './codex-config.js';
 import { AppError } from '../errors.js';
 import { runVerification, type VerificationResult } from '../verification.js';
@@ -12,6 +13,7 @@ export const nativeCodex = createRequire(import.meta.url).resolve('@openai/codex
 export async function assertNativeDenials(
   forbidden: string[][],
   run: (argv: string[]) => Promise<VerificationResult>,
+  forbiddenReadCanaries: readonly string[] = [],
 ): Promise<void> {
   // Convert synchronous launch failures into rejections and wait for every
   // sibling supervisor before allowing the caller to tear down probe resources.
@@ -26,6 +28,16 @@ export async function assertNativeDenials(
     throw new Error('Native sandbox denial probe did not complete normally.');
   if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.passed))
     throw new Error('Sandbox allowed a forbidden operation.');
+  // A wrapper may leak file contents and then return a nonzero status. Exit
+  // status alone cannot attest that forbidden reads were actually denied.
+  if (
+    probes.some(
+      (probe) =>
+        probe.status === 'fulfilled' &&
+        forbiddenReadCanaries.some((canary) => probe.value.output.includes(canary)),
+    )
+  )
+    throw new Error('Sandbox leaked forbidden read contents.');
 }
 
 /** Identical permission table to SDK execution, without legacy --sandbox overrides. */
@@ -55,6 +67,10 @@ export async function verifyNativeIsolation(
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-policy-')));
   const directory = join(root, 'snapshot');
   const home = join(root, 'home');
+  // Fresh per-invocation canaries prove that forbidden files were not exposed,
+  // even when an executable masks a successful read with a failing exit code.
+  const outsideCanary = `OUTSIDE_DENIED_${randomBytes(16).toString('hex')}`;
+  const secretCanary = `SECRET_DENIED_${randomBytes(16).toString('hex')}`;
   let networkEscape = false;
   const server = createServer((_request, response) => {
     networkEscape = true;
@@ -64,8 +80,8 @@ export async function verifyNativeIsolation(
     await mkdir(directory);
     await mkdir(home);
     await writeFile(join(directory, 'allowed.txt'), 'READ_ALLOWED');
-    await writeFile(join(root, 'outside.txt'), 'OUTSIDE_DENIED');
-    await writeFile(join(directory, '.env'), 'SECRET_DENIED');
+    await writeFile(join(root, 'outside.txt'), outsideCanary);
+    await writeFile(join(directory, '.env'), secretCanary);
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
       server.listen(0, '127.0.0.1', resolve);
@@ -99,7 +115,7 @@ export async function verifyNativeIsolation(
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
-    await assertNativeDenials(forbidden, run);
+    await assertNativeDenials(forbidden, run, [outsideCanary, secretCanary]);
     if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
     if (networkEscape) throw new Error('Network isolation failed.');
     // Check effects as well as exit codes (a wrapper may hide its child's status).
