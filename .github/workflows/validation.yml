@@ -42,6 +42,9 @@ jobs:
         run: npm run build
       - name: Formatting
         run: npm run format:check
+      - name: Formatting diagnostics
+        if: failure()
+        run: npx prettier tests/browser-workflow-restart.ts | diff -u tests/browser-workflow-restart.ts - || true
       - name: Install Chromium and browser dependencies
         run: npx playwright install --with-deps chromium
       - name: Browser smoke (deterministic fixtures)
