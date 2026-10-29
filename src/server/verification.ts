@@ -19,7 +19,8 @@ export async function runVerification(
     throw new AppError(409, 'Verification requires macOS or Linux process groups.');
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
     throw new AppError(400, 'Verification timeout must be positive and finite.');
-  if (signal?.aborted) return { passed: false, output: 'Verification interrupted before launch.' };
+  if (signal?.aborted)
+    return { passed: false, output: 'Verification interrupted before launch.', incomplete: true };
   return new Promise((resolve, reject) => {
     const child = fork(
       new URL(
@@ -59,7 +60,11 @@ export async function runVerification(
     }, timeoutMs + 5000);
     const abort = () => {
       interrupted = true;
-      result = { passed: false, output: 'Verification interrupted during application shutdown.' };
+      result = {
+        passed: false,
+        output: 'Verification interrupted during application shutdown.',
+        incomplete: true,
+      };
       try {
         if (child.pid) killProcessGroup(child.pid);
       } catch (error) {
