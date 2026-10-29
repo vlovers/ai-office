@@ -66,3 +66,15 @@ it('waits for every sibling supervisor to settle before failing closed', async (
   }
   await expect(pending).rejects.toThrow('Native sandbox probe supervisor failed.');
 });
+
+for (const reason of ['spawn failure', 'timeout', 'output limit', 'signal termination']) {
+  it(`rejects an incomplete ${reason} as proof of native sandbox denial`, async () => {
+    await expect(
+      assertNativeDenials(commands, async ([name]) =>
+        name === 'outside.txt'
+          ? { passed: false, output: reason, incomplete: true }
+          : denied,
+      ),
+    ).rejects.toThrow('Native sandbox denial probe did not complete normally.');
+  });
+}
