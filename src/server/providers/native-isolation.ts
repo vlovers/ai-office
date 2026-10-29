@@ -71,13 +71,18 @@ export async function verifyNativeIsolation(executable = nativeCodex): Promise<v
     const read = await run(['/bin/cat', join(directory, 'allowed.txt')]);
     if (!read.passed || read.output.trim() !== 'READ_ALLOWED')
       throw new Error('Read probe failed.');
-    for (const argv of [
+    // These independent denial probes share no writable target. Run them
+    // concurrently so one slow native sandbox process cannot multiply the
+    // preflight latency by four; every result and side effect is still checked.
+    const forbidden = [
       ['/bin/cat', join(root, 'outside.txt')],
       ['/bin/cat', join(directory, '.env')],
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
-    ])
-      if ((await run(argv)).passed) throw new Error('Sandbox allowed a forbidden operation.');
+    ];
+    const probes = await Promise.all(forbidden.map((argv) => run(argv)));
+    if (probes.some((probe) => probe.passed))
+      throw new Error('Sandbox allowed a forbidden operation.');
     if (networkEscape) throw new Error('Network isolation failed.');
     // Check effects as well as exit codes (a wrapper may hide its child's status).
     if (
