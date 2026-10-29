@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { runVerification } from '../../src/server/verification.js';
 import { Store } from '../../src/server/store.js';
 import { WorkflowStore } from '../../src/server/workflows.js';
 
@@ -91,11 +94,55 @@ const ordinary = store.createTask({
 });
 store.enqueue(ordinary.id, 'local-cli-chatgpt');
 
-process.send({
+const manifest = {
   cases,
   readyWorkflowId: ready.id,
   readyVersion: approvedReady.version,
   ordinaryTaskId: ordinary.id,
-});
+};
+const verificationDirectory = process.argv[3];
+if (verificationDirectory) {
+  // Optional integration mode: keep the WAL open while a detached verification
+  // supervisor runs a synthetic delayed writer. No provider or network calls.
+  const command = [
+    process.execPath,
+    '-e',
+    "const fs=require('node:fs');fs.writeFileSync('started.json',JSON.stringify({group:process.ppid}));setTimeout(()=>fs.writeFileSync('must-not-run','orphan survived backend SIGKILL'),4000);setInterval(()=>{},1000);",
+  ];
+  void runVerification(command, verificationDirectory, 60_000).catch((error: unknown) => {
+    console.error('Verification fixture failed:', error);
+    process.exit(1);
+  });
+  void (async () => {
+    let group: number | undefined;
+    for (let attempt = 0; attempt < 400; attempt++) {
+      try {
+        const marker: unknown = JSON.parse(
+          await readFile(join(verificationDirectory, 'started.json'), 'utf8'),
+        );
+        if (
+          marker &&
+          typeof marker === 'object' &&
+          'group' in marker &&
+          Number.isSafeInteger(marker.group) &&
+          (marker.group as number) > 1
+        ) {
+          group = marker.group as number;
+          break;
+        }
+      } catch {
+        // The worker has not yet launched the command or written its marker.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    if (!group) throw new Error('Verification supervisor did not start in time.');
+    process.send?.({ ...manifest, verificationGroup: group });
+  })().catch((error: unknown) => {
+    console.error('Verification fixture readiness failed:', error);
+    process.exit(1);
+  });
+} else {
+  process.send(manifest);
+}
 // Keep the SQLite WAL connection open until the parent sends SIGKILL.
 setInterval(() => {}, 1000);
