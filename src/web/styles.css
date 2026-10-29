@@ -2083,3 +2083,29 @@ select {
     position: static;
   }
 }
+
+.destination-intro {
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-dim);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(40, 83, 60, 0.18), transparent);
+}
+.destination-intro h2 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  margin: 0 0 6px;
+}
+.destination-intro p {
+  max-width: 65ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.shell[data-page="settings"] .settings-destination > .destination-intro {
+  grid-column: 1 / -1;
+}
+.shell[data-page="agents"] .agents-destination,
+.shell[data-page="workflows"] .workflows-destination {
+  min-width: 0;
+}
