@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
 import { MainNavigation } from './main-navigation.js';
+import { PageHeading } from './page-heading.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
@@ -448,26 +449,14 @@ function App() {
           </button>
         </header>
         <div className="content">
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">AI OFFICE / {page.toUpperCase()}</div>
-              <h1>
-                {page === 'office' ? (view === 'focus' ? 'Focus mode' : 'Office overview') : ({ tasks: 'Tasks', workflows: 'Workflows', agents: 'Agents', settings: 'Settings' } as const)[page]}
-                <span>_</span>
-              </h1>
-              <p>{page === 'office' ? 'Your team at a glance. Select an agent or start a task.' : page === 'tasks' ? 'Create, track, and review work in one place.' : page === 'workflows' ? 'Follow every stage from coding through approval.' : page === 'agents' ? 'Manage reusable agent profiles and assignments.' : 'Connections, access, and trusted repositories.'}</p>
-            </div>
-            <a
-              className="button-link"
-              href="#compose"
-              onClick={() => {
-                setView('mission');
-                showSection('compose');
-              }}
-            >
-              ＋ New task
-            </a>
-          </div>
+          <PageHeading
+            page={page}
+            focus={view === 'focus'}
+            onNewTask={() => {
+              setView('mission');
+              showSection('compose');
+            }}
+          />
           <div className="view-switch" role="group" aria-label="Workspace view">
             <button
               className="secondary"
