@@ -1,4 +1,4 @@
-import type { AgentProfile } from '../shared/types.js';
+import type { AgentProfile, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
 
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
@@ -12,7 +12,7 @@ export function AgentsPage({
   profiles: AgentProfile[];
   api: Api;
   refresh: () => Promise<void>;
-  onSelect: (id: string) => void;
+  onSelect: (id: AgentId) => void;
 }) {
   return (
     <section className="agents-destination" aria-label="Agent profiles">
