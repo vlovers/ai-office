@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,8 +5,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { codexOptions } from './codex-config.js';
 import { AppError } from '../errors.js';
-
-const exec = promisify(execFile);
+import { runVerification } from '../verification.js';
 export const nativeCodex = createRequire(import.meta.url).resolve('@openai/codex/bin/codex.js');
 
 /** Identical permission table to SDK execution, without legacy --sandbox overrides. */
@@ -55,22 +52,21 @@ export async function verifyNativeIsolation(
     });
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
-    const env = {
-      PATH: `${process.execPath.slice(0, process.execPath.lastIndexOf('/'))}:/usr/bin:/bin`,
-      HOME: home,
-      CODEX_HOME: home,
-    };
     const run = async (argv: string[]) => {
       if (signal?.aborted) return { passed: false, output: '' };
       try {
-        const result = await exec(executable, sandboxArguments(directory, argv), {
-          cwd: directory,
-          env,
-          timeout: 10000,
-          maxBuffer: 64_000,
+        // A direct execFile only kills its immediate child on abort/timeout.
+        // Native Codex can spawn sandbox descendants, which must not outlive
+        // the preflight (or survive an abrupt backend disconnect). Reuse the
+        // independently supervised process-group runner used for QA execution.
+        const command = executable === nativeCodex ? [process.execPath, executable] : [executable];
+        return await runVerification(
+          [...command, ...sandboxArguments(directory, argv)],
+          directory,
+          10000,
           signal,
-        });
-        return { passed: true, output: result.stdout };
+          { HOME: home, CODEX_HOME: home },
+        );
       } catch {
         return { passed: false, output: '' };
       }
