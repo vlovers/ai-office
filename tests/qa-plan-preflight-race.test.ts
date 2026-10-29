@@ -114,6 +114,20 @@ it('passes an unchanged approved command to the supervisor after preflight', asy
   }
 }, 10000);
 
+it('skips native preflight when cancelled during asynchronous approval revalidation', async () => {
+  const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 2000);
+  const controller = new AbortController();
+  const pending = runSandboxedQA('/does-not-exist', plan, controller.signal);
+  // runSandboxedQA is suspended on realpath/stat during its first digest check.
+  controller.abort();
+  await expect(pending).resolves.toEqual({
+    passed: false,
+    output: 'QA stopped before launch.',
+  });
+  expect(native.preflight).not.toHaveBeenCalled();
+  expect(native.verification).not.toHaveBeenCalled();
+}, 10000);
+
 it('rejects an executable permission change during native preflight', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-mode-')));
   const executable = join(root, 'approved.sh');
