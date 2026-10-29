@@ -7,6 +7,7 @@ import { PageHeading } from './page-heading.js';
 import { OfficePage, WorkspacePage } from './workspace-pages.js';
 import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
 import { TaskSummary } from './task-summary.js';
+import { SubmittedQueue } from './submitted-queue.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
@@ -631,33 +632,12 @@ function App() {
           <WorkspacePage page={page} board={<>
 
               {page === 'tasks' && <TaskSummary dashboard={dashboard} />}
-              {!!dashboard?.queue.length && (
-                <section className="panel queue-panel" aria-label="Submitted queue">
-                  <div className="panel-heading">
-                    <h2>Submitted queue</h2>
-                    <span>{dashboard.queue.length} / 100</span>
-                  </div>
-                  <ol>
-                    {dashboard.queue.map((entry) => (
-                      <li key={entry.taskId}>
-                        <button
-                          className="secondary"
-                          onClick={() => {
-                            setSelected(entry.taskId);
-                            setTaskPanel('details');
-                            setSelectedAgent(entry.agentId);
-                            setResumeSessionId('');
-                          }}
-                        >
-                          {dashboard.tasks.find((task) => task.id === entry.taskId)?.title} ·{' '}
-                          {entry.agentId}
-                          <small> / {entry.waitingReason}</small>
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
+              {page === 'tasks' && <SubmittedQueue dashboard={dashboard} onSelect={(taskId, agentId) => {
+                setSelected(taskId);
+                setTaskPanel('details');
+                setSelectedAgent(agentId);
+                setResumeSessionId('');
+              }} />}
               {dashboard && (
                 <section className="agents-destination" aria-label="Agent profiles">
                   <div className="destination-intro"><h2>Your agents</h2><p>Manage profiles and choose who should handle the next task.</p></div>
