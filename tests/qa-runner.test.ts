@@ -50,6 +50,43 @@ esac
   30000,
 );
 native(
+  'checks independent native denial probes without serial timeout amplification',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-parallel-')));
+    try {
+      const fake = join(root, 'fake-sandbox.sh');
+      await writeFile(
+        fake,
+        `#!/bin/sh
+case "$*" in
+  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  *outside.txt*) marker=outside ;;
+  *.env*) marker=secret ;;
+  *write-escape*) marker=write ;;
+  *127.0.0.1:*) marker=network ;;
+  *) exit 0 ;;
+esac
+touch "${root}/$marker"
+i=0
+while [ "$i" -lt 200 ]; do
+  if [ -f "${root}/outside" ] && [ -f "${root}/secret" ] && [ -f "${root}/write" ] && [ -f "${root}/network" ]; then
+    exit 1
+  fi
+  sleep 0.02
+  i=$((i + 1))
+done
+exit 0
+`,
+      );
+      await chmod(fake, 0o700);
+      await expect(verifyNativeIsolation(fake)).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  15000,
+);
+native(
   'proves native read-only, secret, outside-read and network denial without inference',
   async () => {
     await verifyNativeIsolation();
