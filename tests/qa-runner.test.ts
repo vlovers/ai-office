@@ -157,6 +157,47 @@ esac
   12000,
 );
 
+
+fakeNative(
+  'kills background children of concurrent denial probes on cancellation',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-denial-child-')));
+    const controller = new AbortController();
+    const fake = join(root, 'fake-sandbox.sh');
+    await writeFile(
+      fake,
+      `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 1
+shift
+case "$*" in
+  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  *outside.txt*)
+    ( /bin/sleep 1; /usr/bin/touch "${root}/late-write" ) &
+    /usr/bin/touch "${root}/denial-started"
+    wait
+    ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    await chmod(fake, 0o700);
+    const pending = verifyNativeIsolation(fake, controller.signal);
+    try {
+      await waitForProbeMarkers([join(root, 'denial-started')]);
+      controller.abort();
+      await expect(pending).rejects.toThrow('capability verification failed');
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await expect(readFile(join(root, 'late-write'))).rejects.toThrow();
+    } finally {
+      controller.abort();
+      await pending.catch(() => {});
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  12000,
+);
+
 fakeNative(
   'kills native sandbox descendants after abrupt backend process death',
   async () => {
