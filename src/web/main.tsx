@@ -628,7 +628,7 @@ function App() {
           {page !== 'office' && (
           <div className="mission-grid" aria-label="Workspace tools">
             <div className="mission-board">
-              {page === 'tasks' && <div className="stats" aria-label="Workspace statistics">
+              <div className="stats" aria-label="Workspace statistics">
                 <div>
                   <span>CODEX AGENTS</span>
                   <strong>
@@ -657,7 +657,7 @@ function App() {
                   </strong>
                 </div>
               </div>
-              {page === 'tasks' && !!dashboard?.queue.length && (
+              {!!dashboard?.queue.length && (
                 <section className="panel queue-panel" aria-label="Submitted queue">
                   <div className="panel-heading">
                     <h2>Submitted queue</h2>
@@ -684,7 +684,7 @@ function App() {
                   </ol>
                 </section>
               )}
-              {page === 'agents' && dashboard && (
+              {dashboard && (
                 <section className="agents-destination" aria-label="Agent profiles">
                   <div className="destination-intro"><h2>Your agents</h2><p>Manage profiles and choose who should handle the next task.</p></div>
                   <AgentStudio
@@ -699,11 +699,11 @@ function App() {
                 />
                 </section>
               )}
-              {page === 'workflows' && <section className="workflows-destination" id="workflows" tabIndex={-1} aria-label="Workflow management">
+              <section className="workflows-destination" id="workflows" tabIndex={-1} aria-label="Workflow management">
                 <div className="destination-intro"><h2>Workflow runs</h2><p>Inspect each stage, its handoffs, and any action waiting for approval.</p></div>
                 <WorkflowBoard inspection={workflowInspection} />
-              </section>}
-              {page === 'tasks' && <section className="panel history" id="task-history">
+              </section>
+              <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
                   <span className="subtle">{dashboard?.tasks.length ?? 0} tasks</span>
