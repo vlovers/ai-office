@@ -89,7 +89,8 @@ it(
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-});
+  },
+);
 
 it('rejects tampered approved QA arguments, timeout, and digest before preflight', async () => {
   const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 1000);
