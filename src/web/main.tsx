@@ -9,7 +9,7 @@ import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
 import { TaskSummary } from './task-summary.js';
 import { SubmittedQueue } from './submitted-queue.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
-import { WorkflowBoard } from './workflow-board.js';
+import { WorkflowsPage } from './workflows-page.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
@@ -650,10 +650,7 @@ function App() {
                   }}
                 />
               )}
-              <section className="workflows-destination" id="workflows" tabIndex={-1} aria-label="Workflow management">
-                <div className="destination-intro"><h2>Workflow runs</h2><p>Inspect each stage, its handoffs, and any action waiting for approval.</p></div>
-                <WorkflowBoard inspection={workflowInspection} />
-              </section>
+              {page === 'workflows' && <WorkflowsPage inspection={workflowInspection} />}
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
