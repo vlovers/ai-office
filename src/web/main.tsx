@@ -651,6 +651,7 @@ function App() {
                 />
               )}
               {page === 'workflows' && <WorkflowsPage inspection={workflowInspection} />}
+              {page === 'tasks' && (
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
@@ -820,6 +821,8 @@ function App() {
                   </div>
                 )}
               </section>
+              )}
+              {page === 'tasks' && (
               <section className="panel output" id="task-workspace" tabIndex={-1} data-task-panel="details">
                 <div className="panel-heading">
                   <h2>
@@ -1063,6 +1066,8 @@ function App() {
                   </>
                 )}
               </section>
+              )}
+              {page === 'tasks' && (
               <section className="panel compose" id="compose" tabIndex={-1} data-task-panel="new">
                 <div className="panel-heading">
                   <h2>Create a task</h2>
@@ -1173,6 +1178,7 @@ function App() {
                   keeping or rejecting; integration is manual.
                 </p>
               </section>
+              )}
             </>} inspector={<>
 
               <section className="panel agent-panel" id="agent" tabIndex={-1}>
