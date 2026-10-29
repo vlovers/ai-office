@@ -419,11 +419,15 @@ try {
   await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-mobile.png'), fullPage: true });
+  await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
   assert.deepEqual(errors, []);
