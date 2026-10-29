@@ -651,9 +651,7 @@ if (process.argv.includes('--restart-server')) {
       );
       delayedPause.release();
       await staleResponse;
-      await expect(
-        board.getByRole('alert').filter({ hasText: stalePauseMessage }),
-      ).toHaveCount(0);
+      await expect(board.getByRole('alert').filter({ hasText: stalePauseMessage })).toHaveCount(0);
       await expect(createWorkflow).toBeEnabled();
       await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     } finally {
