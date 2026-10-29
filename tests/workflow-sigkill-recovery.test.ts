@@ -81,9 +81,9 @@ it.skipIf(process.platform === 'win32')(
         );
         expect(workflow.stages[1]?.state).toBe('pending');
         expect(recovered.queue().some((item) => item.taskId === entry.taskId)).toBe(false);
-        expect(recovered.events(entry.taskId).filter((event) => event.kind === 'interrupted')).toHaveLength(
-          entry.taskState === 'queued' ? 0 : 1,
-        );
+        expect(
+          recovered.events(entry.taskId).filter((event) => event.kind === 'interrupted'),
+        ).toHaveLength(entry.taskState === 'queued' ? 0 : 1);
         expect(task.error).toContain(
           entry.taskState === 'queued'
             ? 'manual review after server restart'
@@ -112,9 +112,9 @@ it.skipIf(process.platform === 'win32')(
         expect(again.get(entry.workflowId)?.version).toBe(entry.version + 1);
         expect(again.get(entry.workflowId)?.state).toBe('blocked');
         expect(reopened.task(entry.taskId)?.state).toBe('interrupted');
-        expect(reopened.events(entry.taskId).filter((event) => event.kind === 'interrupted')).toHaveLength(
-          entry.taskState === 'queued' ? 0 : 1,
-        );
+        expect(
+          reopened.events(entry.taskId).filter((event) => event.kind === 'interrupted'),
+        ).toHaveLength(entry.taskState === 'queued' ? 0 : 1);
       }
       expect(again.get(manifest.readyWorkflowId)?.version).toBe(manifest.readyVersion);
       expect(reopened.queue().map((entry) => entry.taskId)).toEqual([
