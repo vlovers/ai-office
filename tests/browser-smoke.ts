@@ -116,7 +116,15 @@ try {
     .getByRole('button', { name: 'Office' })
     .click();
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await expect(page.locator('#agent')).toContainText('Codex 02');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.studio-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
   await page.locator('.studio-agent').first().click();
   await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
