@@ -338,7 +338,7 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
     const task = { ...JSON.parse(row.json), state: 'running' };
     db.prepare('UPDATE tasks SET state=?, json=? WHERE id=?')
       .run('running', JSON.stringify(task), process.argv[2]);
-    process.stdout.write('READY\\n');
+    process.stdout.write('READY');
     setInterval(() => {}, 1000);
   `;
   const child = spawn(process.execPath, ['-e', script, path, task.id], {
@@ -354,7 +354,7 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
       let output = '';
       child.stdout!.on('data', (chunk: Buffer) => {
         output += chunk.toString();
-        if (output.includes('READY\\n')) resolve();
+        if (output.includes('READY')) resolve();
       });
       child.once('error', reject);
       child.once('exit', (code, signal) =>
@@ -369,7 +369,7 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
         ready,
         new Promise<never>((_, reject) => {
           timeout = setTimeout(
-            () => reject(new Error('SQLite worker readiness timed out; stderr: ${errorOutput}')),
+            () => reject(new Error(`SQLite worker readiness timed out; stderr: ${errorOutput}`)),
             10000,
           );
         }),
