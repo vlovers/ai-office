@@ -51,8 +51,8 @@ it('cleans native probe listeners after an asynchronous bind error', async () =>
     expect(contender.listenerCount('error')).toBe(errors);
     expect(contender.listenerCount('listening')).toBe(listening);
   } finally {
-    contender.close();
-    occupied.close();
+    if (contender.listening) contender.close();
+    if (occupied.listening) occupied.close();
   }
 });
 
