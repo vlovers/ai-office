@@ -20,6 +20,10 @@ export async function assertNativeDenials(
   );
   if (probes.some((probe) => probe.status === 'rejected'))
     throw new Error('Native sandbox probe supervisor failed.');
+  // A timeout, spawn failure, output cap or signal is not evidence that the
+  // sandbox denied the operation. Only a completed nonzero exit is usable.
+  if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.incomplete))
+    throw new Error('Native sandbox denial probe did not complete normally.');
   if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.passed))
     throw new Error('Sandbox allowed a forbidden operation.');
 }

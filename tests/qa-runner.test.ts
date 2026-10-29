@@ -244,6 +244,35 @@ await verifyNativeIsolation(${JSON.stringify(fake)});
   15000,
 );
 
+fakeNative(
+  'fails closed when a sandbox executable disappears after the allowed-read probe',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-vanish-')));
+    try {
+      const fake = join(root, 'vanishing-sandbox.sh');
+      await writeFile(
+        fake,
+        `#!/bin/sh
+case "$*" in
+  *allowed.txt*)
+    /bin/rm -f "$0"
+    printf 'READ_ALLOWED\\n'
+    exit 0 ;;
+  *) exit 1 ;;
+esac
+`,
+      );
+      await chmod(fake, 0o700);
+      // The read probe succeeds, but all four denial probes fail to spawn.
+      // Spawn failures are not proof of sandbox enforcement.
+      await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  15000,
+);
+
 native(
   'rejects a forged sandbox that allows forbidden operations after passing the read probe',
   async () => {
@@ -276,6 +305,10 @@ native(
       await writeFile(
         fake,
         `#!/bin/sh
+# Sandbox config includes .env deny patterns: inspect only the command after --.
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 0
+shift
 case "$*" in
   *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
