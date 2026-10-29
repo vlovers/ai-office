@@ -344,7 +344,11 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
-  // Reload resets history disclosure. Reopen it before checking persisted activity.
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
+  // Recent agent activity and the selected-agent inspector belong to the Office page.
   const history = page.getByRole('button', { name: /Recent task activity/ });
   if ((await history.getAttribute('aria-expanded')) === 'false') await history.click();
   await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText(
