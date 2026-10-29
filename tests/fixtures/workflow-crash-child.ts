@@ -12,11 +12,13 @@ const repository = store.register({
   gitDir: '/disposable/workflow-crash-recovery/.git',
   name: 'Crash recovery fixture',
 });
-const coder = store.agent('codex-1')!;
+const originalCoder = store.agent('codex-1')!;
+const coder = store.editAgent(originalCoder.id, originalCoder.revision, {
+  ...originalCoder,
+  maximumMode: 'write',
+  model: 'fixture-model',
+});
 const reviewer = store.agent('codex-2')!;
-store.db
-  .prepare('UPDATE agent_versions SET json=? WHERE agent_id=? AND revision=?')
-  .run(JSON.stringify({ ...coder, maximumMode: 'write' }), coder.id, coder.revision);
 const workflows = new WorkflowStore(store.db);
 const baseline = 'a'.repeat(40);
 
