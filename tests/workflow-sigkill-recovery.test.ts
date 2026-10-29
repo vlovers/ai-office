@@ -25,7 +25,9 @@ it.skipIf(process.platform === 'win32')(
   async () => {
     const root = await mkdtemp(join(tmpdir(), 'ai-office-workflow-sigkill-'));
     const path = join(root, 'metadata.sqlite');
-    const fixture = fileURLToPath(new URL('./fixtures/workflow-crash-child.ts', import.meta.url));
+    const fixture = fileURLToPath(
+      new URL('./fixtures/workflow-crash-child.ts', import.meta.url),
+    );
     const child = spawn(process.execPath, ['--import', 'tsx', fixture, path], {
       cwd: process.cwd(),
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -51,7 +53,9 @@ it.skipIf(process.platform === 'win32')(
         });
         child.once('exit', (code, signal) => {
           clearTimeout(timer);
-          reject(new Error(`Crash fixture exited before SIGKILL: ${code}/${signal}: ${stderr}`));
+          reject(
+            new Error(`Crash fixture exited before SIGKILL: ${code}/${signal}: ${stderr}`),
+          );
         });
       });
       expect(manifest.cases.map((entry) => entry.taskState)).toEqual([
@@ -80,7 +84,9 @@ it.skipIf(process.platform === 'win32')(
           expect.objectContaining({ state: 'interrupted', taskId: entry.taskId }),
         );
         expect(workflow.stages[1]?.state).toBe('pending');
-        expect(recovered.queue().some((item) => item.taskId === entry.taskId)).toBe(false);
+        expect(
+          recovered.queue().some((item) => item.taskId === entry.taskId),
+        ).toBe(false);
         expect(
           recovered.events(entry.taskId).filter((event) => event.kind === 'interrupted'),
         ).toHaveLength(entry.taskState === 'queued' ? 0 : 1);
@@ -116,12 +122,15 @@ it.skipIf(process.platform === 'win32')(
           reopened.events(entry.taskId).filter((event) => event.kind === 'interrupted'),
         ).toHaveLength(entry.taskState === 'queued' ? 0 : 1);
       }
-      expect(again.get(manifest.readyWorkflowId)?.version).toBe(manifest.readyVersion);
+      expect(again.get(manifest.readyWorkflowId)?.version).toBe(
+        manifest.readyVersion,
+      );
       expect(reopened.queue().map((entry) => entry.taskId)).toEqual([
         manifest.ordinaryTaskId,
       ]);
     } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill('SIGKILL');
       reopened?.close();
       recovered?.close();
       await rm(root, { recursive: true, force: true });
