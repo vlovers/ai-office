@@ -661,6 +661,32 @@ function App() {
                 />
               )}
               {page === 'workflows' && <WorkflowsPage inspection={workflowInspection} />}
+              {page === 'settings' && (
+                <SettingsPage
+                  dashboard={dashboard}
+                  busy={busy}
+                  agentBusy={agentBusy}
+                  onChangeMode={(mode) => {
+                    void act(async () => {
+                      await api('/connection', { mode });
+                      setResumeSessionId('');
+                    });
+                  }}
+                  onRefreshConnection={() => {
+                    void act(async () => {
+                      await api('/connection/refresh', {});
+                    });
+                  }}
+                  onRegisterRepository={(path, form) => {
+                    void act(async () => {
+                      const repo = await api<{ id: string }>('/repositories', { path });
+                      setRepositoryId(repo.id);
+                      setResumeSessionId('');
+                      form.reset();
+                    });
+                  }}
+                />
+              )}
               {page === 'tasks' && (
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
@@ -1265,32 +1291,6 @@ function App() {
                 </div>
                 {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
-              )}
-              {page === 'settings' && (
-                <SettingsPage
-                  dashboard={dashboard}
-                  busy={busy}
-                  agentBusy={agentBusy}
-                  onChangeMode={(mode) => {
-                    void act(async () => {
-                      await api('/connection', { mode });
-                      setResumeSessionId('');
-                    });
-                  }}
-                  onRefreshConnection={() => {
-                    void act(async () => {
-                      await api('/connection/refresh', {});
-                    });
-                  }}
-                  onRegisterRepository={(path, form) => {
-                    void act(async () => {
-                      const repo = await api<{ id: string }>('/repositories', { path });
-                      setRepositoryId(repo.id);
-                      setResumeSessionId('');
-                      form.reset();
-                    });
-                  }}
-                />
               )}
             </>} />
           )}
