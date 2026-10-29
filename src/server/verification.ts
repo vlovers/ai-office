@@ -79,12 +79,14 @@ export async function runVerification(
         reject(new AppError(409, 'Verification supervisor could not start.'));
         return;
       }
-      resolve(
-        result ?? {
-          passed: false,
-          output: 'Verification supervisor interrupted; no successful completion was confirmed.',
-        },
-      );
+      // An unreported worker exit is not an attested sandbox denial. In
+      // particular, native capability probes must never interpret a crashed
+      // supervisor as evidence that a forbidden operation was blocked.
+      if (!result) {
+        reject(new AppError(409, 'Verification supervisor closed without an attested result.'));
+        return;
+      }
+      resolve(result);
     });
     child.send({ argv, cwd, timeoutMs, environment }, (error) => {
       if (error) {
