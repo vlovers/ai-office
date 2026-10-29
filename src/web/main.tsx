@@ -4,6 +4,7 @@ import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/t
 import { AgentStudio } from './agent-studio.js';
 import { MainNavigation } from './main-navigation.js';
 import { PageHeading } from './page-heading.js';
+import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
@@ -73,6 +74,7 @@ function App() {
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
   const [page, setPage] = useState<Destination>(() => destinationFromHash(window.location.hash));
+  const [taskPanel, setTaskPanel] = useState<TaskPanel>('details');
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -243,6 +245,7 @@ function App() {
     const target = taskNavigationTarget(item, destination);
     if (!target) return;
     setSelected(item.id);
+    setTaskPanel('details');
     setSelectedAgent(item.agentId);
     setResumeSessionId('');
     setView('focus');
@@ -311,6 +314,7 @@ function App() {
   const showSection = (id: string) => {
     const targetPage = destinationForSection(id);
     setPage(targetPage);
+    if (targetPage === 'tasks') setTaskPanel(id === 'compose' ? 'new' : 'details');
     const origin = document.activeElement;
     requestAnimationFrame(() => {
       // A later keyboard/pointer action takes precedence over this deferred navigation.
@@ -341,6 +345,7 @@ function App() {
   return (
     <div
       data-page={page}
+      data-task-panel={taskPanel}
       className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
     >
       <a className="skip-link" href="#overview">
@@ -614,6 +619,9 @@ function App() {
               </p>
             )}
           </section>
+          {page === 'tasks' && (
+            <TaskPanelTabs active={taskPanel} onChange={(panel) => { setTaskPanel(panel); if (panel === 'new') showSection('compose'); else showSection('task-workspace'); }} />
+          )}
           <div className="mission-grid" aria-label="Workspace tools">
             <div className="mission-board">
               <div className="stats" aria-label="Workspace statistics">
@@ -852,7 +860,7 @@ function App() {
                   </div>
                 )}
               </section>
-              <section className="panel output" id="task-workspace" tabIndex={-1}>
+              <section className="panel output" id="task-workspace" tabIndex={-1} data-task-panel="details">
                 <div className="panel-heading">
                   <h2>
                     Task workspace {task && <span className="output-title">/ {task.title}</span>}
@@ -1095,7 +1103,7 @@ function App() {
                   </>
                 )}
               </section>
-              <section className="panel compose" id="compose" tabIndex={-1}>
+              <section className="panel compose" id="compose" tabIndex={-1} data-task-panel="new">
                 <div className="panel-heading">
                   <h2>Create a task</h2>
                   <span className="step">02</span>
