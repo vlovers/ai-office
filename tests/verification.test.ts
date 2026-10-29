@@ -146,9 +146,9 @@ it('kills delayed descendant side effects when verification is aborted', async (
     // Wait past the delayed child action: cleanup must not merely mark the
     // parent task interrupted while leaving a background writer alive.
     await new Promise((resolve) => setTimeout(resolve, 3300));
-    await expect(lstat(join(root, 'must-not-run'))).rejects.toThrow();
+    await expect(lstat(join(root, 'must-not-run'))).rejects.toMatchObject({ code: 'ENOENT' });
   } finally {
     controller.abort();
     await pending.catch(() => {});
   }
-});
+}, 15000);
