@@ -7,6 +7,7 @@ import { PageHeading } from './page-heading.js';
 import { OfficePage, WorkspacePage } from './workspace-pages.js';
 import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
 import { TaskSummary } from './task-summary.js';
+import { TaskHistory } from './task-history.js';
 import { SubmittedQueue } from './submitted-queue.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowsPage } from './workflows-page.js';
@@ -688,175 +689,29 @@ function App() {
                 />
               )}
               {page === 'tasks' && (
-              <section className="panel history" id="task-history">
-                <div className="panel-heading">
-                  <h2>Task history</h2>
-                  <span className="subtle">{dashboard?.tasks.length ?? 0} tasks</span>
-                </div>
-                {!!dashboard?.tasks.length && (
-                  <div className="history-controls" aria-label="Task history filters">
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={visibleHistory.length === 0}
-                      title="Export filtered task metadata only. Prompts, logs and paths are excluded."
-                      onClick={() => {
-                        const csv = exportTaskHistoryCsv(visibleHistory);
-                        const url = URL.createObjectURL(
-                          new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
-                        );
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = 'ai-office-task-history.csv';
-                        link.click();
-                        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-                      }}
-                    >
-                      Export filtered CSV ({visibleHistory.length})
-                    </button>
-                    <p role="status">
-                      {taskSummary.active} active · {taskSummary.queued} queued ·{' '}
-                      {taskSummary.attention} failed/interrupted · {taskSummary.completed} completed
-                    </p>
-                    <label>
-                      Search tasks
-                      <input
-                        type="search"
-                        value={historyQuery}
-                        onChange={(event) => setHistoryQuery(event.target.value)}
-                        placeholder="Title or task ID"
-                      />
-                    </label>
-                    <label>
-                      Task state
-                      <select
-                        value={historyStatus}
-                        onChange={(event) =>
-                          setHistoryStatus(event.target.value as TaskHistoryStatus)
-                        }
-                      >
-                        <option value="all">All states</option>
-                        <option value="attention">Failed / interrupted</option>
-                        <option value="active">Running / stopping</option>
-                        <option value="queued">Queued</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </label>
-                    <label>
-                      Agent
-                      <select
-                        value={historyAgent}
-                        onChange={(event) => setHistoryAgent(event.target.value)}
-                      >
-                        <option value="">All agents</option>
-                        {dashboard?.agents.map((slot) => (
-                          <option key={slot.id} value={slot.id}>
-                            {slot.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Repository
-                      <select
-                        value={historyRepository}
-                        onChange={(event) => setHistoryRepository(event.target.value)}
-                      >
-                        <option value="">All repositories</option>
-                        {dashboard?.repositories.map((repo) => (
-                          <option key={repo.id} value={repo.id}>
-                            {repo.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Sort
-                      <select
-                        value={historyOrder}
-                        onChange={(event) =>
-                          setHistoryOrder(event.target.value as TaskHistoryOrder)
-                        }
-                      >
-                        <option value="attention">Attention first</option>
-                        <option value="recent">Most recently updated</option>
-                        <option value="oldest">Oldest updates</option>
-                      </select>
-                    </label>
-                    <p role="status">
-                      {visibleHistory.length} of {taskSummary.total} tasks shown
-                    </p>
-                    {(historyQuery ||
-                      historyStatus !== 'all' ||
-                      historyAgent ||
-                      historyRepository ||
-                      historyOrder !== 'attention') && (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => {
-                          setHistoryQuery('');
-                          setHistoryStatus('all');
-                          setHistoryOrder('attention');
-                          setHistoryAgent('');
-                          setHistoryRepository('');
-                        }}
-                      >
-                        Reset task filters
-                      </button>
-                    )}
-                  </div>
-                )}
-                {!dashboard?.tasks.length ? (
-                  <div className="empty-state">
-                    <div>☷</div>
-                    <h3>No reviews yet.</h3>
-                    <p>
-                      Your tasks and their results will appear here.
-                      <br />
-                      Choose a repository and describe your first read-only review.
-                    </p>
-                    <a href={dashboard?.repositories.length ? '#compose' : '#repositories'}>
-                      {dashboard?.repositories.length
-                        ? 'Create your first task →'
-                        : 'Register a worktree →'}
-                    </a>
-                  </div>
-                ) : (
-                  <div className="task-list">
-                    {visibleHistory.map((item) => (
-                      <button
-                        key={item.id}
-                        aria-pressed={selected === item.id}
-                        className={`task-row ${selected === item.id ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedAgent(item.agentId);
-                          setSelected(item.id);
-                          setTaskPanel('details');
-                          setResumeSessionId('');
-                          clearTaskNavigation();
-                        }}
-                      >
-                        <span className={`task-indicator ${item.state}`} />
-                        <span>
-                          <strong>{item.title}</strong>
-                          <small>
-                            {item.agentId} ·{' '}
-                            {dashboard.repositories.find((r) => r.id === item.repositoryId)?.name} ·{' '}
-                            {new Date(item.createdAt).toLocaleString()}
-                          </small>
-                        </span>
-                        <span className={`badge ${item.state}`}>{item.state}</span>
-                      </button>
-                    ))}
-                    {visibleHistory.length === 0 && (
-                      <p role="status">
-                        No tasks match these filters. Reset filters to see the full history.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </section>
+              <TaskHistory
+                dashboard={dashboard}
+                visibleHistory={visibleHistory}
+                taskSummary={taskSummary}
+                historyQuery={historyQuery}
+                historyStatus={historyStatus}
+                historyOrder={historyOrder}
+                historyAgent={historyAgent}
+                historyRepository={historyRepository}
+                selected={selected}
+                onQueryChange={setHistoryQuery}
+                onStatusChange={setHistoryStatus}
+                onOrderChange={setHistoryOrder}
+                onAgentChange={setHistoryAgent}
+                onRepositoryChange={setHistoryRepository}
+                onSelectTask={(item) => {
+                  setSelectedAgent(item.agentId);
+                  setSelected(item.id);
+                  setTaskPanel('details');
+                  setResumeSessionId('');
+                  clearTaskNavigation();
+                }}
+              />
               )}
               {page === 'tasks' && (
               <section className="panel output" id="task-workspace" tabIndex={-1} data-task-panel="details">
