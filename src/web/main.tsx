@@ -1,7 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
-import { AgentStudio } from './agent-studio.js';
+import { AgentsPage } from './agents-page.js';
+import { MainNavigation } from './main-navigation.js';
+import { PageHeading } from './page-heading.js';
+import { OfficePage, WorkspacePage } from './workspace-pages.js';
+import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
+import { TaskSummary } from './task-summary.js';
+import { TaskHistory } from './task-history.js';
+import { TaskComposer } from './task-composer.js';
+import { TaskSessionOutput } from './task-session-output.js';
+import { TaskChangedFiles } from './task-changed-files.js';
+import { TaskSessionControls } from './task-session-controls.js';
+import { SubmittedQueue } from './submitted-queue.js';
+import {
+  destinationForSection,
+  destinationFromHash,
+  destinationHash,
+  type Destination,
+} from './destinations.js';
+import { WorkflowsPage } from './workflows-page.js';
+import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
@@ -69,6 +88,10 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
+  const [page, setPage] = useState<Destination>(() => destinationFromHash(window.location.hash));
+  const [taskPanel, setTaskPanel] = useState<TaskPanel>(() =>
+    window.location.hash === '#compose' ? 'new' : 'details',
+  );
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -82,7 +105,11 @@ function App() {
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const lastNavigation = useRef('');
   useEffect(() => {
-    const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
+    const onHashChange = () => {
+      setNavigation(decodeTaskNavigation(window.location.hash));
+      setPage(destinationFromHash(window.location.hash));
+      setTaskPanel(window.location.hash === '#compose' ? 'new' : 'details');
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
@@ -203,9 +230,11 @@ function App() {
     const key = encodeTaskNavigation(navigation);
     if (lastNavigation.current === key) return;
     if (selected !== target.id) setSelected(target.id);
+    if (taskPanel !== 'details') setTaskPanel('details');
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
     if (view !== 'focus') setView('focus');
-  }, [navigation, dashboard, selected, selectedAgent, view]);
+    if (page !== 'tasks') setPage('tasks');
+  }, [navigation, dashboard, selected, selectedAgent, view, page, taskPanel]);
   useEffect(() => {
     if (!navigation || !dashboard || view !== 'focus' || selected !== navigation.taskId) return;
     const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
@@ -235,9 +264,11 @@ function App() {
     const target = taskNavigationTarget(item, destination);
     if (!target) return;
     setSelected(item.id);
+    setTaskPanel('details');
     setSelectedAgent(item.agentId);
     setResumeSessionId('');
     setView('focus');
+    setPage('tasks');
     const hash = encodeTaskNavigation(target);
     if (window.location.hash === hash) {
       lastNavigation.current = '';
@@ -300,10 +331,18 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
+    const targetPage = destinationForSection(id);
+    setPage(targetPage);
+    if (targetPage === 'tasks') setTaskPanel(id === 'compose' ? 'new' : 'details');
+    const targetHash = `#${id}`;
+    if (window.location.hash !== targetHash) {
+      window.history.replaceState(null, '', targetHash);
+      setNavigation(decodeTaskNavigation(targetHash));
+    }
     const origin = document.activeElement;
     requestAnimationFrame(() => {
       // A later keyboard/pointer action takes precedence over this deferred navigation.
-      if (document.activeElement !== origin) return;
+      if (document.activeElement !== origin && origin?.isConnected) return;
       const section = document.getElementById(id);
       section?.focus();
       section?.scrollIntoView({ block: 'start' });
@@ -329,45 +368,38 @@ function App() {
   );
   return (
     <div
+      data-page={page}
+      data-task-panel={taskPanel}
       className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
     >
       <a className="skip-link" href="#overview">
         Skip to mission control
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
-        <a className="brand" href="#overview" onClick={() => setView('mission')}>
+        <a
+          className="brand"
+          href="#overview"
+          onClick={() => {
+            setPage('office');
+            setView('mission');
+          }}
+        >
           <PixelBot />
           <span>
             AI OFFICE<small>A space for your agents</small>
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
-        <nav aria-label="Dashboard sections">
-          <a
-            className={`nav-item ${view === 'mission' ? 'active' : ''}`}
-            href="#overview"
-            onClick={() => setView('mission')}
-          >
-            <span aria-hidden="true">⌂</span>Office<span className="nav-count">01</span>
-          </a>
-          <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
-            <span aria-hidden="true">♙</span>Agents
-            <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
-            Agent Studio
-          </a>
-          <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
-            <span aria-hidden="true">▤</span>Task history
-            <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#task-workspace">
-            <span aria-hidden="true">▣</span>Session terminal
-          </a>
-          <a className="nav-item" href="#compose" onClick={() => setView('mission')}>
-            <span aria-hidden="true">＋</span>New task
-          </a>
-        </nav>
+        <MainNavigation
+          page={page}
+          taskCount={dashboard?.tasks.length ?? 0}
+          onNavigate={(destination) => {
+            setPage(destination);
+            setView('mission');
+            window.location.hash = destinationHash(destination);
+            window.scrollTo({ top: 0 });
+          }}
+        />
         <div className="sidebar-section">
           <div className="nav-label">
             REPOSITORIES <span>{dashboard?.repositories.length ?? 0}</span>
@@ -453,26 +485,14 @@ function App() {
           </button>
         </header>
         <div className="content">
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">AI OFFICE / WORKSPACE</div>
-              <h1>
-                {view === 'focus' ? 'Focus mode' : 'Office overview'}
-                <span>_</span>
-              </h1>
-              <p>Make room for your next idea. Your agents and their real work, together.</p>
-            </div>
-            <a
-              className="button-link"
-              href="#compose"
-              onClick={() => {
-                setView('mission');
-                showSection('compose');
-              }}
-            >
-              ＋ New task
-            </a>
-          </div>
+          <PageHeading
+            page={page}
+            focus={view === 'focus'}
+            onNewTask={() => {
+              setView('mission');
+              showSection('compose');
+            }}
+          />
           <div className="view-switch" role="group" aria-label="Workspace view">
             <button
               className="secondary"
@@ -539,432 +559,227 @@ function App() {
               </button>
             </div>
           )}
-          <section className="office-scene" aria-label="Shared Codex office">
-            <PixelOffice
-              agents={officeAgents.map((slot) => ({
-                id: slot.id,
-                name: slot.name,
-                role: [
-                  dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
-                  dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived
-                    ? 'archived'
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-                assignable: !dashboard?.profiles?.find((profile) => profile.id === slot.id)
-                  ?.archived,
-                taskId: workstationTask(dashboard, selected, slot.id)?.id,
-                taskTitle: workstationTask(dashboard, selected, slot.id)?.title,
-                taskState: workstationTask(dashboard, selected, slot.id)?.state,
-                access:
-                  workstationTask(dashboard, selected, slot.id)?.executionMode === 'write'
-                    ? 'Isolated write'
-                    : 'Read only',
-                checkpoint: officeCheckpoint(workflows, slot.id)?.workflowId,
-                active: Boolean(slot.taskId),
-                status: sceneStatus(
-                  dashboard,
-                  workstationTask(dashboard, selected, slot.id),
-                  Object.values(eventHistory).flat(),
-                  connection.includes('disconnected'),
-                  slot.id,
-                  workflows,
-                ),
-              }))}
-              recentTasks={(dashboard?.tasks ?? []).map((task) => ({
-                id: task.id,
-                agentId: task.agentId,
-                title: task.title,
-                state: task.state,
-                updatedAt: task.updatedAt,
-              }))}
-              queue={(dashboard?.queue ?? []).map((entry) => ({
-                taskId: entry.taskId,
-                agentId: entry.agentId,
-                title:
-                  dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
-                  'Untitled task',
-                order: entry.order,
-                waitingReason: entry.waitingReason,
-              }))}
-              selectedAgent={selectedAgent}
-              onSelect={selectStation}
-              transport={
-                !dashboard
-                  ? connection.includes('disconnected')
-                    ? 'unavailable'
-                    : 'loading'
-                  : connection.includes('disconnected')
-                    ? 'disconnected'
-                    : 'connected'
-              }
-              onAssign={() => showSection('compose')}
-              onInspectSession={() => {
-                if (stationTask) {
-                  setSelected(stationTask.id);
-                  setView('focus');
-                  showSection('task-workspace');
-                }
-              }}
-              onInspectTask={(taskId) => {
-                const target = dashboard?.tasks.find((item) => item.id === taskId);
-                if (target) {
-                  setSelectedAgent(target.agentId);
-                  setSelected(target.id);
-                  setResumeSessionId('');
-                  showSection('task-workspace');
-                }
-              }}
-              onCheckpoint={() => {
-                const checkpoint = officeCheckpoint(workflows, selectedAgent);
-                if (checkpoint) {
-                  setWorkflowInspection({ id: checkpoint.workflowId, request: Date.now() });
-                  showSection('workflows');
-                }
-              }}
-            />
-            {!workflowAvailable && (
-              <p className="studio-notice" role="status">
-                Workflow status unavailable. Open workflow details to retry.
-              </p>
-            )}
-          </section>
-          <div className="mission-grid">
-            <div className="mission-board">
-              <div className="stats" aria-label="Workspace statistics">
-                <div>
-                  <span>CODEX AGENTS</span>
-                  <strong>
-                    {dashboard?.agents.length ?? '—'}
-                    <small>saved profiles</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>IN PROGRESS</span>
-                  <strong>
-                    {dashboard?.tasks.filter((t) => activeStates.includes(t.state)).length ?? 0}
-                    <small>active task</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>COMPLETED</span>
-                  <strong>
-                    {dashboard?.tasks.filter((t) => t.state === 'completed').length ?? 0}
-                    <small>saved results</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>ACCESS</span>
-                  <strong className="environment">
-                    SCOPED<small>Isolated writes / read-only</small>
-                  </strong>
-                </div>
-              </div>
-              {!!dashboard?.queue.length && (
-                <section className="panel queue-panel" aria-label="Submitted queue">
-                  <div className="panel-heading">
-                    <h2>Submitted queue</h2>
-                    <span>{dashboard.queue.length} / 100</span>
-                  </div>
-                  <ol>
-                    {dashboard.queue.map((entry) => (
-                      <li key={entry.taskId}>
-                        <button
-                          className="secondary"
-                          onClick={() => {
-                            setSelected(entry.taskId);
-                            setSelectedAgent(entry.agentId);
-                            setResumeSessionId('');
-                          }}
-                        >
-                          {dashboard.tasks.find((task) => task.id === entry.taskId)?.title} ·{' '}
-                          {entry.agentId}
-                          <small> / {entry.waitingReason}</small>
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
-              {dashboard && (
-                <AgentStudio
-                  profiles={dashboard.profiles ?? []}
-                  api={api}
-                  refresh={refresh}
-                  select={(id) => {
-                    setSelectedAgent(id);
-                    setResumeSessionId('');
-                    showSection('compose');
+          {page === 'office' && (
+            <OfficePage>
+              <section className="office-scene" aria-label="Shared Codex office">
+                <PixelOffice
+                  agents={officeAgents.map((slot) => ({
+                    id: slot.id,
+                    name: slot.name,
+                    role: [
+                      dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                      dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived
+                        ? 'archived'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                    assignable: !dashboard?.profiles?.find((profile) => profile.id === slot.id)
+                      ?.archived,
+                    taskId: workstationTask(dashboard, selected, slot.id)?.id,
+                    taskTitle: workstationTask(dashboard, selected, slot.id)?.title,
+                    taskState: workstationTask(dashboard, selected, slot.id)?.state,
+                    access:
+                      workstationTask(dashboard, selected, slot.id)?.executionMode === 'write'
+                        ? 'Isolated write'
+                        : 'Read only',
+                    checkpoint: officeCheckpoint(workflows, slot.id)?.workflowId,
+                    active: Boolean(slot.taskId),
+                    status: sceneStatus(
+                      dashboard,
+                      workstationTask(dashboard, selected, slot.id),
+                      Object.values(eventHistory).flat(),
+                      connection.includes('disconnected'),
+                      slot.id,
+                      workflows,
+                    ),
+                  }))}
+                  recentTasks={(dashboard?.tasks ?? []).map((task) => ({
+                    id: task.id,
+                    agentId: task.agentId,
+                    title: task.title,
+                    state: task.state,
+                    updatedAt: task.updatedAt,
+                  }))}
+                  queue={(dashboard?.queue ?? []).map((entry) => ({
+                    taskId: entry.taskId,
+                    agentId: entry.agentId,
+                    title:
+                      dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
+                      'Untitled task',
+                    order: entry.order,
+                    waitingReason: entry.waitingReason,
+                  }))}
+                  selectedAgent={selectedAgent}
+                  onSelect={selectStation}
+                  transport={
+                    !dashboard
+                      ? connection.includes('disconnected')
+                        ? 'unavailable'
+                        : 'loading'
+                      : connection.includes('disconnected')
+                        ? 'disconnected'
+                        : 'connected'
+                  }
+                  onAssign={() => showSection('compose')}
+                  onInspectSession={() => {
+                    if (stationTask) {
+                      setSelected(stationTask.id);
+                      setView('focus');
+                      showSection('task-workspace');
+                    }
+                  }}
+                  onInspectTask={(taskId) => {
+                    const target = dashboard?.tasks.find((item) => item.id === taskId);
+                    if (target) {
+                      setSelectedAgent(target.agentId);
+                      setSelected(target.id);
+                      setResumeSessionId('');
+                      showSection('task-workspace');
+                    }
+                  }}
+                  onCheckpoint={() => {
+                    const checkpoint = officeCheckpoint(workflows, selectedAgent);
+                    if (checkpoint) {
+                      setWorkflowInspection({ id: checkpoint.workflowId, request: Date.now() });
+                      showSection('workflows');
+                    }
                   }}
                 />
-              )}
-              <WorkflowBoard inspection={workflowInspection} />
-              <section className="panel history" id="task-history">
-                <div className="panel-heading">
-                  <h2>Task history</h2>
-                  <span className="subtle">{dashboard?.tasks.length ?? 0} tasks</span>
-                </div>
-                {!!dashboard?.tasks.length && (
-                  <div className="history-controls" aria-label="Task history filters">
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={visibleHistory.length === 0}
-                      title="Export filtered task metadata only. Prompts, logs and paths are excluded."
-                      onClick={() => {
-                        const csv = exportTaskHistoryCsv(visibleHistory);
-                        const url = URL.createObjectURL(
-                          new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
-                        );
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = 'ai-office-task-history.csv';
-                        link.click();
-                        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-                      }}
-                    >
-                      Export filtered CSV ({visibleHistory.length})
-                    </button>
-                    <p role="status">
-                      {taskSummary.active} active · {taskSummary.queued} queued ·{' '}
-                      {taskSummary.attention} failed/interrupted · {taskSummary.completed} completed
-                    </p>
-                    <label>
-                      Search tasks
-                      <input
-                        type="search"
-                        value={historyQuery}
-                        onChange={(event) => setHistoryQuery(event.target.value)}
-                        placeholder="Title or task ID"
-                      />
-                    </label>
-                    <label>
-                      Task state
-                      <select
-                        value={historyStatus}
-                        onChange={(event) =>
-                          setHistoryStatus(event.target.value as TaskHistoryStatus)
-                        }
-                      >
-                        <option value="all">All states</option>
-                        <option value="attention">Failed / interrupted</option>
-                        <option value="active">Running / stopping</option>
-                        <option value="queued">Queued</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </label>
-                    <label>
-                      Agent
-                      <select
-                        value={historyAgent}
-                        onChange={(event) => setHistoryAgent(event.target.value)}
-                      >
-                        <option value="">All agents</option>
-                        {dashboard?.agents.map((slot) => (
-                          <option key={slot.id} value={slot.id}>
-                            {slot.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Repository
-                      <select
-                        value={historyRepository}
-                        onChange={(event) => setHistoryRepository(event.target.value)}
-                      >
-                        <option value="">All repositories</option>
-                        {dashboard?.repositories.map((repo) => (
-                          <option key={repo.id} value={repo.id}>
-                            {repo.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Sort
-                      <select
-                        value={historyOrder}
-                        onChange={(event) =>
-                          setHistoryOrder(event.target.value as TaskHistoryOrder)
-                        }
-                      >
-                        <option value="attention">Attention first</option>
-                        <option value="recent">Most recently updated</option>
-                        <option value="oldest">Oldest updates</option>
-                      </select>
-                    </label>
-                    <p role="status">
-                      {visibleHistory.length} of {taskSummary.total} tasks shown
-                    </p>
-                    {(historyQuery ||
-                      historyStatus !== 'all' ||
-                      historyAgent ||
-                      historyRepository ||
-                      historyOrder !== 'attention') && (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => {
-                          setHistoryQuery('');
-                          setHistoryStatus('all');
-                          setHistoryOrder('attention');
-                          setHistoryAgent('');
-                          setHistoryRepository('');
-                        }}
-                      >
-                        Reset task filters
-                      </button>
-                    )}
-                  </div>
-                )}
-                {!dashboard?.tasks.length ? (
-                  <div className="empty-state">
-                    <div>☷</div>
-                    <h3>No reviews yet.</h3>
-                    <p>
-                      Your tasks and their results will appear here.
-                      <br />
-                      Choose a repository and describe your first read-only review.
-                    </p>
-                    <a href={dashboard?.repositories.length ? '#compose' : '#repositories'}>
-                      {dashboard?.repositories.length
-                        ? 'Create your first task →'
-                        : 'Register a worktree →'}
-                    </a>
-                  </div>
-                ) : (
-                  <div className="task-list">
-                    {visibleHistory.map((item) => (
-                      <button
-                        key={item.id}
-                        aria-pressed={selected === item.id}
-                        className={`task-row ${selected === item.id ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedAgent(item.agentId);
-                          setSelected(item.id);
-                          setResumeSessionId('');
-                          clearTaskNavigation();
-                        }}
-                      >
-                        <span className={`task-indicator ${item.state}`} />
-                        <span>
-                          <strong>{item.title}</strong>
-                          <small>
-                            {item.agentId} ·{' '}
-                            {dashboard.repositories.find((r) => r.id === item.repositoryId)?.name} ·{' '}
-                            {new Date(item.createdAt).toLocaleString()}
-                          </small>
-                        </span>
-                        <span className={`badge ${item.state}`}>{item.state}</span>
-                      </button>
-                    ))}
-                    {visibleHistory.length === 0 && (
-                      <p role="status">
-                        No tasks match these filters. Reset filters to see the full history.
-                      </p>
-                    )}
-                  </div>
+                {!workflowAvailable && (
+                  <p className="studio-notice" role="status">
+                    Workflow status unavailable. Open workflow details to retry.
+                  </p>
                 )}
               </section>
-              <section className="panel output" id="task-workspace" tabIndex={-1}>
-                <div className="panel-heading">
-                  <h2>
-                    Task workspace {task && <span className="output-title">/ {task.title}</span>}
-                  </h2>
-                  <span className="subtle">LIVE OUTPUT</span>
-                </div>
-                {!task ? (
-                  <div className="output-empty">
-                    <span>↳</span> Select a task to follow its progress and review the result.
-                  </div>
-                ) : (
-                  <>
-                    <div className="task-toolbar">
-                      <span>
-                        <span className={`badge ${task.state}`}>{task.state}</span>{' '}
-                        {repository?.name} ·{' '}
-                        {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
-                      </span>
-                      <nav className="task-navigation" aria-label="Selected task navigation">
-                        <a
-                          href={encodeTaskNavigation({ taskId: task.id, destination: 'session' })}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            navigateTask(task, 'session');
-                          }}
-                        >
-                          Session
-                        </a>
-                        {taskHasReview(task) && (
-                          <a
-                            href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              navigateTask(task, 'review');
-                            }}
-                          >
-                            Code review
-                          </a>
-                        )}
-                        <a
-                          href={encodeTaskNavigation({ taskId: task.id, destination: 'workflow' })}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            navigateTask(task, 'workflow');
-                          }}
-                        >
-                          Workflow &amp; QA
-                        </a>
-                      </nav>
-                      {view === 'focus' && task.id === agent?.taskId && stopControl}
-                      {task.workspaceId &&
-                        !['queued', 'running', 'stopping'].includes(task.state) && (
-                          <a
-                            className="review-shortcut"
-                            href="#code-review-center"
-                            onClick={() => setView('focus')}
-                          >
-                            Code Review Center ↗
-                          </a>
-                        )}
-                      {task.state === 'queued' && !queued && (
-                        <div className="start-controls">
-                          <select
-                            aria-label="Session"
-                            value={resumeSessionId}
-                            onChange={(e) => setResumeSessionId(e.target.value)}
-                          >
-                            <option value="">New Codex session</option>
-                            {dashboard?.sessions
-                              .filter(
-                                (s) =>
-                                  s.agentId === task.agentId &&
-                                  s.repositoryId === task.repositoryId &&
-                                  s.threadId &&
-                                  s.authMode === dashboard.connection.mode &&
-                                  (s.executionMode ?? 'read-only') ===
-                                    (task.executionMode ?? 'read-only'),
-                              )
-                              .map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  Resume {s.threadId?.slice(0, 12)}… · pinned{' '}
-                                  {s.configuration?.source === 'legacy'
-                                    ? 'legacy'
-                                    : `v${s.configuration?.profileRevision ?? '?'}`}
-                                </option>
-                              ))}
-                          </select>
-                          {resumeSessionId && (
-                            <small>
-                              Resumes the original pinned configuration; current profile edits do
-                              not apply.
-                            </small>
-                          )}
-                          <button
-                            disabled={busy || !dashboard?.ready}
-                            onClick={() =>
+            </OfficePage>
+          )}
+          {page === 'tasks' && (
+            <TaskPanelTabs
+              active={taskPanel}
+              onChange={(panel) => {
+                setTaskPanel(panel);
+                if (panel === 'new') showSection('compose');
+                else showSection('task-workspace');
+              }}
+            />
+          )}
+          {page !== 'office' && (
+            <WorkspacePage
+              page={page}
+              board={
+                <>
+                  {page === 'tasks' && <TaskSummary dashboard={dashboard} />}
+                  {page === 'tasks' && (
+                    <SubmittedQueue
+                      dashboard={dashboard}
+                      onSelect={(taskId, agentId) => {
+                        setSelected(taskId);
+                        setTaskPanel('details');
+                        setSelectedAgent(agentId);
+                        setResumeSessionId('');
+                      }}
+                    />
+                  )}
+                  {page === 'agents' && dashboard && (
+                    <AgentsPage
+                      profiles={dashboard.profiles ?? []}
+                      api={api}
+                      refresh={refresh}
+                      onSelect={(id) => {
+                        setSelectedAgent(id);
+                        setResumeSessionId('');
+                        showSection('compose');
+                      }}
+                    />
+                  )}
+                  {page === 'workflows' && <WorkflowsPage inspection={workflowInspection} />}
+                  {page === 'settings' && (
+                    <SettingsPage
+                      dashboard={dashboard}
+                      busy={busy}
+                      agentBusy={agentBusy}
+                      onChangeMode={(mode) => {
+                        void act(async () => {
+                          await api('/connection', { mode });
+                          setResumeSessionId('');
+                        });
+                      }}
+                      onRefreshConnection={() => {
+                        void act(async () => {
+                          await api('/connection/refresh', {});
+                        });
+                      }}
+                      onRegisterRepository={(path, form) => {
+                        void act(async () => {
+                          const repo = await api<{ id: string }>('/repositories', { path });
+                          setRepositoryId(repo.id);
+                          setResumeSessionId('');
+                          form.reset();
+                        });
+                      }}
+                    />
+                  )}
+                  {page === 'tasks' && (
+                    <TaskHistory
+                      dashboard={dashboard}
+                      visibleHistory={visibleHistory}
+                      taskSummary={taskSummary}
+                      historyQuery={historyQuery}
+                      historyStatus={historyStatus}
+                      historyOrder={historyOrder}
+                      historyAgent={historyAgent}
+                      historyRepository={historyRepository}
+                      selected={selected}
+                      onQueryChange={setHistoryQuery}
+                      onStatusChange={setHistoryStatus}
+                      onOrderChange={setHistoryOrder}
+                      onAgentChange={setHistoryAgent}
+                      onRepositoryChange={setHistoryRepository}
+                      onSelectTask={(item) => {
+                        setSelectedAgent(item.agentId);
+                        setSelected(item.id);
+                        setTaskPanel('details');
+                        setResumeSessionId('');
+                        clearTaskNavigation();
+                      }}
+                    />
+                  )}
+                  {page === 'tasks' && (
+                    <section
+                      className="panel output"
+                      id="task-workspace"
+                      tabIndex={-1}
+                      data-task-panel="details"
+                    >
+                      <div className="panel-heading">
+                        <h2>
+                          Task workspace{' '}
+                          {task && <span className="output-title">/ {task.title}</span>}
+                        </h2>
+                        <span className="subtle">LIVE OUTPUT</span>
+                      </div>
+                      {!task ? (
+                        <div className="output-empty">
+                          <span>↳</span> Select a task to follow its progress and review the result.
+                        </div>
+                      ) : (
+                        <>
+                          <TaskSessionControls
+                            task={task}
+                            repositoryName={repository?.name}
+                            dashboard={dashboard}
+                            queued={queued}
+                            taskConfiguration={taskConfiguration}
+                            resumeSessionId={resumeSessionId}
+                            busy={busy}
+                            stopPending={pendingStops.includes(task.id)}
+                            showStopControl={view === 'focus' && task.id === agent?.taskId}
+                            stopControl={stopControl}
+                            onNavigate={navigateTask}
+                            onFocus={() => setView('focus')}
+                            onResumeSessionChange={setResumeSessionId}
+                            onStartTask={() => {
                               void act(async () => {
                                 if (
                                   task.executionMode === 'write' &&
@@ -977,424 +792,148 @@ function App() {
                                   ...(resumeSessionId ? { resumeSessionId } : {}),
                                   confirmedWrite: task.executionMode === 'write',
                                 });
-                              })
-                            }
-                          >
-                            ▶ Start task
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {queued && (
-                      <div className="queue-notice" role="status">
-                        Submitted / {queued.agentId} / queue #{queued.order}. {queued.waitingReason}
-                        <button
-                          className="secondary"
-                          disabled={pendingStops.includes(task.id)}
-                          onClick={() => void stopTask(task.id)}
-                        >
-                          Cancel queued task
-                        </button>
-                      </div>
-                    )}
-                    {taskConfiguration && (
-                      <details className="configuration-record">
-                        <summary>
-                          Pinned configuration · {taskConfiguration.name} ·{' '}
-                          {taskConfiguration.source === 'legacy'
-                            ? 'legacy v0.5'
-                            : `v${taskConfiguration.profileRevision}`}
-                        </summary>
-                        <p>
-                          Current profile v
-                          {dashboard?.profiles?.find((profile) => profile.id === task.agentId)
-                            ?.revision ?? 'unavailable'}
-                          . This task retains its submitted configuration.
-                        </p>
-                        <p>
-                          {taskConfiguration.executionMode} ·{' '}
-                          {taskConfiguration.model ??
-                            'Connection default (resolved before execution)'}{' '}
-                          · {taskConfiguration.policy}
-                        </p>
-                        <pre>
-                          {taskConfiguration.role}
-                          {'\n'}
-                          {taskConfiguration.instructions}
-                        </pre>
-                      </details>
-                    )}
-                    <p className="task-prompt">{task.prompt}</p>
-                    {session?.threadId && (
-                      <p className="thread-id">
-                        Thread <code>{session.threadId}</code>
-                        <span className="session-mode">
-                          {session.authMode === 'local-cli-chatgpt'
-                            ? 'ChatGPT login'
-                            : session.authMode === 'api-key'
-                              ? 'API key'
-                              : 'Legacy session'}
-                          {session.model ? ` · ${session.model}` : ''}
-                        </span>
-                      </p>
-                    )}
-                    <div
-                      className="event-console"
-                      aria-label="Agent event log"
-                      role="log"
-                      tabIndex={0}
-                    >
-                      {events.length ? (
-                        events.map((item) => (
-                          <div className="event-line" key={item.id}>
-                            <time>{new Date(item.at).toLocaleTimeString()}</time>
-                            <span className="event-kind">{item.kind}</span>
-                            <pre>{item.message}</pre>
-                          </div>
-                        ))
-                      ) : (
-                        <span className="console-placeholder">
-                          Ready. Start this task to open a Codex session.
-                        </span>
-                      )}
-                    </div>
-                    {task.error && (
-                      <p className="task-error" role="alert">
-                        {task.error}
-                      </p>
-                    )}
-                    {task.result && (
-                      <div className="result">
-                        <h3>Final result</h3>
-                        <pre>{task.result}</pre>
-                      </div>
-                    )}
-                    {taskHasReview(task) ? (
-                      <ReviewCenter
-                        key={task.id}
-                        task={{ ...task, configuration: taskConfiguration }}
-                        api={api}
-                      />
-                    ) : (
-                      <div id="task-workflow" tabIndex={-1}>
-                        <WorkflowBoard taskId={task.id} />
-                      </div>
-                    )}
-                    {task.executionMode !== 'write' &&
-                      !['queued', 'running', 'stopping'].includes(task.state) && (
-                        <div className="file-summary">
-                          <h3>
-                            Changed-file summary <span>{task.changedFiles.length}</span>
-                          </h3>
-                          <p>
-                            Git worktree status at finish, including pre-existing changes. The agent
-                            has read-only access.
-                          </p>
-                          {task.summaryError ? (
-                            <p role="alert">Summary unavailable: {task.summaryError}</p>
-                          ) : task.changedFiles.length ? (
-                            <ul>
-                              {task.changedFiles.map((file) => (
-                                <li key={file.path}>
-                                  <code>{file.status}</code> {file.path}
-                                  {task.baselineFiles.some(
-                                    (before) => before.path === file.path,
-                                  ) && <small> · present before task</small>}
-                                </li>
-                              ))}
-                            </ul>
+                              });
+                            }}
+                            onStopTask={() => void stopTask(task.id)}
+                          />
+                          <TaskSessionOutput task={task} session={session} events={events} />
+                          {taskHasReview(task) ? (
+                            <ReviewCenter
+                              key={task.id}
+                              task={{ ...task, configuration: taskConfiguration }}
+                              api={api}
+                            />
                           ) : (
-                            <p>No changed files in the worktree.</p>
+                            <div id="task-workflow" tabIndex={-1}>
+                              <WorkflowBoard taskId={task.id} />
+                            </div>
                           )}
-                        </div>
+                          <TaskChangedFiles task={task} />
+                        </>
                       )}
-                  </>
-                )}
-              </section>
-              <section className="panel compose" id="compose" tabIndex={-1}>
-                <div className="panel-heading">
-                  <h2>Create a task</h2>
-                  <span className="step">02</span>
-                </div>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = event.currentTarget;
-                    const data = new FormData(form);
-                    void act(async () => {
-                      const created = await api<Task>('/tasks', {
-                        repositoryId,
-                        agentId: selectedAgent,
-                        title: data.get('title'),
-                        prompt: data.get('prompt'),
-                        executionMode: data.get('executionMode'),
-                      });
-                      setSelected(created.id);
-                      clearTaskNavigation();
-                      form.reset();
-                      setExecutionMode('read-only');
-                    });
-                  }}
-                >
-                  <label htmlFor="assigned-agent">Assign to agent</label>
-                  <select
-                    id="assigned-agent"
-                    value={selectedAgent}
-                    onChange={(event) => {
-                      setSelectedAgent(event.target.value as AgentId);
-                      setResumeSessionId('');
-                    }}
-                  >
-                    {!canAssign && (
-                      <option value={selectedAgent} disabled>
-                        Select an active profile
-                      </option>
-                    )}
-                    {assignable.map((slot) => (
-                      <option key={slot.id} value={slot.id}>
-                        {slot.name} · {slot.id.slice(0, 8)} · {slot.state}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor="repository">Repository</label>
-                  <select
-                    id="repository"
-                    required
-                    value={repositoryId}
-                    onChange={(event) => {
-                      setRepositoryId(event.target.value);
-                      setResumeSessionId('');
-                    }}
-                  >
-                    <option value="" disabled>
-                      Select a repository
-                    </option>
-                    {dashboard?.repositories.map((repo) => (
-                      <option key={repo.id} value={repo.id}>
-                        {repo.name}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor="executionMode">Execution mode</label>
-                  <select
-                    id="executionMode"
-                    name="executionMode"
-                    value={executionMode}
-                    onChange={(event) => setExecutionMode(event.target.value)}
-                  >
-                    <option value="read-only">Read-only review</option>
-                    <option value="write" disabled={selectedProfile?.maximumMode !== 'write'}>
-                      Isolated coding · write enabled
-                    </option>
-                  </select>
-                  <label htmlFor="title">Task title</label>
-                  <input
-                    id="title"
-                    name="title"
-                    required
-                    maxLength={160}
-                    placeholder="Review the project structure"
-                  />
-                  <label htmlFor="prompt">What should the agent work on?</label>
-                  <textarea
-                    id="prompt"
-                    name="prompt"
-                    required
-                    maxLength={16000}
-                    rows={5}
-                    placeholder="Explore the codebase, explain how it fits together, and suggest the next improvement…"
-                  />
-                  <div className="compose-footer">
-                    <span>
-                      <span className="tiny-avatar">⌘</span> Assigned to{' '}
-                      {agent?.name ?? 'Select a profile'}
-                    </span>
-                    <button disabled={busy || !repositoryId || !canAssign}>
-                      Create task <span>→</span>
-                    </button>
-                  </div>
-                </form>
-                <p className="read-only-note">
-                  Start submits to the assigned FIFO queue and may execute immediately. Isolated
-                  coding requires confirmation and server-configured roots. Review changes before
-                  keeping or rejecting; integration is manual.
-                </p>
-              </section>
-            </div>
-            <aside className="inspector" aria-label="Agent and connection inspector">
-              <section className="panel agent-panel" id="agent" tabIndex={-1}>
-                <div className="panel-heading">
-                  <h2>Agents / {agent?.name ?? 'Codex'}</h2>
-                  <span className="subtle">{dashboard?.concurrency ?? 2} slots</span>
-                </div>
-                <div
-                  className="agent-switcher"
-                  role="group"
-                  aria-label="Select agent"
-                  hidden={view !== 'focus'}
-                >
-                  {dashboard?.agents.map((slot) => (
-                    <button
-                      key={slot.id}
-                      className="secondary"
-                      aria-pressed={selectedAgent === slot.id}
-                      onClick={() => {
-                        setSelectedAgent(slot.id);
-                        setSelected(workstationTask(dashboard, selected, slot.id)?.id);
+                    </section>
+                  )}
+                  {page === 'tasks' && (
+                    <TaskComposer
+                      dashboard={dashboard}
+                      selectedAgent={selectedAgent}
+                      repositoryId={repositoryId}
+                      executionMode={executionMode}
+                      selectedProfile={selectedProfile}
+                      assignable={assignable}
+                      canAssign={canAssign}
+                      agentName={agent?.name}
+                      busy={busy}
+                      onAgentChange={(id) => {
+                        setSelectedAgent(id);
                         setResumeSessionId('');
                       }}
-                    >
-                      {slot.name}
-                      <small>{slot.state}</small>
-                    </button>
-                  ))}
-                </div>
-                <div className="agent-info">
-                  <div className={`agent-avatar state-${scene.state}`}>
-                    <PixelBot />
-                  </div>
-                  <div>
-                    <h3>
-                      {agent?.name}{' '}
-                      <span className={`badge ${agent?.state ?? ''}`}>
-                        {agent?.state ?? 'connecting'}
-                      </span>
-                    </h3>
-                    <p>
-                      OpenAI <span>·</span> Coding & repository review
-                    </p>
-                  </div>
-                </div>
-                <div className="agent-detail">
-                  <span>Access mode</span>
-                  <strong>
-                    {selectedProfile?.maximumMode === 'write'
-                      ? 'Isolated writes with confirmation'
-                      : 'Read-only preference'}
-                  </strong>
-                </div>
-                <div className="agent-detail">
-                  <span>Workspace</span>
-                  <strong>
-                    {dashboard?.repositories.find(
-                      (r) =>
-                        r.id === dashboard.tasks.find((t) => t.id === agent?.taskId)?.repositoryId,
-                    )?.name ?? 'Awaiting a task'}
-                  </strong>
-                </div>
-                <div className="agent-detail">
-                  <span>Saved sessions</span>
-                  <strong>
-                    {dashboard?.sessions.filter((session) => session.agentId === selectedAgent)
-                      .length ?? 0}
-                  </strong>
-                </div>
-                <div className="agent-note">
-                  <span>↳</span>
-                  <p>{dashboard?.readinessMessage ?? 'Connecting to the local backend…'}</p>
-                </div>
-                {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
-              </section>
-              <section className="panel connection-panel" aria-label="Codex connection">
-                <div className="panel-heading">
-                  <h2>Codex connection</h2>
-                  <span
-                    className={`badge ${dashboard?.connection.status === 'available' ? 'completed' : 'failed'}`}
-                    role="status"
-                    data-testid="codex-connection-status"
-                  >
-                    {!dashboard
-                      ? 'Checking connection…'
-                      : dashboard.connection.status === 'available'
-                        ? 'Available'
-                        : dashboard?.connection.status === 'authentication-required'
-                          ? 'Authentication required'
-                          : 'Connection error'}
-                  </span>
-                </div>
-                <div className="connection-controls">
-                  <div>
-                    <label htmlFor="authentication-mode">Authentication mode</label>
-                    <select
-                      id="authentication-mode"
-                      value={dashboard?.connection.mode ?? 'local-cli-chatgpt'}
-                      disabled={busy || agentBusy}
-                      onChange={(event) => {
-                        const mode = event.target.value as AuthMode;
+                      onRepositoryChange={(id) => {
+                        setRepositoryId(id);
+                        setResumeSessionId('');
+                      }}
+                      onExecutionModeChange={setExecutionMode}
+                      onCreateTask={(input, form) => {
                         void act(async () => {
-                          await api('/connection', { mode });
-                          setResumeSessionId('');
+                          const created = await api<Task>('/tasks', {
+                            repositoryId,
+                            agentId: selectedAgent,
+                            ...input,
+                          });
+                          setSelected(created.id);
+                          setTaskPanel('details');
+                          clearTaskNavigation();
+                          form.reset();
+                          setExecutionMode('read-only');
                         });
                       }}
-                    >
-                      <option value="local-cli-chatgpt">Local ChatGPT login (preferred)</option>
-                      <option value="api-key">API key (separate billing)</option>
-                    </select>
-                  </div>
-                  <button
-                    className="secondary"
-                    disabled={busy || agentBusy}
-                    onClick={() =>
-                      void act(async () => {
-                        await api('/connection/refresh', {});
-                      })
-                    }
-                  >
-                    Refresh connection
-                  </button>
-                </div>
-                <p className="connection-message">
-                  {dashboard?.connection.message ?? 'Checking the local backend connection…'}
-                </p>
-                <p className="field-hint">
-                  No credentials are entered in this dashboard. Local login never falls back to API
-                  billing.
-                </p>
-              </section>
-              <section className="panel repository-panel" id="repositories">
-                <div className="panel-heading">
-                  <h2>Connect a repository</h2>
-                  <span className="step">01</span>
-                </div>
-                <p className="panel-description">
-                  Choose an existing local Git worktree. Your files stay on your machine; task
-                  context is sent to your AI provider.
-                </p>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = event.currentTarget;
-                    const data = new FormData(form);
-                    void act(async () => {
-                      const repo = await api<{ id: string }>('/repositories', {
-                        path: data.get('path'),
-                      });
-                      setRepositoryId(repo.id);
-                      setResumeSessionId('');
-                      form.reset();
-                    });
-                  }}
-                >
-                  <label htmlFor="path">Absolute repository path</label>
-                  <div className="input-row">
-                    <input
-                      id="path"
-                      name="path"
-                      required
-                      placeholder="/Users/you/projects/example"
-                      autoComplete="off"
                     />
-                    <button className="secondary" disabled={busy}>
-                      Register <span>↗</span>
-                    </button>
-                  </div>
-                  <p className="field-hint">
-                    Git worktree roots only. Estima and Pixel Office are excluded.
-                  </p>
-                </form>
-              </section>
-            </aside>
-          </div>
+                  )}
+                </>
+              }
+              inspector={
+                <>
+                  {page === 'agents' && (
+                    <section className="panel agent-panel" id="agent" tabIndex={-1}>
+                      <div className="panel-heading">
+                        <h2>Agents / {agent?.name ?? 'Codex'}</h2>
+                        <span className="subtle">{dashboard?.concurrency ?? 2} slots</span>
+                      </div>
+                      <div
+                        className="agent-switcher"
+                        role="group"
+                        aria-label="Select agent"
+                        hidden={view !== 'focus'}
+                      >
+                        {dashboard?.agents.map((slot) => (
+                          <button
+                            key={slot.id}
+                            className="secondary"
+                            aria-pressed={selectedAgent === slot.id}
+                            onClick={() => {
+                              setSelectedAgent(slot.id);
+                              setSelected(workstationTask(dashboard, selected, slot.id)?.id);
+                              setResumeSessionId('');
+                            }}
+                          >
+                            {slot.name}
+                            <small>{slot.state}</small>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="agent-info">
+                        <div className={`agent-avatar state-${scene.state}`}>
+                          <PixelBot />
+                        </div>
+                        <div>
+                          <h3>
+                            {agent?.name}{' '}
+                            <span className={`badge ${agent?.state ?? ''}`}>
+                              {agent?.state ?? 'connecting'}
+                            </span>
+                          </h3>
+                          <p>
+                            OpenAI <span>·</span> Coding & repository review
+                          </p>
+                        </div>
+                      </div>
+                      <div className="agent-detail">
+                        <span>Access mode</span>
+                        <strong>
+                          {selectedProfile?.maximumMode === 'write'
+                            ? 'Isolated writes with confirmation'
+                            : 'Read-only preference'}
+                        </strong>
+                      </div>
+                      <div className="agent-detail">
+                        <span>Workspace</span>
+                        <strong>
+                          {dashboard?.repositories.find(
+                            (r) =>
+                              r.id ===
+                              dashboard.tasks.find((t) => t.id === agent?.taskId)?.repositoryId,
+                          )?.name ?? 'Awaiting a task'}
+                        </strong>
+                      </div>
+                      <div className="agent-detail">
+                        <span>Saved sessions</span>
+                        <strong>
+                          {dashboard?.sessions.filter(
+                            (session) => session.agentId === selectedAgent,
+                          ).length ?? 0}
+                        </strong>
+                      </div>
+                      <div className="agent-note">
+                        <span>↳</span>
+                        <p>{dashboard?.readinessMessage ?? 'Connecting to the local backend…'}</p>
+                      </div>
+                      {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
+                    </section>
+                  )}
+                </>
+              }
+            />
+          )}
           <footer>
             <span>
               ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / AGENT STUDIO · UNRELEASED

@@ -95,11 +95,19 @@ try {
     undefined,
   );
   await expect(board.getByRole('button', { name: 'Start QA', exact: true })).toHaveCount(0);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute(
     'data-state',
     'approval',
     { timeout: 10000 },
   );
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Workflows' })
+    .click();
   // Another tab advancing a checkpoint must invalidate an already checked dialog.
   await board.getByRole('button', { name: 'Approve Reviewer result', exact: true }).click();
   await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
@@ -130,6 +138,10 @@ try {
   await expect(diagnostics).toContainText('no automatic restart');
   await page.reload();
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
@@ -154,6 +166,10 @@ try {
   });
   assert.equal(alternate.statusCode, 201);
   const otherId = alternate.json().id;
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Workflows' })
+    .click();
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true }).locator('option')).toHaveCount(2);
   const operationsQueue = board.getByLabel('Workflow operations queue');
@@ -214,17 +230,21 @@ try {
     release();
     await page.unroute(routePattern);
   }
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'approval',
     { timeout: 10000 },
   );
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
-  await board.getByRole('button', { name: 'Pause live updates' }).click();
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
   await expect(board.getByText(/^State: active/)).toBeVisible();
-  await expect(board.getByRole('button', { name: 'Pause live updates' })).toBeVisible();
+  await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
   assert.equal((await env.get()).state, 'completed');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);

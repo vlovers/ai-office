@@ -1875,3 +1875,259 @@ select {
 .task-link-warning p {
   margin: 0 0 8px;
 }
+
+/* Destination-based workspace: existing task controls retain their behavior,
+   but no longer compete for attention on the Office landing page. */
+.sidebar nav .nav-item {
+  width: 100%;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+  border-radius: 8px;
+}
+.sidebar nav .nav-item.active {
+  background: var(--surface-raised);
+  border-color: var(--line);
+  color: var(--phosphor);
+}
+.shell[data-page='office'] .mission-grid {
+  display: none;
+}
+.shell:not([data-page='office']) .office-scene,
+.shell:not([data-page='office']) .view-switch {
+  display: none;
+}
+.shell[data-page='tasks'] .stats,
+.shell[data-page='tasks'] .agents-destination,
+.shell[data-page='tasks'] .workflows-destination,
+.shell[data-page='tasks'] .inspector,
+.shell[data-page='tasks'] .sidebar-art {
+  display: none;
+}
+.shell[data-page='workflows'] .stats,
+.shell[data-page='workflows'] .queue-panel,
+.shell[data-page='workflows'] .agents-destination,
+.shell[data-page='workflows'] .history,
+.shell[data-page='workflows'] .output,
+.shell[data-page='workflows'] .compose,
+.shell[data-page='workflows'] .inspector {
+  display: none;
+}
+.shell[data-page='agents'] .stats,
+.shell[data-page='agents'] .queue-panel,
+.shell[data-page='agents'] .workflows-destination,
+.shell[data-page='agents'] .history,
+.shell[data-page='agents'] .output,
+.shell[data-page='agents'] .compose,
+.shell[data-page='agents'] .connection-panel,
+.shell[data-page='agents'] .repository-panel {
+  display: none;
+}
+.shell[data-page='settings'] .agent-panel {
+  display: none;
+}
+.shell[data-page='settings'] .mission-grid,
+.shell[data-page='agents'] .mission-grid,
+.shell[data-page='tasks'] .mission-grid,
+.shell[data-page='workflows'] .mission-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.shell[data-page='settings'] .inspector,
+.shell[data-page='agents'] .inspector {
+  width: 100%;
+  max-width: 900px;
+}
+.shell[data-page='office'] .office-scene {
+  max-height: min(76vh, 850px);
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .shell[data-page='office'] .office-scene {
+    max-height: none;
+  }
+}
+
+/* Keep the existing focus-mode inspector usable on the Tasks destination. */
+.shell[data-page='tasks'].focus-mode .inspector {
+  display: block;
+}
+.shell[data-page='tasks'].focus-mode .agent-panel {
+  display: block;
+}
+.shell[data-page='tasks'] .mission-board,
+.shell[data-page='workflows'] .mission-board,
+.shell[data-page='agents'] .mission-board {
+  min-width: 0;
+}
+.shell[data-page='tasks'] .history,
+.shell[data-page='tasks'] .output,
+.shell[data-page='tasks'] .compose,
+.shell[data-page='workflows'] .workflows-destination,
+.shell[data-page='agents'] .agents-destination {
+  width: 100%;
+}
+
+/* Task workspace: a stable task list, one active detail pane, no long creation form
+   competing with session output. */
+.task-panel-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 5px;
+  width: fit-content;
+  border: 1px solid var(--border, #426354);
+  border-radius: 10px;
+  background: rgba(12, 22, 18, 0.6);
+}
+.task-panel-tabs button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+.task-panel-tabs button.active {
+  background: rgba(135, 215, 164, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(135, 215, 164, 0.3);
+}
+.task-panel-tabs button:focus-visible {
+  outline: 2px solid #b7ffca;
+  outline-offset: 2px;
+}
+.shell[data-page='tasks'][data-task-panel='details'] .compose,
+.shell[data-page='tasks'][data-task-panel='new'] .output {
+  display: none;
+}
+.shell[data-page='tasks'] .mission-board {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.85fr) minmax(0, 2fr);
+  align-items: start;
+  gap: 16px;
+}
+.shell[data-page='tasks'] .mission-board > .history {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+}
+.shell[data-page='tasks'] .mission-board > .output,
+.shell[data-page='tasks'] .mission-board > .compose,
+.shell[data-page='tasks'] .mission-board > .queue-panel {
+  grid-column: 2;
+}
+@media (max-width: 1100px) {
+  .shell[data-page='tasks'] .mission-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell[data-page='tasks'] .mission-board > .history,
+  .shell[data-page='tasks'] .mission-board > .output,
+  .shell[data-page='tasks'] .mission-board > .compose,
+  .shell[data-page='tasks'] .mission-board > .queue-panel {
+    grid-column: 1;
+  }
+  .shell[data-page='tasks'] .mission-board > .history {
+    position: static;
+    max-height: 420px;
+  }
+}
+
+/* Dedicated agent and settings surfaces. Agent profile editor stays in its
+   existing modal, while the live agent inspector is available beside it. */
+.shell[data-page='agents'] .mission-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  align-items: start;
+  gap: 20px;
+}
+.shell[data-page='agents'] .inspector {
+  max-width: none;
+  width: auto;
+  position: sticky;
+  top: 18px;
+}
+.shell[data-page='agents'] .settings-destination {
+  display: none;
+}
+.shell[data-page='settings'] .mission-board {
+  width: 100%;
+  max-width: 1200px;
+  min-width: 0;
+}
+.shell[data-page='settings'] .inspector {
+  display: none;
+}
+.shell[data-page='settings'] .settings-destination {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+}
+.shell[data-page='settings'] .settings-destination > .panel {
+  min-width: 0;
+  margin: 0;
+}
+.shell[data-page='workflows'] .workflows-destination {
+  max-width: 1200px;
+}
+.shell[data-page='workflows'] .mission-board {
+  display: block;
+}
+@media (max-width: 1200px) {
+  .shell[data-page='agents'] .mission-grid,
+  .shell[data-page='settings'] .settings-destination {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell[data-page='agents'] .inspector {
+    position: static;
+  }
+}
+
+.destination-intro {
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-dim);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(40, 83, 60, 0.18), transparent);
+}
+.destination-intro h2 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  margin: 0 0 6px;
+}
+.destination-intro p {
+  max-width: 65ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.shell[data-page='settings'] .settings-destination > .destination-intro {
+  grid-column: 1 / -1;
+}
+.shell[data-page='agents'] .agents-destination,
+.shell[data-page='workflows'] .workflows-destination {
+  min-width: 0;
+}
+
+/* Keep page identity clear when only the selected screen is mounted. */
+.shell[data-page='office'] .page-heading {
+  margin-bottom: 20px;
+}
+.shell[data-page='office'] .office-scene {
+  margin-top: 0;
+}
+.shell[data-page='tasks'] .task-panel-tabs {
+  position: relative;
+  z-index: 1;
+}
+.shell[data-page='agents'] .agents-destination .agent-studio {
+  margin-top: 0;
+}
+.shell[data-page='workflows'] .workflows-destination > .panel {
+  margin-top: 0;
+}

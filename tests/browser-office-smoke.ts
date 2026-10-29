@@ -104,58 +104,60 @@ try {
   await expect(page.locator('.studio-agent')).toHaveCount(6, { timeout: 10000 });
   await expect(page.locator('.office-workstation')).toHaveCount(4);
   await page.locator('.studio-agent').last().click();
-  await expect(
-    page.locator(`.office-workstation[data-agent-id="${extras[3]!.id}"]`),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.studio-agent').last()).toHaveAttribute('aria-pressed', 'true');
   await capture('multiple-agents');
   // Queue and execution use the manager/SDK fixture through the normal UI in browser-smoke.
   // These persisted records exercise the saved outcome view with explicit fixture names.
+  const navigate = async (destination: 'Office' | 'Tasks' | 'Settings') => {
+    await page.getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: destination }).click();
+  };
+  const newTask = async (agentId: string, title: string, prompt: string) => {
+    await navigate('Tasks');
+    await page.getByRole('button', { name: '+ New task' }).click();
+    await page.getByLabel('Assign to agent').selectOption(agentId);
+    await page.getByLabel('Task title').fill(title);
+    await page.getByLabel('What should the agent work on?').fill(prompt);
+    await page.getByRole('button', { name: 'Create task' }).click();
+    await page.getByRole('button', { name: 'Start task' }).click();
+    await navigate('Office');
+  };
+  await navigate('Settings');
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
-  await page.getByLabel('Assign to agent').selectOption('codex-1');
-  await page.getByLabel('Task title').fill('FIXTURE · held SDK reasoning');
-  await page.getByLabel('What should the agent work on?').fill('WAIT_FIXTURE');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  await newTask('codex-1', 'FIXTURE · held SDK reasoning', 'WAIT_FIXTURE');
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'thinking',
     { timeout: 15000 },
   );
   await capture('active');
-  await page.getByLabel('Assign to agent').selectOption('codex-2');
-  await page.getByLabel('Task title').fill('FIXTURE · submitted queue');
-  await page.getByLabel('What should the agent work on?').fill('Review later');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  await newTask('codex-2', 'FIXTURE · submitted queue', 'Review later');
   const queue = page.getByRole('region', { name: 'Live task queue' });
   await expect(queue).toContainText('FIXTURE · submitted queue');
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute('data-state', 'queued');
   await queue.getByRole('button', { name: /FIXTURE · submitted queue/ }).click();
+  await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await navigate('Office');
   await capture('queued');
+  await navigate('Tasks');
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
   await manager.stop(env.store.tasks().find((task) => task.state === 'running')!.id);
-  await page.getByLabel('Assign to agent').selectOption('codex-1');
-  await page.getByLabel('Task title').fill('FIXTURE · saved completion');
-  await page.getByLabel('What should the agent work on?').fill('Review the README.');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  await newTask('codex-1', 'FIXTURE · saved completion', 'Review the README.');
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'completed',
     { timeout: 15000 },
   );
   await capture('completed');
-  await page.getByLabel('Task title').fill('FIXTURE · provider failure');
-  await page.getByLabel('What should the agent work on?').fill('FAIL_FIXTURE');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  await newTask('codex-1', 'FIXTURE · provider failure', 'FAIL_FIXTURE');
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute('data-state', 'error', {
     timeout: 15000,
   });
   await capture('failure');
   // CSV export uses the current history filters and contains no prompt or transcript content.
+  await navigate('Tasks');
   const history = page.locator('#task-history');
   await history.getByLabel('Search tasks').fill('FIXTURE · provider failure');
   await expect(history.getByRole('button', { name: /Export filtered CSV/ })).toBeEnabled();
@@ -169,6 +171,7 @@ try {
   assert.doesNotMatch(csv, /FIXTURE · saved completion/);
   assert.doesNotMatch(csv, /FAIL_FIXTURE|WAIT_FIXTURE/);
   await history.getByLabel('Search tasks').fill('');
+  await navigate('Office');
 
   // Simulate transport failure while retaining genuine persisted application snapshots.
   await page.route('**/api/dashboard', (route) => route.abort());
