@@ -127,6 +127,10 @@ try {
     .click();
   await expect(page.locator('.studio-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
   await page.locator('.studio-agent').first().click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
   await secondDesk.focus();
   await page.keyboard.press('Enter');
