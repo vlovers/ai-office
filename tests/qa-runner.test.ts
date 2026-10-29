@@ -4,7 +4,10 @@ import { mkdtemp, realpath, writeFile, rm, readFile, chmod } from 'node:fs/promi
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA } from '../src/server/qa-runner.js';
-import { listenProbeServer, verifyNativeIsolation } from '../src/server/providers/native-isolation.js';
+import {
+  listenProbeServer,
+  verifyNativeIsolation,
+} from '../src/server/providers/native-isolation.js';
 
 it('removes transient HTTP listener callbacks after successful native probe bind', async () => {
   const server = createServer();
