@@ -11,7 +11,7 @@ export function TaskSessionControls({
   task: Task;
   repositoryName?: string;
   dashboard?: Dashboard;
-  queued?: { agentId: string; order: number; waitingReason: string };
+  queued?: { agentId: string; order: number; waitingReason?: string };
   taskConfiguration?: NonNullable<Task['configuration']>;
   resumeSessionId: string;
   busy: boolean;
