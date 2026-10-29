@@ -87,6 +87,11 @@ fakeNative(
     await writeFile(
       fake,
       `#!/bin/sh
+# Codex --config arguments include .env deny patterns. Inspect only the
+# sandbox command after the -- separator, not its permission configuration.
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 1
+shift
 case "$*" in
   *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
