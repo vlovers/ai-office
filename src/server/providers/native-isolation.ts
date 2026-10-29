@@ -1,13 +1,36 @@
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 import { codexOptions } from './codex-config.js';
 import { AppError } from '../errors.js';
 import { runVerification, type VerificationResult } from '../verification.js';
 export const nativeCodex = createRequire(import.meta.url).resolve('@openai/codex/bin/codex.js');
+
+/** Bind a probe listener without retaining temporary settle callbacks. */
+export function listenProbeServer(server: Server): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    try {
+      server.listen(0, '127.0.0.1');
+    } catch (error) {
+      server.off('error', onError);
+      server.off('listening', onListening);
+      reject(error);
+    }
+  });
+}
 
 /** A denied command is evidence only when its supervisor completed normally. */
 export async function assertNativeDenials(
@@ -82,10 +105,7 @@ export async function verifyNativeIsolation(
     await writeFile(join(directory, 'allowed.txt'), 'READ_ALLOWED');
     await writeFile(join(root, 'outside.txt'), outsideCanary);
     await writeFile(join(directory, '.env'), secretCanary);
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', resolve);
-    });
+    await listenProbeServer(server);
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
     const run = (argv: string[]) => {
