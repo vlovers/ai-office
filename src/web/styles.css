@@ -1875,3 +1875,77 @@ select {
 .task-link-warning p {
   margin: 0 0 8px;
 }
+
+
+/* Destination-based workspace: existing task controls retain their behavior,
+   but no longer compete for attention on the Office landing page. */
+.sidebar nav .nav-item {
+  width: 100%;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+  border-radius: 8px;
+}
+.sidebar nav .nav-item.active {
+  background: var(--surface-raised);
+  border-color: var(--line);
+  color: var(--phosphor);
+}
+.shell[data-page="office"] .mission-grid,
+.shell[data-page="office"] .view-switch ~ .onboarding + .mission-grid {
+  display: none;
+}
+.shell:not([data-page="office"]) .office-scene,
+.shell:not([data-page="office"]) .view-switch {
+  display: none;
+}
+.shell[data-page="tasks"] .stats,
+.shell[data-page="tasks"] .agents-destination,
+.shell[data-page="tasks"] .workflows-destination,
+.shell[data-page="tasks"] .inspector,
+.shell[data-page="tasks"] .sidebar-art {
+  display: none;
+}
+.shell[data-page="workflows"] .stats,
+.shell[data-page="workflows"] .queue-panel,
+.shell[data-page="workflows"] .agents-destination,
+.shell[data-page="workflows"] .history,
+.shell[data-page="workflows"] .output,
+.shell[data-page="workflows"] .compose,
+.shell[data-page="workflows"] .inspector {
+  display: none;
+}
+.shell[data-page="agents"] .stats,
+.shell[data-page="agents"] .queue-panel,
+.shell[data-page="agents"] .workflows-destination,
+.shell[data-page="agents"] .history,
+.shell[data-page="agents"] .output,
+.shell[data-page="agents"] .compose,
+.shell[data-page="agents"] .connection-panel,
+.shell[data-page="agents"] .repository-panel {
+  display: none;
+}
+.shell[data-page="settings"] .mission-board,
+.shell[data-page="settings"] .agent-panel {
+  display: none;
+}
+.shell[data-page="settings"] .mission-grid,
+.shell[data-page="agents"] .mission-grid,
+.shell[data-page="tasks"] .mission-grid,
+.shell[data-page="workflows"] .mission-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.shell[data-page="settings"] .inspector,
+.shell[data-page="agents"] .inspector {
+  width: 100%;
+  max-width: 900px;
+}
+.shell[data-page="office"] .office-scene {
+  max-height: min(76vh, 850px);
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .shell[data-page="office"] .office-scene { max-height: none; }
+}
