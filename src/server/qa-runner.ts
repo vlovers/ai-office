@@ -76,10 +76,13 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
     throw error;
   }
   if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
-  await requireUnchangedQAPlan(plan);
-  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
   const home = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-')));
   try {
+    // Narrow the replacement window: re-check after all asynchronous setup
+    // and immediately before handing the approved argv to the supervisor.
+    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+    await requireUnchangedQAPlan(plan);
+    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
     return await runVerification(
       [process.execPath, nativeCodex, ...sandboxArguments(directory, plan.argv)],
       directory,
