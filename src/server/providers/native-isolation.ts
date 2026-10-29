@@ -24,7 +24,6 @@ export async function assertNativeDenials(
     throw new Error('Sandbox allowed a forbidden operation.');
 }
 
-
 /** Identical permission table to SDK execution, without legacy --sandbox overrides. */
 export function sandboxArguments(directory: string, argv: string[]): string[] {
   const options = codexOptions(directory, {});
