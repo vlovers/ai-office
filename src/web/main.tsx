@@ -11,6 +11,7 @@ import { TaskHistory } from './task-history.js';
 import { TaskComposer } from './task-composer.js';
 import { TaskSessionOutput } from './task-session-output.js';
 import { TaskChangedFiles } from './task-changed-files.js';
+import { TaskSessionControls } from './task-session-controls.js';
 import { SubmittedQueue } from './submitted-queue.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowsPage } from './workflows-page.js';
@@ -730,149 +731,36 @@ function App() {
                   </div>
                 ) : (
                   <>
-                    <div className="task-toolbar">
-                      <span>
-                        <span className={`badge ${task.state}`}>{task.state}</span>{' '}
-                        {repository?.name} ·{' '}
-                        {task.executionMode === 'write' ? 'Isolated write' : 'Read only'}
-                      </span>
-                      <nav className="task-navigation" aria-label="Selected task navigation">
-                        <a
-                          href={encodeTaskNavigation({ taskId: task.id, destination: 'session' })}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            navigateTask(task, 'session');
-                          }}
-                        >
-                          Session
-                        </a>
-                        {taskHasReview(task) && (
-                          <a
-                            href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              navigateTask(task, 'review');
-                            }}
-                          >
-                            Code review
-                          </a>
-                        )}
-                        <a
-                          href={encodeTaskNavigation({ taskId: task.id, destination: 'workflow' })}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            navigateTask(task, 'workflow');
-                          }}
-                        >
-                          Workflow &amp; QA
-                        </a>
-                      </nav>
-                      {view === 'focus' && task.id === agent?.taskId && stopControl}
-                      {task.workspaceId &&
-                        !['queued', 'running', 'stopping'].includes(task.state) && (
-                          <a
-                            className="review-shortcut"
-                            href="#code-review-center"
-                            onClick={() => setView('focus')}
-                          >
-                            Code Review Center ↗
-                          </a>
-                        )}
-                      {task.state === 'queued' && !queued && (
-                        <div className="start-controls">
-                          <select
-                            aria-label="Session"
-                            value={resumeSessionId}
-                            onChange={(e) => setResumeSessionId(e.target.value)}
-                          >
-                            <option value="">New Codex session</option>
-                            {dashboard?.sessions
-                              .filter(
-                                (s) =>
-                                  s.agentId === task.agentId &&
-                                  s.repositoryId === task.repositoryId &&
-                                  s.threadId &&
-                                  s.authMode === dashboard.connection.mode &&
-                                  (s.executionMode ?? 'read-only') ===
-                                    (task.executionMode ?? 'read-only'),
-                              )
-                              .map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  Resume {s.threadId?.slice(0, 12)}… · pinned{' '}
-                                  {s.configuration?.source === 'legacy'
-                                    ? 'legacy'
-                                    : `v${s.configuration?.profileRevision ?? '?'}`}
-                                </option>
-                              ))}
-                          </select>
-                          {resumeSessionId && (
-                            <small>
-                              Resumes the original pinned configuration; current profile edits do
-                              not apply.
-                            </small>
-                          )}
-                          <button
-                            disabled={busy || !dashboard?.ready}
-                            onClick={() =>
-                              void act(async () => {
-                                if (
-                                  task.executionMode === 'write' &&
-                                  !window.confirm(
-                                    'Start a write-enabled Codex session in an isolated Git worktree? The agent can edit that worktree. Review and integration are manual.',
-                                  )
-                                )
-                                  return;
-                                await api(`/tasks/${task.id}/start`, {
-                                  ...(resumeSessionId ? { resumeSessionId } : {}),
-                                  confirmedWrite: task.executionMode === 'write',
-                                });
-                              })
-                            }
-                          >
-                            ▶ Start task
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {queued && (
-                      <div className="queue-notice" role="status">
-                        Submitted / {queued.agentId} / queue #{queued.order}. {queued.waitingReason}
-                        <button
-                          className="secondary"
-                          disabled={pendingStops.includes(task.id)}
-                          onClick={() => void stopTask(task.id)}
-                        >
-                          Cancel queued task
-                        </button>
-                      </div>
-                    )}
-                    {taskConfiguration && (
-                      <details className="configuration-record">
-                        <summary>
-                          Pinned configuration · {taskConfiguration.name} ·{' '}
-                          {taskConfiguration.source === 'legacy'
-                            ? 'legacy v0.5'
-                            : `v${taskConfiguration.profileRevision}`}
-                        </summary>
-                        <p>
-                          Current profile v
-                          {dashboard?.profiles?.find((profile) => profile.id === task.agentId)
-                            ?.revision ?? 'unavailable'}
-                          . This task retains its submitted configuration.
-                        </p>
-                        <p>
-                          {taskConfiguration.executionMode} ·{' '}
-                          {taskConfiguration.model ??
-                            'Connection default (resolved before execution)'}{' '}
-                          · {taskConfiguration.policy}
-                        </p>
-                        <pre>
-                          {taskConfiguration.role}
-                          {'\n'}
-                          {taskConfiguration.instructions}
-                        </pre>
-                      </details>
-                    )}
+                    <TaskSessionControls
+                      task={task}
+                      repositoryName={repository?.name}
+                      dashboard={dashboard}
+                      queued={queued}
+                      taskConfiguration={taskConfiguration}
+                      resumeSessionId={resumeSessionId}
+                      busy={busy}
+                      stopPending={pendingStops.includes(task.id)}
+                      showStopControl={view === 'focus' && task.id === agent?.taskId}
+                      stopControl={stopControl}
+                      onNavigate={navigateTask}
+                      onFocus={() => setView('focus')}
+                      onResumeSessionChange={setResumeSessionId}
+                      onStartTask={() => {
+                        void act(async () => {
+                          if (
+                            task.executionMode === 'write' &&
+                            !window.confirm(
+                              'Start a write-enabled Codex session in an isolated Git worktree? The agent can edit that worktree. Review and integration are manual.',
+                            )
+                          ) return;
+                          await api(`/tasks/${task.id}/start`, {
+                            ...(resumeSessionId ? { resumeSessionId } : {}),
+                            confirmedWrite: task.executionMode === 'write',
+                          });
+                        });
+                      }}
+                      onStopTask={() => void stopTask(task.id)}
+                    />
                     <TaskSessionOutput task={task} session={session} events={events} />
                     {taskHasReview(task) ? (
                       <ReviewCenter
