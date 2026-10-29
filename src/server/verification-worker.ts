@@ -24,12 +24,12 @@ process.on(
     let output = '';
     let finishing = false;
     let timer: NodeJS.Timeout;
-    function finish(passed: boolean, reason = '') {
+    function finish(passed: boolean, reason = '', incomplete = false) {
       if (ending || finishing) return;
       finishing = true;
       // Do not report completion to the backend until it also observes this worker close.
       clearTimeout(timer);
-      const result = { output: output + reason, passed };
+      const result = { output: output + reason, passed, ...(incomplete ? { incomplete: true } : {}) };
       if (process.connected) process.send?.(result, () => terminate());
       else terminate();
       // IPC failure/blocked pipe must not extend the runtime bound.
@@ -49,16 +49,16 @@ process.on(
       },
     });
     timer = setTimeout(
-      () => finish(false, '\nExecution stopped at time/output limit.'),
+      () => finish(false, '\nExecution stopped at time/output limit.', true),
       message.timeoutMs,
     );
     const capture = (data: Buffer) => {
       output = (output + data.toString()).slice(0, 128_000);
-      if (output.length >= 128_000) finish(false, '\nExecution stopped at time/output limit.');
+      if (output.length >= 128_000) finish(false, '\nExecution stopped at time/output limit.', true);
     };
     child.stdout.on('data', capture);
     child.stderr.on('data', capture);
-    child.on('error', () => finish(false, '\nVerification executable could not start.'));
-    child.on('close', (code) => finish(code === 0));
+    child.on('error', () => finish(false, '\nVerification executable could not start.', true));
+    child.on('close', (code, signal) => finish(code === 0, '', code === null || signal !== null));
   },
 );
