@@ -237,6 +237,11 @@ try {
   );
   // Exercise persisted session selection and cancellation through the redesigned UI.
   const createTask = async (title: string, prompt: string) => {
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: 'Tasks' })
+      .click();
+    await page.getByRole('button', { name: '+ New task' }).click();
     await page.getByLabel('Task title').fill(title);
     await page.getByLabel('What should the agent work on?').fill(prompt);
     await page.getByRole('button', { name: 'Create task' }).click();
