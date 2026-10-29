@@ -27,3 +27,18 @@ it('rejects a supervisor that exits without an attested result', async () => {
   );
   expect(reapProcessGroup).toHaveBeenCalledWith(424242);
 });
+
+it('preserves an explicitly reported denied operation', async () => {
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 424243,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+
+  const pending = runVerification(['/bin/false'], '/tmp', 1000);
+  worker.emit('message', { passed: false, output: 'Permission denied' });
+  worker.emit('close', 1);
+
+  await expect(pending).resolves.toEqual({ passed: false, output: 'Permission denied' });
+  expect(reapProcessGroup).toHaveBeenCalledWith(424243);
+});
