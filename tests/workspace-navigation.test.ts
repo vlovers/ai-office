@@ -10,6 +10,10 @@ describe('workspace navigation', () => {
     expect(destinationFromHash('#task/example/session')).toBe('tasks');
     expect(destinationFromHash('#task/example/review')).toBe('tasks');
     expect(destinationFromHash('#task/example/workflow')).toBe('tasks');
+    expect(destinationFromHash('#compose')).toBe('tasks');
+    expect(destinationFromHash('#task-history')).toBe('tasks');
+    expect(destinationFromHash('#agent-studio')).toBe('agents');
+    expect(destinationFromHash('#repositories')).toBe('settings');
   });
 
   it('falls back safely for unknown and empty fragments', () => {
