@@ -78,7 +78,9 @@ function App() {
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
   const [page, setPage] = useState<Destination>(() => destinationFromHash(window.location.hash));
-  const [taskPanel, setTaskPanel] = useState<TaskPanel>('details');
+  const [taskPanel, setTaskPanel] = useState<TaskPanel>(() =>
+    window.location.hash === '#compose' ? 'new' : 'details',
+  );
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -95,6 +97,7 @@ function App() {
     const onHashChange = () => {
       setNavigation(decodeTaskNavigation(window.location.hash));
       setPage(destinationFromHash(window.location.hash));
+      setTaskPanel(window.location.hash === '#compose' ? 'new' : 'details');
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
