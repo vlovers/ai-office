@@ -529,6 +529,7 @@ function App() {
               </button>
             </div>
           )}
+          {page === 'office' && (
           <section className="office-scene" aria-label="Shared Codex office">
             <PixelOffice
               agents={officeAgents.map((slot) => ({
@@ -620,9 +621,11 @@ function App() {
               </p>
             )}
           </section>
+          )}
           {page === 'tasks' && (
             <TaskPanelTabs active={taskPanel} onChange={(panel) => { setTaskPanel(panel); if (panel === 'new') showSection('compose'); else showSection('task-workspace'); }} />
           )}
+          {page !== 'office' && (
           <div className="mission-grid" aria-label="Workspace tools">
             <div className="mission-board">
               <div className="stats" aria-label="Workspace statistics">
@@ -1400,6 +1403,7 @@ function App() {
               </div>
             </aside>
           </div>
+          )}
           <footer>
             <span>
               ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / AGENT STUDIO · UNRELEASED
