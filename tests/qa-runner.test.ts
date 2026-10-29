@@ -108,6 +108,7 @@ it('rejects tampered approved QA arguments, timeout, and digest before preflight
   const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 1000);
   const changed = [
     { ...plan, argv: [plan.argv[0]!, 'unsafe'] },
+    { ...plan, commandId: 'different-command' },
     { ...plan, timeoutMs: 2000 },
     { ...plan, digest: '0'.repeat(64) },
   ];
