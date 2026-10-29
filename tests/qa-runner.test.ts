@@ -95,9 +95,9 @@ it(
 
       const swapped = await qaPlan('approved', [executable, '--safe'], 1000);
       await rm(executable);
-      await expect(runSandboxedQA(root, swapped, new AbortController().signal)).rejects.toMatchObject({
-        statusCode: 409,
-      });
+      await expect(
+        runSandboxedQA(root, swapped, new AbortController().signal),
+      ).rejects.toMatchObject({ statusCode: 409 });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
