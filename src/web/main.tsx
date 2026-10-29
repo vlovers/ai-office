@@ -686,7 +686,7 @@ function App() {
                 </section>
               )}
               {dashboard && (
-                <AgentStudio
+                <div className="agents-destination"><AgentStudio
                   profiles={dashboard.profiles ?? []}
                   api={api}
                   refresh={refresh}
@@ -695,9 +695,9 @@ function App() {
                     setResumeSessionId('');
                     showSection('compose');
                   }}
-                />
+                /></div>
               )}
-              <WorkflowBoard inspection={workflowInspection} />
+              <div className="workflows-destination"><WorkflowBoard inspection={workflowInspection} /></div>
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
