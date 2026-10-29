@@ -1291,6 +1291,7 @@ function App() {
                 </div>
                 {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
+              <div className="settings-destination">
               <section className="panel connection-panel" aria-label="Codex connection">
                 <div className="panel-heading">
                   <h2>Codex connection</h2>
@@ -1389,6 +1390,7 @@ function App() {
                   </p>
                 </form>
               </section>
+              </div>
             </aside>
           </div>
           <footer>
