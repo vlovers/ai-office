@@ -8,6 +8,18 @@ export interface VerificationResult {
   /** Not an attested sandbox denial: spawn failure, timeout, output cap or signal. */
   incomplete?: boolean;
 }
+/** An IPC message is evidence only if it matches the worker's result protocol. */
+function isAttestedResult(value: unknown): value is VerificationResult {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.passed === 'boolean' &&
+    typeof candidate.output === 'string' &&
+    candidate.output.length <= 128_100 &&
+    (candidate.incomplete === undefined || typeof candidate.incomplete === 'boolean') &&
+    !(candidate.passed && candidate.incomplete === true)
+  );
+}
 export async function runVerification(
   argv: string[],
   cwd: string,
@@ -37,15 +49,27 @@ export async function runVerification(
     );
     let result: VerificationResult | undefined;
     let startupError = false;
+    let protocolError = false;
     let interrupted = false;
     let cleanupError: unknown;
-    child.on('message', (value: VerificationResult) => {
-      if (!interrupted)
-        result = {
-          passed: value.passed === true,
-          output: String(value.output).slice(0, 128_100),
-          ...(value.incomplete === true ? { incomplete: true } : {}),
-        };
+    child.on('message', (value: unknown) => {
+      if (interrupted || protocolError) return;
+      // A malformed or repeated message must never be coerced into a denial.
+      // It can otherwise crash the backend (null) or overwrite a real result.
+      if (result || !isAttestedResult(value)) {
+        protocolError = true;
+        try {
+          if (child.pid) killProcessGroup(child.pid);
+        } catch (error) {
+          cleanupError = error;
+        }
+        return;
+      }
+      result = {
+        passed: value.passed,
+        output: value.output,
+        ...(value.incomplete === true ? { incomplete: true } : {}),
+      };
     });
     child.on('error', () => {
       startupError = true;
@@ -84,6 +108,10 @@ export async function runVerification(
       }
       if (cleanupError) {
         reject(cleanupError);
+        return;
+      }
+      if (protocolError) {
+        reject(new AppError(409, 'Verification supervisor sent an invalid result.'));
         return;
       }
       if (startupError && !interrupted) {
