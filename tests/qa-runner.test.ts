@@ -83,7 +83,7 @@ it('rejects missing, broken, directory and non-executable QA commands before app
   const executable = join(root, 'qa.sh');
   const brokenLink = join(root, 'broken-link');
   try {
-    await writeFile(executable, '#!/bin/sh\\nexit 0\\n');
+    await writeFile(executable, '#!/bin/sh\nexit 0\n');
     await chmod(executable, 0o600);
     await expect(qaPlan('not-executable', [executable])).rejects.toMatchObject({
       statusCode: 409,
@@ -264,7 +264,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 1
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  *allowed.txt*) printf 'READ_ALLOWED\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
   *.env*) marker=secret ;;
   *write-escape*) marker=write ;;
@@ -303,7 +303,7 @@ native(
         fake,
         `#!/bin/sh
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n' ;;
+  *allowed.txt*) printf 'READ_ALLOWED\n' ;;
   *) exit 0 ;;
 esac
 `,
@@ -331,7 +331,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 1
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  *allowed.txt*) printf 'READ_ALLOWED\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
   *.env*) marker=secret ;;
   *write-escape*) marker=write ;;
