@@ -828,6 +828,62 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(terminalTasks.get(failed.task.id), 'failed');
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
     assert.equal(terminalTasks.get(blocked.task.id), 'completed');
+    // A confirmation opened on a recovered checkpoint must never remain
+    // actionable through a transport outage or an external version change.
+    // Exercise the real browser dialog and HTTP API rather than mocking React.
+    await selector.selectOption(blocked.workflowId);
+    await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
+    await board.getByRole('button', { name: 'Cancel workflow' }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+    const confirmCheckpoint = confirmation.getByRole('button', { name: 'Confirm checkpoint' });
+    await expect(confirmCheckpoint).toBeEnabled();
+
+    const dialogTimelineUrl = address + '/api/workflows/' + blocked.workflowId + '/timeline';
+    await page.route(dialogTimelineUrl, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic dialog checkpoint outage' }),
+      }),
+    );
+    try {
+      await expect(
+        confirmation.getByRole('alert').filter({ hasText: 'Synthetic dialog checkpoint outage' }),
+      ).toBeVisible({ timeout: 20000 });
+      await expect(confirmCheckpoint).toBeDisabled();
+    } finally {
+      await page.unroute(dialogTimelineUrl);
+    }
+    await expect(
+      confirmation.getByRole('alert').filter({ hasText: 'Synthetic dialog checkpoint outage' }),
+    ).toHaveCount(0, { timeout: 20000 });
+    await expect(confirmCheckpoint).toBeEnabled();
+
+    // Another operator can cancel the same checkpoint while this dialog stays
+    // open. The next poll must invalidate the already-checked confirmation.
+    const externalCancelUrl = address + '/api/workflows/' + blocked.workflowId + '/cancel';
+    const externalCancel = await page.request.post(externalCancelUrl, {
+      data: { version: versions[3], confirmed: true },
+    });
+    assert.equal(externalCancel.status(), 200);
+    const externalCancelled = await externalCancel.json();
+    assert.equal(externalCancelled.version, versions[3]! + 1);
+    await expect(
+      confirmation.getByRole('alert').filter({ hasText: 'The workflow changed' }),
+    ).toBeVisible({ timeout: 20000 });
+    await expect(confirmCheckpoint).toBeDisabled();
+    await expect(confirmation).toContainText('version ' + versions[3]);
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await expect(board.getByText(/^State: cancelled/)).toBeVisible();
+    const afterDialog = await page.request.get(
+      address + '/api/workflows/' + blocked.workflowId,
+    );
+    assert.equal(afterDialog.status(), 200);
+    assert.equal((await afterDialog.json()).version, externalCancelled.version);
+    await assertNoUnexpectedWorkflowAlerts();
     assert.deepEqual(pageErrors, []);
     passed = true;
     console.log(
