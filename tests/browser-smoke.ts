@@ -209,10 +209,12 @@ try {
     path: join(screenshotDir, 'ai-office-phosphor-desktop.png'),
     fullPage: true,
   });
-  await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.locator('.result')).toContainText('Reviewed the disposable repository');
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.reload();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.locator('.task-row').filter({ hasText: 'Review the example project' }).click();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
   for (const width of [320, 390, 768, 1024, 1440]) {
