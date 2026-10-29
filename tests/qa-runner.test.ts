@@ -121,7 +121,6 @@ exec /bin/sleep 30
   12000,
 );
 
-
 fakeNative(
   'kills native sandbox descendants when cancellation interrupts the read probe',
   async () => {
@@ -178,9 +177,10 @@ esac
 `,
     );
     await chmod(fake, 0o700);
+    const moduleUrl = new URL('../src/server/providers/native-isolation.ts', import.meta.url).href;
     await writeFile(
       parentScript,
-      `import { verifyNativeIsolation } from ${JSON.stringify(new URL('../src/server/providers/native-isolation.ts', import.meta.url).href)};
+      `import { verifyNativeIsolation } from ${JSON.stringify(moduleUrl)};
 await verifyNativeIsolation(${JSON.stringify(fake)});
 `,
     );
