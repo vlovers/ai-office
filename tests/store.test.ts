@@ -358,7 +358,9 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
       });
       child.once('error', reject);
       child.once('exit', (code, signal) =>
-        reject(new Error(`SQLite worker exited before ready: ${code}/${signal}; stderr: ${errorOutput}`)),
+        reject(
+          new Error(`SQLite worker exited before ready: ${code}/${signal}; stderr: ${errorOutput}`),
+        ),
       );
     });
     let timeout: NodeJS.Timeout | undefined;
@@ -366,7 +368,10 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
       await Promise.race([
         ready,
         new Promise<never>((_, reject) => {
-          timeout = setTimeout(() => reject(new Error('SQLite worker readiness timed out; stderr: ${errorOutput}')), 10000);
+          timeout = setTimeout(
+            () => reject(new Error('SQLite worker readiness timed out; stderr: ${errorOutput}')),
+            10000,
+          );
         }),
       ]);
     } finally {
@@ -378,11 +383,15 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
     reopened = new Store(path);
     expect(reopened.task(task.id)?.state).toBe('interrupted');
     expect(reopened.queue()).toEqual([]);
-    expect(reopened.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    expect(reopened.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(
+      1,
+    );
     reopened.close();
     reopened = new Store(path);
     expect(reopened.task(task.id)?.state).toBe('interrupted');
-    expect(reopened.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    expect(reopened.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(
+      1,
+    );
     expect(reopened.queue()).toEqual([]);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
