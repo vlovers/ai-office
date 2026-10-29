@@ -246,6 +246,23 @@ native(
         expect(recovered.state).toBe('blocked');
         expect(recovered.stages[1]!.state).toBe('interrupted');
         expect(recovered.stages[1]!.execution).toBeTruthy();
+        const interruptedTask = reopened.task(taskId)!;
+        const interruptedVersion = recovered.version;
+        // Repeated startup recovery must not enqueue or replay the stage, nor
+        // change the operator-visible workflow revision after the first pass.
+        const reopenedAgain = new Store(join(env.root, 'metadata.sqlite'));
+        try {
+          const twiceRecovered = new WorkflowStore(reopenedAgain.db).get(workflow.id)!;
+          expect(reopenedAgain.task(taskId)?.state).toBe('interrupted');
+          expect(reopenedAgain.task(taskId)?.sessionId).toBe(interruptedTask.sessionId);
+          expect(reopenedAgain.queue()).toEqual([]);
+          expect(twiceRecovered.version).toBe(interruptedVersion);
+          expect(twiceRecovered.stages[1]!.taskId).toBe(taskId);
+          expect(twiceRecovered.stages[1]!.execution).toEqual(recovered.stages[1]!.execution);
+          expect(twiceRecovered.stages[2]!.state).toBe('pending');
+        } finally {
+          reopenedAgain.close();
+        }
         expect(
           (
             await env.send('POST', env.url + '/submit-reviewer', {
