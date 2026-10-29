@@ -1181,6 +1181,7 @@ function App() {
               )}
             </>} inspector={<>
 
+              {page === 'agents' && (
               <section className="panel agent-panel" id="agent" tabIndex={-1}>
                 <div className="panel-heading">
                   <h2>Agents / {agent?.name ?? 'Codex'}</h2>
@@ -1254,6 +1255,8 @@ function App() {
                 </div>
                 {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
+              )}
+              {page === 'settings' && (
               <div className="settings-destination">
               <div className="destination-intro"><h2>Workspace settings</h2><p>Manage your local connection and trusted repository roots.</p></div>
               <section className="panel connection-panel" aria-label="Codex connection">
@@ -1355,6 +1358,7 @@ function App() {
                 </form>
               </section>
               </div>
+              )}
             </>} />
           )}
           <footer>
