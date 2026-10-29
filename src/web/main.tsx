@@ -10,6 +10,7 @@ import { TaskSummary } from './task-summary.js';
 import { SubmittedQueue } from './submitted-queue.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowsPage } from './workflows-page.js';
+import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
