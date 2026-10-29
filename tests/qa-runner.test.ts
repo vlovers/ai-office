@@ -202,6 +202,11 @@ native(
       await writeFile(
         fake,
         `#!/bin/sh
+# Ignore --config values, which contain .env deny patterns, and inspect only
+# the actual sandbox command following the -- separator.
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 1
+shift
 case "$*" in
   *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
