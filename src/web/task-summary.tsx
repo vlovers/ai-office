@@ -6,7 +6,7 @@ export function TaskSummary({ dashboard }: { dashboard?: Dashboard }) {
   const completed = tasks.filter((task) => task.state === 'completed').length;
 
   return (
-    <div className="stats" aria-label="Workspace statistics">
+    <div className="stats" aria-label="Task workspace statistics">
       <div>
         <span>CODEX AGENTS</span>
         <strong>{dashboard?.agents.length ?? '—'}<small>saved profiles</small></strong>
