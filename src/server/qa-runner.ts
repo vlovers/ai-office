@@ -47,17 +47,36 @@ export async function qaPlan(
   };
 }
 
+/**
+ * QA approval pins the executable's file identity and the exact command.
+ * Reject changed plans before expensive preflight and again after it, since
+ * the executable can be replaced while native capability probes are running.
+ */
+async function requireUnchangedQAPlan(plan: QAPlan): Promise<void> {
+  let current: QAPlan;
+  try {
+    current = await qaPlan(plan.commandId, plan.argv, plan.timeoutMs);
+  } catch {
+    throw new AppError(409, 'Approved QA command changed. Request a new approval.');
+  }
+  if (current.digest !== plan.digest)
+    throw new AppError(409, 'Approved QA command changed. Request a new approval.');
+}
+
 /** Untrusted repository commands run INSIDE the same restrictive native policy. */
 export async function runSandboxedQA(directory: string, plan: QAPlan, signal: AbortSignal) {
   // A cancelled queued QA must not launch even the expensive native capability
   // probes. Keep the second check: cancellation may arrive during verification.
   if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+  await requireUnchangedQAPlan(plan);
   try {
     await verifyNativeIsolation(undefined, signal);
   } catch (error) {
     if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
     throw error;
   }
+  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+  await requireUnchangedQAPlan(plan);
   if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
   const home = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-')));
   try {
