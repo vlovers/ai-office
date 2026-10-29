@@ -273,6 +273,38 @@ esac
   15000,
 );
 
+for (const [label, match, redirect] of [
+  ['outside file', '*outside.txt*', ''],
+  ['secret file', '*.env*', '>&2'],
+] as const) {
+  fakeNative(
+    `rejects masked forbidden reads of the ${label} even when the sandbox exits nonzero`,
+    async () => {
+      const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-masked-read-')));
+      try {
+        const fake = join(root, 'fake-sandbox.sh');
+        await writeFile(
+          fake,
+          `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 9
+shift
+case "$*" in
+  *allowed.txt*) /bin/cat "$2"; exit 0 ;;
+  ${match}) /bin/cat "$2" ${redirect}; exit 7 ;;
+  *) exit 7 ;;
+esac
+`,
+        );
+        await chmod(fake, 0o700);
+        await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    15000,
+  );
+}
 native(
   'rejects a forged sandbox that allows forbidden operations after passing the read probe',
   async () => {
