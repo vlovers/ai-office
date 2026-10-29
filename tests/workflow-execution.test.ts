@@ -250,7 +250,6 @@ native(
         const interruptedVersion = recovered.version;
         // Repeated startup recovery must not enqueue or replay the stage, nor
         // change the operator-visible workflow revision after the first pass.
-        reopened.close();
         const reopenedAgain = new Store(join(env.root, 'metadata.sqlite'));
         try {
           const twiceRecovered = new WorkflowStore(reopenedAgain.db).get(workflow.id)!;
