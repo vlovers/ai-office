@@ -101,9 +101,7 @@ function expectRecoveredApprovalsBlocked(
       expect(workflows.get(entry.workflowId)).toEqual(before);
       expect(store.task(entry.taskId)?.state).toBe('interrupted');
       expect(store.events(entry.taskId)).toEqual(originalEvents);
-      expect(store.queue().map((item) => item.taskId)).toEqual([
-        ordinaryTaskId,
-      ]);
+      expect(store.queue().map((item) => item.taskId)).toEqual([ordinaryTaskId]);
     }
   }
 }
