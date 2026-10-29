@@ -22,6 +22,8 @@ it('rejects a supervisor that exits without an attested result', async () => {
   // process group has been reaped. This is not proof of sandbox denial.
   worker.emit('close', 1);
 
-  await expect(pending).rejects.toThrow('Verification supervisor closed without an attested result');
+  await expect(pending).rejects.toThrow(
+    'Verification supervisor closed without an attested result',
+  );
   expect(reapProcessGroup).toHaveBeenCalledWith(424242);
 });
