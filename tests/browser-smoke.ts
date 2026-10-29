@@ -325,8 +325,17 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskA = env.store.tasks().find((task) => task.title === 'Agent A concurrent')!;
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Settings' })
+    .click();
   await page.getByLabel('Absolute repository path').fill(secondEnv.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Assign to agent').selectOption('codex-2');
   await createTask('Agent B concurrent', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
