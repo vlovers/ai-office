@@ -10,6 +10,7 @@ import { TaskSummary } from './task-summary.js';
 import { SubmittedQueue } from './submitted-queue.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowsPage } from './workflows-page.js';
+import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
@@ -1266,107 +1267,30 @@ function App() {
               </section>
               )}
               {page === 'settings' && (
-              <div className="settings-destination">
-              <div className="destination-intro"><h2>Workspace settings</h2><p>Manage your local connection and trusted repository roots.</p></div>
-              <section className="panel connection-panel" aria-label="Codex connection">
-                <div className="panel-heading">
-                  <h2>Codex connection</h2>
-                  <span
-                    className={`badge ${dashboard?.connection.status === 'available' ? 'completed' : 'failed'}`}
-                    role="status"
-                    data-testid="codex-connection-status"
-                  >
-                    {!dashboard
-                      ? 'Checking connection…'
-                      : dashboard.connection.status === 'available'
-                        ? 'Available'
-                        : dashboard?.connection.status === 'authentication-required'
-                          ? 'Authentication required'
-                          : 'Connection error'}
-                  </span>
-                </div>
-                <div className="connection-controls">
-                  <div>
-                    <label htmlFor="authentication-mode">Authentication mode</label>
-                    <select
-                      id="authentication-mode"
-                      value={dashboard?.connection.mode ?? 'local-cli-chatgpt'}
-                      disabled={busy || agentBusy}
-                      onChange={(event) => {
-                        const mode = event.target.value as AuthMode;
-                        void act(async () => {
-                          await api('/connection', { mode });
-                          setResumeSessionId('');
-                        });
-                      }}
-                    >
-                      <option value="local-cli-chatgpt">Local ChatGPT login (preferred)</option>
-                      <option value="api-key">API key (separate billing)</option>
-                    </select>
-                  </div>
-                  <button
-                    className="secondary"
-                    disabled={busy || agentBusy}
-                    onClick={() =>
-                      void act(async () => {
-                        await api('/connection/refresh', {});
-                      })
-                    }
-                  >
-                    Refresh connection
-                  </button>
-                </div>
-                <p className="connection-message">
-                  {dashboard?.connection.message ?? 'Checking the local backend connection…'}
-                </p>
-                <p className="field-hint">
-                  No credentials are entered in this dashboard. Local login never falls back to API
-                  billing.
-                </p>
-              </section>
-              <section className="panel repository-panel" id="repositories">
-                <div className="panel-heading">
-                  <h2>Connect a repository</h2>
-                  <span className="step">01</span>
-                </div>
-                <p className="panel-description">
-                  Choose an existing local Git worktree. Your files stay on your machine; task
-                  context is sent to your AI provider.
-                </p>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = event.currentTarget;
-                    const data = new FormData(form);
+                <SettingsPage
+                  dashboard={dashboard}
+                  busy={busy}
+                  agentBusy={agentBusy}
+                  onChangeMode={(mode) => {
                     void act(async () => {
-                      const repo = await api<{ id: string }>('/repositories', {
-                        path: data.get('path'),
-                      });
+                      await api('/connection', { mode });
+                      setResumeSessionId('');
+                    });
+                  }}
+                  onRefreshConnection={() => {
+                    void act(async () => {
+                      await api('/connection/refresh', {});
+                    });
+                  }}
+                  onRegisterRepository={(path, form) => {
+                    void act(async () => {
+                      const repo = await api<{ id: string }>('/repositories', { path });
                       setRepositoryId(repo.id);
                       setResumeSessionId('');
                       form.reset();
                     });
                   }}
-                >
-                  <label htmlFor="path">Absolute repository path</label>
-                  <div className="input-row">
-                    <input
-                      id="path"
-                      name="path"
-                      required
-                      placeholder="/Users/you/projects/example"
-                      autoComplete="off"
-                    />
-                    <button className="secondary" disabled={busy}>
-                      Register <span>↗</span>
-                    </button>
-                  </div>
-                  <p className="field-hint">
-                    Git worktree roots only. Estima and Pixel Office are excluded.
-                  </p>
-                </form>
-              </section>
-              </div>
+                />
               )}
             </>} />
           )}
