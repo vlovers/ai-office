@@ -11,7 +11,8 @@ export function TaskChangedFiles({ task }: { task: Task }) {
         Changed-file summary <span>{task.changedFiles.length}</span>
       </h3>
       <p>
-        Git worktree status at finish, including pre-existing changes. The agent has read-only access.
+        Git worktree status at finish, including pre-existing changes. The agent has read-only
+        access.
       </p>
       {task.summaryError ? (
         <p role="alert">Summary unavailable: {task.summaryError}</p>

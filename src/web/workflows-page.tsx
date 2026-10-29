@@ -1,10 +1,6 @@
 import { WorkflowBoard } from './workflow-board.js';
 
-export function WorkflowsPage({
-  inspection,
-}: {
-  inspection?: { id: string; request: number };
-}) {
+export function WorkflowsPage({ inspection }: { inspection?: { id: string; request: number } }) {
   return (
     <section
       className="workflows-destination"

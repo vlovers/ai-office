@@ -2,7 +2,11 @@ import type { ReactNode } from 'react';
 import type { Destination } from './destinations.js';
 
 export function OfficePage({ children }: { children: ReactNode }) {
-  return <div className="office-page" aria-label="Office overview">{children}</div>;
+  return (
+    <div className="office-page" aria-label="Office overview">
+      {children}
+    </div>
+  );
 }
 
 export function WorkspacePage({

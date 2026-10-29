@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTaskNavigation, encodeTaskNavigation, taskHasReview, taskNavigationTarget } from '../src/web/task-navigation.js';
-import { destinationForSection, destinationFromHash, destinationHash, destinations } from '../src/web/destinations.js';
+import {
+  decodeTaskNavigation,
+  encodeTaskNavigation,
+  taskHasReview,
+  taskNavigationTarget,
+} from '../src/web/task-navigation.js';
+import {
+  destinationForSection,
+  destinationFromHash,
+  destinationHash,
+  destinations,
+} from '../src/web/destinations.js';
 
 describe('workspace navigation', () => {
   it.each(destinations)('round-trips the %s destination', (destination) => {

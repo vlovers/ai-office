@@ -97,7 +97,9 @@ export function SettingsPage({
               Register <span>↗</span>
             </button>
           </div>
-          <p className="field-hint">Git worktree roots only. Estima and Pixel Office are excluded.</p>
+          <p className="field-hint">
+            Git worktree roots only. Estima and Pixel Office are excluded.
+          </p>
         </form>
       </section>
     </div>
