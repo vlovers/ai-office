@@ -41,7 +41,9 @@ it('exposes interrupted tasks after an HTTP backend restart without replaying th
     };
     expect(dashboard.tasks.find((task) => task.id === running.id)?.state).toBe('interrupted');
     expect(dashboard.queue.some((item) => item.taskId === running.id)).toBe(false);
-    expect(recovered.events(running.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    expect(
+      recovered.events(running.id).filter((event) => event.kind === 'interrupted'),
+    ).toHaveLength(1);
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(recovered.task(running.id)?.state).toBe('interrupted');
     expect(recovered.queue()).toEqual([]);
@@ -52,7 +54,9 @@ it('exposes interrupted tasks after an HTTP backend restart without replaying th
     });
     expect(start.status).toBe(409);
     expect(recovered.task(running.id)?.state).toBe('interrupted');
-    expect(recovered.events(running.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    expect(
+      recovered.events(running.id).filter((event) => event.kind === 'interrupted'),
+    ).toHaveLength(1);
   } finally {
     await app?.close();
     recovered?.close();
