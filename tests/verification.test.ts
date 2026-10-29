@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtemp, realpath, readFile, lstat, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
@@ -134,7 +135,7 @@ it('kills delayed descendant side effects when verification is aborted', async (
   );
   try {
     await until(
-      () => readFile(join(root, 'ready'), 'utf8').then(() => true, () => false),
+      () => existsSync(join(root, 'ready')),
       (ready) => ready,
     );
     controller.abort();
