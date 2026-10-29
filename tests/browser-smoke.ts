@@ -162,6 +162,11 @@ try {
   await expect(page.locator('#agent')).toBeFocused();
   assert.equal(env.store.tasks().length, 0, 'Workstation invented a task');
   await page.getByRole('link', { name: 'Register local worktree' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Settings' })
+    .click();
+  await page.getByLabel('Absolute repository path').focus();
   await expect(page.getByLabel('Absolute repository path')).toBeFocused();
   await crt.click();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
