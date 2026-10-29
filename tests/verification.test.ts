@@ -116,7 +116,7 @@ it('waits for worker closure when verification is aborted during shutdown', asyn
   const pending = runVerification(['/bin/sleep', '60'], root, 60_000, controller.signal);
   const timer = setTimeout(() => controller.abort(), 200);
   try {
-    expect((await pending).passed).toBe(false);
+    expect(await pending).toMatchObject({ passed: false, incomplete: true });
   } finally {
     clearTimeout(timer);
   }
@@ -151,4 +151,15 @@ it('marks an output-limit termination as incomplete', async () => {
   expect(result).toMatchObject({ passed: false, incomplete: true });
   expect(result.output).toContain('time/output limit');
   expect(result.output.length).toBeLessThanOrEqual(128100);
+});
+
+it('marks cancellation before worker launch as incomplete', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const result = await runVerification(['/bin/true'], tmpdir(), 1000, controller.signal);
+  expect(result).toEqual({
+    passed: false,
+    output: 'Verification interrupted before launch.',
+    incomplete: true,
+  });
 });
