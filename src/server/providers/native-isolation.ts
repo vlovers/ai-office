@@ -52,24 +52,20 @@ export async function verifyNativeIsolation(
     });
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
-    const run = async (argv: string[]) => {
-      if (signal?.aborted) return { passed: false, output: '' };
-      try {
-        // A direct execFile only kills its immediate child on abort/timeout.
-        // Native Codex can spawn sandbox descendants, which must not outlive
-        // the preflight (or survive an abrupt backend disconnect). Reuse the
-        // independently supervised process-group runner used for QA execution.
-        const command = executable === nativeCodex ? [process.execPath, executable] : [executable];
-        return await runVerification(
-          [...command, ...sandboxArguments(directory, argv)],
-          directory,
-          10000,
-          signal,
-          { HOME: home, CODEX_HOME: home },
-        );
-      } catch {
-        return { passed: false, output: '' };
-      }
+    const run = (argv: string[]) => {
+      if (signal?.aborted)
+        return Promise.resolve({ passed: false, output: 'Verification cancelled before launch.' });
+      // A sandbox denial is a completed verification returning passed: false.
+      // A rejected supervisor (startup, IPC or uncertain process cleanup) is
+      // NOT evidence of denial: propagate it and fail the entire preflight.
+      const command = executable === nativeCodex ? [process.execPath, executable] : [executable];
+      return runVerification(
+        [...command, ...sandboxArguments(directory, argv)],
+        directory,
+        10000,
+        signal,
+        { HOME: home, CODEX_HOME: home },
+      );
     };
     const read = await run(['/bin/cat', join(directory, 'allowed.txt')]);
     if (!read.passed || read.output.trim() !== 'READ_ALLOWED')
@@ -83,9 +79,14 @@ export async function verifyNativeIsolation(
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
-    const probes = await Promise.all(forbidden.map((argv) => run(argv)));
+    // Wait for every supervised process to finish before removing its probe
+    // directory or listener. Promise.all would reject early while siblings
+    // could still be running after a supervisor failure.
+    const probes = await Promise.allSettled(forbidden.map((argv) => run(argv)));
     if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
-    if (probes.some((probe) => probe.passed))
+    if (probes.some((probe) => probe.status === 'rejected'))
+      throw new Error('Native sandbox probe supervisor failed.');
+    if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.passed))
       throw new Error('Sandbox allowed a forbidden operation.');
     if (networkEscape) throw new Error('Network isolation failed.');
     // Check effects as well as exit codes (a wrapper may hide its child's status).
