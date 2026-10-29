@@ -346,6 +346,10 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
   });
   let reopened: Store | undefined;
   try {
+    let errorOutput = '';
+    child.stderr!.on('data', (chunk: Buffer) => {
+      errorOutput += chunk.toString();
+    });
     const ready = new Promise<void>((resolve, reject) => {
       let output = '';
       child.stdout!.on('data', (chunk: Buffer) => {
@@ -354,7 +358,7 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
       });
       child.once('error', reject);
       child.once('exit', (code, signal) =>
-        reject(new Error(`SQLite worker exited before ready: ${code}/${signal}`)),
+        reject(new Error(`SQLite worker exited before ready: ${code}/${signal}; stderr: ${errorOutput}`)),
       );
     });
     let timeout: NodeJS.Timeout | undefined;
@@ -362,7 +366,7 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
       await Promise.race([
         ready,
         new Promise<never>((_, reject) => {
-          timeout = setTimeout(() => reject(new Error('SQLite worker readiness timed out')), 10000);
+          timeout = setTimeout(() => reject(new Error('SQLite worker readiness timed out; stderr: ${errorOutput}')), 10000);
         }),
       ]);
     } finally {
