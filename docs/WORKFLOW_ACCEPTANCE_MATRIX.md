@@ -42,15 +42,15 @@ an intentional safety notice, not a transient connection error. The current
 browser regression permits that notice and rejects other alerts observed after
 reconnection. It also injects a synthetic HTTP 503 during subsequent live
 polling against both the timeline and Dashboard endpoints and requires stale
-Workflow actions **and the Create gated workflow form** to become disabled; A separate delayed-response
-regression holds an older timeline request open while the operator switches
-Workflows, and again while live polling is paused and resumed. Once a newer
-successful checkpoint is rendered, releasing the older HTTP 503 must not
-replace the selected timeline, surface a stale error, or disable controls.
-This verifies that the UI rejects out-of-order polling results, not merely
-that ordinary 503 responses are handled.
+Workflow actions **and the Create gated workflow form** to become disabled;
 after transport recovery, errors must disappear and controls become available
-again without reloading the page. Pausing live polling must also disable
+again without reloading the page. A separate delayed-response regression
+holds an older timeline request open while the operator switches Workflows,
+and again while live polling is paused and resumed. Once a newer successful
+checkpoint is rendered, releasing the older HTTP 503 must not replace the
+selected timeline, surface a stale error, or disable controls. This verifies
+that the UI rejects out-of-order polling results, not merely that ordinary
+503 responses are handled. Pausing live polling must also disable
 Workflow creation, cancellation, and checkpoint mutations; resuming requires a
 fresh successful refresh before these controls become actionable. A fresh
 Dashboard response must also invalidate previously selected Coder tasks and
