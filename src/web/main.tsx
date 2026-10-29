@@ -625,7 +625,7 @@ function App() {
               </p>
             )}
           </section>
-          <div className="mission-grid">
+          <div className="mission-grid" aria-label="Workspace tools">
             <div className="mission-board">
               <div className="stats" aria-label="Workspace statistics">
                 <div>
@@ -694,7 +694,7 @@ function App() {
                   }}
                 /></div>
               )}
-              <div className="workflows-destination"><WorkflowBoard inspection={workflowInspection} /></div>
+              <div className="workflows-destination" id="workflows" tabIndex={-1}><WorkflowBoard inspection={workflowInspection} /></div>
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
