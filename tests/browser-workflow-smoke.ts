@@ -95,11 +95,19 @@ try {
     undefined,
   );
   await expect(board.getByRole('button', { name: 'Start QA', exact: true })).toHaveCount(0);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute(
     'data-state',
     'approval',
     { timeout: 10000 },
   );
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Workflows' })
+    .click();
   // Another tab advancing a checkpoint must invalidate an already checked dialog.
   await board.getByRole('button', { name: 'Approve Reviewer result', exact: true }).click();
   await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
@@ -130,6 +138,10 @@ try {
   await expect(diagnostics).toContainText('no automatic restart');
   await page.reload();
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
