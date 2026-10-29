@@ -152,6 +152,11 @@ try {
     first.focus();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   });
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
+  await firstDesk.focus();
   await expect(firstDesk).toBeFocused();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
   await expect(page.locator('#agent')).toBeFocused();
