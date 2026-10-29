@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import { createRequire } from 'node:module';
 import { codexOptions } from './codex-config.js';
 import { AppError } from '../errors.js';
@@ -24,6 +24,29 @@ export function sandboxArguments(directory: string, argv: string[]): string[] {
   flatten(options.config, '');
   values.push(...options.configOverrides!);
   return [...values.flatMap((value) => ['--config', value]), 'sandbox', '--', ...argv];
+}
+
+/** Bind a probe listener without retaining temporary settle callbacks. */
+export function listenProbeServer(server: Server): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    try {
+      server.listen(0, '127.0.0.1');
+    } catch (error) {
+      server.off('error', onError);
+      server.off('listening', onListening);
+      reject(error);
+    }
+  });
 }
 
 /** No credentials or inference. Failure is an execution fence, never a fallback. */
@@ -49,10 +72,7 @@ export async function verifyNativeIsolation(
     await writeFile(join(directory, 'allowed.txt'), 'READ_ALLOWED');
     await writeFile(join(root, 'outside.txt'), 'OUTSIDE_DENIED');
     await writeFile(join(directory, '.env'), 'SECRET_DENIED');
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', resolve);
-    });
+    await listenProbeServer(server);
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
     const env = {

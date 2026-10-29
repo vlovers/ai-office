@@ -1,9 +1,63 @@
 import { expect, it } from 'vitest';
+import { createServer } from 'node:http';
 import { mkdtemp, realpath, writeFile, rm, readFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA } from '../src/server/qa-runner.js';
-import { verifyNativeIsolation } from '../src/server/providers/native-isolation.js';
+import {
+  listenProbeServer,
+  verifyNativeIsolation,
+} from '../src/server/providers/native-isolation.js';
+
+it('removes transient HTTP listener callbacks after successful native probe bind', async () => {
+  const server = createServer();
+  try {
+    const errors = server.listenerCount('error');
+    const listening = server.listenerCount('listening');
+    await listenProbeServer(server);
+    expect(server.listenerCount('error')).toBe(errors);
+    expect(server.listenerCount('listening')).toBe(listening);
+  } finally {
+    server.close();
+  }
+});
+
+it('cleans native probe listeners when listen throws synchronously', async () => {
+  const server = createServer();
+  try {
+    await listenProbeServer(server);
+    const errors = server.listenerCount('error');
+    const listening = server.listenerCount('listening');
+    await expect(listenProbeServer(server)).rejects.toThrow();
+    expect(server.listenerCount('error')).toBe(errors);
+    expect(server.listenerCount('listening')).toBe(listening);
+  } finally {
+    server.close();
+  }
+});
+
+it('cleans native probe listeners after an asynchronous bind error', async () => {
+  const occupied = createServer();
+  const contender = createServer();
+  try {
+    await new Promise<void>((resolve) => occupied.listen(0, '127.0.0.1', resolve));
+    const address = occupied.address();
+    if (!address || typeof address === 'string') throw new Error('Missing occupied port.');
+    // Force an asynchronous EADDRINUSE on the same address using the server's
+    // native listen method while retaining the normal probe lifecycle handler.
+    const originalListen = contender.listen.bind(contender);
+    contender.listen = ((..._args: Parameters<typeof contender.listen>) =>
+      originalListen(address.port, '127.0.0.1')) as typeof contender.listen;
+    const errors = contender.listenerCount('error');
+    const listening = contender.listenerCount('listening');
+    await expect(listenProbeServer(contender)).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    expect(contender.listenerCount('error')).toBe(errors);
+    expect(contender.listenerCount('listening')).toBe(listening);
+  } finally {
+    if (contender.listening) contender.close();
+    if (occupied.listening) occupied.close();
+  }
+});
 
 const native = it.skipIf(
   process.platform !== 'darwin' && process.env.AI_OFFICE_NATIVE_TESTS !== '1',
@@ -151,6 +205,11 @@ native(
       await writeFile(
         fake,
         `#!/bin/sh
+# Ignore --config values, which contain .env deny patterns, and inspect only
+# the actual sandbox command following the -- separator.
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 1
+shift
 case "$*" in
   *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
