@@ -1926,7 +1926,6 @@ select {
 .shell[data-page="agents"] .repository-panel {
   display: none;
 }
-.shell[data-page="settings"] .mission-board,
 .shell[data-page="settings"] .agent-panel {
   display: none;
 }
@@ -2054,9 +2053,13 @@ select {
 .shell[data-page="agents"] .settings-destination {
   display: none;
 }
-.shell[data-page="settings"] .inspector {
-  max-width: 1100px;
+.shell[data-page="settings"] .mission-board {
   width: 100%;
+  max-width: 1200px;
+  min-width: 0;
+}
+.shell[data-page="settings"] .inspector {
+  display: none;
 }
 .shell[data-page="settings"] .settings-destination {
   display: grid;
