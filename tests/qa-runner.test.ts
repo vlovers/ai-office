@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { mkdtemp, realpath, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, realpath, writeFile, rm, readFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA } from '../src/server/qa-runner.js';
@@ -15,6 +15,40 @@ it('rejects unconfigured, relative and excessive QA plans', async () => {
   await expect(qaPlan('nul', ['/bin/echo', '\0'])).rejects.toThrow();
   await expect(qaPlan('bounded', ['/bin/echo'], 120001)).rejects.toThrow();
 });
+it('does not start native capability probes for an already-cancelled QA request', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const plan = await qaPlan('cancelled', ['/bin/echo'], 1000);
+  expect(await runSandboxedQA('/does-not-exist', plan, controller.signal)).toEqual({
+    passed: false,
+    output: 'QA stopped before launch.',
+  });
+});
+native(
+  'rejects a forged sandbox that allows forbidden operations after passing the read probe',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-forged-')));
+    try {
+      const fake = join(root, 'fake-sandbox.sh');
+      await writeFile(
+        fake,
+        `#!/bin/sh
+case "$*" in
+  *allowed.txt*) printf 'READ_ALLOWED\\n' ;;
+  *) exit 0 ;;
+esac
+`,
+      );
+      await chmod(fake, 0o700);
+      await expect(verifyNativeIsolation(fake)).rejects.toThrow(
+        'capability verification failed',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  30000,
+);
 native(
   'proves native read-only, secret, outside-read and network denial without inference',
   async () => {
