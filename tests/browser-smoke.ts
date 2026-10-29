@@ -275,11 +275,12 @@ try {
     .getByRole('button', { name: 'Tasks' })
     .click();
   await expect(page.locator('#task-workspace')).toContainText('Stop review');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toBeFocused();
   await expect(page.locator('.office-scene').first()).toBeHidden();
   await expect(page.locator('#compose')).toBeHidden();
@@ -301,10 +302,7 @@ try {
 
   await page.getByRole('button', { name: /Stop agent/ }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
-  await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await page
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Agents' })
