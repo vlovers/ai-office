@@ -69,6 +69,7 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
+  const [page, setPage] = useState<'office' | 'tasks' | 'workflows' | 'agents' | 'settings'>('office');
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -300,6 +301,8 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
+    const targetPage = id === 'workflows' ? 'workflows' : id === 'agent' || id === 'agent-studio' ? 'agents' : id === 'repositories' || id === 'connection' ? 'settings' : id === 'overview' ? 'office' : 'tasks';
+    setPage(targetPage);
     const origin = document.activeElement;
     requestAnimationFrame(() => {
       // A later keyboard/pointer action takes precedence over this deferred navigation.
@@ -329,44 +332,39 @@ function App() {
   );
   return (
     <div
+      data-page={page}
       className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
     >
       <a className="skip-link" href="#overview">
         Skip to mission control
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
-        <a className="brand" href="#overview" onClick={() => setView('mission')}>
+        <a className="brand" href="#overview" onClick={() => { setPage('office'); setView('mission'); }}>
           <PixelBot />
           <span>
             AI OFFICE<small>A space for your agents</small>
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
-        <nav aria-label="Dashboard sections">
-          <a
-            className={`nav-item ${view === 'mission' ? 'active' : ''}`}
-            href="#overview"
-            onClick={() => setView('mission')}
-          >
-            <span aria-hidden="true">⌂</span>Office<span className="nav-count">01</span>
-          </a>
-          <a className="nav-item" href="#agent" onClick={() => setView('mission')}>
-            <span aria-hidden="true">♙</span>Agents
-            <span className="nav-count">{dashboard?.agents.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#agent-studio" onClick={() => setView('mission')}>
-            Agent Studio
-          </a>
-          <a className="nav-item" href="#task-history" onClick={() => setView('mission')}>
-            <span aria-hidden="true">▤</span>Task history
-            <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>
-          </a>
-          <a className="nav-item" href="#task-workspace">
-            <span aria-hidden="true">▣</span>Session terminal
-          </a>
-          <a className="nav-item" href="#compose" onClick={() => setView('mission')}>
-            <span aria-hidden="true">＋</span>New task
-          </a>
+        <nav aria-label="Main navigation">
+          {([
+            ['office', '⌂', 'Office'],
+            ['tasks', '▤', 'Tasks'],
+            ['workflows', '◇', 'Workflows'],
+            ['agents', '♙', 'Agents'],
+            ['settings', '⚙', 'Settings'],
+          ] as const).map(([id, icon, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`nav-item ${page === id ? 'active' : ''}`}
+              aria-current={page === id ? 'page' : undefined}
+              onClick={() => { setPage(id); setView('mission'); window.scrollTo({ top: 0 }); }}
+            >
+              <span aria-hidden="true">{icon}</span>{label}
+              {id === 'tasks' && <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>}
+            </button>
+          ))}
         </nav>
         <div className="sidebar-section">
           <div className="nav-label">
@@ -457,10 +455,10 @@ function App() {
             <div>
               <div className="eyebrow">AI OFFICE / WORKSPACE</div>
               <h1>
-                {view === 'focus' ? 'Focus mode' : 'Office overview'}
+                {page === 'office' ? (view === 'focus' ? 'Focus mode' : 'Office overview') : ({ tasks: 'Tasks', workflows: 'Workflows', agents: 'Agents', settings: 'Settings' } as const)[page]}
                 <span>_</span>
               </h1>
-              <p>Make room for your next idea. Your agents and their real work, together.</p>
+              <p>{page === 'office' ? 'Your team at a glance. Select an agent or start a task.' : page === 'tasks' ? 'Create, track, and review work in one place.' : page === 'workflows' ? 'Follow every stage from coding through approval.' : page === 'agents' ? 'Manage reusable agent profiles and assignments.' : 'Connections, access, and trusted repositories.'}</p>
             </div>
             <a
               className="button-link"
