@@ -6,6 +6,7 @@ import { MainNavigation } from './main-navigation.js';
 import { PageHeading } from './page-heading.js';
 import { OfficePage, WorkspacePage } from './workspace-pages.js';
 import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
+import { TaskSummary } from './task-summary.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
@@ -629,35 +630,7 @@ function App() {
           {page !== 'office' && (
           <WorkspacePage page={page} board={<>
 
-              <div className="stats" aria-label="Workspace statistics">
-                <div>
-                  <span>CODEX AGENTS</span>
-                  <strong>
-                    {dashboard?.agents.length ?? '—'}
-                    <small>saved profiles</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>IN PROGRESS</span>
-                  <strong>
-                    {dashboard?.tasks.filter((t) => activeStates.includes(t.state)).length ?? 0}
-                    <small>active task</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>COMPLETED</span>
-                  <strong>
-                    {dashboard?.tasks.filter((t) => t.state === 'completed').length ?? 0}
-                    <small>saved results</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>ACCESS</span>
-                  <strong className="environment">
-                    SCOPED<small>Isolated writes / read-only</small>
-                  </strong>
-                </div>
-              </div>
+              {page === 'tasks' && <TaskSummary dashboard={dashboard} />}
               {!!dashboard?.queue.length && (
                 <section className="panel queue-panel" aria-label="Submitted queue">
                   <div className="panel-heading">
