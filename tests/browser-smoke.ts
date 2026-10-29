@@ -389,6 +389,10 @@ try {
   assert.equal(env.store.task(taskA.id)?.state, 'running');
   assert.equal(env.store.task(taskB.id)?.state, 'running');
   // A queued task is visible/cancellable without interrupting B's active task.
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Assign to agent').selectOption('codex-2');
   await createTask('Agent B queue', 'Review later');
