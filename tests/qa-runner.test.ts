@@ -33,6 +33,29 @@ it('cleans native probe listeners when listen throws synchronously', async () =>
   }
 });
 
+it('cleans native probe listeners after an asynchronous bind error', async () => {
+  const occupied = createServer();
+  const contender = createServer();
+  try {
+    await new Promise<void>((resolve) => occupied.listen(0, '127.0.0.1', resolve));
+    const address = occupied.address();
+    if (!address || typeof address === 'string') throw new Error('Missing occupied port.');
+    // Force an asynchronous EADDRINUSE on the same address using the server's
+    // native listen method while retaining the normal probe lifecycle handler.
+    const originalListen = contender.listen.bind(contender);
+    contender.listen = ((..._args: Parameters<typeof contender.listen>) =>
+      originalListen(address.port, '127.0.0.1')) as typeof contender.listen;
+    const errors = contender.listenerCount('error');
+    const listening = contender.listenerCount('listening');
+    await expect(listenProbeServer(contender)).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    expect(contender.listenerCount('error')).toBe(errors);
+    expect(contender.listenerCount('listening')).toBe(listening);
+  } finally {
+    contender.close();
+    occupied.close();
+  }
+});
+
 const native = it.skipIf(
   process.platform !== 'darwin' && process.env.AI_OFFICE_NATIVE_TESTS !== '1',
 );
