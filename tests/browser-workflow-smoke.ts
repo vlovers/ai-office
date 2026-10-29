@@ -240,12 +240,8 @@ try {
     { timeout: 10000 },
   );
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
-  await page
-    .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Workflows' })
-    .click();
-  await board.getByRole('button', { name: 'Pause live updates' }).click();
   await page.getByRole('button', { name: '◇ Inspect approval', exact: true }).click();
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
   await expect(board.getByText(/^State: active/)).toBeVisible();
   await expect(board.getByRole('button', { name: 'Pause live updates' })).toBeVisible();
