@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { createApp } from '../src/server/app.js';
 import { profileConfiguration } from '../src/server/execution-config.js';
 import { TaskManager } from '../src/server/manager.js';
@@ -242,6 +243,27 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
       const workflow = await get(base);
       const timeline = await get(base + '/timeline');
       const diagnostics = await get(base + '/diagnostics');
+      const results = await get(base + '/results');
+      const snapshot = await get(base + '/snapshot');
+      expect(snapshot.statusCode).toBe(200);
+      expect(snapshot.headers['cache-control']).toBe('no-store');
+      expect(snapshot.json()).toEqual({
+        workflowId: entry.id,
+        version: workflow.json().version,
+        state: workflow.json().state,
+        timeline: timeline.json(),
+        diagnostics: diagnostics.json(),
+        results: results.json(),
+      });
+      // All four projections must use the same persisted checkpoint after
+      // a real SQLite reopen, including interrupted, failed and stopped tasks.
+      expect(snapshot.json().timeline.version).toBe(snapshot.json().version);
+      expect(snapshot.json().diagnostics.version).toBe(snapshot.json().version);
+      for (const report of snapshot.json().results) {
+        expect(report.workflowId).toBe(entry.id);
+        expect(report.version).toBe(snapshot.json().version);
+      }
+      expect(JSON.stringify(snapshot.json())).not.toContain(sessionBinding.contextId);
       expect(workflow.statusCode).toBe(200);
       expect(timeline.statusCode).toBe(200);
       expect(diagnostics.statusCode).toBe(200);
@@ -260,6 +282,69 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
       });
       expect(rejected.statusCode).toBe(409);
     }
+    // The combined endpoint must preserve validation and missing-resource
+    // semantics without returning a partial checkpoint or changing the DB.
+    const missing = await get('/api/workflows/00000000-0000-4000-8000-000000000000/snapshot');
+    expect(missing.statusCode).toBe(404);
+    const malformed = await get('/api/workflows/not-a-uuid/snapshot');
+    expect(malformed.statusCode).toBe(400);
+    const failedSnapshot = (await get(`/api/workflows/${qaFailed.workflowId}/snapshot`)).json();
+    expect(failedSnapshot.results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+      expect.objectContaining({ taskId: qaFailed.task.id, error: 'QA failed before restart.' }),
+    );
+    const stoppedSnapshot = (await get(`/api/workflows/${qaStopped.workflowId}/snapshot`)).json();
+    expect(stoppedSnapshot.results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+      expect.objectContaining({ taskId: qaStopped.task.id, error: 'QA stopped before restart.' }),
+    );
+    const completedSnapshot = (
+      await get(`/api/workflows/${qaCompleted.workflowId}/snapshot`)
+    ).json();
+    expect(completedSnapshot.results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+      expect.objectContaining({
+        taskId: qaCompleted.task.id,
+        result: 'Output not yet approved or checkpointed',
+      }),
+    );
+    // A second SQLite connection may commit task output after the workflow row
+    // has been read but before the result projection is built. The atomic API
+    // must return one pinned read snapshot, not a newer result mixed into the
+    // earlier workflow checkpoint. This is a deterministic cross-connection
+    // write during the actual HTTP request, without sleeps or a live provider.
+    const writer = new DatabaseSync(path);
+    const originalTask = store.task;
+    const oldResult = 'Output not yet approved or checkpointed';
+    const newResult = 'Result committed concurrently on another connection';
+    let wroteDuringSnapshot = false;
+    try {
+      store.task = (taskId) => {
+        if (taskId === qaCompleted.task.id && !wroteDuringSnapshot) {
+          wroteDuringSnapshot = true;
+          const task = originalTask.call(store, taskId)!;
+          writer
+            .prepare('UPDATE tasks SET json=? WHERE id=?')
+            .run(JSON.stringify({ ...task, result: newResult }), taskId);
+        }
+        return originalTask.call(store, taskId);
+      };
+      const pinned = await get(`/api/workflows/${qaCompleted.workflowId}/snapshot`);
+      expect(pinned.statusCode).toBe(200);
+      expect(wroteDuringSnapshot).toBe(true);
+      expect(pinned.json().results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+        expect.objectContaining({ result: oldResult }),
+      );
+    } finally {
+      store.task = originalTask;
+      writer.close();
+    }
+    const fresh = await get(`/api/workflows/${qaCompleted.workflowId}/snapshot`);
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json().results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+      expect.objectContaining({ result: newResult }),
+    );
+    // Read-only snapshots must not advance workflow versions or mutate stages.
+    expect(fresh.json().version).toBe(completedSnapshot.version);
+    expect(fresh.json().timeline).toEqual(completedSnapshot.timeline);
+    expect(fresh.json().diagnostics).toEqual(completedSnapshot.diagnostics);
     const listed = await get('/api/workflows');
     expect(listed.statusCode).toBe(200);
     expect(
@@ -268,6 +353,32 @@ it('serves recovered Reviewer and QA checkpoints through dashboard and workflow 
     expect(store.queue().map((entry) => entry.taskId)).toEqual([ordinary.id, ordinaryAfter.id]);
     expect(store.queue()[0]?.resumeSessionId).toBe(ordinarySession.id);
 
+    // Two operator tabs may submit the same version concurrently. Exactly one
+    // cancellation may commit; the loser must get 409 and must not alter the
+    // durable checkpoint or discard the failed QA report.
+    const cancelUrl = `/api/workflows/${qaFailed.workflowId}/cancel`;
+    const beforeCancel = (await get(`/api/workflows/${qaFailed.workflowId}/snapshot`)).json();
+    const attempts = await Promise.all([
+      post(cancelUrl, { version: beforeCancel.version, confirmed: true }),
+      post(cancelUrl, { version: beforeCancel.version, confirmed: true }),
+    ]);
+    expect(attempts.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    const afterCancel = (await get(`/api/workflows/${qaFailed.workflowId}/snapshot`)).json();
+    expect(afterCancel.version).toBe(beforeCancel.version + 1);
+    expect(afterCancel.state).toBe('cancelled');
+    expect(afterCancel.timeline.state).toBe('cancelled');
+    expect(afterCancel.diagnostics.state).toBe('cancelled');
+    expect(afterCancel.results.find((row: { kind: string }) => row.kind === 'qa')).toEqual(
+      expect.objectContaining({ taskId: qaFailed.task.id, error: 'QA failed before restart.' }),
+    );
+    const staleReplay = await post(cancelUrl, {
+      version: beforeCancel.version,
+      confirmed: true,
+    });
+    expect(staleReplay.statusCode).toBe(409);
+    expect((await get(`/api/workflows/${qaFailed.workflowId}/snapshot`)).json()).toEqual(
+      afterCancel,
+    );
     const versions = cases.map((entry) => new WorkflowStore(store.db).get(entry.id)!.version);
     await app.close();
     app = undefined;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { fork, type ChildProcess } from 'node:child_process';
+import { execFileSync, fork, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -495,7 +495,7 @@ if (process.argv.includes('--restart-server')) {
     const reconnected = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url() === address + '/api/workflows/' + blocked.workflowId + '/timeline' &&
+        response.url() === address + '/api/workflows/' + blocked.workflowId + '/snapshot' &&
         response.ok(),
       { timeout: 20000 },
     );
@@ -536,7 +536,7 @@ if (process.argv.includes('--restart-server')) {
     // Exercise an actual browser-visible transport failure after a successful
     // reconnect. Persisted state may remain visible, but stale operator actions
     // must not be executable until the next successful timeline refresh.
-    const timelineUrl = address + '/api/workflows/' + blocked.workflowId + '/timeline';
+    const timelineUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
     await page.route(timelineUrl, (route) =>
       route.fulfill({
         status: 503,
@@ -551,9 +551,16 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
     await expect(createWorkflow).toBeDisabled();
     await expect(board.getByText(/^State: blocked/)).toBeVisible();
+    await expect(
+      board.getByText('Last known state — refresh required before acting'),
+    ).toBeVisible();
     await expect(board.getByRole('button', { name: 'Start QA' })).toHaveCount(0);
     await page.unrouteAll({ behavior: 'wait' });
     await expect(transportAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(board.getByText('Last known state — refresh required before acting')).toHaveCount(
+      0,
+      { timeout: 20000 },
+    );
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await expect(createWorkflow).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
@@ -578,6 +585,158 @@ if (process.argv.includes('--restart-server')) {
     await expect(dashboardAlert).toHaveCount(0, { timeout: 20000 });
     await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
+
+    // The list and atomic checkpoint can still describe different versions
+    // after a concurrent transition. Reject inconsistent snapshot metadata.
+    const mixedCheckpointAlert = board.getByRole('alert').filter({
+      hasText: 'Workflow checkpoint changed while loading; retry refresh.',
+    });
+    const snapshotUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
+    for (const field of ['workflowId', 'version', 'state'] as const) {
+      await page.route(snapshotUrl, async (route) => {
+        const response = await route.fetch();
+        const snapshot = await response.json();
+        if (field === 'workflowId') snapshot.workflowId = 'obsolete-workflow';
+        if (field === 'version') snapshot.version += 1;
+        if (field === 'state') snapshot.state = 'obsolete-state';
+        await route.fulfill({ response, json: snapshot });
+      });
+      try {
+        await board.getByRole('button', { name: 'Refresh workflow' }).click();
+        await expect(mixedCheckpointAlert, field).toBeVisible({ timeout: 20000 });
+        await expect(createWorkflow, field).toBeDisabled();
+        await expect(board.getByRole('button', { name: 'Cancel workflow' }), field).toBeDisabled();
+      } finally {
+        await page.unrouteAll({ behavior: 'wait' });
+      }
+      await expect(mixedCheckpointAlert, field).toHaveCount(0, { timeout: 20000 });
+      await expect(createWorkflow, field).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' }), field).toBeEnabled();
+    }
+
+    // A malformed atomic snapshot with inconsistent diagnostics metadata
+    // must block actions instead of permitting approval from another version.
+    const diagnosticsUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
+    await page.route(diagnosticsUrl, async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...snapshot,
+          diagnostics: { ...snapshot.diagnostics, version: snapshot.diagnostics.version + 1 },
+        },
+      });
+    });
+    await board.getByRole('button', { name: 'Refresh workflow' }).click();
+    await expect(mixedCheckpointAlert).toBeVisible({ timeout: 20000 });
+    await expect(createWorkflow).toBeDisabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeDisabled();
+    await page.unrouteAll({ behavior: 'wait' });
+    await expect(mixedCheckpointAlert).toHaveCount(0, { timeout: 20000 });
+    await expect(createWorkflow).toBeEnabled();
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+
+    // A malformed snapshot may contain results from another task or version.
+    // Reject mismatched result identity, state and persisted report digest.
+    type BrowserReport = {
+      workflowId: string;
+      version: number;
+      kind: string;
+      state: string;
+      taskId: string | null;
+      report: { digest: string } | null;
+      result: string;
+      error: string | null;
+    };
+    const resultsUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
+    const mixedResultsAlert = board.getByRole('alert').filter({
+      hasText: 'Workflow results changed while loading; retry refresh.',
+    });
+    const staleReportText = 'Obsolete result from a different checkpoint';
+    const corruptions: {
+      label: string;
+      change: (report: BrowserReport) => BrowserReport;
+    }[] = [
+      {
+        label: 'workflow identity',
+        change: (report) => ({ ...report, workflowId: 'obsolete-workflow' }),
+      },
+      { label: 'stage kind', change: (report) => ({ ...report, kind: 'coder' }) },
+      { label: 'version', change: (report) => ({ ...report, version: report.version + 1 }) },
+      { label: 'task identity', change: (report) => ({ ...report, taskId: 'obsolete-task' }) },
+      { label: 'stage state', change: (report) => ({ ...report, state: 'running' }) },
+      {
+        label: 'report digest',
+        change: (report) => ({ ...report, report: { digest: 'obsolete-digest' } }),
+      },
+    ];
+    for (const { label, change } of corruptions) {
+      await page.route(resultsUrl, async (route) => {
+        const response = await route.fetch();
+        const snapshot = (await response.json()) as { results: BrowserReport[] };
+        const rows = snapshot.results;
+        assert.ok(
+          rows.some((row) => row.kind === 'qa'),
+          'QA result fixture must exist',
+        );
+        await route.fulfill({
+          response,
+          json: {
+            ...snapshot,
+            results: rows.map((row) =>
+              row.kind === 'qa' ? { ...change(row), result: staleReportText } : row,
+            ),
+          },
+        });
+      });
+      try {
+        await board.getByRole('button', { name: 'Refresh workflow' }).click();
+        await expect(mixedResultsAlert, label).toBeVisible({ timeout: 20000 });
+        await expect(createWorkflow, label).toBeDisabled();
+        await expect(board.getByRole('button', { name: 'Cancel workflow' }), label).toBeDisabled();
+        await expect(board.getByText(staleReportText), label).toHaveCount(0);
+      } finally {
+        await page.unrouteAll({ behavior: 'wait' });
+      }
+      await expect(mixedResultsAlert, label).toHaveCount(0, { timeout: 20000 });
+      await expect(createWorkflow, label).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' }), label).toBeEnabled();
+    }
+    // A partial or duplicated result array must not be accepted as a valid
+    // checkpoint even if every remaining row has the correct metadata.
+    for (const shape of ['missing downstream result', 'duplicate downstream result'] as const) {
+      await page.route(resultsUrl, async (route) => {
+        const response = await route.fetch();
+        const snapshot = (await response.json()) as { results: BrowserReport[] };
+        const rows = snapshot.results;
+        const qaRow = rows.find((row) => row.kind === 'qa');
+        assert.ok(qaRow, 'QA result fixture must exist');
+        await route.fulfill({
+          response,
+          json: {
+            ...snapshot,
+            results:
+              shape === 'missing downstream result'
+                ? rows.filter((row) => row.kind !== 'qa')
+                : [...rows, qaRow],
+          },
+        });
+      });
+      try {
+        await board.getByRole('button', { name: 'Refresh workflow' }).click();
+        await expect(mixedResultsAlert, shape).toBeVisible({ timeout: 20000 });
+        await expect(createWorkflow, shape).toBeDisabled();
+        await expect(board.getByRole('button', { name: 'Cancel workflow' }), shape).toBeDisabled();
+      } finally {
+        await page.unrouteAll({ behavior: 'wait' });
+      }
+      await expect(mixedResultsAlert, shape).toHaveCount(0, { timeout: 20000 });
+      await expect(createWorkflow, shape).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' }), shape).toBeEnabled();
+    }
+    await expect(board.getByText('Awaiting approval.', { exact: true })).toBeVisible();
     await assertNoUnexpectedWorkflowAlerts();
 
     // A fresh Dashboard can invalidate a form selection while the old ID
@@ -629,6 +788,204 @@ if (process.argv.includes('--restart-server')) {
     await expect(createWorkflow).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
     await assertOrdinaryQueueVisible();
+    // Only the WorkflowBoard requests qa-commands. The parent Office shell
+    // independently polls /api/dashboard every 2s, so counting Dashboard
+    // requests would falsely report overlapping WorkflowBoard polls.
+    const boardPollUrl = address + '/api/workflows/qa-commands';
+    // A pending WorkflowBoard response must not prevent Pause/Resume from
+    // starting a new polling generation. The old response is released only
+    // after a fresh post-resume response has been observed.
+    let releasePausedPoll: (() => void) | undefined;
+    let markPausedPollStarted: (() => void) | undefined;
+    const pausedPollStarted = new Promise<void>((resolve) => {
+      markPausedPollStarted = resolve;
+    });
+    const pausedPollGate = new Promise<void>((resolve) => {
+      releasePausedPoll = resolve;
+    });
+    let holdPausedPoll = true;
+    await page.route(boardPollUrl, async (route) => {
+      if (holdPausedPoll) {
+        holdPausedPoll = false;
+        markPausedPollStarted?.();
+        await pausedPollGate;
+      }
+      await route.continue();
+    });
+    try {
+      await Promise.race([
+        pausedPollStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Paused polling request never started')), 10000),
+        ),
+      ]);
+      await board.getByRole('button', { name: 'Pause live updates' }).click();
+      await expect(createWorkflow).toBeDisabled();
+      const resumedResponse = page.waitForResponse(
+        (response) => response.url() === boardPollUrl && response.ok(),
+        { timeout: 10000 },
+      );
+      await board.getByRole('button', { name: 'Resume live updates' }).click();
+      await resumedResponse;
+      await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+    } finally {
+      releasePausedPoll?.();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+
+    // A response slower than the 3s polling interval must not starve the UI.
+    // While that poll is pending, an explicit refresh must supersede it.
+    let releaseSlowPoll: (() => void) | undefined;
+    let markSlowPollStarted: (() => void) | undefined;
+    const slowPollStarted = new Promise<void>((resolve) => {
+      markSlowPollStarted = resolve;
+    });
+    const slowPollGate = new Promise<void>((resolve) => {
+      releaseSlowPoll = resolve;
+    });
+    let delayOnce = true;
+    let boardPollRequests = 0;
+    await page.route(boardPollUrl, async (route) => {
+      boardPollRequests++;
+      if (delayOnce) {
+        delayOnce = false;
+        markSlowPollStarted?.();
+        await slowPollGate;
+        // An old failed response must not replace a newer successful refresh.
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Obsolete delayed workflow polling failure' }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+    let staleFailure: Promise<unknown> | undefined;
+    try {
+      await Promise.race([
+        slowPollStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Slow polling request never started')), 10000),
+        ),
+      ]);
+      // Let the next interval tick while the first response is deliberately held.
+      await page.waitForTimeout(3500);
+      assert.equal(boardPollRequests, 1, 'Periodic polling must not overlap a slow request');
+      const freshResponse = page.waitForResponse(
+        (response) => response.url() === boardPollUrl && response.ok(),
+        { timeout: 10000 },
+      );
+      await board.getByRole('button', { name: 'Refresh workflow' }).click();
+      await freshResponse;
+      assert.equal(
+        boardPollRequests,
+        2,
+        'Explicit refresh must bypass the held poll with exactly one fresh WorkflowBoard request',
+      );
+      await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
+        timeout: 10000,
+      });
+      await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+      // Register before releasing the held request to avoid missing the 503.
+      staleFailure = page.waitForResponse(
+        (response) => response.url() === boardPollUrl && response.status() === 503,
+        { timeout: 10000 },
+      );
+    } finally {
+      releaseSlowPoll?.();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await staleFailure;
+    // Once the delayed request completes, its obsolete epoch must not undo
+    // the successful operator refresh or leave controls stuck in a stale state.
+    await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+    await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await expect(
+      board.getByRole('alert').filter({ hasText: 'Obsolete delayed workflow polling failure' }),
+    ).toHaveCount(0);
+    await assertNoUnexpectedWorkflowAlerts();
+    await assertOrdinaryQueueVisible();
+    // Dispatch two refresh events in the same browser task while the first
+    // request is held. The second event must not start another board read.
+    let releaseManualRefresh!: () => void;
+    let markManualRefreshStarted!: () => void;
+    const manualRefreshStarted = new Promise<void>((resolve) => {
+      markManualRefreshStarted = resolve;
+    });
+    const manualRefreshGate = new Promise<void>((resolve) => {
+      releaseManualRefresh = resolve;
+    });
+    let manualRefreshRequests = 0;
+    await page.route(boardPollUrl, async (route) => {
+      manualRefreshRequests++;
+      if (manualRefreshRequests === 1) {
+        markManualRefreshStarted();
+        await manualRefreshGate;
+      }
+      await route.continue();
+    });
+    try {
+      await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
+      await Promise.race([
+        manualRefreshStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Manual refresh request never started')), 10000),
+        ),
+      ]);
+      await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
+      assert.equal(manualRefreshRequests, 1, 'Duplicate manual refresh must be ignored');
+    } finally {
+      releaseManualRefresh();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
+      timeout: 10000,
+    });
+    // A manual refresh and a privileged Create workflow event must share one
+    // synchronous operator lock, even when dispatched before React re-renders.
+    // Hold the read, attempt the mutation, and verify no POST reached the API.
+    let releaseOperatorRefresh!: () => void;
+    let markOperatorRefreshStarted!: () => void;
+    const operatorRefreshStarted = new Promise<void>((resolve) => {
+      markOperatorRefreshStarted = resolve;
+    });
+    const operatorRefreshGate = new Promise<void>((resolve) => {
+      releaseOperatorRefresh = resolve;
+    });
+    let holdOperatorRefresh = true;
+    let attemptedCreates = 0;
+    await page.route(address + '/api/workflows', async (route) => {
+      if (route.request().method() === 'POST') attemptedCreates++;
+      await route.continue();
+    });
+    await page.route(boardPollUrl, async (route) => {
+      if (holdOperatorRefresh) {
+        holdOperatorRefresh = false;
+        markOperatorRefreshStarted();
+        await operatorRefreshGate;
+      }
+      await route.continue();
+    });
+    try {
+      await board.getByRole('button', { name: 'Refresh workflow' }).dispatchEvent('click');
+      await Promise.race([
+        operatorRefreshStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Operator refresh request never started')), 10000),
+        ),
+      ]);
+      await createWorkflow.dispatchEvent('click');
+      assert.equal(attemptedCreates, 0, 'Mutation must not overlap manual refresh');
+    } finally {
+      releaseOperatorRefresh();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await expect(board.getByRole('button', { name: 'Refresh workflow' })).toBeEnabled({
+      timeout: 10000,
+    });
+    assert.equal(attemptedCreates, 0, 'Blocked mutation must not be submitted after refresh');
     for (const [index, id] of ids.entries()) {
       const response: APIResponse = await activePage.request.get(address + '/api/workflows/' + id);
       assert.equal(response.status(), 200);
@@ -687,7 +1044,7 @@ if (process.argv.includes('--restart-server')) {
     const terminalReconnect = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url() === address + '/api/workflows/' + interrupted.workflowId + '/timeline' &&
+        response.url() === address + '/api/workflows/' + interrupted.workflowId + '/snapshot' &&
         response.ok(),
       { timeout: 20000 },
     );
@@ -748,6 +1105,102 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(terminalTasks.get(failed.task.id), 'failed');
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
     assert.equal(terminalTasks.get(blocked.task.id), 'completed');
+
+    // Use a separate disposable Git repository for the creation test. The
+    // recovery fixtures above intentionally reference a nonexistent worktree;
+    // the HTTP creation endpoint correctly requires a real, verifiable HEAD.
+    const creationPath = join(root, 'creation-fixture');
+    await mkdir(creationPath);
+    execFileSync('/usr/bin/git', ['-C', creationPath, 'init', '--quiet']);
+    execFileSync('/usr/bin/git', [
+      '-C',
+      creationPath,
+      '-c',
+      'user.name=AI Office fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '--allow-empty',
+      '--quiet',
+      '-m',
+      'Isolated browser restart baseline',
+    ]);
+    // The original fixture Store was closed during the restart sequence.
+    // Open a short-lived connection rather than reusing its closed handle.
+    const creationStore = new Store(db);
+    // macOS resolves /var to /private/var. Store the canonical identity that
+    // revalidateRepository() compares against before allowing an HTTP create.
+    const canonicalCreationPath = await realpath(creationPath);
+    const creationRepository = creationStore.register({
+      path: canonicalCreationPath,
+      gitDir: join(canonicalCreationPath, '.git'),
+      name: 'creation-fixture',
+    });
+    const creationTask = creationStore.createTask({
+      repositoryId: creationRepository.id,
+      agentId: coder.id,
+      title: 'Isolated workflow creation regression',
+      prompt: 'Never dispatch a provider in this fixture.',
+      executionMode: 'write',
+    });
+    creationStore.db.close();
+    await expect(coderChoice.locator(`option[value="${creationTask.id}"]`)).toHaveCount(1, {
+      timeout: 15000,
+    });
+    await coderChoice.selectOption(creationTask.id);
+
+    // Creating a workflow must switch the async selection cursor immediately.
+    // If the post-write read fails, controls remain fail-closed until recovery.
+    let createdWorkflowId = '';
+    let createRequests = 0;
+    await page.route(address + '/api/workflows', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      createRequests++;
+      const response = await route.fetch();
+      if (response.ok()) createdWorkflowId = (await response.json()).id as string;
+      await route.fulfill({ response });
+    });
+    await page.route(boardPollUrl, async (route) => {
+      if (!createdWorkflowId) {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic post-create refresh outage' }),
+      });
+    });
+    await expect(createWorkflow).toBeEnabled();
+    const creationResponse = page.waitForResponse(
+      (response) =>
+        response.url() === address + '/api/workflows' && response.request().method() === 'POST',
+      { timeout: 15000 },
+    );
+    await createWorkflow.click();
+    const posted = await creationResponse;
+    assert.equal(posted.status(), 201, await posted.text());
+    await expect(
+      board.getByRole('alert').filter({ hasText: 'Synthetic post-create refresh outage' }),
+    ).toBeVisible({ timeout: 15000 });
+    assert.equal(createRequests, 1, 'Workflow creation must issue exactly one POST');
+    assert.ok(createdWorkflowId);
+    await expect(createWorkflow).toBeDisabled();
+    await page.unrouteAll({ behavior: 'wait' });
+    const freshCreatedTimeline = page.waitForResponse(
+      (response) =>
+        response.url() === address + '/api/workflows/' + createdWorkflowId + '/snapshot' &&
+        response.ok(),
+      { timeout: 15000 },
+    );
+    await board.getByRole('button', { name: 'Refresh workflow' }).click();
+    await freshCreatedTimeline;
+    await expect(selector).toHaveValue(createdWorkflowId);
+    await expect(board.getByText(/^State: active/)).toBeVisible();
+    await expect(createWorkflow).toBeEnabled();
     assert.deepEqual(pageErrors, []);
     passed = true;
     console.log(

@@ -67,7 +67,49 @@ try {
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal((await env.get()).stages[0]!.state, 'awaiting_approval');
   assert.equal(env.store.queue().length, 0);
-  await gate('Approve Coder baseline');
+  // Hold a privileged request and dispatch a second operator event while it is pending.
+  let approveRequests = 0;
+  let releaseApprove!: () => void;
+  const approveGate = new Promise<void>((resolve) => {
+    releaseApprove = resolve;
+  });
+  const approveRoute = '**/api/workflows/*/approve-initial';
+  await page.route(approveRoute, async (route) => {
+    approveRequests++;
+    await approveGate;
+    await route.continue();
+  });
+  try {
+    const requestStarted = page.waitForRequest(approveRoute);
+    const pendingApproval = gate('Approve Coder baseline');
+    await requestStarted;
+    await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+    await dialog.getByRole('button', { name: 'Confirm checkpoint' }).dispatchEvent('click');
+    assert.equal(approveRequests, 1);
+    releaseApprove();
+    await pendingApproval;
+    // The first approval advances the persisted workflow exactly once.
+    // Replaying the old checkpoint version must fail closed without changing it.
+    const approved = await env.get();
+    assert.equal(approved.stages[0]!.state, 'ready');
+    const replay = await page.request.post(address + env.url + '/approve-initial', {
+      data: { version: approved.version - 1, confirmed: true },
+    });
+    assert.equal(replay.status(), 409);
+    assert.equal((await env.get()).version, approved.version);
+  } finally {
+    releaseApprove();
+    await page.unroute(approveRoute);
+  }
+  // A cancelled bind must not retain its task choice for the next approval.
+  await board.getByRole('button', { name: 'Bind Coder task' }).click();
+  await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await board.getByRole('button', { name: 'Bind Coder task' }).click();
+  await expect(dialog.getByLabel('Bind Coder task')).toHaveValue('');
+  await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await gate('Bind Coder task', async () => {
     await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
   });
@@ -117,6 +159,41 @@ try {
   );
   assert.equal(concurrentApproval.status(), 200);
   await expect(dialog.getByRole('alert')).toContainText('The workflow changed', { timeout: 10000 });
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  // QA approval must not reuse a command selected in a cancelled dialog.
+  await board.getByRole('button', { name: 'Approve QA command' }).click();
+  await dialog.getByLabel('Approved QA command').selectOption('source');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await board.getByRole('button', { name: 'Approve QA command' }).click();
+  await expect(dialog.getByLabel('Approved QA command')).toHaveValue('');
+  await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  // If an allowlisted command disappears during refresh, restoring the list
+  // must not silently reactivate the old operator choice.
+  await board.getByRole('button', { name: 'Approve QA command' }).click();
+  await dialog.getByLabel('Approved QA command').selectOption('source');
+  await dialog.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+  await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeEnabled();
+  // The modal makes the board inert for pointer interaction. Dispatch the
+  // refresh event directly to exercise the live-update guard while it is open.
+  const refreshWhileDialogOpen = board.locator('button').filter({ hasText: 'Refresh workflow' });
+  const qaCommandsRoute = '**/api/workflows/qa-commands';
+  await page.route(qaCommandsRoute, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"commands":[]}' }),
+  );
+  try {
+    await refreshWhileDialogOpen.dispatchEvent('click');
+    await expect(dialog.getByLabel('Approved QA command')).toHaveValue('');
+    await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
+  } finally {
+    await page.unroute(qaCommandsRoute);
+  }
+  await refreshWhileDialogOpen.dispatchEvent('click');
+  await expect(
+    dialog.getByLabel('Approved QA command').locator('option[value="source"]'),
+  ).toHaveCount(1);
   await expect(dialog.getByRole('button', { name: 'Confirm checkpoint' })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await gate('Approve QA command', async () => {
@@ -200,12 +277,16 @@ try {
   // load the completed one first so switching to otherId always triggers a request.
   await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
-  await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  // Selection must fetch the completed timeline automatically after resume.
+  // A manual Refresh here would mask a broken selection/reconnect effect.
+  await expect(board.getByText(/^State: completed/)).toContainText('State: completed', {
+    timeout: 15000,
+  });
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const routePattern = `**/api/workflows/${otherId}/timeline`;
+  const routePattern = `**/api/workflows/${otherId}/snapshot`;
   await page.route(routePattern, async (route) => {
     const response = await route.fetch();
     await held;
@@ -213,14 +294,16 @@ try {
   });
   try {
     const requested = page.waitForRequest((request) =>
-      request.url().endsWith(`/workflows/${otherId}/timeline`),
+      request.url().endsWith(`/workflows/${otherId}/snapshot`),
     );
     await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
     await requested;
+    // Never display the previously selected checkpoint while another one loads.
+    await expect(board.getByText(/^State: completed/)).toHaveCount(0);
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
     const delayed = page.waitForResponse((response) =>
-      response.url().endsWith(`/workflows/${otherId}/timeline`),
+      response.url().endsWith(`/workflows/${otherId}/snapshot`),
     );
     release();
     await (await delayed).finished();

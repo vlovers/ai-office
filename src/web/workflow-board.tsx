@@ -31,7 +31,24 @@ type Summary = {
   updatedAt?: string;
   stages: { kind?: string; state?: string; taskId: string | null; agentId: string }[];
 };
-type Report = { kind: string; taskId: string | null; result: string; error: string | null };
+type Report = {
+  workflowId: string;
+  version: number;
+  kind: string;
+  state: string;
+  taskId: string | null;
+  report: { digest: string } | null;
+  result: string;
+  error: string | null;
+};
+type WorkflowSnapshot = {
+  workflowId: string;
+  version: number;
+  state: string;
+  timeline: Timeline;
+  diagnostics: Diagnostics;
+  results: Report[];
+};
 type Diagnostics = {
   id: string;
   version: number;
@@ -93,14 +110,6 @@ export function WorkflowBoard({
   const [paused, setPaused] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
   const [selected, setSelected] = useState('');
-  useEffect(() => {
-    if (inspection) {
-      setSelected(inspection.id);
-      // Explicit inspection must load the requested checkpoint, including after a pause.
-      setPaused(false);
-      setRefreshRequired(true);
-    }
-  }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
@@ -108,6 +117,7 @@ export function WorkflowBoard({
   const [commands, setCommands] = useState<{ commandId: string; argv: string[] }[]>([]);
   const [commandId, setCommandId] = useState('');
   const [coderTask, setCoderTask] = useState('');
+  const [bindTaskId, setBindTaskId] = useState('');
   const [reviewer, setReviewer] = useState('');
   const [qa, setQA] = useState('');
   const [error, setError] = useState('');
@@ -121,58 +131,167 @@ export function WorkflowBoard({
   const [confirmed, setConfirmed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const refreshEpoch = useRef(0);
-  const refresh = useCallback(async () => {
-    const epoch = ++refreshEpoch.current;
-    try {
-      const [all, current, choices] = await Promise.all([
-        request<Summary[]>('/workflows'),
-        request<Dashboard>('/dashboard'),
-        request<{ commands: { commandId: string; argv: string[] }[] }>('/workflows/qa-commands'),
-      ]);
-      if (epoch !== refreshEpoch.current) return;
-      const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
-      setItems(workflows);
-      setDashboard(current);
-      setCommands(choices.commands);
-      const next = workflows.some((item) => item.id === selected)
-        ? selected
-        : (workflows[0]?.id ?? '');
-      setSelected(next);
-      const [view, output, diagnosis] = next
-        ? await Promise.all([
-            request<Timeline>(`/workflows/${next}/timeline`),
-            request<Report[]>(`/workflows/${next}/results`),
-            request<Diagnostics>(`/workflows/${next}/diagnostics`),
-          ])
-        : [null, [], null];
-      if (epoch !== refreshEpoch.current) return;
-      setTimeline(view);
-      setReports(output);
-      setDiagnostics(diagnosis);
-      setError('');
-      setRefreshRequired(false);
-    } catch (cause) {
-      if (epoch === refreshEpoch.current)
-        setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [selected, taskId]);
+  const pollingInFlight = useRef(false);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  // A user selection must trigger a fresh read even when the selected ID
+  // equals the value already held in React state.
+  const [selectionRevision, setSelectionRevision] = useState(0);
   useEffect(() => {
-    if (!paused) void refresh();
+    if (inspection) {
+      // Inspection requests are external selection changes. Keep the async
+      // refresh cursor in sync so a slow poll cannot restore the previous ID.
+      selectedRef.current = inspection.id;
+      setSelected(inspection.id);
+      setPaused(false);
+      setRefreshRequired(true);
+      setSelectionRevision((revision) => revision + 1);
+    }
+  }, [inspection]);
+  const refresh = useCallback(
+    async (force = false) => {
+      // Periodic polling is serial. Explicit operator refresh supersedes any
+      // in-flight poll so a mutation never silently skips its fresh read.
+      if (!force && pollingInFlight.current) return;
+      pollingInFlight.current = true;
+      const epoch = ++refreshEpoch.current;
+      try {
+        const [all, current, choices] = await Promise.all([
+          request<Summary[]>('/workflows'),
+          request<Dashboard>('/dashboard'),
+          request<{ commands: { commandId: string; argv: string[] }[] }>('/workflows/qa-commands'),
+        ]);
+        if (epoch !== refreshEpoch.current) return;
+        const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
+        setItems(workflows);
+        setDashboard(current);
+        setCommands(choices.commands);
+        // Removed commands must not remain implicitly selected when they reappear.
+        setCommandId((current) =>
+          choices.commands.some((command) => command.commandId === current) ? current : '',
+        );
+        // Read the latest selection after the async list request. A poll started
+        // before a user switched workflows must not restore its old selection.
+        const currentSelection = selectedRef.current;
+        const next = workflows.some((item) => item.id === currentSelection)
+          ? currentSelection
+          : (workflows[0]?.id ?? '');
+        if (next !== currentSelection) {
+          selectedRef.current = next;
+          setSelected(next);
+        }
+        const snapshot = next
+          ? await request<WorkflowSnapshot>(`/workflows/${next}/snapshot`)
+          : null;
+        const view = snapshot?.timeline ?? null;
+        const output = snapshot?.results ?? [];
+        const diagnosis = snapshot?.diagnostics ?? null;
+        if (epoch !== refreshEpoch.current || next !== selectedRef.current) return;
+        // The workflow list and atomic snapshot are separate reads. A concurrent
+        // transition between them must fail closed before operator actions.
+        if (next) {
+          const summary = workflows.find((item) => item.id === next);
+          if (
+            !summary ||
+            !snapshot ||
+            snapshot.workflowId !== next ||
+            snapshot.version !== view?.version ||
+            snapshot.state !== view?.state ||
+            !view ||
+            !diagnosis ||
+            view.id !== next ||
+            diagnosis.id !== next ||
+            summary.version !== view.version ||
+            diagnosis.version !== view.version ||
+            summary.state !== view.state ||
+            diagnosis.state !== view.state
+          ) {
+            throw new Error('Workflow checkpoint changed while loading; retry refresh.');
+          }
+        }
+        // Validate snapshot integrity before associating reports with stages.
+        // Fail closed if a malformed server response violates its contract.
+        if (view) {
+          const downstreamStages = view.stages.slice(1);
+          if (
+            output.length !== downstreamStages.length ||
+            output.some((report, index) => {
+              const stage = downstreamStages[index];
+              return (
+                !stage ||
+                report.workflowId !== view.id ||
+                report.version !== view.version ||
+                report.kind !== stage.kind ||
+                report.state !== stage.status ||
+                report.taskId !== stage.taskId ||
+                (report.report?.digest ?? null) !== stage.reportDigest
+              );
+            })
+          ) {
+            throw new Error('Workflow results changed while loading; retry refresh.');
+          }
+        }
+        setTimeline(view);
+        setReports(output);
+        setDiagnostics(diagnosis);
+        setError('');
+        setRefreshRequired(false);
+      } catch (cause) {
+        if (epoch === refreshEpoch.current) {
+          // A failed read must not leave a previous task's report on screen.
+          setReports([]);
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      } finally {
+        if (epoch === refreshEpoch.current) pollingInFlight.current = false;
+      }
+    },
+    [selected, taskId],
+  );
+  useEffect(() => {
+    // Selection changes and resume must load their own snapshot even if a
+    // previous generation's slow poll has not settled yet.
+    if (!paused) void refresh(true);
     const timer = paused ? undefined : setInterval(() => void refresh(), 3000);
     return () => {
       if (timer) clearInterval(timer);
       refreshEpoch.current++;
+      // Invalidated requests may still be pending. Their finally blocks
+      // cannot clear the new epoch's lock, so reset it on effect teardown.
+      pollingInFlight.current = false;
     };
-  }, [refresh, paused]);
+  }, [refresh, paused, selectionRevision]);
+  // A synchronous guard covers rapid consecutive events before React can
+  // render the disabled state. Manual reads remain distinct from mutations.
+  const operatorInFlight = useRef(false);
+  async function refreshNow() {
+    if (operatorInFlight.current) return;
+    operatorInFlight.current = true;
+    setLoading(true);
+    try {
+      await refresh(true);
+    } finally {
+      operatorInFlight.current = false;
+      setLoading(false);
+    }
+  }
+  // Share the synchronous operator lock with manual refresh. Otherwise a
+  // refresh and a privileged mutation can overlap before React disables controls.
   async function mutate(operation: () => Promise<unknown>) {
+    if (operatorInFlight.current) return;
+    operatorInFlight.current = true;
+    // Invalidate the verified snapshot before the server-side write begins.
+    // A failed post-mutation read must never re-enable privileged actions.
+    setRefreshRequired(true);
     setLoading(true);
     setError('');
     try {
       await operation();
-      await refresh();
+      await refresh(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
+      operatorInFlight.current = false;
       setLoading(false);
     }
   }
@@ -218,13 +337,36 @@ export function WorkflowBoard({
   const selectedCoder = unsubmitted.find((task) => task.id === coderTask);
   const selectedReviewer = profiles.some((profile) => profile.id === reviewer);
   const selectedQA = !qa || profiles.some((profile) => profile.id === qa);
+  const eligibleBindTasks =
+    action?.name === 'bind-coder-task'
+      ? unsubmitted.filter(
+          (task) =>
+            task.agentId === action.stage.agentId && task.repositoryId === chosen?.repositoryId,
+        )
+      : [];
+  const validBindTask = eligibleBindTasks.some((task) => task.id === bindTaskId);
+  const validQACommand = commands.some((command) => command.commandId === commandId);
+  useEffect(() => {
+    // A refreshed dashboard can invalidate an earlier task choice.
+    if (bindTaskId && !validBindTask) setBindTaskId('');
+  }, [bindTaskId, validBindTask]);
   async function perform() {
-    if (!action || !confirmed || staleAction || paused || refreshRequired || error) return;
+    if (
+      !action ||
+      !confirmed ||
+      staleAction ||
+      paused ||
+      refreshRequired ||
+      error ||
+      (action.name === 'bind-coder-task' && !validBindTask) ||
+      (action.name === 'approve-qa' && !validQACommand)
+    )
+      return;
     const body: Record<string, unknown> = { version: action.version, confirmed: true };
     let endpoint = action.name;
     if (action.name === 'bind-coder-task') {
       endpoint = 'bind-task';
-      body.taskId = coderTask;
+      body.taskId = bindTaskId;
     }
     if (action.name === 'submit-initial') body.confirmedWrite = true;
     if (['approve-coder-evidence', 'approve-reviewer', 'approve-qa'].includes(action.name))
@@ -260,7 +402,7 @@ export function WorkflowBoard({
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
         )}
-        <button className="secondary" disabled={loading} onClick={() => void mutate(refresh)}>
+        <button className="secondary" disabled={loading} onClick={() => void refreshNow()}>
           Refresh workflow
         </button>
       </div>
@@ -330,6 +472,8 @@ export function WorkflowBoard({
                   reviewerAgentId: reviewer,
                   ...(qa ? { qaAgentId: qa } : {}),
                 });
+                // Keep the in-flight refresh aligned with the new checkpoint.
+                selectedRef.current = created.id;
                 setSelected(created.id);
               })
             }
@@ -448,10 +592,15 @@ export function WorkflowBoard({
                     aria-current={item.id === selected ? 'true' : undefined}
                     onClick={() => {
                       refreshEpoch.current++;
+                      // Queue selection is also a checkpoint switch: require a
+                      // successful fresh read before privileged actions resume.
+                      setRefreshRequired(true);
                       setTimeline(null);
                       setReports([]);
                       setDiagnostics(null);
+                      selectedRef.current = item.id;
                       setSelected(item.id);
+                      setSelectionRevision((revision) => revision + 1);
                     }}
                   >
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
@@ -497,10 +646,15 @@ export function WorkflowBoard({
               value={selected}
               onChange={(event) => {
                 refreshEpoch.current++;
+                // A different selection invalidates the operator's verified snapshot.
+                // Keep privileged actions fail-closed until its own timeline loads.
+                setRefreshRequired(true);
                 setTimeline(null);
                 setReports([]);
                 setDiagnostics(null);
+                selectedRef.current = event.target.value;
                 setSelected(event.target.value);
+                setSelectionRevision((revision) => revision + 1);
               }}
             >
               {selected && !workflowChoices.some((item) => item.id === selected) && (
@@ -519,6 +673,9 @@ export function WorkflowBoard({
             <>
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
+                {(error || refreshRequired || paused) && (
+                  <> · Last known state — refresh required before acting</>
+                )}
               </p>
               {diagnostics &&
                 diagnostics.id === timeline.id &&
@@ -565,7 +722,9 @@ export function WorkflowBoard({
                       </p>
                     )}
                     {reports
-                      .filter((report) => report.kind === stage.kind)
+                      .filter(
+                        (report) => report.kind === stage.kind && report.taskId === stage.taskId,
+                      )
                       .map((report) => (
                         <div key={report.kind}>
                           {report.result && (
@@ -581,6 +740,9 @@ export function WorkflowBoard({
                       <button
                         disabled={mutationUnavailable}
                         onClick={() => {
+                          // Never carry approval-specific choices into a new dialog.
+                          setBindTaskId('');
+                          setCommandId('');
                           setAction({
                             name: stage.nextAction!,
                             stage,
@@ -662,19 +824,13 @@ export function WorkflowBoard({
             {action.name === 'bind-coder-task' && (
               <label>
                 Bind Coder task
-                <select value={coderTask} onChange={(event) => setCoderTask(event.target.value)}>
+                <select value={bindTaskId} onChange={(event) => setBindTaskId(event.target.value)}>
                   <option value="">Select task</option>
-                  {unsubmitted
-                    .filter(
-                      (task) =>
-                        task.agentId === action.stage.agentId &&
-                        task.repositoryId === chosen?.repositoryId,
-                    )
-                    .map((task) => (
-                      <option key={task.id} value={task.id}>
-                        {task.title}
-                      </option>
-                    ))}
+                  {eligibleBindTasks.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                    </option>
+                  ))}
                 </select>
               </label>
             )}
@@ -716,8 +872,8 @@ export function WorkflowBoard({
                   mutationUnavailable ||
                   staleAction ||
                   !confirmed ||
-                  (action.name === 'approve-qa' && !commandId) ||
-                  (action.name === 'bind-coder-task' && !coderTask)
+                  (action.name === 'approve-qa' && !validQACommand) ||
+                  (action.name === 'bind-coder-task' && !validBindTask)
                 }
                 onClick={() => void mutate(perform)}
               >
