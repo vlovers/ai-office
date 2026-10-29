@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../src/server/store.js';
@@ -309,3 +311,72 @@ it('recovers running and stopping tasks exactly once across repeated SQLite rest
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('recovers an unfinished task after a real SIGKILL of its SQLite-owning process', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-process-crash-'));
+  const path = join(directory, 'office.sqlite');
+  const store = new Store(path);
+  const repository = store.register({
+    path: '/disposable/process-crash',
+    gitDir: '/disposable/process-crash/.git',
+    name: 'process-crash',
+  });
+  const task = store.createTask({
+    repositoryId: repository.id,
+    title: 'Killed worker',
+    prompt: 'must not replay',
+  });
+  store.close();
+
+  // Use a separate OS process with a real SQLite connection, rather than
+  // simulating a crash by calling Store.close() after a state update.
+  const script = `
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(process.argv[1]);
+    db.exec('PRAGMA journal_mode=WAL;');
+    const row = db.prepare('SELECT json FROM tasks WHERE id=?').get(process.argv[2]);
+    const task = { ...JSON.parse(row.json), state: 'running' };
+    db.prepare('UPDATE tasks SET state=?, json=? WHERE id=?')
+      .run('running', JSON.stringify(task), process.argv[2]);
+    process.stdout.write('READY\\n');
+    setInterval(() => {}, 1000);
+  `;
+  const child = spawn(process.execPath, ['-e', script, path, task.id], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let reopened: Store | undefined;
+  try {
+    const ready = new Promise<void>((resolve, reject) => {
+      let output = '';
+      child.stdout!.on('data', (chunk: Buffer) => {
+        output += chunk.toString();
+        if (output.includes('READY\\n')) resolve();
+      });
+      child.once('error', reject);
+      child.once('exit', (code, signal) =>
+        reject(new Error(`SQLite worker exited before ready: ${code}/${signal}`)),
+      );
+    });
+    await Promise.race([
+      ready,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('SQLite worker readiness timed out')), 10000),
+      ),
+    ]);
+    child.kill('SIGKILL');
+    await once(child, 'exit');
+    reopened = new Store(path);
+    expect(reopened.task(task.id)?.state).toBe('interrupted');
+    expect(reopened.queue()).toEqual([]);
+    expect(reopened.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    reopened.close();
+    reopened = new Store(path);
+    expect(reopened.task(task.id)?.state).toBe('interrupted');
+    expect(reopened.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    expect(reopened.queue()).toEqual([]);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    reopened?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 20000);
