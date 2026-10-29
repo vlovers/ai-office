@@ -27,7 +27,12 @@ export function sandboxArguments(directory: string, argv: string[]): string[] {
 }
 
 /** No credentials or inference. Failure is an execution fence, never a fallback. */
-export async function verifyNativeIsolation(executable = nativeCodex): Promise<void> {
+export async function verifyNativeIsolation(
+  executable = nativeCodex,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (signal?.aborted)
+    throw new AppError(409, 'Native sandbox capability verification was cancelled.');
   if (!['darwin', 'linux'].includes(process.platform))
     throw new AppError(409, 'Native read-only sandbox is unsupported on this platform.');
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-policy-')));
@@ -56,12 +61,14 @@ export async function verifyNativeIsolation(executable = nativeCodex): Promise<v
       CODEX_HOME: home,
     };
     const run = async (argv: string[]) => {
+      if (signal?.aborted) return { passed: false, output: '' };
       try {
         const result = await exec(executable, sandboxArguments(directory, argv), {
           cwd: directory,
           env,
           timeout: 10000,
           maxBuffer: 64_000,
+          signal,
         });
         return { passed: true, output: result.stdout };
       } catch {
@@ -81,6 +88,7 @@ export async function verifyNativeIsolation(executable = nativeCodex): Promise<v
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
     const probes = await Promise.all(forbidden.map((argv) => run(argv)));
+    if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
     if (probes.some((probe) => probe.passed))
       throw new Error('Sandbox allowed a forbidden operation.');
     if (networkEscape) throw new Error('Network isolation failed.');
