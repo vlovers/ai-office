@@ -1,48 +1,36 @@
-import { beforeEach, expect, it, vi } from 'vitest';
-import { runVerification } from '../src/server/verification.js';
-import { verifyNativeIsolation } from '../src/server/providers/native-isolation.js';
+import { expect, it } from 'vitest';
+import { assertNativeDenials } from '../src/server/providers/native-isolation.js';
 
-vi.mock('../src/server/verification.js', () => ({ runVerification: vi.fn() }));
-
-const run = vi.mocked(runVerification);
-const native = it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux');
 const denied = { passed: false, output: '' };
+const commands = [['outside.txt'], ['.env'], ['write-escape'], ['127.0.0.1:']];
 
-function probeCommand(argv: string[]): string {
-  return argv.slice(argv.indexOf('--') + 1).join(' ');
-}
-
-beforeEach(() => run.mockReset());
-
-for (const probe of ['outside.txt', '.env', 'write-escape', '127.0.0.1:']) {
-  native(`fails closed when the ${probe} probe supervisor cannot confirm cleanup`, async () => {
-    run.mockImplementation(async (argv) => {
-      const command = probeCommand(argv);
-      if (command.includes('allowed.txt')) return { passed: true, output: 'READ_ALLOWED' };
-      if (command.includes(probe)) throw new Error('Supervisor could not confirm process cleanup.');
-      return denied;
-    });
-
-    await expect(verifyNativeIsolation('/bin/true')).rejects.toThrow(
-      'Native sandbox capability verification failed',
-    );
-    // A failed supervisor is not proof of a denied operation; all other
-    // concurrently started probes must still be awaited before teardown.
-    expect(run).toHaveBeenCalledTimes(5);
+for (const probe of commands.map(([name]) => name!)) {
+  it(`fails closed when the ${probe} supervisor cannot confirm cleanup`, async () => {
+    const started: string[] = [];
+    await expect(
+      assertNativeDenials(commands, async ([name]) => {
+        started.push(name!);
+        if (name === probe) throw new Error('Supervisor could not confirm process cleanup.');
+        return denied;
+      }),
+    ).rejects.toThrow('Native sandbox probe supervisor failed.');
+    expect(started).toEqual(commands.map(([name]) => name));
   });
 }
 
-native('accepts completed denial probes, not a failed supervisor', async () => {
-  run.mockImplementation(async (argv) =>
-    probeCommand(argv).includes('allowed.txt')
-      ? { passed: true, output: 'READ_ALLOWED' }
-      : denied,
-  );
-  await expect(verifyNativeIsolation('/bin/true')).resolves.toBeUndefined();
-  expect(run).toHaveBeenCalledTimes(5);
+it('accepts completed denial probes, not a failed supervisor', async () => {
+  await expect(assertNativeDenials(commands, async () => denied)).resolves.toBeUndefined();
 });
 
-native('waits for every sibling supervisor to settle before failing closed', async () => {
+it('rejects a forbidden operation reported as allowed', async () => {
+  await expect(
+    assertNativeDenials(commands, async ([name]) =>
+      name === 'write-escape' ? { passed: true, output: '' } : denied,
+    ),
+  ).rejects.toThrow('Sandbox allowed a forbidden operation.');
+});
+
+it('waits for every sibling supervisor to settle before failing closed', async () => {
   let releaseSibling!: () => void;
   const sibling = new Promise<typeof denied>((resolve) => {
     releaseSibling = () => resolve(denied);
@@ -51,18 +39,15 @@ native('waits for every sibling supervisor to settle before failing closed', asy
   const started = new Promise<void>((resolve) => {
     siblingStarted = resolve;
   });
-  run.mockImplementation(async (argv) => {
-    const command = probeCommand(argv);
-    if (command.includes('allowed.txt')) return { passed: true, output: 'READ_ALLOWED' };
-    if (command.includes('outside.txt')) throw new Error('Supervisor failed.');
-    if (command.includes('.env')) {
+  const pending = assertNativeDenials(commands, async ([name]) => {
+    if (name === 'outside.txt') throw new Error('Supervisor failed.');
+    if (name === '.env') {
       siblingStarted();
       return sibling;
     }
     return denied;
   });
 
-  const pending = verifyNativeIsolation('/bin/true');
   try {
     await started;
     let settled = false;
@@ -79,6 +64,5 @@ native('waits for every sibling supervisor to settle before failing closed', asy
   } finally {
     releaseSibling();
   }
-  await expect(pending).rejects.toThrow('Native sandbox capability verification failed');
-  expect(run).toHaveBeenCalledTimes(5);
+  await expect(pending).rejects.toThrow('Native sandbox probe supervisor failed.');
 });

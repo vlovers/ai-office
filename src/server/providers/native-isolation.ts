@@ -5,8 +5,25 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { codexOptions } from './codex-config.js';
 import { AppError } from '../errors.js';
-import { runVerification } from '../verification.js';
+import { runVerification, type VerificationResult } from '../verification.js';
 export const nativeCodex = createRequire(import.meta.url).resolve('@openai/codex/bin/codex.js');
+
+/** A denied command is evidence only when its supervisor completed normally. */
+export async function assertNativeDenials(
+  forbidden: string[][],
+  run: (argv: string[]) => Promise<VerificationResult>,
+): Promise<void> {
+  // Convert synchronous launch failures into rejections and wait for every
+  // sibling supervisor before allowing the caller to tear down probe resources.
+  const probes = await Promise.allSettled(
+    forbidden.map((argv) => Promise.resolve().then(() => run(argv))),
+  );
+  if (probes.some((probe) => probe.status === 'rejected'))
+    throw new Error('Native sandbox probe supervisor failed.');
+  if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.passed))
+    throw new Error('Sandbox allowed a forbidden operation.');
+}
+
 
 /** Identical permission table to SDK execution, without legacy --sandbox overrides. */
 export function sandboxArguments(directory: string, argv: string[]): string[] {
@@ -79,15 +96,8 @@ export async function verifyNativeIsolation(
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
-    // Wait for every supervised process to finish before removing its probe
-    // directory or listener. Promise.all would reject early while siblings
-    // could still be running after a supervisor failure.
-    const probes = await Promise.allSettled(forbidden.map((argv) => run(argv)));
+    await assertNativeDenials(forbidden, run);
     if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
-    if (probes.some((probe) => probe.status === 'rejected'))
-      throw new Error('Native sandbox probe supervisor failed.');
-    if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.passed))
-      throw new Error('Sandbox allowed a forbidden operation.');
     if (networkEscape) throw new Error('Network isolation failed.');
     // Check effects as well as exit codes (a wrapper may hide its child's status).
     if (
