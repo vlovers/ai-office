@@ -95,6 +95,74 @@ it.skipIf(process.platform === 'win32')(
       }
       expect(recovered.queue().map((entry) => entry.taskId)).toEqual([manifest.ordinaryTaskId]);
       expect(recovered.task(manifest.ordinaryTaskId)?.state).toBe('queued');
+
+      // A recovered workflow must never accept a stale browser action or a
+      // fresh action that reuses the pre-crash approval. Check all three
+      // persisted task states, not just the running case.
+      for (const entry of manifest.cases) {
+        const version = entry.version + 1;
+        const before = workflows.get(entry.workflowId);
+        const originalEvents = recovered.events(entry.taskId);
+        const attempts = [
+          // Stale tab still holds the approval version from before SIGKILL.
+          () =>
+            workflows.transition(entry.workflowId, entry.version, {
+              type: 'start' as const,
+              taskId: entry.taskId,
+              revision: 'a'.repeat(40),
+            }),
+          // A refreshed tab cannot resurrect a blocked stage either.
+          () =>
+            workflows.transition(entry.workflowId, version, {
+              type: 'start' as const,
+              taskId: entry.taskId,
+              revision: 'a'.repeat(40),
+            }),
+          () =>
+            workflows.transition(entry.workflowId, version, {
+              type: 'approve' as const,
+              revision: 'a'.repeat(40),
+            }),
+          () =>
+            workflows.transition(entry.workflowId, version, {
+              type: 'finish' as const,
+              taskId: entry.taskId,
+              revision: 'b'.repeat(40),
+              succeeded: true,
+            }),
+          () => workflows.bindApprovedTask(entry.workflowId, version, entry.taskId),
+          () =>
+            workflows.enqueueApprovedTask(
+              recovered!,
+              entry.workflowId,
+              version,
+              entry.taskId,
+              'local-cli-chatgpt',
+              'a'.repeat(40),
+            ),
+          () =>
+            workflows.approveCoderEvidence(
+              entry.workflowId,
+              version,
+              entry.taskId,
+              'b'.repeat(64),
+            ),
+          () =>
+            workflows.approveReadOnlyResult(
+              entry.workflowId,
+              version,
+              'reviewer',
+              'b'.repeat(64),
+            ),
+        ];
+        for (const attempt of attempts) expect(attempt).toThrow();
+        expect(workflows.get(entry.workflowId)).toEqual(before);
+        expect(recovered.task(entry.taskId)?.state).toBe('interrupted');
+        expect(recovered.events(entry.taskId)).toEqual(originalEvents);
+        expect(recovered.queue().map((item) => item.taskId)).toEqual([
+          manifest.ordinaryTaskId,
+        ]);
+      }
       expect(workflows.get(manifest.readyWorkflowId)).toEqual(
         expect.objectContaining({
           state: 'active',
