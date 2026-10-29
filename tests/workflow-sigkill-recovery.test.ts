@@ -73,20 +73,8 @@ function expectRecoveredApprovalsBlocked(
           'local-cli-chatgpt',
           'a'.repeat(40),
         ),
-      () =>
-        workflows.approveCoderEvidence(
-          entry.workflowId,
-          version,
-          entry.taskId,
-          'b'.repeat(64),
-        ),
-      () =>
-        workflows.approveReadOnlyResult(
-          entry.workflowId,
-          version,
-          'reviewer',
-          'b'.repeat(64),
-        ),
+      () => workflows.approveCoderEvidence(entry.workflowId, version, entry.taskId, 'b'.repeat(64)),
+      () => workflows.approveReadOnlyResult(entry.workflowId, version, 'reviewer', 'b'.repeat(64)),
     ];
     for (const attempt of attempts) {
       let rejection: unknown;
