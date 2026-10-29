@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
-import { AgentStudio } from './agent-studio.js';
+import { AgentsPage } from './agents-page.js';
 import { MainNavigation } from './main-navigation.js';
 import { PageHeading } from './page-heading.js';
 import { OfficePage, WorkspacePage } from './workspace-pages.js';
@@ -638,20 +638,17 @@ function App() {
                 setSelectedAgent(agentId);
                 setResumeSessionId('');
               }} />}
-              {dashboard && (
-                <section className="agents-destination" aria-label="Agent profiles">
-                  <div className="destination-intro"><h2>Your agents</h2><p>Manage profiles and choose who should handle the next task.</p></div>
-                  <AgentStudio
+              {page === 'agents' && dashboard && (
+                <AgentsPage
                   profiles={dashboard.profiles ?? []}
                   api={api}
                   refresh={refresh}
-                  select={(id) => {
+                  onSelect={(id) => {
                     setSelectedAgent(id);
                     setResumeSessionId('');
                     showSection('compose');
                   }}
                 />
-                </section>
               )}
               <section className="workflows-destination" id="workflows" tabIndex={-1} aria-label="Workflow management">
                 <div className="destination-intro"><h2>Workflow runs</h2><p>Inspect each stage, its handoffs, and any action waiting for approval.</p></div>
