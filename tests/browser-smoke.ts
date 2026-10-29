@@ -355,6 +355,10 @@ try {
   await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toContainText(
     'Agent B concurrent',
   );
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').nth(0)).toHaveAttribute(
     'data-state',
     'thinking',
@@ -387,7 +391,15 @@ try {
   );
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await expect(page.locator('#task-workspace')).toContainText('Agent A concurrent');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   // B's Stop remains usable while A waits for its own process-group cleanup.
