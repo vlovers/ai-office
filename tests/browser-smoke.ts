@@ -318,9 +318,12 @@ try {
   await expect(page.locator('.task-toolbar .badge')).toHaveText('failed');
   await expect(page.locator('.task-error')).toContainText('Provider diagnostics were withheld');
   await expect(page.locator('.task-error')).not.toContainText('Simulated provider failure');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'error');
   // Launch both real agent slots against two disposable worktrees through the UI.
-  await page.getByLabel('Assign to agent').selectOption('codex-1');
   await createTask('Agent A concurrent', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
@@ -335,8 +338,6 @@ try {
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Tasks' })
     .click();
-  await page.getByRole('button', { name: '+ New task' }).click();
-  await page.getByLabel('Assign to agent').selectOption('codex-2');
   await createTask('Agent B concurrent', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
