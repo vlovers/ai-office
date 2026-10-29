@@ -1,6 +1,15 @@
 import { expect, it } from 'vitest';
 import { createServer } from 'node:http';
-import { mkdtemp, realpath, writeFile, rm, readFile, chmod, rename, symlink } from 'node:fs/promises';
+import {
+  mkdtemp,
+  realpath,
+  writeFile,
+  rm,
+  readFile,
+  chmod,
+  rename,
+  symlink,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA, type QAPlan } from '../src/server/qa-runner.js';
