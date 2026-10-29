@@ -77,3 +77,26 @@ for (const reason of ['spawn failure', 'timeout', 'output limit', 'signal termin
     ).rejects.toThrow('Native sandbox denial probe did not complete normally.');
   });
 }
+
+it('rejects forbidden read canaries even when the sandbox exits nonzero', async () => {
+  const canaries = ['outside-unique-canary', 'secret-unique-canary'];
+  for (const canary of canaries) {
+    await expect(
+      assertNativeDenials(
+        commands,
+        async () => ({ passed: false, output: `read succeeded: ${canary}\\n` }),
+        canaries,
+      ),
+    ).rejects.toThrow('Sandbox leaked forbidden read contents.');
+  }
+});
+
+it('does not mistake ordinary permission-denied output for a leaked canary', async () => {
+  await expect(
+    assertNativeDenials(
+      commands,
+      async () => ({ passed: false, output: 'cat: Permission denied' }),
+      ['outside-unique-canary', 'secret-unique-canary'],
+    ),
+  ).resolves.toBeUndefined();
+});
