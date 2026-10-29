@@ -106,6 +106,36 @@ function expectRecoveredApprovalsBlocked(
   }
 }
 
+/** Crash recovery must fence only interrupted workflows, not unrelated work. */
+function expectUnaffectedWorkCanProceed(
+  store: Store,
+  workflows: WorkflowStore,
+  manifest: CrashManifest,
+) {
+  const ready = workflows.get(manifest.readyWorkflowId);
+  expect(ready).toMatchObject({
+    state: 'active',
+    version: manifest.readyVersion,
+    stages: expect.arrayContaining([expect.objectContaining({ state: 'ready' })]),
+  });
+  const cancelled = workflows.transition(manifest.readyWorkflowId, manifest.readyVersion, {
+    type: 'cancel',
+  });
+  expect(cancelled.state).toBe('cancelled');
+  expect(cancelled.version).toBe(manifest.readyVersion + 1);
+
+  // Claiming the unrelated read-only task changes only the synthetic SQLite
+  // queue. It does not execute a provider or a QA command.
+  store.claimQueued(manifest.ordinaryTaskId);
+  expect(store.task(manifest.ordinaryTaskId)?.state).toBe('running');
+  expect(store.queue()).toHaveLength(0);
+  for (const entry of manifest.cases) {
+    expect(workflows.get(entry.workflowId)?.state).toBe('blocked');
+    expect(workflows.get(entry.workflowId)?.version).toBe(entry.version + 1);
+    expect(store.task(entry.taskId)?.state).toBe('interrupted');
+  }
+}
+
 it.skipIf(process.platform === 'win32')(
   'recovers real SIGKILL with open SQLite WAL without replaying approved workflow tasks',
   async () => {
@@ -210,6 +240,7 @@ it.skipIf(process.platform === 'win32')(
       expect(again.get(manifest.readyWorkflowId)?.version).toBe(manifest.readyVersion);
       expect(reopened.queue().map((entry) => entry.taskId)).toEqual([manifest.ordinaryTaskId]);
       expectRecoveredApprovalsBlocked(reopened, again, manifest.cases, manifest.ordinaryTaskId);
+      expectUnaffectedWorkCanProceed(reopened, again, manifest);
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       reopened?.close();
@@ -326,6 +357,7 @@ it.skipIf(process.platform === 'win32')(
         reopened.events(running.taskId).filter((event) => event.kind === 'interrupted'),
       ).toHaveLength(1);
       expectRecoveredApprovalsBlocked(reopened, again, manifest.cases, manifest.ordinaryTaskId);
+      expectUnaffectedWorkCanProceed(reopened, again, manifest);
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       if (group) {
