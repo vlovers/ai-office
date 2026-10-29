@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
 import { createServer } from 'node:http';
-import { mkdtemp, realpath, writeFile, rm, readFile, chmod, rename } from 'node:fs/promises';
+import { mkdtemp, realpath, writeFile, rm, readFile, chmod, rename, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { qaPlan, runSandboxedQA } from '../src/server/qa-runner.js';
+import { qaPlan, runSandboxedQA, type QAPlan } from '../src/server/qa-runner.js';
 import {
   listenProbeServer,
   verifyNativeIsolation,
@@ -69,40 +69,75 @@ it('rejects unconfigured, relative and excessive QA plans', async () => {
   await expect(qaPlan('nul', ['/bin/echo', '\0'])).rejects.toThrow();
   await expect(qaPlan('bounded', ['/bin/echo'], 120001)).rejects.toThrow();
 });
-it(
-  'rejects an executable modified or removed after QA approval before native preflight',
-  async () => {
-    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-pinned-executable-')));
-    const executable = join(root, 'approved-qa.sh');
-    try {
-      await writeFile(executable, '#!/bin/sh\nexit 0\n');
-      await chmod(executable, 0o700);
-      const plan = await qaPlan('approved', [executable, '--safe'], 1000);
-      await writeFile(executable, '#!/bin/sh\necho changed\n');
-      await expect(runSandboxedQA(root, plan, new AbortController().signal)).rejects.toMatchObject({
-        statusCode: 409,
-      });
-      // Replacing the approved path with a byte-identical new inode is
-      // forbidden too: content equality alone is not executable identity.
-      const reapproved = await qaPlan('approved', [executable, '--safe'], 1000);
-      const replacement = join(root, 'replacement.sh');
-      await writeFile(replacement, '#!/bin/sh\necho changed\n');
-      await chmod(replacement, 0o700);
-      await rename(replacement, executable);
-      await expect(
-        runSandboxedQA(root, reapproved, new AbortController().signal),
-      ).rejects.toMatchObject({ statusCode: 409 });
+async function expectQAPlanConflict(directory: string, plan: QAPlan) {
+  await expect(runSandboxedQA(directory, plan, new AbortController().signal)).rejects.toMatchObject({
+    statusCode: 409,
+  });
+}
 
-      const swapped = await qaPlan('approved', [executable, '--safe'], 1000);
-      await rm(executable);
-      await expect(
-        runSandboxedQA(root, swapped, new AbortController().signal),
-      ).rejects.toMatchObject({ statusCode: 409 });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  },
-);
+it('rejects changed or missing approved QA executables', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-pinned-executable-')));
+  const executable = join(root, 'approved-qa.sh');
+  try {
+    await writeFile(executable, '#!/bin/sh\nexit 0\n');
+    await chmod(executable, 0o700);
+    const plan = await qaPlan('approved', [executable, '--safe'], 1000);
+    await writeFile(executable, '#!/bin/sh\necho changed\n');
+    await expectQAPlanConflict(root, plan);
+
+    // A byte-identical replacement with a different inode is forbidden too.
+    const reapproved = await qaPlan('approved', [executable, '--safe'], 1000);
+    const replacement = join(root, 'replacement.sh');
+    await writeFile(replacement, '#!/bin/sh\necho changed\n');
+    await chmod(replacement, 0o700);
+    await rename(replacement, executable);
+    await expectQAPlanConflict(root, reapproved);
+
+    const swapped = await qaPlan('approved', [executable, '--safe'], 1000);
+    await rm(executable);
+    await expectQAPlanConflict(root, swapped);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('rejects metadata-only changes to an approved executable', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-mode-change-')));
+  const executable = join(root, 'approved-qa.sh');
+  try {
+    await writeFile(executable, '#!/bin/sh\nexit 0\n');
+    await chmod(executable, 0o700);
+    const plan = await qaPlan('approved', [executable], 1000);
+    await chmod(executable, 0o600);
+    await expectQAPlanConflict(root, plan);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('pins a symlink approval to the resolved executable', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-symlink-')));
+  const executable = join(root, 'approved.sh');
+  const replacement = join(root, 'replacement.sh');
+  const alias = join(root, 'qa.sh');
+  try {
+    await writeFile(executable, '#!/bin/sh\nexit 0\n');
+    await writeFile(replacement, '#!/bin/sh\nexit 0\n');
+    await chmod(executable, 0o700);
+    await chmod(replacement, 0o700);
+    await symlink(executable, alias);
+    const plan = await qaPlan('approved', [alias, '--safe'], 1000);
+    expect(plan.argv).toEqual([executable, '--safe']);
+    await rm(alias);
+    await symlink(replacement, alias);
+    const newPlan = await qaPlan('approved', [alias, '--safe'], 1000);
+    expect(newPlan.argv[0]).toBe(replacement);
+    expect(newPlan.digest).not.toBe(plan.digest);
+    expect(plan.argv[0]).toBe(executable);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 it('rejects tampered approved QA arguments, timeout, and digest before preflight', async () => {
   const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 1000);
@@ -113,9 +148,7 @@ it('rejects tampered approved QA arguments, timeout, and digest before preflight
     { ...plan, digest: '0'.repeat(64) },
   ];
   for (const candidate of changed) {
-    await expect(
-      runSandboxedQA('/does-not-exist', candidate, new AbortController().signal),
-    ).rejects.toMatchObject({ statusCode: 409 });
+    await expectQAPlanConflict('/does-not-exist', candidate);
   }
 });
 
