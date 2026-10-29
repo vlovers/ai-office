@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { createServer } from 'node:http';
-import { mkdtemp, realpath, writeFile, rm, readFile, chmod } from 'node:fs/promises';
+import { mkdtemp, realpath, writeFile, rm, readFile, chmod, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA } from '../src/server/qa-runner.js';
@@ -82,8 +82,20 @@ it(
       await expect(runSandboxedQA(root, plan, new AbortController().signal)).rejects.toMatchObject({
         statusCode: 409,
       });
+      // Replacing the approved path with a byte-identical new inode is
+      // forbidden too: content equality alone is not executable identity.
+      const reapproved = await qaPlan('approved', [executable, '--safe'], 1000);
+      const replacement = join(root, 'replacement.sh');
+      await writeFile(replacement, '#!/bin/sh\necho changed\n');
+      await chmod(replacement, 0o700);
+      await rename(replacement, executable);
+      await expect(
+        runSandboxedQA(root, reapproved, new AbortController().signal),
+      ).rejects.toMatchObject({ statusCode: 409 });
+
+      const swapped = await qaPlan('approved', [executable, '--safe'], 1000);
       await rm(executable);
-      await expect(runSandboxedQA(root, plan, new AbortController().signal)).rejects.toMatchObject({
+      await expect(runSandboxedQA(root, swapped, new AbortController().signal)).rejects.toMatchObject({
         statusCode: 409,
       });
     } finally {
