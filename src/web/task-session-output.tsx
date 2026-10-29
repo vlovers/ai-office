@@ -1,4 +1,4 @@
-import type { AgentEvent, Task } from '../shared/types.js';
+import type { AgentEvent, Session, Task } from '../shared/types.js';
 
 export function TaskSessionOutput({
   task,
@@ -6,7 +6,7 @@ export function TaskSessionOutput({
   events,
 }: {
   task: Task;
-  session?: { threadId?: string | null; authMode?: string; model?: string | null };
+  session?: Session;
   events: AgentEvent[];
 }) {
   return (
