@@ -682,7 +682,9 @@ function App() {
                 </section>
               )}
               {dashboard && (
-                <div className="agents-destination"><AgentStudio
+                <section className="agents-destination" aria-label="Agent profiles">
+                  <div className="destination-intro"><h2>Your agents</h2><p>Manage profiles and choose who should handle the next task.</p></div>
+                  <AgentStudio
                   profiles={dashboard.profiles ?? []}
                   api={api}
                   refresh={refresh}
@@ -691,9 +693,13 @@ function App() {
                     setResumeSessionId('');
                     showSection('compose');
                   }}
-                /></div>
+                />
+                </section>
               )}
-              <div className="workflows-destination" id="workflows" tabIndex={-1}><WorkflowBoard inspection={workflowInspection} /></div>
+              <section className="workflows-destination" id="workflows" tabIndex={-1} aria-label="Workflow management">
+                <div className="destination-intro"><h2>Workflow runs</h2><p>Inspect each stage, its handoffs, and any action waiting for approval.</p></div>
+                <WorkflowBoard inspection={workflowInspection} />
+              </section>
               <section className="panel history" id="task-history">
                 <div className="panel-heading">
                   <h2>Task history</h2>
@@ -1292,6 +1298,7 @@ function App() {
                 {(view === 'mission' || task?.id !== agent?.taskId) && stopControl}
               </section>
               <div className="settings-destination">
+              <div className="destination-intro"><h2>Workspace settings</h2><p>Manage your local connection and trusted repository roots.</p></div>
               <section className="panel connection-panel" aria-label="Codex connection">
                 <div className="panel-heading">
                   <h2>Codex connection</h2>
