@@ -1,9 +1,23 @@
 import { expect, it } from 'vitest';
+import { createServer } from 'node:http';
 import { mkdtemp, realpath, writeFile, rm, readFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA } from '../src/server/qa-runner.js';
-import { verifyNativeIsolation } from '../src/server/providers/native-isolation.js';
+import { listenProbeServer, verifyNativeIsolation } from '../src/server/providers/native-isolation.js';
+
+it('removes transient HTTP listener callbacks after successful native probe bind', async () => {
+  const server = createServer();
+  try {
+    const errors = server.listenerCount('error');
+    const listening = server.listenerCount('listening');
+    await listenProbeServer(server);
+    expect(server.listenerCount('error')).toBe(errors);
+    expect(server.listenerCount('listening')).toBe(listening);
+  } finally {
+    server.close();
+  }
+});
 
 const native = it.skipIf(
   process.platform !== 'darwin' && process.env.AI_OFFICE_NATIVE_TESTS !== '1',
