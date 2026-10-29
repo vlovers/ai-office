@@ -5,6 +5,8 @@ import { killProcessGroup, reapProcessGroup } from './process-group.js';
 export interface VerificationResult {
   output: string;
   passed: boolean;
+  /** Not an attested sandbox denial: spawn failure, timeout, output cap or signal. */
+  incomplete?: boolean;
 }
 export async function runVerification(
   argv: string[],
@@ -38,7 +40,11 @@ export async function runVerification(
     let cleanupError: unknown;
     child.on('message', (value: VerificationResult) => {
       if (!interrupted)
-        result = { passed: value.passed === true, output: String(value.output).slice(0, 128_100) };
+        result = {
+          passed: value.passed === true,
+          output: String(value.output).slice(0, 128_100),
+          ...(value.incomplete === true ? { incomplete: true } : {}),
+        };
     });
     child.on('error', () => {
       startupError = true;
