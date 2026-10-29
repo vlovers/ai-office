@@ -8,6 +8,7 @@ import { OfficePage, WorkspacePage } from './workspace-pages.js';
 import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
 import { TaskSummary } from './task-summary.js';
 import { TaskHistory } from './task-history.js';
+import { TaskComposer } from './task-composer.js';
 import { SubmittedQueue } from './submitted-queue.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowsPage } from './workflows-page.js';
@@ -959,116 +960,40 @@ function App() {
               </section>
               )}
               {page === 'tasks' && (
-              <section className="panel compose" id="compose" tabIndex={-1} data-task-panel="new">
-                <div className="panel-heading">
-                  <h2>Create a task</h2>
-                  <span className="step">02</span>
-                </div>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = event.currentTarget;
-                    const data = new FormData(form);
-                    void act(async () => {
-                      const created = await api<Task>('/tasks', {
-                        repositoryId,
-                        agentId: selectedAgent,
-                        title: data.get('title'),
-                        prompt: data.get('prompt'),
-                        executionMode: data.get('executionMode'),
-                      });
-                      setSelected(created.id);
-                      setTaskPanel('details');
-                      clearTaskNavigation();
-                      form.reset();
-                      setExecutionMode('read-only');
+              <TaskComposer
+                dashboard={dashboard}
+                selectedAgent={selectedAgent}
+                repositoryId={repositoryId}
+                executionMode={executionMode}
+                selectedProfile={selectedProfile}
+                assignable={assignable}
+                canAssign={canAssign}
+                agentName={agent?.name}
+                busy={busy}
+                onAgentChange={(id) => {
+                  setSelectedAgent(id);
+                  setResumeSessionId('');
+                }}
+                onRepositoryChange={(id) => {
+                  setRepositoryId(id);
+                  setResumeSessionId('');
+                }}
+                onExecutionModeChange={setExecutionMode}
+                onCreateTask={(input, form) => {
+                  void act(async () => {
+                    const created = await api<Task>('/tasks', {
+                      repositoryId,
+                      agentId: selectedAgent,
+                      ...input,
                     });
-                  }}
-                >
-                  <label htmlFor="assigned-agent">Assign to agent</label>
-                  <select
-                    id="assigned-agent"
-                    value={selectedAgent}
-                    onChange={(event) => {
-                      setSelectedAgent(event.target.value as AgentId);
-                      setResumeSessionId('');
-                    }}
-                  >
-                    {!canAssign && (
-                      <option value={selectedAgent} disabled>
-                        Select an active profile
-                      </option>
-                    )}
-                    {assignable.map((slot) => (
-                      <option key={slot.id} value={slot.id}>
-                        {slot.name} · {slot.id.slice(0, 8)} · {slot.state}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor="repository">Repository</label>
-                  <select
-                    id="repository"
-                    required
-                    value={repositoryId}
-                    onChange={(event) => {
-                      setRepositoryId(event.target.value);
-                      setResumeSessionId('');
-                    }}
-                  >
-                    <option value="" disabled>
-                      Select a repository
-                    </option>
-                    {dashboard?.repositories.map((repo) => (
-                      <option key={repo.id} value={repo.id}>
-                        {repo.name}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor="executionMode">Execution mode</label>
-                  <select
-                    id="executionMode"
-                    name="executionMode"
-                    value={executionMode}
-                    onChange={(event) => setExecutionMode(event.target.value)}
-                  >
-                    <option value="read-only">Read-only review</option>
-                    <option value="write" disabled={selectedProfile?.maximumMode !== 'write'}>
-                      Isolated coding · write enabled
-                    </option>
-                  </select>
-                  <label htmlFor="title">Task title</label>
-                  <input
-                    id="title"
-                    name="title"
-                    required
-                    maxLength={160}
-                    placeholder="Review the project structure"
-                  />
-                  <label htmlFor="prompt">What should the agent work on?</label>
-                  <textarea
-                    id="prompt"
-                    name="prompt"
-                    required
-                    maxLength={16000}
-                    rows={5}
-                    placeholder="Explore the codebase, explain how it fits together, and suggest the next improvement…"
-                  />
-                  <div className="compose-footer">
-                    <span>
-                      <span className="tiny-avatar">⌘</span> Assigned to{' '}
-                      {agent?.name ?? 'Select a profile'}
-                    </span>
-                    <button disabled={busy || !repositoryId || !canAssign}>
-                      Create task <span>→</span>
-                    </button>
-                  </div>
-                </form>
-                <p className="read-only-note">
-                  Start submits to the assigned FIFO queue and may execute immediately. Isolated
-                  coding requires confirmation and server-configured roots. Review changes before
-                  keeping or rejecting; integration is manual.
-                </p>
-              </section>
+                    setSelected(created.id);
+                    setTaskPanel('details');
+                    clearTaskNavigation();
+                    form.reset();
+                    setExecutionMode('read-only');
+                  });
+                }}
+              />
               )}
             </>} inspector={<>
 
