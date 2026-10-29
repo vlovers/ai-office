@@ -267,3 +267,45 @@ it('upgrades v8 metadata to v9 without losing existing work', async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('recovers running and stopping tasks exactly once across repeated SQLite restarts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ai-office-recovery-repeat-'));
+  const path = join(directory, 'office.sqlite');
+  let store = new Store(path);
+  try {
+    const repository = store.register({
+      path: '/disposable/recovery-repeat',
+      gitDir: '/disposable/recovery-repeat/.git',
+      name: 'recovery-repeat',
+    });
+    const running = store.createTask({
+      repositoryId: repository.id,
+      title: 'Running at crash',
+      prompt: 'do not replay',
+    });
+    const stopping = store.createTask({
+      repositoryId: repository.id,
+      title: 'Stopping at crash',
+      prompt: 'do not replay',
+    });
+    store.updateTask(running.id, { state: 'running' });
+    store.updateTask(stopping.id, { state: 'stopping' });
+    store.close();
+    store = new Store(path);
+    for (const task of [running, stopping]) {
+      expect(store.task(task.id)?.state).toBe('interrupted');
+      expect(store.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    }
+    expect(store.queue()).toEqual([]);
+    store.close();
+    store = new Store(path);
+    for (const task of [running, stopping]) {
+      expect(store.task(task.id)?.state).toBe('interrupted');
+      expect(store.events(task.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
+    }
+    expect(store.queue()).toEqual([]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
