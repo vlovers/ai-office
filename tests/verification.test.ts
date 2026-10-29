@@ -127,11 +127,7 @@ it('kills delayed descendant side effects when verification is aborted', async (
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const controller = new AbortController();
   const pending = runVerification(
-    [
-      '/bin/sh',
-      '-c',
-      'echo ready > ready; (sleep 3; echo orphan > must-not-run) & wait',
-    ],
+    ['/bin/sh', '-c', 'echo ready > ready; (sleep 3; echo orphan > must-not-run) & wait'],
     root,
     10000,
     controller.signal,
