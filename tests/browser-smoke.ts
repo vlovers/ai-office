@@ -404,13 +404,18 @@ try {
   await expect(page.locator('#task-workspace')).toContainText('Agent A concurrent');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   // B's Stop remains usable while A waits for its own process-group cleanup.
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await expect(page.getByRole('button', { name: /Stop agent/ })).toBeEnabled();
   await expect.poll(() => env.store.task(taskA.id)?.state).toBe('stopped');
   assert.equal(env.store.task(taskB.id)?.state, 'running', 'Stopping A affected B');
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
-  await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
   await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   await page.setViewportSize({ width: 1440, height: 1100 });
