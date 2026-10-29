@@ -179,7 +179,12 @@ it.skipIf(process.platform === 'win32')(
       expect(recovered.queue().map((entry) => entry.taskId)).toEqual([manifest.ordinaryTaskId]);
       expect(recovered.task(manifest.ordinaryTaskId)?.state).toBe('queued');
 
-      expectRecoveredApprovalsBlocked(recovered, workflows, manifest.cases, manifest.ordinaryTaskId);
+      expectRecoveredApprovalsBlocked(
+        recovered,
+        workflows,
+        manifest.cases,
+        manifest.ordinaryTaskId,
+      );
       expect(workflows.get(manifest.readyWorkflowId)).toEqual(
         expect.objectContaining({
           state: 'active',
@@ -279,7 +284,12 @@ it.skipIf(process.platform === 'win32')(
       expect(
         recovered.events(running.taskId).filter((event) => event.kind === 'interrupted'),
       ).toHaveLength(1);
-      expectRecoveredApprovalsBlocked(recovered, workflows, manifest.cases, manifest.ordinaryTaskId);
+      expectRecoveredApprovalsBlocked(
+        recovered,
+        workflows,
+        manifest.cases,
+        manifest.ordinaryTaskId,
+      );
 
       // The worker's IPC disconnect must terminate its entire process group,
       // not merely leave the SQLite task marked interrupted.
