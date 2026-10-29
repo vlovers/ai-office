@@ -79,9 +79,9 @@ it('rejects unconfigured, relative and excessive QA plans', async () => {
   await expect(qaPlan('bounded', ['/bin/echo'], 120001)).rejects.toThrow();
 });
 async function expectQAPlanConflict(directory: string, plan: QAPlan) {
-  await expect(
-    runSandboxedQA(directory, plan, new AbortController().signal),
-  ).rejects.toMatchObject({ statusCode: 409 });
+  await expect(runSandboxedQA(directory, plan, new AbortController().signal)).rejects.toMatchObject(
+    { statusCode: 409 },
+  );
 }
 
 it('rejects changed or missing approved QA executables', async () => {
