@@ -87,6 +87,9 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
   // probes. Keep the second check: cancellation may arrive during verification.
   if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
   await requireUnchangedQAPlan(plan);
+  // File identity resolution is asynchronous: cancellation can arrive while
+  // the approval digest is being revalidated, before native probes start.
+  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
   try {
     await verifyNativeIsolation(undefined, signal);
   } catch (error) {
