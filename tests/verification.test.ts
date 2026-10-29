@@ -152,13 +152,15 @@ it('kills delayed descendant side effects when verification is aborted', async (
 it('kills delayed descendant side effects when verification times out', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-verify-timeout-tree-')));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
+  // A deliberately long-lived shell keeps the process group alive past the
+  // verification deadline; its background writer must not survive cleanup.
   const result = await runVerification(
-    ['/bin/sh', '-c', 'echo ready > ready; (sleep 3; echo orphan > must-not-run) & wait'],
+    ['/bin/sh', '-c', 'echo ready > ready; (sleep 5; echo orphan > must-not-run) & wait'],
     root,
-    500,
+    1500,
   );
   expect(result.passed).toBe(false);
   expect(await readFile(join(root, 'ready'), 'utf8')).toContain('ready');
-  await new Promise((resolve) => setTimeout(resolve, 3300));
+  await new Promise((resolve) => setTimeout(resolve, 5300));
   await expect(lstat(join(root, 'must-not-run'))).rejects.toMatchObject({ code: 'ENOENT' });
-}, 15000);
+}, 20000);
