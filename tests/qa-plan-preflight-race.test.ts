@@ -119,7 +119,7 @@ it('rejects an executable permission change during native preflight', async () =
   const executable = join(root, 'approved.sh');
   const { started, release } = preflightGate();
   try {
-    await writeFile(executable, '#!/bin/sh\\nexit 0\\n');
+    await writeFile(executable, '#!/bin/sh\nexit 0\n');
     await chmod(executable, 0o700);
     const plan = await qaPlan('approved', [executable], 2000);
     const pending = runSandboxedQA(root, plan, new AbortController().signal);
