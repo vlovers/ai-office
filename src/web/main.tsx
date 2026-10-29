@@ -342,7 +342,7 @@ function App() {
     const origin = document.activeElement;
     requestAnimationFrame(() => {
       // A later keyboard/pointer action takes precedence over this deferred navigation.
-      if (document.activeElement !== origin) return;
+      if (document.activeElement !== origin && origin?.isConnected) return;
       const section = document.getElementById(id);
       section?.focus();
       section?.scrollIntoView({ block: 'start' });
