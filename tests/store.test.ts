@@ -357,14 +357,20 @@ it('recovers an unfinished task after a real SIGKILL of its SQLite-owning proces
         reject(new Error(`SQLite worker exited before ready: ${code}/${signal}`)),
       );
     });
-    await Promise.race([
-      ready,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('SQLite worker readiness timed out')), 10000),
-      ),
-    ]);
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        ready,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('SQLite worker readiness timed out')), 10000);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+    const exited = once(child, 'exit');
     child.kill('SIGKILL');
-    await once(child, 'exit');
+    await exited;
     reopened = new Store(path);
     expect(reopened.task(task.id)?.state).toBe('interrupted');
     expect(reopened.queue()).toEqual([]);
