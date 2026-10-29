@@ -305,8 +305,15 @@ try {
     'aria-pressed',
     'true',
   );
-  await page.locator('nav a[href="#agent"]').click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await expect(page.locator('#agent')).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await createTask('Failed review', 'FAIL_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
