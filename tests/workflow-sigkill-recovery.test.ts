@@ -23,6 +23,107 @@ interface CrashManifest {
   verificationGroup?: number;
 }
 
+function expectRecoveredApprovalsBlocked(
+  store: Store,
+  workflows: WorkflowStore,
+  entries: CrashManifest['cases'],
+  ordinaryTaskId: string,
+) {
+  // A recovered workflow must never accept a stale browser action or a
+  // fresh action that reuses the pre-crash approval. Check all three
+  // persisted task states, not just the running case.
+  for (const entry of entries) {
+    const version = entry.version + 1;
+    const before = workflows.get(entry.workflowId);
+    const originalEvents = store.events(entry.taskId);
+    const attempts = [
+      // Stale tab still holds the approval version from before SIGKILL.
+      () =>
+        workflows.transition(entry.workflowId, entry.version, {
+          type: 'start' as const,
+          taskId: entry.taskId,
+          revision: 'a'.repeat(40),
+        }),
+      // A refreshed tab cannot resurrect a blocked stage either.
+      () =>
+        workflows.transition(entry.workflowId, version, {
+          type: 'start' as const,
+          taskId: entry.taskId,
+          revision: 'a'.repeat(40),
+        }),
+      () =>
+        workflows.transition(entry.workflowId, version, {
+          type: 'approve' as const,
+          revision: 'a'.repeat(40),
+        }),
+      () =>
+        workflows.transition(entry.workflowId, version, {
+          type: 'finish' as const,
+          taskId: entry.taskId,
+          revision: 'b'.repeat(40),
+          succeeded: true,
+        }),
+      () => workflows.bindApprovedTask(entry.workflowId, version, entry.taskId),
+      () =>
+        workflows.enqueueApprovedTask(
+          store,
+          entry.workflowId,
+          version,
+          entry.taskId,
+          'local-cli-chatgpt',
+          'a'.repeat(40),
+        ),
+      () => workflows.approveCoderEvidence(entry.workflowId, version, entry.taskId, 'b'.repeat(64)),
+      () => workflows.approveReadOnlyResult(entry.workflowId, version, 'reviewer', 'b'.repeat(64)),
+    ];
+    for (const attempt of attempts) {
+      let rejection: unknown;
+      try {
+        attempt();
+      } catch (error) {
+        rejection = error;
+      }
+      // A TypeError or an unrelated failure is not a security boundary.
+      // Every forbidden transition must fail explicitly with HTTP 409.
+      expect(rejection).toMatchObject({ statusCode: 409 });
+      expect(workflows.get(entry.workflowId)).toEqual(before);
+      expect(store.task(entry.taskId)?.state).toBe('interrupted');
+      expect(store.events(entry.taskId)).toEqual(originalEvents);
+      expect(store.queue().map((item) => item.taskId)).toEqual([ordinaryTaskId]);
+    }
+  }
+}
+
+/** Crash recovery must fence only interrupted workflows, not unrelated work. */
+function expectUnaffectedWorkCanProceed(
+  store: Store,
+  workflows: WorkflowStore,
+  manifest: CrashManifest,
+) {
+  const ready = workflows.get(manifest.readyWorkflowId);
+  expect(ready).toMatchObject({
+    state: 'active',
+    version: manifest.readyVersion,
+    stages: expect.arrayContaining([expect.objectContaining({ state: 'ready' })]),
+  });
+  const cancelled = workflows.transition(manifest.readyWorkflowId, manifest.readyVersion, {
+    type: 'cancel',
+  });
+  expect(cancelled.state).toBe('cancelled');
+  expect(cancelled.version).toBe(manifest.readyVersion + 1);
+
+  // Claiming the unrelated read-only task changes only the synthetic SQLite
+  // queue. It does not execute a provider or a QA command.
+  store.claimQueued(manifest.ordinaryTaskId);
+  expect(store.task(manifest.ordinaryTaskId)?.state).toBe('running');
+  expect(store.queue()).toHaveLength(0);
+  for (const entry of manifest.cases) {
+    expect(workflows.get(entry.workflowId)?.state).toBe('blocked');
+    expect(workflows.get(entry.workflowId)?.version).toBe(entry.version + 1);
+    expect(store.task(entry.taskId)?.state).toBe('interrupted');
+  }
+}
+
 it.skipIf(process.platform === 'win32')(
   'recovers real SIGKILL with open SQLite WAL without replaying approved workflow tasks',
   async () => {
@@ -95,6 +196,13 @@ it.skipIf(process.platform === 'win32')(
       }
       expect(recovered.queue().map((entry) => entry.taskId)).toEqual([manifest.ordinaryTaskId]);
       expect(recovered.task(manifest.ordinaryTaskId)?.state).toBe('queued');
+
+      expectRecoveredApprovalsBlocked(
+        recovered,
+        workflows,
+        manifest.cases,
+        manifest.ordinaryTaskId,
+      );
       expect(workflows.get(manifest.readyWorkflowId)).toEqual(
         expect.objectContaining({
           state: 'active',
@@ -119,6 +227,8 @@ it.skipIf(process.platform === 'win32')(
       }
       expect(again.get(manifest.readyWorkflowId)?.version).toBe(manifest.readyVersion);
       expect(reopened.queue().map((entry) => entry.taskId)).toEqual([manifest.ordinaryTaskId]);
+      expectRecoveredApprovalsBlocked(reopened, again, manifest.cases, manifest.ordinaryTaskId);
+      expectUnaffectedWorkCanProceed(reopened, again, manifest);
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       reopened?.close();
@@ -193,6 +303,12 @@ it.skipIf(process.platform === 'win32')(
       expect(
         recovered.events(running.taskId).filter((event) => event.kind === 'interrupted'),
       ).toHaveLength(1);
+      expectRecoveredApprovalsBlocked(
+        recovered,
+        workflows,
+        manifest.cases,
+        manifest.ordinaryTaskId,
+      );
 
       // The worker's IPC disconnect must terminate its entire process group,
       // not merely leave the SQLite task marked interrupted.
@@ -228,6 +344,8 @@ it.skipIf(process.platform === 'win32')(
       expect(
         reopened.events(running.taskId).filter((event) => event.kind === 'interrupted'),
       ).toHaveLength(1);
+      expectRecoveredApprovalsBlocked(reopened, again, manifest.cases, manifest.ordinaryTaskId);
+      expectUnaffectedWorkCanProceed(reopened, again, manifest);
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       if (group) {
