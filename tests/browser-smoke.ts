@@ -256,6 +256,10 @@ try {
   await createTask('Stop review', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute(
     'data-state',
     'thinking',
