@@ -212,10 +212,11 @@ function App() {
     const key = encodeTaskNavigation(navigation);
     if (lastNavigation.current === key) return;
     if (selected !== target.id) setSelected(target.id);
+    if (taskPanel !== 'details') setTaskPanel('details');
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
     if (view !== 'focus') setView('focus');
     if (page !== 'tasks') setPage('tasks');
-  }, [navigation, dashboard, selected, selectedAgent, view, page]);
+  }, [navigation, dashboard, selected, selectedAgent, view, page, taskPanel]);
   useEffect(() => {
     if (!navigation || !dashboard || view !== 'focus' || selected !== navigation.taskId) return;
     const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
@@ -666,6 +667,7 @@ function App() {
                           className="secondary"
                           onClick={() => {
                             setSelected(entry.taskId);
+                            setTaskPanel('details');
                             setSelectedAgent(entry.agentId);
                             setResumeSessionId('');
                           }}
@@ -836,6 +838,7 @@ function App() {
                         onClick={() => {
                           setSelectedAgent(item.agentId);
                           setSelected(item.id);
+                          setTaskPanel('details');
                           setResumeSessionId('');
                           clearTaskNavigation();
                         }}
@@ -1122,6 +1125,7 @@ function App() {
                         executionMode: data.get('executionMode'),
                       });
                       setSelected(created.id);
+                      setTaskPanel('details');
                       clearTaskNavigation();
                       form.reset();
                       setExecutionMode('read-only');
