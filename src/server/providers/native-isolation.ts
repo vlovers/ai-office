@@ -39,7 +39,13 @@ export function listenProbeServer(server: Server): Promise<void> {
     };
     server.once('error', onError);
     server.once('listening', onListening);
-    server.listen(0, '127.0.0.1');
+    try {
+      server.listen(0, '127.0.0.1');
+    } catch (error) {
+      server.off('error', onError);
+      server.off('listening', onListening);
+      reject(error);
+    }
   });
 }
 
