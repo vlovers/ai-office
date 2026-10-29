@@ -40,7 +40,16 @@ export async function qaPlan(
       .update(
         JSON.stringify({
           ...selected,
-          identity: [info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs],
+          identity: [
+            info.dev,
+            info.ino,
+            info.mode,
+            info.uid,
+            info.gid,
+            info.size,
+            info.mtimeMs,
+            info.ctimeMs,
+          ],
         }),
       )
       .digest('hex'),
