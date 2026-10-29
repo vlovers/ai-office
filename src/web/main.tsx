@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
 import { AgentStudio } from './agent-studio.js';
+import { MainNavigation } from './main-navigation.js';
+import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
@@ -69,7 +71,7 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
-  const [page, setPage] = useState<'office' | 'tasks' | 'workflows' | 'agents' | 'settings'>(() => window.location.hash.startsWith('#task/') ? 'tasks' : 'office');
+  const [page, setPage] = useState<Destination>(() => destinationFromHash(window.location.hash));
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -83,7 +85,10 @@ function App() {
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const lastNavigation = useRef('');
   useEffect(() => {
-    const onHashChange = () => setNavigation(decodeTaskNavigation(window.location.hash));
+    const onHashChange = () => {
+      setNavigation(decodeTaskNavigation(window.location.hash));
+      setPage(destinationFromHash(window.location.hash));
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
@@ -303,7 +308,7 @@ function App() {
   );
   const stationTask = workstationTask(dashboard, selected, selectedAgent);
   const showSection = (id: string) => {
-    const targetPage = id === 'workflows' ? 'workflows' : id === 'agent' || id === 'agent-studio' ? 'agents' : id === 'repositories' || id === 'connection' ? 'settings' : id === 'overview' ? 'office' : 'tasks';
+    const targetPage = destinationForSection(id);
     setPage(targetPage);
     const origin = document.activeElement;
     requestAnimationFrame(() => {
@@ -348,26 +353,16 @@ function App() {
           </span>
         </a>
         <div className="nav-label">// MISSION DIRECTORY</div>
-        <nav aria-label="Main navigation">
-          {([
-            ['office', '⌂', 'Office'],
-            ['tasks', '▤', 'Tasks'],
-            ['workflows', '◇', 'Workflows'],
-            ['agents', '♙', 'Agents'],
-            ['settings', '⚙', 'Settings'],
-          ] as const).map(([id, icon, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`nav-item ${page === id ? 'active' : ''}`}
-              aria-current={page === id ? 'page' : undefined}
-              onClick={() => { setPage(id); setView('mission'); window.scrollTo({ top: 0 }); }}
-            >
-              <span aria-hidden="true">{icon}</span>{label}
-              {id === 'tasks' && <span className="nav-count">{dashboard?.tasks.length ?? 0}</span>}
-            </button>
-          ))}
-        </nav>
+        <MainNavigation
+          page={page}
+          taskCount={dashboard?.tasks.length ?? 0}
+          onNavigate={(destination) => {
+            setPage(destination);
+            setView('mission');
+            window.location.hash = destinationHash(destination);
+            window.scrollTo({ top: 0 });
+          }}
+        />
         <div className="sidebar-section">
           <div className="nav-label">
             REPOSITORIES <span>{dashboard?.repositories.length ?? 0}</span>
