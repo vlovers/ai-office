@@ -270,6 +270,10 @@ try {
     'aria-pressed',
     'true',
   );
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await expect(page.locator('#task-workspace')).toContainText('Stop review');
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
