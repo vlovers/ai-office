@@ -323,6 +323,8 @@ function App() {
     const targetPage = destinationForSection(id);
     setPage(targetPage);
     if (targetPage === 'tasks') setTaskPanel(id === 'compose' ? 'new' : 'details');
+    const targetHash = `#${id}`;
+    if (window.location.hash !== targetHash) window.history.replaceState(null, '', targetHash);
     const origin = document.activeElement;
     requestAnimationFrame(() => {
       // A later keyboard/pointer action takes precedence over this deferred navigation.
