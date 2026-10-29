@@ -111,6 +111,10 @@ try {
   await page.keyboard.press('ArrowRight');
   await expect(secondDesk).toBeFocused();
   await page.keyboard.press(' ');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#agent')).toContainText('Codex 02');
   await expect(page.locator('.studio-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
