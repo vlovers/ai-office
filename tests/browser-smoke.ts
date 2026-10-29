@@ -191,11 +191,19 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
+  assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'completed',
   );
-  assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
     path: join(screenshotDir, 'ai-office-phosphor-desktop.png'),
