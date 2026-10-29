@@ -3,7 +3,7 @@ export type Destination = (typeof destinations)[number];
 
 export function destinationFromHash(hash: string): Destination {
   if (hash.startsWith('#task/')) return 'tasks';
-  const slug = hash.replace(/^#\/?/, '').split('/')[0];
+  const slug = hash.replace(/^#\/?/, '').split('/')[0] ?? '';
   if (['compose', 'task-history', 'task-workspace', 'task-workflow', 'code-review-center'].includes(slug)) return 'tasks';
   if (['agent', 'agent-studio'].includes(slug)) return 'agents';
   if (['repositories', 'connection'].includes(slug)) return 'settings';
