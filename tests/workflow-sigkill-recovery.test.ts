@@ -155,13 +155,23 @@ it.skipIf(process.platform === 'win32')(
               'b'.repeat(64),
             ),
         ];
-        for (const attempt of attempts) expect(attempt).toThrow();
-        expect(workflows.get(entry.workflowId)).toEqual(before);
-        expect(recovered.task(entry.taskId)?.state).toBe('interrupted');
-        expect(recovered.events(entry.taskId)).toEqual(originalEvents);
-        expect(recovered.queue().map((item) => item.taskId)).toEqual([
-          manifest.ordinaryTaskId,
-        ]);
+        for (const attempt of attempts) {
+          let rejection: unknown;
+          try {
+            attempt();
+          } catch (error) {
+            rejection = error;
+          }
+          // A TypeError or an unrelated failure is not a security boundary.
+          // Every forbidden transition must fail explicitly with HTTP 409.
+          expect(rejection).toMatchObject({ statusCode: 409 });
+          expect(workflows.get(entry.workflowId)).toEqual(before);
+          expect(recovered.task(entry.taskId)?.state).toBe('interrupted');
+          expect(recovered.events(entry.taskId)).toEqual(originalEvents);
+          expect(recovered.queue().map((item) => item.taskId)).toEqual([
+            manifest.ordinaryTaskId,
+          ]);
+        }
       }
       expect(workflows.get(manifest.readyWorkflowId)).toEqual(
         expect.objectContaining({
