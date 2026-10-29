@@ -2109,3 +2109,10 @@ select {
 .shell[data-page="workflows"] .workflows-destination {
   min-width: 0;
 }
+
+/* Keep page identity clear when only the selected screen is mounted. */
+.shell[data-page="office"] .page-heading { margin-bottom: 20px; }
+.shell[data-page="office"] .office-scene { margin-top: 0; }
+.shell[data-page="tasks"] .task-panel-tabs { position: relative; z-index: 1; }
+.shell[data-page="agents"] .agents-destination .agent-studio { margin-top: 0; }
+.shell[data-page="workflows"] .workflows-destination > .panel { margin-top: 0; }
