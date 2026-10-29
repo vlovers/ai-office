@@ -180,6 +180,10 @@ try {
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
   await expect(page.getByRole('region', { name: 'Get started' })).toHaveCount(0);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.getByLabel('Task title').fill('Review the example project');
   await page.getByLabel('What should the agent work on?').fill('Review the README.');
   await page.getByRole('button', { name: 'Create task' }).click();
