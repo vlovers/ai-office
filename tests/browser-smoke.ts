@@ -339,6 +339,7 @@ try {
     .getByRole('button', { name: 'Tasks' })
     .click();
   await createTask('Agent B concurrent', 'WAIT_FIXTURE');
+  await page.getByLabel('Assign to agent').selectOption('codex-2');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
