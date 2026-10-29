@@ -30,9 +30,18 @@ export async function qaPlan(
     throw new AppError(409, 'QA requires a configured command with an absolute executable.');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000)
     throw new AppError(409, 'QA timeout must be between 1 and 120000 ms.');
-  const executable = await realpath(argv[0]!);
-  const info = await stat(executable);
-  if (!info.isFile()) throw new AppError(409, 'QA executable is not a file.');
+  // A missing, inaccessible or non-executable command must fail approval
+  // deterministically rather than leaking a filesystem error as HTTP 500.
+  let executable: string;
+  let info: Awaited<ReturnType<typeof stat>>;
+  try {
+    executable = await realpath(argv[0]!);
+    info = await stat(executable);
+  } catch {
+    throw new AppError(409, 'QA executable is unavailable. Configure a valid command.');
+  }
+  if (!info.isFile() || (info.mode & 0o111) === 0)
+    throw new AppError(409, 'QA executable must be an executable file.');
   const selected = { commandId, argv: [executable, ...argv.slice(1)], timeoutMs };
   return {
     ...selected,
