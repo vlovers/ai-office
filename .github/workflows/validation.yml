@@ -3,7 +3,7 @@ name: AI Office validation
 on:
   pull_request:
     # Validate stacked workflow PRs against their integration base.
-    branches: [main, 'test/**']
+    branches: [main, 'test/**', 'fix/**']
   push:
     branches: [main]
   workflow_dispatch:

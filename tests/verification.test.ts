@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtemp, realpath, readFile, lstat, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
@@ -121,3 +122,46 @@ it('waits for worker closure when verification is aborted during shutdown', asyn
     clearTimeout(timer);
   }
 });
+
+it('kills delayed descendant side effects when verification is aborted', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-verify-abort-tree-')));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  const controller = new AbortController();
+  const pending = runVerification(
+    ['/bin/sh', '-c', 'echo ready > ready; (sleep 3; echo orphan > must-not-run) & wait'],
+    root,
+    10000,
+    controller.signal,
+  );
+  try {
+    await until(
+      () => existsSync(join(root, 'ready')),
+      (ready) => ready,
+    );
+    controller.abort();
+    expect((await pending).passed).toBe(false);
+    // Wait past the delayed child action: cleanup must not merely mark the
+    // parent task interrupted while leaving a background writer alive.
+    await new Promise((resolve) => setTimeout(resolve, 3300));
+    await expect(lstat(join(root, 'must-not-run'))).rejects.toMatchObject({ code: 'ENOENT' });
+  } finally {
+    controller.abort();
+    await pending.catch(() => {});
+  }
+}, 15000);
+
+it('kills delayed descendant side effects when verification times out', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-verify-timeout-tree-')));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  // A deliberately long-lived shell keeps the process group alive past the
+  // verification deadline; its background writer must not survive cleanup.
+  const result = await runVerification(
+    ['/bin/sh', '-c', 'echo ready > ready; (sleep 5; echo orphan > must-not-run) & wait'],
+    root,
+    1500,
+  );
+  expect(result.passed).toBe(false);
+  expect(await readFile(join(root, 'ready'), 'utf8')).toContain('ready');
+  await new Promise((resolve) => setTimeout(resolve, 5300));
+  await expect(lstat(join(root, 'must-not-run'))).rejects.toMatchObject({ code: 'ENOENT' });
+}, 20000);

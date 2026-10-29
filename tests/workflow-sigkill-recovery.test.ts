@@ -1,12 +1,14 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { lstat, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
+import { killProcessGroup } from '../src/server/process-group.js';
+import { until } from './helpers.js';
 
 interface CrashManifest {
   cases: Array<{
@@ -18,6 +20,7 @@ interface CrashManifest {
   readyWorkflowId: string;
   readyVersion: number;
   ordinaryTaskId: string;
+  verificationGroup?: number;
 }
 
 it.skipIf(process.platform === 'win32')(
@@ -124,4 +127,120 @@ it.skipIf(process.platform === 'win32')(
     }
   },
   30000,
+);
+
+it.skipIf(process.platform === 'win32')(
+  'reconciles a SIGKILLed workflow with live verification and no orphan writes or replay',
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ai-office-workflow-live-crash-'));
+    const path = join(root, 'metadata.sqlite');
+    const fixture = fileURLToPath(new URL('./fixtures/workflow-crash-child.ts', import.meta.url));
+    const child = spawn(process.execPath, ['--import', 'tsx', fixture, path, root], {
+      cwd: process.cwd(),
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    });
+    let stderr = '';
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    let group: number | undefined;
+    let recovered: Store | undefined;
+    let reopened: Store | undefined;
+    try {
+      const manifest = await new Promise<CrashManifest>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(`Live crash fixture did not become ready: ${stderr}`));
+        }, 20000);
+        const fail = (reason: string) => {
+          clearTimeout(timer);
+          reject(new Error(reason));
+        };
+        child.once('message', (message) => {
+          clearTimeout(timer);
+          resolve(message as CrashManifest);
+        });
+        child.once('error', (error) => fail(`Live crash fixture failed: ${error}`));
+        child.once('exit', (code, signal) =>
+          fail(`Live crash fixture exited before SIGKILL: ${code}/${signal}: ${stderr}`),
+        );
+      });
+      group = manifest.verificationGroup;
+      if (typeof group !== 'number' || !Number.isSafeInteger(group) || group <= 1)
+        throw new Error('Live verification fixture did not report a valid process group.');
+      const running = manifest.cases.find((entry) => entry.taskState === 'running');
+      if (!running) throw new Error('Live crash fixture has no running workflow task.');
+
+      // The parent holds SQLite WAL open while a detached supervisor and a
+      // synthetic background writer are both alive. No provider is executed.
+      const exit = once(child, 'exit');
+      expect(child.kill('SIGKILL')).toBe(true);
+      const [code, signal] = await exit;
+      expect(code).toBeNull();
+      expect(signal).toBe('SIGKILL');
+
+      recovered = new Store(path);
+      const workflows = new WorkflowStore(recovered.db);
+      const task = recovered.task(running.taskId);
+      const workflow = workflows.get(running.workflowId);
+      expect(task?.state).toBe('interrupted');
+      expect(workflow?.state).toBe('blocked');
+      expect(workflow?.version).toBe(running.version + 1);
+      expect(workflow?.stages[0]).toEqual(
+        expect.objectContaining({ state: 'interrupted', taskId: running.taskId }),
+      );
+      expect(workflow?.stages[1]?.state).toBe('pending');
+      expect(recovered.queue().some((entry) => entry.taskId === running.taskId)).toBe(false);
+      expect(
+        recovered.events(running.taskId).filter((event) => event.kind === 'interrupted'),
+      ).toHaveLength(1);
+
+      // The worker's IPC disconnect must terminate its entire process group,
+      // not merely leave the SQLite task marked interrupted.
+      await until(
+        () => {
+          try {
+            process.kill(-group!, 0);
+            return false;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true;
+            if ((error as NodeJS.ErrnoException).code === 'EPERM') return false;
+            throw error;
+          }
+        },
+        (gone) => gone,
+        10000,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 4300));
+      await expect(lstat(join(root, 'must-not-run'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+
+      // Reopening the WAL twice cannot replay the interrupted workflow or
+      // duplicate its interruption event, even after the worker is gone.
+      recovered.close();
+      recovered = undefined;
+      reopened = new Store(path);
+      const again = new WorkflowStore(reopened.db);
+      expect(again.get(running.workflowId)?.state).toBe('blocked');
+      expect(again.get(running.workflowId)?.version).toBe(running.version + 1);
+      expect(reopened.task(running.taskId)?.state).toBe('interrupted');
+      expect(reopened.queue().some((entry) => entry.taskId === running.taskId)).toBe(false);
+      expect(
+        reopened.events(running.taskId).filter((event) => event.kind === 'interrupted'),
+      ).toHaveLength(1);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      if (group) {
+        try {
+          killProcessGroup(group);
+        } catch {
+          // Assertions above report uncertain cleanup; still release test files.
+        }
+      }
+      reopened?.close();
+      recovered?.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  45000,
 );
