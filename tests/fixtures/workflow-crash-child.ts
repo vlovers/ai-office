@@ -124,10 +124,11 @@ if (verificationDirectory) {
           marker &&
           typeof marker === 'object' &&
           'group' in marker &&
+          typeof marker.group === 'number' &&
           Number.isSafeInteger(marker.group) &&
-          (marker.group as number) > 1
+          marker.group > 1
         ) {
-          group = marker.group as number;
+          group = marker.group;
           break;
         }
       } catch {
