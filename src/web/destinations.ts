@@ -12,7 +12,7 @@ export function destinationHash(destination: Destination): string {
 }
 
 export function destinationForSection(id: string): Destination {
-  if (id === 'workflows' || id === 'task-workflow') return 'workflows';
+  if (id === 'workflows') return 'workflows';
   if (id === 'agent' || id === 'agent-studio') return 'agents';
   if (id === 'repositories' || id === 'connection') return 'settings';
   if (id === 'overview') return 'office';
