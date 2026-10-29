@@ -29,7 +29,7 @@ const fakeNative = it.skipIf(process.platform !== 'darwin' && process.platform !
 async function waitForProbeMarkers(paths: string[]) {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
-    const found = await Promise.all(paths.map((p) => readFile(p).then(() => true, () => false)));
+    const found = await Promise.all(paths.map((p) => readFile(p).then(Boolean, () => false)));
     if (found.every(Boolean)) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
@@ -104,9 +104,8 @@ exec /bin/sleep 30
     await chmod(fake, 0o700);
     const pending = verifyNativeIsolation(fake, controller.signal);
     try {
-      await waitForProbeMarkers(
-        ['outside', 'secret', 'write', 'network'].map((name) => join(root, name)),
-      );
+      const markers = ['outside', 'secret', 'write', 'network'].map((name) => join(root, name));
+      await waitForProbeMarkers(markers);
       const started = Date.now();
       controller.abort();
       await expect(pending).rejects.toThrow('capability verification failed');
