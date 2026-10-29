@@ -29,7 +29,11 @@ process.on(
       finishing = true;
       // Do not report completion to the backend until it also observes this worker close.
       clearTimeout(timer);
-      const result = { output: output + reason, passed, ...(incomplete ? { incomplete: true } : {}) };
+      const result = {
+        output: output + reason,
+        passed,
+        ...(incomplete ? { incomplete: true } : {}),
+      };
       if (process.connected) process.send?.(result, () => terminate());
       else terminate();
       // IPC failure/blocked pipe must not extend the runtime bound.
@@ -54,7 +58,8 @@ process.on(
     );
     const capture = (data: Buffer) => {
       output = (output + data.toString()).slice(0, 128_000);
-      if (output.length >= 128_000) finish(false, '\nExecution stopped at time/output limit.', true);
+      if (output.length >= 128_000)
+        finish(false, '\nExecution stopped at time/output limit.', true);
     };
     child.stdout.on('data', capture);
     child.stderr.on('data', capture);
