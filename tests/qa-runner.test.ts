@@ -69,6 +69,40 @@ it('rejects unconfigured, relative and excessive QA plans', async () => {
   await expect(qaPlan('nul', ['/bin/echo', '\0'])).rejects.toThrow();
   await expect(qaPlan('bounded', ['/bin/echo'], 120001)).rejects.toThrow();
 });
+it('rejects an executable modified or removed after QA approval before native preflight', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-pinned-executable-')));
+  const executable = join(root, 'approved-qa.sh');
+  try {
+    await writeFile(executable, '#!/bin/sh\\nexit 0\\n');
+    await chmod(executable, 0o700);
+    const plan = await qaPlan('approved', [executable, '--safe'], 1000);
+    await writeFile(executable, '#!/bin/sh\\necho changed\\n');
+    await expect(runSandboxedQA(root, plan, new AbortController().signal)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    await rm(executable);
+    await expect(runSandboxedQA(root, plan, new AbortController().signal)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('rejects tampered approved QA arguments, timeout, and digest before preflight', async () => {
+  const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 1000);
+  const changed = [
+    { ...plan, argv: [plan.argv[0]!, 'unsafe'] },
+    { ...plan, timeoutMs: 2000 },
+    { ...plan, digest: '0'.repeat(64) },
+  ];
+  for (const candidate of changed) {
+    await expect(
+      runSandboxedQA('/does-not-exist', candidate, new AbortController().signal),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  }
+});
+
 it('does not start native capability probes for an already-cancelled QA request', async () => {
   const controller = new AbortController();
   controller.abort();
