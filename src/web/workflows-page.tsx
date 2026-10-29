@@ -4,7 +4,6 @@ export function WorkflowsPage({ inspection }: { inspection?: { id: string; reque
   return (
     <section
       className="workflows-destination"
-      id="workflows"
       tabIndex={-1}
       aria-label="Workflow management"
     >
