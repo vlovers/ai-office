@@ -29,9 +29,7 @@ const fakeNative = it.skipIf(process.platform !== 'darwin' && process.platform !
 async function waitForProbeMarkers(paths: string[]) {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
-    const found = await Promise.all(
-      paths.map((path) => readFile(path).then(() => true, () => false)),
-    );
+    const found = await Promise.all(paths.map((p) => readFile(p).then(() => true, () => false)));
     if (found.every(Boolean)) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
@@ -41,9 +39,8 @@ async function waitForProbeMarkers(paths: string[]) {
 fakeNative('rejects an already-aborted preflight before starting a subprocess', async () => {
   const controller = new AbortController();
   controller.abort();
-  await expect(verifyNativeIsolation('/nonexistent-native-probe', controller.signal)).rejects.toThrow(
-    'verification was cancelled',
-  );
+  const pending = verifyNativeIsolation('/nonexistent-native-probe', controller.signal);
+  await expect(pending).rejects.toThrow('verification was cancelled');
 });
 
 fakeNative(
