@@ -6,7 +6,7 @@ export function TaskSessionOutput({
   events,
 }: {
   task: Task;
-  session?: { threadId?: string; authMode?: string; model?: string };
+  session?: { threadId?: string | null; authMode?: string; model?: string };
   events: AgentEvent[];
 }) {
   return (
