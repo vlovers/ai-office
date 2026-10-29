@@ -50,8 +50,17 @@ export async function verifyNativeIsolation(
     await writeFile(join(root, 'outside.txt'), 'OUTSIDE_DENIED');
     await writeFile(join(directory, '.env'), 'SECRET_DENIED');
     await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', resolve);
+      const onError = (error: Error) => {
+        server.off('listening', onListening);
+        reject(error);
+      };
+      const onListening = () => {
+        server.off('error', onError);
+        resolve();
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(0, '127.0.0.1');
     });
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
