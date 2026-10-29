@@ -1893,8 +1893,7 @@ select {
   border-color: var(--line);
   color: var(--phosphor);
 }
-.shell[data-page="office"] .mission-grid,
-.shell[data-page="office"] .view-switch ~ .onboarding + .mission-grid {
+.shell[data-page="office"] .mission-grid {
   display: none;
 }
 .shell:not([data-page="office"]) .office-scene,
@@ -1948,4 +1947,24 @@ select {
 }
 @media (max-width: 900px) {
   .shell[data-page="office"] .office-scene { max-height: none; }
+}
+
+/* Keep the existing focus-mode inspector usable on the Tasks destination. */
+.shell[data-page="tasks"].focus-mode .inspector {
+  display: block;
+}
+.shell[data-page="tasks"].focus-mode .agent-panel {
+  display: block;
+}
+.shell[data-page="tasks"] .mission-board,
+.shell[data-page="workflows"] .mission-board,
+.shell[data-page="agents"] .mission-board {
+  min-width: 0;
+}
+.shell[data-page="tasks"] .history,
+.shell[data-page="tasks"] .output,
+.shell[data-page="tasks"] .compose,
+.shell[data-page="workflows"] .workflows-destination,
+.shell[data-page="agents"] .agents-destination {
+  width: 100%;
 }
