@@ -619,9 +619,9 @@ if (process.argv.includes('--restart-server')) {
       await staleResponse;
       await expect(selector).toHaveValue(failed.workflowId);
       await expect(board).toContainText('QA — failed');
-      await expect(
-        board.getByRole('alert').filter({ hasText: staleSelectionMessage }),
-      ).toHaveCount(0);
+      await expect(board.getByRole('alert').filter({ hasText: staleSelectionMessage })).toHaveCount(
+        0,
+      );
     } finally {
       delayedSelection.release();
       await activePage.unroute(timelineUrl, delayedSelection.handler);
