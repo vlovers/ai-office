@@ -121,3 +121,34 @@ it('waits for worker closure when verification is aborted during shutdown', asyn
     clearTimeout(timer);
   }
 });
+
+it('kills delayed descendant side effects when verification is aborted', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-verify-abort-tree-')));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  const controller = new AbortController();
+  const pending = runVerification(
+    [
+      '/bin/sh',
+      '-c',
+      'echo ready > ready; (sleep 3; echo orphan > must-not-run) & wait',
+    ],
+    root,
+    10000,
+    controller.signal,
+  );
+  try {
+    await until(
+      () => readFile(join(root, 'ready'), 'utf8').then(() => true, () => false),
+      (ready) => ready,
+    );
+    controller.abort();
+    expect((await pending).passed).toBe(false);
+    // Wait past the delayed child action: cleanup must not merely mark the
+    // parent task interrupted while leaving a background writer alive.
+    await new Promise((resolve) => setTimeout(resolve, 3300));
+    await expect(lstat(join(root, 'must-not-run'))).rejects.toThrow();
+  } finally {
+    controller.abort();
+    await pending.catch(() => {});
+  }
+});
