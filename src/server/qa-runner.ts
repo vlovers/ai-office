@@ -52,7 +52,12 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
   // A cancelled queued QA must not launch even the expensive native capability
   // probes. Keep the second check: cancellation may arrive during verification.
   if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
-  await verifyNativeIsolation();
+  try {
+    await verifyNativeIsolation(undefined, signal);
+  } catch (error) {
+    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+    throw error;
+  }
   if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
   const home = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-')));
   try {
