@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { fork, type ChildProcess } from 'node:child_process';
 import { expect, it, vi } from 'vitest';
-import { reapProcessGroup } from '../src/server/process-group.js';
+import { killProcessGroup, reapProcessGroup } from '../src/server/process-group.js';
 import { runVerification } from '../src/server/verification.js';
 
 vi.mock('node:child_process', () => ({ fork: vi.fn() }));
@@ -41,4 +41,50 @@ it('preserves an explicitly reported denied operation', async () => {
 
   await expect(pending).resolves.toEqual({ passed: false, output: 'Permission denied' });
   expect(reapProcessGroup).toHaveBeenCalledWith(424243);
+});
+
+// The IPC boundary is not an attestation if the worker payload is malformed.
+// In particular, null previously threw from the EventEmitter callback and
+// a missing/incorrect passed flag was silently converted into a denial.
+it.each([
+  ['null payload', null],
+  ['missing passed', { output: '' }],
+  ['non-boolean passed', { passed: 'false', output: '' }],
+  ['non-string output', { passed: false, output: 123 }],
+  ['invalid incomplete flag', { passed: false, output: '', incomplete: 'false' }],
+  ['contradictory success', { passed: true, output: '', incomplete: true }],
+  ['oversized output', { passed: false, output: 'x'.repeat(128_101) }],
+])('fails closed on %s from the supervisor', async (_label, payload) => {
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525252,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/false'], '/tmp', 1000);
+  worker.emit('message', payload);
+  worker.emit('close', 0);
+
+  await expect(pending).rejects.toThrow('Verification supervisor sent an invalid result');
+  expect(killProcessGroup).toHaveBeenCalledWith(525252);
+  expect(reapProcessGroup).toHaveBeenCalledWith(525252);
+});
+
+it('rejects a repeated IPC result rather than letting it overwrite an attested denial', async () => {
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525253,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/false'], '/tmp', 1000);
+  worker.emit('message', { passed: false, output: 'Permission denied' });
+  worker.emit('message', { passed: true, output: 'Forged success' });
+  worker.emit('close', 0);
+
+  await expect(pending).rejects.toThrow('Verification supervisor sent an invalid result');
+  expect(killProcessGroup).toHaveBeenCalledWith(525253);
+  expect(reapProcessGroup).toHaveBeenCalledWith(525253);
 });
