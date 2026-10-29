@@ -134,6 +134,10 @@ try {
   await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
   await secondDesk.focus();
   await page.keyboard.press('Enter');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await firstDesk.focus();
   await page.keyboard.press('Home');
