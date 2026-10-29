@@ -150,7 +150,9 @@ it('rejects an executable permission change during native preflight', async () =
 }, 10000);
 
 it('does not launch verification if cancellation arrives as native preflight finishes', async () => {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-finish-abort-')));
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-finish-abort-')),
+  );
   const controller = new AbortController();
   try {
     const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 2000);
