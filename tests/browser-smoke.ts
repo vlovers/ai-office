@@ -338,8 +338,9 @@ try {
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Tasks' })
     .click();
-  await createTask('Agent B concurrent', 'WAIT_FIXTURE');
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Assign to agent').selectOption('codex-2');
+  await createTask('Agent B concurrent', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
@@ -384,8 +385,9 @@ try {
   assert.equal(env.store.task(taskA.id)?.state, 'running');
   assert.equal(env.store.task(taskB.id)?.state, 'running');
   // A queued task is visible/cancellable without interrupting B's active task.
-  await createTask('Agent B queue', 'Review later');
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Assign to agent').selectOption('codex-2');
+  await createTask('Agent B queue', 'Review later');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('region', { name: 'Submitted queue' })).toContainText(
     'Agent B queue',
