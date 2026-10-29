@@ -1,30 +1,13 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createRequire } from 'node:module';
+import { randomBytes } from 'node:crypto';
 import { codexOptions } from './codex-config.js';
 import { AppError } from '../errors.js';
-
-const exec = promisify(execFile);
+import { runVerification, type VerificationResult } from '../verification.js';
 export const nativeCodex = createRequire(import.meta.url).resolve('@openai/codex/bin/codex.js');
-
-/** Identical permission table to SDK execution, without legacy --sandbox overrides. */
-export function sandboxArguments(directory: string, argv: string[]): string[] {
-  const options = codexOptions(directory, {});
-  const values: string[] = [];
-  const flatten = (value: unknown, prefix: string) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      for (const [key, child] of Object.entries(value))
-        flatten(child, prefix ? `${prefix}.${key}` : key);
-    } else values.push(`${prefix}=${JSON.stringify(value)}`);
-  };
-  flatten(options.config, '');
-  values.push(...options.configOverrides!);
-  return [...values.flatMap((value) => ['--config', value]), 'sandbox', '--', ...argv];
-}
 
 /** Bind a probe listener without retaining temporary settle callbacks. */
 export function listenProbeServer(server: Server): Promise<void> {
@@ -49,6 +32,52 @@ export function listenProbeServer(server: Server): Promise<void> {
   });
 }
 
+/** A denied command is evidence only when its supervisor completed normally. */
+export async function assertNativeDenials(
+  forbidden: string[][],
+  run: (argv: string[]) => Promise<VerificationResult>,
+  forbiddenReadCanaries: readonly string[] = [],
+): Promise<void> {
+  // Convert synchronous launch failures into rejections and wait for every
+  // sibling supervisor before allowing the caller to tear down probe resources.
+  const probes = await Promise.allSettled(
+    forbidden.map((argv) => Promise.resolve().then(() => run(argv))),
+  );
+  if (probes.some((probe) => probe.status === 'rejected'))
+    throw new Error('Native sandbox probe supervisor failed.');
+  // A timeout, spawn failure, output cap or signal is not evidence that the
+  // sandbox denied the operation. Only a completed nonzero exit is usable.
+  if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.incomplete))
+    throw new Error('Native sandbox denial probe did not complete normally.');
+  if (probes.some((probe) => probe.status === 'fulfilled' && probe.value.passed))
+    throw new Error('Sandbox allowed a forbidden operation.');
+  // A wrapper may leak file contents and then return a nonzero status. Exit
+  // status alone cannot attest that forbidden reads were actually denied.
+  if (
+    probes.some(
+      (probe) =>
+        probe.status === 'fulfilled' &&
+        forbiddenReadCanaries.some((canary) => probe.value.output.includes(canary)),
+    )
+  )
+    throw new Error('Sandbox leaked forbidden read contents.');
+}
+
+/** Identical permission table to SDK execution, without legacy --sandbox overrides. */
+export function sandboxArguments(directory: string, argv: string[]): string[] {
+  const options = codexOptions(directory, {});
+  const values: string[] = [];
+  const flatten = (value: unknown, prefix: string) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [key, child] of Object.entries(value))
+        flatten(child, prefix ? `${prefix}.${key}` : key);
+    } else values.push(`${prefix}=${JSON.stringify(value)}`);
+  };
+  flatten(options.config, '');
+  values.push(...options.configOverrides!);
+  return [...values.flatMap((value) => ['--config', value]), 'sandbox', '--', ...argv];
+}
+
 /** No credentials or inference. Failure is an execution fence, never a fallback. */
 export async function verifyNativeIsolation(
   executable = nativeCodex,
@@ -61,6 +90,10 @@ export async function verifyNativeIsolation(
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-policy-')));
   const directory = join(root, 'snapshot');
   const home = join(root, 'home');
+  // Fresh per-invocation canaries prove that forbidden files were not exposed,
+  // even when an executable masks a successful read with a failing exit code.
+  const outsideCanary = `OUTSIDE_DENIED_${randomBytes(16).toString('hex')}`;
+  const secretCanary = `SECRET_DENIED_${randomBytes(16).toString('hex')}`;
   let networkEscape = false;
   const server = createServer((_request, response) => {
     networkEscape = true;
@@ -70,30 +103,25 @@ export async function verifyNativeIsolation(
     await mkdir(directory);
     await mkdir(home);
     await writeFile(join(directory, 'allowed.txt'), 'READ_ALLOWED');
-    await writeFile(join(root, 'outside.txt'), 'OUTSIDE_DENIED');
-    await writeFile(join(directory, '.env'), 'SECRET_DENIED');
+    await writeFile(join(root, 'outside.txt'), outsideCanary);
+    await writeFile(join(directory, '.env'), secretCanary);
     await listenProbeServer(server);
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
-    const env = {
-      PATH: `${process.execPath.slice(0, process.execPath.lastIndexOf('/'))}:/usr/bin:/bin`,
-      HOME: home,
-      CODEX_HOME: home,
-    };
-    const run = async (argv: string[]) => {
-      if (signal?.aborted) return { passed: false, output: '' };
-      try {
-        const result = await exec(executable, sandboxArguments(directory, argv), {
-          cwd: directory,
-          env,
-          timeout: 10000,
-          maxBuffer: 64_000,
-          signal,
-        });
-        return { passed: true, output: result.stdout };
-      } catch {
-        return { passed: false, output: '' };
-      }
+    const run = (argv: string[]) => {
+      if (signal?.aborted)
+        return Promise.resolve({ passed: false, output: 'Verification cancelled before launch.' });
+      // A sandbox denial is a completed verification returning passed: false.
+      // A rejected supervisor (startup, IPC or uncertain process cleanup) is
+      // NOT evidence of denial: propagate it and fail the entire preflight.
+      const command = executable === nativeCodex ? [process.execPath, executable] : [executable];
+      return runVerification(
+        [...command, ...sandboxArguments(directory, argv)],
+        directory,
+        10000,
+        signal,
+        { HOME: home, CODEX_HOME: home },
+      );
     };
     const read = await run(['/bin/cat', join(directory, 'allowed.txt')]);
     if (!read.passed || read.output.trim() !== 'READ_ALLOWED')
@@ -107,10 +135,8 @@ export async function verifyNativeIsolation(
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
-    const probes = await Promise.all(forbidden.map((argv) => run(argv)));
+    await assertNativeDenials(forbidden, run, [outsideCanary, secretCanary]);
     if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
-    if (probes.some((probe) => probe.passed))
-      throw new Error('Sandbox allowed a forbidden operation.');
     if (networkEscape) throw new Error('Network isolation failed.');
     // Check effects as well as exit codes (a wrapper may hide its child's status).
     if (

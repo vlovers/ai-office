@@ -116,8 +116,50 @@ it('waits for worker closure when verification is aborted during shutdown', asyn
   const pending = runVerification(['/bin/sleep', '60'], root, 60_000, controller.signal);
   const timer = setTimeout(() => controller.abort(), 200);
   try {
-    expect((await pending).passed).toBe(false);
+    expect(await pending).toMatchObject({ passed: false, incomplete: true });
   } finally {
     clearTimeout(timer);
   }
+});
+
+it('attests an ordinary nonzero process exit without marking it incomplete', async () => {
+  const result = await runVerification(['/bin/sh', '-c', 'exit 7'], tmpdir(), 1000);
+  expect(result).toEqual({ passed: false, output: '' });
+});
+
+it('marks an executable spawn failure as incomplete, not a sandbox denial', async () => {
+  const result = await runVerification(
+    ['/nonexistent-ai-office-verification-executable'],
+    tmpdir(),
+    1000,
+  );
+  expect(result).toMatchObject({ passed: false, incomplete: true });
+  expect(result.output).toContain('could not start');
+});
+
+it('marks timed-out and signal-terminated processes as incomplete', async () => {
+  const timedOut = await runVerification(['/bin/sleep', '30'], tmpdir(), 100);
+  expect(timedOut).toMatchObject({ passed: false, incomplete: true });
+  expect(timedOut.output).toContain('time/output limit');
+
+  const signaled = await runVerification(['/bin/sh', '-c', 'kill -TERM $$'], tmpdir(), 1000);
+  expect(signaled).toMatchObject({ passed: false, incomplete: true });
+});
+
+it('marks an output-limit termination as incomplete', async () => {
+  const result = await runVerification(['/usr/bin/yes'], tmpdir(), 5000);
+  expect(result).toMatchObject({ passed: false, incomplete: true });
+  expect(result.output).toContain('time/output limit');
+  expect(result.output.length).toBeLessThanOrEqual(128100);
+});
+
+it('marks cancellation before worker launch as incomplete', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const result = await runVerification(['/bin/true'], tmpdir(), 1000, controller.signal);
+  expect(result).toEqual({
+    passed: false,
+    output: 'Verification interrupted before launch.',
+    incomplete: true,
+  });
 });
