@@ -78,6 +78,34 @@ it('rejects unconfigured, relative and excessive QA plans', async () => {
   await expect(qaPlan('nul', ['/bin/echo', '\0'])).rejects.toThrow();
   await expect(qaPlan('bounded', ['/bin/echo'], 120001)).rejects.toThrow();
 });
+it('rejects missing, broken, directory and non-executable QA commands before approval', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-invalid-command-')));
+  const executable = join(root, 'qa.sh');
+  const brokenLink = join(root, 'broken-link');
+  try {
+    await writeFile(executable, '#!/bin/sh\\nexit 0\\n');
+    await chmod(executable, 0o600);
+    await expect(qaPlan('not-executable', [executable])).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    await expect(qaPlan('directory', [root])).rejects.toMatchObject({ statusCode: 409 });
+    await expect(qaPlan('missing', [join(root, 'missing')])).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    await symlink(join(root, 'missing'), brokenLink);
+    await expect(qaPlan('broken-symlink', [brokenLink])).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    await chmod(executable, 0o700);
+    await expect(qaPlan('valid', [executable])).resolves.toMatchObject({
+      commandId: 'valid',
+      argv: [executable],
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function expectQAPlanConflict(directory: string, plan: QAPlan) {
   await expect(runSandboxedQA(directory, plan, new AbortController().signal)).rejects.toMatchObject(
     { statusCode: 409 },
