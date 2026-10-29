@@ -1,4 +1,6 @@
 import { expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtemp, realpath, writeFile, rm, readFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -117,6 +119,89 @@ exec /bin/sleep 30
     }
   },
   12000,
+);
+
+
+fakeNative(
+  'kills native sandbox descendants when cancellation interrupts the read probe',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-child-abort-')));
+    const controller = new AbortController();
+    const fake = join(root, 'fake-sandbox.sh');
+    await writeFile(
+      fake,
+      `#!/bin/sh
+case "$*" in
+  *allowed.txt*)
+    ( /bin/sleep 1; /usr/bin/touch "${root}/late-write" ) &
+    /usr/bin/touch "${root}/child-started"
+    wait
+    ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    await chmod(fake, 0o700);
+    const pending = verifyNativeIsolation(fake, controller.signal);
+    try {
+      await waitForProbeMarkers([join(root, 'child-started')]);
+      controller.abort();
+      await expect(pending).rejects.toThrow('capability verification failed');
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await expect(readFile(join(root, 'late-write'))).rejects.toThrow();
+    } finally {
+      controller.abort();
+      await pending.catch(() => {});
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  12000,
+);
+
+fakeNative(
+  'kills native sandbox descendants after abrupt backend process death',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-parent-kill-')));
+    const fake = join(root, 'fake-sandbox.sh');
+    const parentScript = join(root, 'parent.mjs');
+    await writeFile(
+      fake,
+      `#!/bin/sh
+case "$*" in
+  *allowed.txt*)
+    ( /bin/sleep 1; /usr/bin/touch "${root}/late-write" ) &
+    /usr/bin/touch "${root}/child-started"
+    wait
+    ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    await chmod(fake, 0o700);
+    await writeFile(
+      parentScript,
+      `import { verifyNativeIsolation } from ${JSON.stringify(new URL('../src/server/providers/native-isolation.ts', import.meta.url).href)};
+await verifyNativeIsolation(${JSON.stringify(fake)});
+`,
+    );
+    const parent = spawn(process.execPath, ['--import', 'tsx', parentScript], {
+      cwd: process.cwd(),
+      stdio: 'ignore',
+    });
+    const closed = once(parent, 'close');
+    try {
+      await waitForProbeMarkers([join(root, 'child-started')]);
+      parent.kill('SIGKILL');
+      await closed;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await expect(readFile(join(root, 'late-write'))).rejects.toThrow();
+    } finally {
+      parent.kill('SIGKILL');
+      await closed;
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  15000,
 );
 
 native(
