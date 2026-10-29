@@ -157,7 +157,6 @@ esac
   12000,
 );
 
-
 fakeNative(
   'kills background children of concurrent denial probes on cancellation',
   async () => {
