@@ -20,8 +20,8 @@ it('exposes interrupted tasks after an HTTP backend restart without replaying th
     prompt: 'must not be replayed',
   });
   env.store.updateTask(running.id, { state: 'running' });
-  // The initial server's process has disappeared: no graceful manager shutdown
-  // or task cancellation was recorded. Restart with a new SQLite connection.
+  // Simulate persisted state left by an abruptly terminated backend. The real
+  // process-kill path is covered separately by the SQLite SIGKILL regression.
   env.store.close();
   let recovered: Store | undefined;
   let app: Awaited<ReturnType<typeof createApp>> | undefined;
@@ -33,7 +33,6 @@ it('exposes interrupted tasks after an HTTP backend restart without replaying th
     const manager = new TaskManager(recovered, provider, auth);
     app = await createApp(manager);
     const address = await app.listen({ host: '127.0.0.1', port: 0 });
-    manager.startQueue();
     const response = await fetch(`${address}/api/dashboard`);
     expect(response.status).toBe(200);
     const dashboard = (await response.json()) as {
@@ -46,6 +45,14 @@ it('exposes interrupted tasks after an HTTP backend restart without replaying th
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(recovered.task(running.id)?.state).toBe('interrupted');
     expect(recovered.queue()).toEqual([]);
+    const start = await fetch(address + '/api/tasks/' + running.id + '/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(start.status).toBe(409);
+    expect(recovered.task(running.id)?.state).toBe('interrupted');
+    expect(recovered.events(running.id).filter((event) => event.kind === 'interrupted')).toHaveLength(1);
   } finally {
     await app?.close();
     recovered?.close();
