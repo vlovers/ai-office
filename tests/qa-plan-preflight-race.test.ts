@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { chmod, mkdtemp, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -109,6 +109,65 @@ it('passes an unchanged approved command to the supervisor after preflight', asy
       controller.signal,
       expect.objectContaining({ HOME: expect.any(String), CODEX_HOME: expect.any(String) }),
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 10000);
+
+it('rejects an executable permission change during native preflight', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-mode-')));
+  const executable = join(root, 'approved.sh');
+  const { started, release } = preflightGate();
+  try {
+    await writeFile(executable, '#!/bin/sh\\nexit 0\\n');
+    await chmod(executable, 0o700);
+    const plan = await qaPlan('approved', [executable], 2000);
+    const pending = runSandboxedQA(root, plan, new AbortController().signal);
+    await started;
+    await chmod(executable, 0o600);
+    release();
+
+    await expect(pending).rejects.toMatchObject({ statusCode: 409 });
+    expect(native.verification).not.toHaveBeenCalled();
+  } finally {
+    release();
+    await rm(root, { recursive: true, force: true });
+  }
+}, 10000);
+
+it('does not launch verification if cancellation arrives as native preflight finishes', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-finish-abort-')));
+  const controller = new AbortController();
+  try {
+    const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 2000);
+    native.preflight.mockImplementationOnce(async () => {
+      controller.abort();
+    });
+    await expect(runSandboxedQA(root, plan, controller.signal)).resolves.toEqual({
+      passed: false,
+      output: 'QA stopped before launch.',
+    });
+    expect(native.verification).not.toHaveBeenCalled();
+  } finally {
+    controller.abort();
+    await rm(root, { recursive: true, force: true });
+  }
+}, 10000);
+
+it('removes isolated QA home even when verification supervisor rejects', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-supervisor-error-')));
+  let home: string | undefined;
+  try {
+    const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 2000);
+    native.verification.mockImplementationOnce(async (...args: unknown[]) => {
+      home = (args[4] as { HOME: string }).HOME;
+      throw new Error('verification supervisor failed');
+    });
+    await expect(runSandboxedQA(root, plan, new AbortController().signal)).rejects.toThrow(
+      'verification supervisor failed',
+    );
+    expect(home).toBeDefined();
+    await expect(lstat(home!)).rejects.toMatchObject({ code: 'ENOENT' });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
