@@ -166,6 +166,10 @@ try {
   });
   assert.equal(alternate.statusCode, 201);
   const otherId = alternate.json().id;
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Workflows' })
+    .click();
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByLabel('Workflow', { exact: true }).locator('option')).toHaveCount(2);
   const operationsQueue = board.getByLabel('Workflow operations queue');
