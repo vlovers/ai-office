@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { chromium, expect, type APIResponse, type Page } from '@playwright/test';
+import { chromium, expect, type APIResponse, type Page, type Route } from '@playwright/test';
 import { Store } from '../src/server/store.js';
 import { WorkflowStore } from '../src/server/workflows.js';
 import { TaskManager } from '../src/server/manager.js';
@@ -578,6 +578,86 @@ if (process.argv.includes('--restart-server')) {
     await expect(dashboardAlert).toHaveCount(0, { timeout: 20000 });
     await expect(createWorkflow).toBeEnabled();
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
+
+    // A slow response from a previously selected Workflow must not replace a
+    // newer checkpoint or turn a healthy board into an error state.
+    const holdTimelineFailure = async (url: string, message: string) => {
+      let release!: () => void;
+      let held = false;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const handler = async (route: Route) => {
+        if (held) {
+          await route.continue();
+          return;
+        }
+        held = true;
+        await gate;
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: message }),
+        });
+      };
+      await activePage.route(url, handler);
+      await expect.poll(() => held, { timeout: 20000 }).toBe(true);
+      return { release, handler };
+    };
+
+    const staleSelectionMessage = 'Synthetic stale selection response';
+    const delayedSelection = await holdTimelineFailure(timelineUrl, staleSelectionMessage);
+    try {
+      await selector.selectOption(failed.workflowId);
+      await expect(board).toContainText('QA — failed');
+      const staleResponse = activePage.waitForResponse(
+        (response) => response.url() === timelineUrl && response.status() === 503,
+        { timeout: 20000 },
+      );
+      delayedSelection.release();
+      await staleResponse;
+      await expect(selector).toHaveValue(failed.workflowId);
+      await expect(board).toContainText('QA — failed');
+      await expect(board.getByRole('alert').filter({ hasText: staleSelectionMessage })).toHaveCount(
+        0,
+      );
+    } finally {
+      delayedSelection.release();
+      await activePage.unroute(timelineUrl, delayedSelection.handler);
+    }
+    await selector.selectOption(blocked.workflowId);
+    await expect(board).toContainText('QA — blocked');
+    await expect(createWorkflow).toBeEnabled();
+
+    // Pausing discards an in-flight poll, and resuming must obtain a new
+    // successful checkpoint. A late 503 from before the pause cannot revoke
+    // the newly refreshed operator controls.
+    const stalePauseMessage = 'Synthetic stale paused response';
+    const delayedPause = await holdTimelineFailure(timelineUrl, stalePauseMessage);
+    try {
+      await board.getByRole('button', { name: 'Pause live updates' }).click();
+      await expect(createWorkflow).toBeDisabled();
+      const freshResponse = activePage.waitForResponse(
+        (response) => response.url() === timelineUrl && response.status() === 200,
+        { timeout: 20000 },
+      );
+      await board.getByRole('button', { name: 'Resume live updates' }).click();
+      await freshResponse;
+      await expect(createWorkflow).toBeEnabled();
+      const staleResponse = activePage.waitForResponse(
+        (response) => response.url() === timelineUrl && response.status() === 503,
+        { timeout: 20000 },
+      );
+      delayedPause.release();
+      await staleResponse;
+      await expect(board.getByRole('alert').filter({ hasText: stalePauseMessage })).toHaveCount(0);
+      await expect(createWorkflow).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    } finally {
+      delayedPause.release();
+      await activePage.unroute(timelineUrl, delayedPause.handler);
+    }
     await assertNoUnexpectedWorkflowAlerts();
 
     // A fresh Dashboard can invalidate a form selection while the old ID
