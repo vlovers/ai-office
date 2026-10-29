@@ -19,6 +19,20 @@ it('removes transient HTTP listener callbacks after successful native probe bind
   }
 });
 
+it('cleans native probe listeners when listen throws synchronously', async () => {
+  const server = createServer();
+  try {
+    await listenProbeServer(server);
+    const errors = server.listenerCount('error');
+    const listening = server.listenerCount('listening');
+    await expect(listenProbeServer(server)).rejects.toThrow();
+    expect(server.listenerCount('error')).toBe(errors);
+    expect(server.listenerCount('listening')).toBe(listening);
+  } finally {
+    server.close();
+  }
+});
+
 const native = it.skipIf(
   process.platform !== 'darwin' && process.env.AI_OFFICE_NATIVE_TESTS !== '1',
 );
