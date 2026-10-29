@@ -40,9 +40,7 @@ esac
 `,
       );
       await chmod(fake, 0o700);
-      await expect(verifyNativeIsolation(fake)).rejects.toThrow(
-        'capability verification failed',
-      );
+      await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -50,7 +48,7 @@ esac
   30000,
 );
 native(
-  'checks independent native denial probes without serial timeout amplification',
+  'checks all independent native sandbox denial probes concurrently without serial timeout amplification',
   async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-parallel-')));
     try {
