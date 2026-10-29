@@ -4,6 +4,7 @@ import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/t
 import { AgentStudio } from './agent-studio.js';
 import { MainNavigation } from './main-navigation.js';
 import { PageHeading } from './page-heading.js';
+import { OfficePage, WorkspacePage } from './workspace-pages.js';
 import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
 import { destinationForSection, destinationFromHash, destinationHash, type Destination } from './destinations.js';
 import { WorkflowBoard } from './workflow-board.js';
@@ -530,7 +531,7 @@ function App() {
             </div>
           )}
           {page === 'office' && (
-          <section className="office-scene" aria-label="Shared Codex office">
+          <OfficePage><section className="office-scene" aria-label="Shared Codex office">
             <PixelOffice
               agents={officeAgents.map((slot) => ({
                 id: slot.id,
@@ -620,14 +621,14 @@ function App() {
                 Workflow status unavailable. Open workflow details to retry.
               </p>
             )}
-          </section>
+          </section></OfficePage>
           )}
           {page === 'tasks' && (
             <TaskPanelTabs active={taskPanel} onChange={(panel) => { setTaskPanel(panel); if (panel === 'new') showSection('compose'); else showSection('task-workspace'); }} />
           )}
           {page !== 'office' && (
-          <div className="mission-grid" aria-label="Workspace tools">
-            <div className="mission-board">
+          <WorkspacePage page={page} board={<>
+
               <div className="stats" aria-label="Workspace statistics">
                 <div>
                   <span>CODEX AGENTS</span>
@@ -1225,8 +1226,8 @@ function App() {
                   keeping or rejecting; integration is manual.
                 </p>
               </section>
-            </div>
-            <aside className="inspector" aria-label="Agent and connection inspector">
+            </>} inspector={<>
+
               <section className="panel agent-panel" id="agent" tabIndex={-1}>
                 <div className="panel-heading">
                   <h2>Agents / {agent?.name ?? 'Codex'}</h2>
@@ -1401,8 +1402,7 @@ function App() {
                 </form>
               </section>
               </div>
-            </aside>
-          </div>
+            </>} />
           )}
           <footer>
             <span>
