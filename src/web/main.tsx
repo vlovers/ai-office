@@ -69,7 +69,7 @@ function App() {
     }
   }, [motion]);
   const [view, setView] = useState<'mission' | 'focus'>('mission');
-  const [page, setPage] = useState<'office' | 'tasks' | 'workflows' | 'agents' | 'settings'>('office');
+  const [page, setPage] = useState<'office' | 'tasks' | 'workflows' | 'agents' | 'settings'>(() => window.location.hash.startsWith('#task/') ? 'tasks' : 'office');
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
   const [historyOrder, setHistoryOrder] = useState<TaskHistoryOrder>('attention');
@@ -206,7 +206,8 @@ function App() {
     if (selected !== target.id) setSelected(target.id);
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
     if (view !== 'focus') setView('focus');
-  }, [navigation, dashboard, selected, selectedAgent, view]);
+    if (page !== 'tasks') setPage('tasks');
+  }, [navigation, dashboard, selected, selectedAgent, view, page]);
   useEffect(() => {
     if (!navigation || !dashboard || view !== 'focus' || selected !== navigation.taskId) return;
     const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
@@ -239,6 +240,7 @@ function App() {
     setSelectedAgent(item.agentId);
     setResumeSessionId('');
     setView('focus');
+    setPage('tasks');
     const hash = encodeTaskNavigation(target);
     if (window.location.hash === hash) {
       lastNavigation.current = '';
@@ -453,7 +455,7 @@ function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">AI OFFICE / WORKSPACE</div>
+              <div className="eyebrow">AI OFFICE / {page.toUpperCase()}</div>
               <h1>
                 {page === 'office' ? (view === 'focus' ? 'Focus mode' : 'Office overview') : ({ tasks: 'Tasks', workflows: 'Workflows', agents: 'Agents', settings: 'Settings' } as const)[page]}
                 <span>_</span>
