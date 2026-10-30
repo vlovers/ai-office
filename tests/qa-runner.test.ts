@@ -463,7 +463,7 @@ case "$*" in
   *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *) exit 7 ;;
 esac
-  `,
+`,
       );
       await chmod(fake, 0o700);
       await expect(verifyNativeIsolation(fake)).resolves.toBeUndefined();
