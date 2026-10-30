@@ -888,11 +888,9 @@ if (process.argv.includes('--restart-server')) {
       assert.equal(externalCancelled.version, expectedExternalVersion);
       await expect.poll(() => heldNewTimeline, { timeout: 20000 }).toBe(true);
       await expect(
-        board
-          .getByRole('list', { name: 'Workflow operations queue' })
-          .getByRole('button', {
-            name: new RegExp('^' + blocked.workflowId.slice(0, 8) + '.*v' + expectedExternalVersion),
-          }),
+        board.getByRole('list', { name: 'Workflow operations queue' }).getByRole('button', {
+          name: new RegExp('^' + blocked.workflowId.slice(0, 8) + '.*v' + expectedExternalVersion),
+        }),
       ).toBeVisible({ timeout: 20000 });
       await expect(
         confirmation.getByRole('alert').filter({ hasText: 'The workflow changed' }),
