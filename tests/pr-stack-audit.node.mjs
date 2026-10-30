@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  assertStableCIEvidence,
   auditStack,
   collectStack,
   fetchAttemptJobs,
@@ -218,6 +219,14 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
+  assert.equal(
+    requested.filter((path) => path.endsWith('/actions/runs')).length,
+    STACK.length * 2,
+  );
+  assert.equal(
+    requested.filter((path) => /\/attempts\/\d+\/jobs$/.test(path)).length,
+    2,
+  );
 });
 
 test('newer failed CI overrides older green CI regardless of API array order', () => {
@@ -491,4 +500,50 @@ test('collector rejects a main push while evidence is being collected', async ()
     /main HEAD changed during stack audit/,
   );
   assert.equal(mainReads, 2);
+});
+
+test('CI recheck rejects a new failed run after the initial green snapshot', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.runs);
+  const original = refreshed[107][0];
+  refreshed[107].push({ ...original, id: original.id + 10000, conclusion: 'failure' });
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+    /PR #107 CI changed during stack audit/,
+  );
+});
+
+test('CI recheck rejects a rerun of the same run ID with a new attempt', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.runs);
+  refreshed[116][0].run_attempt = 2;
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+    /PR #116 CI changed during stack audit/,
+  );
+});
+
+test('CI recheck rejects a native security job that fails after the first read', () => {
+  const snapshot = fixture();
+  const refreshedJobs = structuredClone(snapshot.jobs);
+  refreshedJobs[1].conclusion = 'failure';
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, snapshot.runs, snapshot.jobs, refreshedJobs),
+    /candidate CI jobs changed during stack audit/,
+  );
+});
+
+test('CI recheck ignores API ordering changes without losing run or job evidence', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.runs);
+  refreshed[107].push({ ...refreshed[107][0], id: 5000 });
+  snapshot.runs[107].push({ ...snapshot.runs[107][0], id: 5000 });
+  assert.doesNotThrow(() =>
+    assertStableCIEvidence(
+      snapshot.runs,
+      { ...refreshed, 107: refreshed[107].reverse() },
+      snapshot.jobs,
+      [...snapshot.jobs].reverse(),
+    ),
+  );
 });

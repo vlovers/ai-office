@@ -85,8 +85,10 @@ could discard the parent while leaving the PR metadata unchanged. Every edge
 must have `behind_by=0`, a valid ahead/identical status, and both its
 `base_commit` and `merge_base_commit` equal to the expected parent SHA.
 
-After collecting CI, ancestry and blob evidence, the audit re-reads `main`
+After collecting CI, ancestry and blob evidence, the audit re-reads all 12 PRs'
+workflow runs and the candidate's exact-attempt jobs, then re-reads `main`
 and all 12 pinned PRs. A changed head, base, Draft state or main commit aborts
 the audit rather than reporting an outdated snapshot as current. Offline
-regressions cover missing/diverged edges, forged comparison metadata and a
-concurrent main push. This is a read-only safety gate, not merge authorization.
+regressions cover missing/diverged edges, forged comparison metadata,
+new failed CI runs, rerun attempts, changed native jobs and a concurrent main
+push. This is a read-only safety gate, not merge authorization.

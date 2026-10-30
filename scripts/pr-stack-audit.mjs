@@ -105,6 +105,48 @@ export async function fetchAttemptJobs(get, root, run) {
   );
 }
 
+// GitHub Actions can start a new run or rerun the same ID while the audit
+// reads unrelated PRs. Recheck relevant CI fields before trusting a snapshot.
+export function assertStableCIEvidence(initialRuns, refreshedRuns, initialJobs, refreshedJobs) {
+  const runFingerprint = (entries) =>
+    JSON.stringify(
+      (entries ?? [])
+        .map((run) => ({
+          id: run.id,
+          run_attempt: run.run_attempt,
+          name: run.name,
+          event: run.event,
+          head_sha: run.head_sha,
+          status: run.status,
+          conclusion: run.conclusion,
+          pull_requests: (run.pull_requests ?? []).map((pr) => pr.number).sort((a, b) => a - b),
+        }))
+        .sort((a, b) => a.id - b.id),
+    );
+  const jobFingerprint = (entries) =>
+    JSON.stringify(
+      (entries ?? [])
+        .map((job) => ({
+          id: job.id,
+          name: job.name,
+          run_id: job.run_id,
+          run_attempt: job.run_attempt,
+          status: job.status,
+          conclusion: job.conclusion,
+        }))
+        .sort((a, b) => a.id - b.id),
+    );
+
+  for (const { number } of STACK) {
+    if (runFingerprint(initialRuns[number]) !== runFingerprint(refreshedRuns[number])) {
+      throw new Error(`GitHub PR #${number} CI changed during stack audit`);
+    }
+  }
+  if (jobFingerprint(initialJobs) !== jobFingerprint(refreshedJobs)) {
+    throw new Error('GitHub candidate CI jobs changed during stack audit');
+  }
+}
+
 // Pure, deterministic evaluation: tests never need a token or network access.
 export function auditStack(snapshot) {
   const issues = [];
@@ -287,6 +329,20 @@ export async function collectStack({
       blobs[path] = { source: source.sha, candidate: candidate.sha };
     }),
   );
+
+  // A new failed run or a rerun of the candidate's native job may appear
+  // while ancestry is checked. Re-read CI before the final branch snapshot.
+  const refreshedRuns = {};
+  await Promise.all(
+    STACK.map(async ({ number }) => {
+      refreshedRuns[number] = await fetchWorkflowRuns(get, root, prs[number].head.sha);
+    }),
+  );
+  const refreshedCandidate = selectValidationRun(refreshedRuns[116], 116);
+  const refreshedJobs = refreshedCandidate
+    ? await fetchAttemptJobs(get, root, refreshedCandidate)
+    : [];
+  assertStableCIEvidence(runs, refreshedRuns, jobs, refreshedJobs);
 
   // Ref reads and comparisons are not atomic across GitHub API requests.
   // A concurrent push must invalidate the snapshot rather than letting a
