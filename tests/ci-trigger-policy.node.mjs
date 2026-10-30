@@ -239,7 +239,10 @@ test('rejects unreviewed network commands and extra allowlisted action steps', (
 
 test('rejects workflow-wide environment and default execution overrides', () => {
   for (const injected of [
-    workflow.replace('permissions:\n', 'env:\n  NODE_OPTIONS: --import ./untrusted.mjs\npermissions:\n'),
+    workflow.replace(
+      'permissions:\n',
+      'env:\n  NODE_OPTIONS: --import ./untrusted.mjs\npermissions:\n',
+    ),
     workflow.replace('permissions:\n', 'defaults:\n  run:\n    shell: bash\npermissions:\n'),
   ]) {
     assert.match(issues(injected).join(' '), /unreviewed top-level/);
@@ -296,10 +299,7 @@ test('rejects unreviewed action inputs and extra artifact upload settings', () =
 test('rejects altered diagnostic execution and workflow dispatch inputs', () => {
   assert.match(
     issues(
-      workflow.replace(
-        "if: failure() && steps.formatting.outcome == 'failure'",
-        'if: always()',
-      ),
+      workflow.replace("if: failure() && steps.formatting.outcome == 'failure'", 'if: always()'),
     ).join(' '),
     /unreviewed validation step/,
   );

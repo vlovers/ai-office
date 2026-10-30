@@ -78,16 +78,8 @@ function jobSteps(job, fail) {
 // Pin the complete executable CI surface: extra steps, shell/env/defaults changes,
 // artifact paths and action inputs require an explicit policy review.
 const approvedValidationStructure = {
-  top: [
-    'name: AI Office validation',
-    'on:',
-    'permissions:',
-    'concurrency:',
-    'jobs:',
-  ],
-  push: [
-    '    branches: [main]',
-  ],
+  top: ['name: AI Office validation', 'on:', 'permissions:', 'concurrency:', 'jobs:'],
+  push: ['    branches: [main]'],
   concurrency: [
     '  group: ai-office-validation-${{ github.workflow }}-${{ github.ref }}',
     '  cancel-in-progress: true',
@@ -102,7 +94,7 @@ const approvedValidationStructure = {
       ],
       blocks: [
         '- name: Checkout\nuses: actions/checkout@v7',
-        '- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: \'24\'\n  cache: npm',
+        "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
         '- name: Install dependencies\nrun: npm ci',
         '- name: TypeScript\nrun: npm run typecheck',
         '- name: Delivery security lint\nrun: npm run lint',
@@ -112,7 +104,7 @@ const approvedValidationStructure = {
         '- name: HTTP/SSE smoke tests\nrun: npm run test:smoke',
         '- name: Production build\nrun: npm run build',
         '- name: Formatting\nid: formatting\nrun: npm run format:check',
-        '- name: Show formatting diff on failure\nif: failure() && steps.formatting.outcome == \'failure\'\nrun: |\n  npx prettier --write . > /dev/null\n  git diff -- .',
+        "- name: Show formatting diff on failure\nif: failure() && steps.formatting.outcome == 'failure'\nrun: |\n  npx prettier --write . > /dev/null\n  git diff -- .",
         '- name: Install Chromium and browser dependencies\nrun: npx playwright install --with-deps chromium',
         '- name: Browser smoke (deterministic fixtures)\nrun: npm run test:browser',
         '- name: Office V4 scene and state browser smoke (no model calls)\nrun: npm run test:browser:office\nenv:\n  AI_OFFICE_BROWSER_ARTIFACTS: ${{ runner.temp }}/office-v4',
@@ -130,7 +122,7 @@ const approvedValidationStructure = {
       ],
       blocks: [
         '- name: Checkout\nuses: actions/checkout@v7',
-        '- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: \'24\'\n  cache: npm',
+        "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
         '- name: Install dependencies\nrun: npm ci',
         '- name: Native read-only and isolated-write policy\nrun: npm run test:sandbox',
         '- name: Reviewer, QA, workflow recovery and security integration (native sandbox, no inference)\nrun: npm run test:workflow:native',
