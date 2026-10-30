@@ -105,6 +105,48 @@ export async function fetchAttemptJobs(get, root, run) {
   );
 }
 
+// GitHub Actions can start a new run or rerun the same ID while the audit
+// reads unrelated PRs. Recheck relevant CI fields before trusting a snapshot.
+export function assertStableCIEvidence(initialRuns, refreshedRuns, initialJobs, refreshedJobs) {
+  const runFingerprint = (entries) =>
+    JSON.stringify(
+      (entries ?? [])
+        .map((run) => ({
+          id: run.id,
+          run_attempt: run.run_attempt,
+          name: run.name,
+          event: run.event,
+          head_sha: run.head_sha,
+          status: run.status,
+          conclusion: run.conclusion,
+          pull_requests: (run.pull_requests ?? []).map((pr) => pr.number).sort((a, b) => a - b),
+        }))
+        .sort((a, b) => a.id - b.id),
+    );
+  const jobFingerprint = (entries) =>
+    JSON.stringify(
+      (entries ?? [])
+        .map((job) => ({
+          id: job.id,
+          name: job.name,
+          run_id: job.run_id,
+          run_attempt: job.run_attempt,
+          status: job.status,
+          conclusion: job.conclusion,
+        }))
+        .sort((a, b) => a.id - b.id),
+    );
+
+  for (const { number } of STACK) {
+    if (runFingerprint(initialRuns[number]) !== runFingerprint(refreshedRuns[number])) {
+      throw new Error(`GitHub PR #${number} CI changed during stack audit`);
+    }
+  }
+  if (jobFingerprint(initialJobs) !== jobFingerprint(refreshedJobs)) {
+    throw new Error('GitHub candidate CI jobs changed during stack audit');
+  }
+}
+
 // Pure, deterministic evaluation: tests never need a token or network access.
 export function auditStack(snapshot) {
   const issues = [];
@@ -125,6 +167,23 @@ export function auditStack(snapshot) {
       issue('missing-parent', `PR #${number} has no verified base`);
     } else if (pr.base?.ref !== parent.ref || pr.base?.sha !== parent.sha) {
       issue('base-drift', `PR #${number} base does not match ${base ?? 'main'} HEAD`);
+    }
+
+    // GitHub's base ref and base SHA are metadata, not proof that the
+    // proposed head actually contains that parent commit. A force-push can
+    // leave both fields looking correct while silently dropping changes.
+    if (parent?.sha) {
+      const edge = comparisons.edges?.[number];
+      if (!edge) {
+        issue('missing-edge-evidence', `PR #${number} has no verified ancestry comparison`);
+      } else if (
+        edge.behind_by !== 0 ||
+        !['ahead', 'identical'].includes(edge.status) ||
+        edge.base_commit?.sha !== parent.sha ||
+        edge.merge_base_commit?.sha !== parent.sha
+      ) {
+        issue('lost-stack-parent', `PR #${number} does not contain its declared base HEAD`);
+      }
     }
 
     const latest = selectValidationRun(runs[number], number);
@@ -242,7 +301,16 @@ export async function collectStack({
 
   const comparisons = {
     main: await get(`${root}/compare/${main.commit.sha}...${prs[116].head.sha}`),
+    edges: {},
   };
+  await Promise.all(
+    STACK.map(async ({ number, base }) => {
+      const parentSha = base === null ? main.commit.sha : prs[base].head.sha;
+      comparisons.edges[number] = await get(
+        `${root}/compare/${parentSha}...${prs[number].head.sha}`,
+      );
+    }),
+  );
   await Promise.all(
     REQUIRED_ANCESTORS.map(async (number) => {
       comparisons[number] = await get(
@@ -261,6 +329,44 @@ export async function collectStack({
       blobs[path] = { source: source.sha, candidate: candidate.sha };
     }),
   );
+
+  // A new failed run or a rerun of the candidate's native job may appear
+  // while ancestry is checked. Re-read CI before the final branch snapshot.
+  const refreshedRuns = {};
+  await Promise.all(
+    STACK.map(async ({ number }) => {
+      refreshedRuns[number] = await fetchWorkflowRuns(get, root, prs[number].head.sha);
+    }),
+  );
+  const refreshedCandidate = selectValidationRun(refreshedRuns[116], 116);
+  const refreshedJobs = refreshedCandidate
+    ? await fetchAttemptJobs(get, root, refreshedCandidate)
+    : [];
+  assertStableCIEvidence(runs, refreshedRuns, jobs, refreshedJobs);
+
+  // Ref reads and comparisons are not atomic across GitHub API requests.
+  // A concurrent push must invalidate the snapshot rather than letting a
+  // formerly green commit masquerade as the current integration candidate.
+  const [finalMain, ...finalPrs] = await Promise.all([
+    get(`${root}/branches/main`),
+    ...STACK.map(({ number }) => get(`${root}/pulls/${number}`)),
+  ]);
+  if (finalMain.commit?.sha !== main.commit.sha) {
+    throw new Error('GitHub main HEAD changed during stack audit');
+  }
+  for (const [index, { number }] of STACK.entries()) {
+    const before = prs[number];
+    const after = finalPrs[index];
+    if (
+      before.head?.sha !== after.head?.sha ||
+      before.base?.sha !== after.base?.sha ||
+      before.base?.ref !== after.base?.ref ||
+      before.state !== after.state ||
+      before.draft !== after.draft
+    ) {
+      throw new Error(`GitHub PR #${number} changed during stack audit`);
+    }
+  }
 
   return { mainSha: main.commit.sha, prs, runs, jobs, comparisons, blobs };
 }
