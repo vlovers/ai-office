@@ -252,7 +252,7 @@ esac
 );
 
 fakeNative(
-  'interrupts all four concurrent native denial probes on cancellation',
+  'interrupts concurrent native denial probes on cancellation',
   async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-denial-abort-')));
     const controller = new AbortController();
@@ -447,13 +447,15 @@ esac
   15000,
 );
 
-fakeNative('accepts complete denials of nested metadata and symlink reads', async () => {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-nested-deny-')));
-  try {
-    const fake = join(root, 'fake-sandbox.sh');
-    await writeFile(
-      fake,
-      `#!/bin/sh
+fakeNative(
+  'accepts complete denials of nested metadata and symlink reads',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-nested-deny-')));
+    try {
+      const fake = join(root, 'fake-sandbox.sh');
+      await writeFile(
+        fake,
+        `#!/bin/sh
 while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 9
 shift
@@ -461,14 +463,16 @@ case "$*" in
   *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *) exit 7 ;;
 esac
-`,
-    );
-    await chmod(fake, 0o700);
-    await expect(verifyNativeIsolation(fake)).resolves.toBeUndefined();
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-}, 15000);
+  `,
+      );
+      await chmod(fake, 0o700);
+      await expect(verifyNativeIsolation(fake)).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  15000,
+);
 
 for (const [label, match] of [
   ['nested Git metadata', '*nested/.git/config*'],
@@ -478,9 +482,7 @@ for (const [label, match] of [
   fakeNative(
     `rejects masked forbidden reads of ${label} despite a nonzero sandbox exit`,
     async () => {
-      const root = await realpath(
-        await mkdtemp(join(tmpdir(), 'ai-office-probe-nested-leak-')),
-      );
+      const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-nested-leak-')));
       try {
         const fake = join(root, 'fake-sandbox.sh');
         await writeFile(

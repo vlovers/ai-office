@@ -103,4 +103,3 @@ Each forbidden read uses a fresh canary. A nonzero sandbox exit that prints a
 canary is a failure, not evidence of isolation. All denial supervisors must
 complete normally before QA is allowed to launch. The additional probes use
 only temporary synthetic fixtures and never invoke a model provider.
-

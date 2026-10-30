@@ -136,7 +136,7 @@ export async function verifyNativeIsolation(
       throw new Error('Read probe failed.');
     // These independent denial probes share no writable target. Run them
     // concurrently so one slow native sandbox process cannot multiply the
-    // preflight latency by four; every result and side effect is still checked.
+    // preflight latency as probe count grows; every result and side effect is still checked.
     const forbidden = [
       ['/bin/cat', join(root, 'outside.txt')],
       ['/bin/cat', join(directory, '.env')],
