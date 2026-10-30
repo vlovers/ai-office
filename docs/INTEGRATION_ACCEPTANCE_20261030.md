@@ -1,47 +1,66 @@
-# Cross-stack workflow and QA security integration — 2026-10-30
+# Combined workflow, QA and browser integration — 2026-10-30
 
-This draft integration branch combines two independently validated but previously
-disjoint histories. It is **not** a production release or a merge to `main`.
+This document supersedes the earlier #113-only acceptance notes. It describes
+the **Draft PR #116 candidate** at
+`c2da6f3e652b805305ac26b7d242a2e1bbb43f05`. Neither this evidence nor
+a green CI authorizes a merge, deployment or production write.
 
-## Source histories
+## Dependency graph and actual inclusion
 
-- Workflow crash/recovery and operator gates: PR #95 → #96 → #107 → #108
-  (head `42982df38b89d9e6cd108a6ed085c18f86d2ade9`).
-- Native QA preflight, process supervision, denial attestation and approved
-  executable pinning: PR #97 → #103 → #110
-  (head `6dc3fc270d122506e31cfc5195ef02bdbe0259d7`).
-- UI stale-response and checkpoint confirmation changes: PR #111 → #112 are
-  **not included** in this branch. Their reconciliation with #96 remains a
-  separate required integration step.
+- Workflow recovery and replay prevention: #95 → #96 → #107 → #108.
+- Native QA supervision and fail-closed security: #97 → #103 → #110.
+- Browser stale responses and checkpoint confirmations: #95 → #111 → #112.
+- Combined server integration: #108 + #110 → #113.
+- Final browser/server integration: #113 + #112 → #116.
 
-## Conflict resolution
+GitHub commit comparisons on 2026-10-30 confirmed that the exact heads of
+#108 (`42982df`), #110 (`6dc3fc2`), #112 (`629981d`) and #113
+(`737db92`) are ancestors of #116, with `behind_by=0`.
 
-- `tests/verification.test.ts`: retain the QA supervisor's explicit
-  `incomplete` attestation tests **and** the workflow branch's delayed
-  descendant-write cancellation/timeout tests. The combined tests also assert
-  that interrupted verification is reported as incomplete.
-- `.github/workflows/validation.yml`: retain the workflow branch's
-  `main`, `test/**` and `fix/**` pull-request triggers. Both source
-  branches used the same validation jobs; the QA branch only lacked the
-  explanatory comment.
-- All other QA changes are copied byte-for-byte from PR #110's head.
-  Workflow, UI and recovery files remain byte-for-byte from PR #108's head.
+**Important non-ancestry exception:** #109 is not an ancestor of #116. Its
+approved-executable implementation was copied into #110. The blob SHA of
+`src/server/qa-runner.ts` is identical in #109 and #116
+(`fa71350ba52e259b3aab73a4f9da9f30dc4c1a83`), as is the race regression
+`tests/qa-plan-preflight-race.test.ts`
+(`d93b638de7b9da855055eb57577ddd0e15fdd437`).
+`tests/qa-runner.test.ts` is **not** byte-identical; the combined security
+branch contains additional tests. These content pins complement, rather than
+replace, independent review of the integration.
 
-## Required acceptance before any merge
+## Verified CI evidence
 
-1. Run TypeScript, security lint, unit/integration tests, smoke tests,
-   production build and Prettier on the **combined tree**.
-2. Run browser workflow/restart tests with deterministic local fixtures.
-3. Run native macOS sandbox, QA approval, process supervision and workflow
-   recovery integration without model-provider calls.
-4. Confirm the exact integration HEAD is green in **both** CI jobs.
-5. Independently review process-group lifecycle, incomplete attestation,
-   approval digest revalidation and operator replay prevention.
-6. Reconcile the separate UI checkpoint/stale-polling branch (#112) before
-   proposing any release integration.
+The GitHub Actions run
+[40990498627](https://github.com/vlovers/ai-office/actions/runs/40990498627)
+completed successfully for exact #116 HEAD `c2da6f3e`. Both the Linux
+`TypeScript, tests, smoke, build and formatting` and macOS
+`Native Codex filesystem policy (no inference)` jobs completed successfully.
+The exact heads of #95, #96, #97, #103, #107, #108, #109, #110, #111, #112
+and #113 also had completed successful validation runs when checked on
+2026-10-30. This is historical evidence, not a promise about future commits.
 
-## Safety
+## Reproducible read-only stack audit
 
-No real AI provider, deployment, production write or external project mutation
-is required. The regression tests use temporary directories, local processes,
-synthetic commands and temporary SQLite databases.
+Run `node --test tests/pr-stack-audit.node.mjs` to exercise the **offline**
+regressions for branch drift, stale CI, missing native jobs, lost merge ancestry,
+and changed copied security files. The CI workflow runs these tests without
+network, provider credentials, or production access.
+
+Run `node scripts/pr-stack-audit.mjs vlovers/ai-office` to query GitHub's
+public read-only API for the current branch graph, CI evidence, exact source
+ancestry and copied security file SHA checks. An optional `GITHUB_TOKEN`
+increases API rate limits; the script never performs a write. The command
+returns nonzero when evidence is missing, pending, stale or contradictory.
+GitHub API failures are blockers, **not** successful validation. This tool
+checks the known stack; it does not discover every future PR or replace a
+human code review.
+
+## Outstanding release gates
+
+1. Obtain an independent security review of process groups, supervisor IPC,
+   native sandbox failure-close, QA executable identity and approval gates.
+2. Review conflicts and source changes made after the pinned candidate heads.
+   If any branch advances, rerun the audit and all candidate CI jobs.
+3. Confirm rollback/backup, deployment and production security separately.
+   Synthetic tests intentionally never invoke real model providers.
+4. Do not merge or deploy from this integration Draft without explicit
+   authorization.
