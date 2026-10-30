@@ -200,12 +200,12 @@ export function WorkflowBoard({
   // confirmation even before its timeline request has completed.
   const staleAction = Boolean(
     action &&
-      (selected !== action.id ||
-        !chosen ||
-        chosen.version !== action.version ||
-        !timeline ||
-        action.id !== timeline.id ||
-        action.version !== timeline.version),
+    (selected !== action.id ||
+      !chosen ||
+      chosen.version !== action.version ||
+      !timeline ||
+      action.id !== timeline.id ||
+      action.version !== timeline.version),
   );
   // Pausing polling is for inspection only, never permission to act on a stale snapshot.
   // Resume requires a new successful refresh before operator actions are enabled.
@@ -228,7 +228,8 @@ export function WorkflowBoard({
   const selectedReviewer = profiles.some((profile) => profile.id === reviewer);
   const selectedQA = !qa || profiles.some((profile) => profile.id === qa);
   async function perform() {
-    if (!action || !confirmed || staleAction || loading || paused || refreshRequired || error) return;
+    if (!action || !confirmed || staleAction || loading || paused || refreshRequired || error)
+      return;
     const body: Record<string, unknown> = { version: action.version, confirmed: true };
     let endpoint = action.name;
     if (action.name === 'bind-coder-task') {
@@ -716,7 +717,8 @@ export function WorkflowBoard({
             {error && <p role="alert">{error}</p>}
             {staleAction && (
               <p role="alert">
-                The workflow changed or another workflow was selected. Close this dialog and inspect the current checkpoint.
+                The workflow changed or another workflow was selected. Close this dialog and inspect
+                the current checkpoint.
               </p>
             )}
             <div className="button-row">
