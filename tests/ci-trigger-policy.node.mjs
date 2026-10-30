@@ -3,7 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { validateValidationWorkflow } from '../scripts/ci-trigger-policy.mjs';
 
-const workflow = await readFile(new URL('../.github/workflows/validation.yml', import.meta.url), 'utf8');
+const workflow = await readFile(
+  new URL('../.github/workflows/validation.yml', import.meta.url),
+  'utf8',
+);
 const issues = (text) => validateValidationWorkflow(text);
 
 test('current CI covers all stacked PR base branches without privileged triggers', () => {
@@ -20,7 +23,10 @@ test('rejects a branch filter that suppresses security and future stacked PR che
 
 test('rejects path filters and restricted pull request event types', () => {
   for (const filter of ['paths: [src/**]', 'paths-ignore: [docs/**]', 'types: [opened]']) {
-    const restricted = workflow.replace('  pull_request:\n', '  pull_request:\n    ' + filter + '\n');
+    const restricted = workflow.replace(
+      '  pull_request:\n',
+      '  pull_request:\n    ' + filter + '\n',
+    );
     assert.match(issues(restricted).join(' '), /default activity types/);
   }
 });
@@ -43,7 +49,10 @@ test('rejects missing native security, browser recovery, or offline audit checks
     'npm run test:browser:workflow',
     'node --test tests/pr-stack-audit.node.mjs',
   ]) {
-    assert.match(issues(workflow.replace(step, 'echo omitted')).join(' '), /missing validation step/);
+    assert.match(
+      issues(workflow.replace(step, 'echo omitted')).join(' '),
+      /missing validation step/,
+    );
   }
 });
 
@@ -52,5 +61,8 @@ test('rejects accidental real provider test execution', () => {
 });
 
 test('rejects workflows without a pull_request event', () => {
-  assert.match(issues(workflow.replace('  pull_request:', '  manual_only:')).join(' '), /missing pull_request/);
+  assert.match(
+    issues(workflow.replace('  pull_request:', '  manual_only:')).join(' '),
+    /missing pull_request/,
+  );
 });
