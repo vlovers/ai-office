@@ -909,8 +909,15 @@ if (process.argv.includes('--restart-server')) {
       });
     });
     try {
-      await board.getByRole('button', { name: 'Refresh workflow' }).click();
-      await oldPauseStarted;
+      // Use a background poll: a manually held Refresh workflow keeps its
+      // loading flag true until the old request resolves, independently of
+      // the newer resumed checkpoint.
+      await Promise.race([
+        oldPauseStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Stale paused poll never started')), 15000),
+        ),
+      ]);
       await board.getByRole('button', { name: 'Pause live updates' }).click();
       await expect(createWorkflow).toBeDisabled();
       const freshAfterResume = page.waitForResponse(
