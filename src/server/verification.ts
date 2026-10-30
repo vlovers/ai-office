@@ -12,6 +12,9 @@ export interface VerificationResult {
 function isAttestedResult(value: unknown): value is VerificationResult {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
+  // Unexpected fields are not part of the worker attestation protocol.
+  if (Object.keys(candidate).some((key) => !['passed', 'output', 'incomplete'].includes(key)))
+    return false;
   return (
     typeof candidate.passed === 'boolean' &&
     typeof candidate.output === 'string' &&
@@ -51,9 +54,10 @@ export async function runVerification(
     let startupError = false;
     let protocolError = false;
     let interrupted = false;
+    let watchdogExpired = false;
     let cleanupError: unknown;
     child.on('message', (value: unknown) => {
-      if (interrupted || protocolError) return;
+      if (interrupted || protocolError || watchdogExpired) return;
       // A malformed or repeated message must never be coerced into a denial.
       // It can otherwise crash the backend (null) or overwrite a real result.
       if (result || !isAttestedResult(value)) {
@@ -76,6 +80,8 @@ export async function runVerification(
     });
     // Backstop for worker startup/IPC failures. The worker also owns its own bound.
     const timer = setTimeout(() => {
+      // A late supervisor result cannot attest success after forced termination.
+      watchdogExpired = true;
       try {
         if (child.pid) killProcessGroup(child.pid);
       } catch (error) {
@@ -108,6 +114,10 @@ export async function runVerification(
       }
       if (cleanupError) {
         reject(cleanupError);
+        return;
+      }
+      if (watchdogExpired) {
+        reject(new AppError(409, 'Verification supervisor exceeded its shutdown deadline.'));
         return;
       }
       if (protocolError) {

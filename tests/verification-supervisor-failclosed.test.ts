@@ -54,6 +54,7 @@ it.each([
   ['invalid incomplete flag', { passed: false, output: '', incomplete: 'false' }],
   ['contradictory success', { passed: true, output: '', incomplete: true }],
   ['oversized output', { passed: false, output: 'x'.repeat(128_101) }],
+  ['unexpected attestation field', { passed: true, output: '', verified: true }],
 ])('fails closed on %s from the supervisor', async (_label, payload) => {
   const worker = Object.assign(new EventEmitter(), {
     pid: 525252,
@@ -87,4 +88,34 @@ it('rejects a repeated IPC result rather than letting it overwrite an attested d
   await expect(pending).rejects.toThrow('Verification supervisor sent an invalid result');
   expect(killProcessGroup).toHaveBeenCalledWith(525253);
   expect(reapProcessGroup).toHaveBeenCalledWith(525253);
+});
+
+// A worker may emit a plausible result and then hang instead of closing.
+// The backend watchdog must not turn a forced SIGKILL into an attested success
+// (or an attested native sandbox denial).
+it.each([
+  ['success', { passed: true, output: 'ok' }],
+  ['denial', { passed: false, output: 'Permission denied' }],
+  ['incomplete result', { passed: false, output: 'timeout', incomplete: true }],
+])('rejects a %s reported before supervisor watchdog termination', async (_label, payload) => {
+  vi.useFakeTimers();
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525254,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+  vi.mocked(reapProcessGroup).mockClear();
+  try {
+    const pending = runVerification(['/bin/true'], '/tmp', 1000);
+    worker.emit('message', payload);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(killProcessGroup).toHaveBeenCalledWith(525254);
+    worker.emit('message', { passed: true, output: 'late success' });
+    worker.emit('close', null, 'SIGKILL');
+    await expect(pending).rejects.toThrow('Verification supervisor exceeded its shutdown deadline');
+    expect(reapProcessGroup).toHaveBeenCalledWith(525254);
+  } finally {
+    vi.useRealTimers();
+  }
 });
