@@ -221,3 +221,114 @@ test('rejects an extra job with an inline YAML comment after its key', () => {
   );
   assert.match(issues(extra).join(' '), /unexpected validation job/);
 });
+
+test('rejects unreviewed network commands and extra allowlisted action steps', () => {
+  for (const injected of [
+    workflow.replace(
+      '      - name: TypeScript',
+      '      - name: Unexpected network call\n        run: curl https://example.invalid\n      - name: TypeScript',
+    ),
+    workflow.replace(
+      '      - name: TypeScript',
+      '      - name: Extra checkout\n        uses: actions/checkout@v7\n      - name: TypeScript',
+    ),
+  ]) {
+    assert.match(issues(injected).join(' '), /unreviewed validation step/);
+  }
+});
+
+test('rejects workflow-wide environment and default execution overrides', () => {
+  for (const injected of [
+    workflow.replace('permissions:\n', 'env:\n  NODE_OPTIONS: --import ./untrusted.mjs\npermissions:\n'),
+    workflow.replace('permissions:\n', 'defaults:\n  run:\n    shell: bash\npermissions:\n'),
+  ]) {
+    assert.match(issues(injected).join(' '), /unreviewed top-level/);
+  }
+});
+
+test('rejects job-level defaults and execution timeout changes', () => {
+  for (const injected of [
+    workflow.replace(
+      '    runs-on: ubuntu-latest',
+      '    defaults:\n      run:\n        shell: bash\n    runs-on: ubuntu-latest',
+    ),
+    workflow.replace('    timeout-minutes: 10', '    timeout-minutes: 1'),
+  ]) {
+    assert.match(issues(injected).join(' '), /unreviewed job settings/);
+  }
+});
+
+test('rejects step-level env, shell and working-directory overrides', () => {
+  for (const setting of [
+    'env:\n          NODE_OPTIONS: --import ./untrusted.mjs',
+    'shell: bash -c true',
+    'working-directory: /tmp',
+  ]) {
+    const injected = workflow.replace(
+      '        run: npm run typecheck',
+      '        run: npm run typecheck\n        ' + setting,
+    );
+    assert.match(issues(injected).join(' '), /unreviewed validation step/);
+  }
+});
+
+test('rejects artifact upload path and retention changes', () => {
+  for (const injected of [
+    workflow.replace('          path: ${{ runner.temp }}/office-v4', '          path: .'),
+    workflow.replace('          retention-days: 7', '          retention-days: 90'),
+  ]) {
+    assert.match(issues(injected).join(' '), /unreviewed validation step/);
+  }
+});
+
+test('rejects unreviewed action inputs and extra artifact upload settings', () => {
+  for (const injected of [
+    workflow.replace('          cache: npm', '          cache: yarn'),
+    workflow.replace(
+      '          if-no-files-found: ignore',
+      '          if-no-files-found: ignore\n          include-hidden-files: true',
+    ),
+  ]) {
+    assert.match(issues(injected).join(' '), /unreviewed validation step/);
+  }
+});
+
+test('rejects altered diagnostic execution and workflow dispatch inputs', () => {
+  assert.match(
+    issues(
+      workflow.replace(
+        "if: failure() && steps.formatting.outcome == 'failure'",
+        'if: always()',
+      ),
+    ).join(' '),
+    /unreviewed validation step/,
+  );
+  assert.match(
+    issues(
+      workflow.replace(
+        '  workflow_dispatch:\n',
+        '  workflow_dispatch:\n    inputs:\n      key:\n        required: false\n',
+      ),
+    ).join(' '),
+    /workflow_dispatch must not accept/,
+  );
+});
+
+test('rejects broad push triggers and modified cancellation policy', () => {
+  assert.match(
+    issues(workflow.replace('    branches: [main]', "    branches: ['**']")).join(' '),
+    /push must target main only/,
+  );
+  assert.match(
+    issues(workflow.replace('  cancel-in-progress: true', '  cancel-in-progress: false')).join(' '),
+    /unreviewed workflow concurrency policy/,
+  );
+});
+
+test('rejects rearranged security gates even if all commands remain present', () => {
+  const injected = workflow.replace(
+    '      - name: TypeScript\n        run: npm run typecheck\n      - name: Delivery security lint\n        run: npm run lint',
+    '      - name: Delivery security lint\n        run: npm run lint\n      - name: TypeScript\n        run: npm run typecheck',
+  );
+  assert.match(issues(injected).join(' '), /unreviewed validation step/);
+});
