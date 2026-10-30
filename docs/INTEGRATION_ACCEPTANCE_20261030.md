@@ -1,9 +1,24 @@
 # Combined workflow, QA and browser integration — 2026-10-30
 
-This document supersedes the earlier #113-only acceptance notes. It describes
-the **Draft PR #116 candidate** at
+This document supersedes the earlier #113-only acceptance notes. It records
+the historical **Draft PR #116 integration join** at
 `c2da6f3e652b805305ac26b7d242a2e1bbb43f05`. Neither this evidence nor
 a green CI authorizes a merge, deployment or production write.
+
+## Current read-only audit tip — Draft PR #122
+
+The audit now covers **18 Draft PRs**, including the six security, CI-policy and
+integration-audit descendants **#117 → #118 → #119 → #120 → #121 → #122**.
+The current pinned candidate is **#122**, HEAD
+`833c1510a156cc0442202407352fb99e0189bd3f`, not the older #116 join.
+Its recorded GitHub Actions run
+[#41037758712](https://github.com/vlovers/ai-office/actions/runs/41037758712)
+completed successfully on that HEAD, including Linux validation and macOS
+native sandbox jobs. This is historical evidence and must be rechecked on
+future pushes. The read-only audit checks every declared parent edge, current
+main ancestry, #108/#110/#112/#116/#121 inclusion, copied #109 security file
+pins, and both jobs from the exact latest #122 CI attempt. A successful audit
+is **not** authorization to merge or deploy.
 
 ## Dependency graph and actual inclusion
 
@@ -13,7 +28,7 @@ a green CI authorizes a merge, deployment or production write.
 - Combined server integration: #108 + #110 → #113.
 - Final browser/server integration: #113 + #112 → #116.
 
-The audit also compares the current `main` commit against #116. Merely
+The audit now compares the current `main` commit against #122. Merely
 checking a PR's `base.sha` is insufficient: GitHub updates that pointer when
 `main` moves, even if the integration branch has not incorporated the new
 commit.
@@ -52,7 +67,7 @@ network, provider credentials, or production access.
 
 Run `node scripts/pr-stack-audit.mjs vlovers/ai-office` to query GitHub's
 public read-only API for the current branch graph, CI evidence, exact source
-ancestry and copied security file SHA checks. An optional `GITHUB_TOKEN`
+ancestry and copied security file SHA checks against the latest #122 tip. An optional `GITHUB_TOKEN`
 increases API rate limits; the script never performs a write. The command
 returns nonzero when evidence is missing, pending, stale or contradictory.
 CI evidence is tied to the exact pull request, latest run ID and attempt,
@@ -62,7 +77,7 @@ records fail closed. All candidate job pages and **all workflow-run pages** are 
 evaluation. Missing pages, duplicate record IDs, inconsistent total counts,
 unexpected commit SHAs and missing run-attempt metadata fail closed.
 GitHub API failures are blockers, **not** successful validation. This tool
-checks the known stack; it does not discover every future PR or replace a
+checks the known 18-PR stack through #122; it does not discover every future PR or replace a
 human code review.
 
 ## Outstanding release gates
@@ -85,9 +100,9 @@ could discard the parent while leaving the PR metadata unchanged. Every edge
 must have `behind_by=0`, a valid ahead/identical status, and both its
 `base_commit` and `merge_base_commit` equal to the expected parent SHA.
 
-After collecting CI, ancestry and blob evidence, the audit re-reads all 12 PRs'
+After collecting CI, ancestry and blob evidence, the audit re-reads all 18 PRs'
 workflow runs and the candidate's exact-attempt jobs, then re-reads `main`
-and all 12 pinned PRs. A changed head, base, Draft state or main commit aborts
+and all 18 pinned PRs. A changed head, base, Draft state or main commit aborts
 the audit rather than reporting an outdated snapshot as current. Offline
 regressions cover missing/diverged edges, forged comparison metadata,
 new failed CI runs, rerun attempts, changed native jobs and a concurrent main
