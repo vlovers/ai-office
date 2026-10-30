@@ -55,6 +55,10 @@ public read-only API for the current branch graph, CI evidence, exact source
 ancestry and copied security file SHA checks. An optional `GITHUB_TOKEN`
 increases API rate limits; the script never performs a write. The command
 returns nonzero when evidence is missing, pending, stale or contradictory.
+CI evidence is tied to the exact pull request, latest run ID and attempt,
+not merely a shared commit SHA. The candidate's Linux and macOS jobs must
+both belong to that run and attempt; duplicate, missing or truncated job
+records fail closed. All candidate job pages are fetched before evaluation.
 GitHub API failures are blockers, **not** successful validation. This tool
 checks the known stack; it does not discover every future PR or replace a
 human code review.

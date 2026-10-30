@@ -26,6 +26,43 @@ export const REQUIRED_JOBS = [
 
 const VALIDATION_WORKFLOW = 'AI Office validation';
 
+// The same commit may have checks from different PRs. Only a run attached to
+// this exact PR is evidence, and a newer failure must override an older green.
+export function selectValidationRun(runs, number) {
+  return (runs ?? [])
+    .filter(
+      (run) =>
+        run.name === VALIDATION_WORKFLOW &&
+        run.event === 'pull_request' &&
+        run.pull_requests?.some((pr) => pr.number === number),
+    )
+    .sort(
+      (left, right) => right.id - left.id || (right.run_attempt ?? 0) - (left.run_attempt ?? 0),
+    )[0];
+}
+
+// Read the jobs for the exact attempt; never silently trust a truncated page.
+export async function fetchAttemptJobs(get, root, run) {
+  if (!Number.isSafeInteger(run?.id) || !Number.isSafeInteger(run?.run_attempt)) {
+    throw new Error('Candidate CI run has no verifiable ID and attempt');
+  }
+  const jobs = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const result = await get(
+      `${root}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100&page=${page}`,
+    );
+    if (!Number.isSafeInteger(result.total_count) || !Array.isArray(result.jobs)) {
+      throw new Error('GitHub returned incomplete candidate job evidence');
+    }
+    jobs.push(...result.jobs);
+    if (jobs.length === result.total_count) return jobs;
+    if (jobs.length > result.total_count || result.jobs.length === 0) {
+      throw new Error('GitHub candidate job pages are inconsistent');
+    }
+  }
+  throw new Error('GitHub candidate job evidence exceeds pagination limit');
+}
+
 // Pure, deterministic evaluation: tests never need a token or network access.
 export function auditStack(snapshot) {
   const issues = [];
@@ -48,9 +85,7 @@ export function auditStack(snapshot) {
       issue('base-drift', `PR #${number} base does not match ${base ?? 'main'} HEAD`);
     }
 
-    const latest = (runs[number] ?? []).find(
-      (run) => run.name === VALIDATION_WORKFLOW && run.event === 'pull_request',
-    );
+    const latest = selectValidationRun(runs[number], number);
     if (!latest) {
       issue('missing-ci', `PR #${number} has no pull_request validation run`);
     } else if (latest.head_sha !== pr.head?.sha) {
@@ -94,10 +129,20 @@ export function auditStack(snapshot) {
     }
   }
 
+  const candidateRun = selectValidationRun(runs[116], 116);
   for (const name of REQUIRED_JOBS) {
-    const job = jobs.find((entry) => entry.name === name);
-    if (!job || job.status !== 'completed' || job.conclusion !== 'success') {
-      issue('missing-candidate-job', `PR #116 has no successful job: ${name}`);
+    const matches = jobs.filter((entry) => entry.name === name);
+    const job = matches[0];
+    if (
+      matches.length !== 1 ||
+      !candidateRun ||
+      !job ||
+      job.run_id !== candidateRun.id ||
+      job.run_attempt !== candidateRun.run_attempt ||
+      job.status !== 'completed' ||
+      job.conclusion !== 'success'
+    ) {
+      issue('missing-candidate-job', `PR #116 has no successful exact-attempt job: ${name}`);
     }
   }
 
@@ -141,18 +186,17 @@ export async function collectStack({
     STACK.map(async ({ number }) => {
       const head = prs[number].head.sha;
       const result = await get(
-        `${root}/actions/runs?head_sha=${head}&event=pull_request&per_page=30`,
+        `${root}/actions/runs?head_sha=${head}&event=pull_request&per_page=100`,
       );
+      if (!Array.isArray(result.workflow_runs)) {
+        throw new Error(`GitHub returned incomplete PR #${number} CI evidence`);
+      }
       runs[number] = result.workflow_runs;
     }),
   );
 
-  const latestCandidate = (runs[116] ?? []).find(
-    (run) => run.name === VALIDATION_WORKFLOW && run.event === 'pull_request',
-  );
-  const jobs = latestCandidate
-    ? (await get(`${root}/actions/runs/${latestCandidate.id}/jobs?per_page=100`)).jobs
-    : [];
+  const latestCandidate = selectValidationRun(runs[116], 116);
+  const jobs = latestCandidate ? await fetchAttemptJobs(get, root, latestCandidate) : [];
 
   const comparisons = {
     main: await get(`${root}/compare/${main.commit.sha}...${prs[116].head.sha}`),
@@ -186,9 +230,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(`Integration PR #116: ${snapshot.prs[116].head.sha}`);
     console.log(`Current main: ${snapshot.mainSha}`);
     for (const { number } of STACK) {
-      const run = snapshot.runs[number]?.find(
-        (entry) => entry.name === VALIDATION_WORKFLOW && entry.event === 'pull_request',
-      );
+      const run = selectValidationRun(snapshot.runs[number], number);
       console.log(
         `#${number}: ${snapshot.prs[number].head.sha.slice(0, 8)} CI ${run?.conclusion ?? 'missing'}`,
       );

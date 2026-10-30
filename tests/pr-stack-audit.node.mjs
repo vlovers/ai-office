@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   auditStack,
   collectStack,
+  fetchAttemptJobs,
   PINNED_PATHS,
   REQUIRED_ANCESTORS,
   REQUIRED_JOBS,
@@ -24,7 +25,9 @@ function fixture() {
     };
     runs[number] = [
       {
-        id: number,
+        id: 1000 + number,
+        run_attempt: 1,
+        pull_requests: [{ number }],
         name: 'AI Office validation',
         event: 'pull_request',
         head_sha: `head-${number}`,
@@ -55,6 +58,8 @@ function fixture() {
   );
   const jobs = REQUIRED_JOBS.map((name) => ({
     name,
+    run_id: 1116,
+    run_attempt: 1,
     status: 'completed',
     conclusion: 'success',
   }));
@@ -164,9 +169,9 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
       body = source.prs[Number(path.match(/\/pulls\/(\d+)$/)[1])];
     } else if (path.endsWith('/actions/runs')) {
       const number = Number(parsed.searchParams.get('head_sha').slice('head-'.length));
-      body = { workflow_runs: source.runs[number] };
-    } else if (/\/actions\/runs\/\d+\/jobs$/.test(path)) {
-      body = { jobs: source.jobs };
+      body = { total_count: source.runs[number].length, workflow_runs: source.runs[number] };
+    } else if (/\/actions\/runs\/\d+\/attempts\/\d+\/jobs$/.test(path)) {
+      body = { total_count: source.jobs.length, jobs: source.jobs };
     } else if (path.includes('/compare/')) {
       const base = path.split('/compare/')[1].split('...')[0];
       const number = Number(base.slice('head-'.length));
@@ -189,6 +194,66 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.deepEqual(auditStack(actual), []);
   assert.ok(requested.some((path) => path.includes('/compare/main-head...head-116')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
+});
+
+test('newer failed CI overrides older green CI regardless of API array order', () => {
+  const snapshot = fixture();
+  const oldRun = snapshot.runs[107][0];
+  snapshot.runs[107] = [oldRun, { ...oldRun, id: oldRun.id + 10000, conclusion: 'failure' }];
+  assert.ok(codes(snapshot).includes('ci-not-green'));
+});
+
+test('a successful workflow for another PR on the same SHA is not evidence', () => {
+  const snapshot = fixture();
+  snapshot.runs[107][0].pull_requests = [{ number: 999 }];
+  assert.ok(codes(snapshot).includes('missing-ci'));
+});
+
+test('candidate jobs must belong to the latest run and attempt', () => {
+  const snapshot = fixture();
+  snapshot.jobs[0].run_id = 1115;
+  snapshot.jobs[1].run_attempt = 2;
+  assert.equal(codes(snapshot).filter((code) => code === 'missing-candidate-job').length, 2);
+});
+
+test('duplicate jobs cannot conceal a failed security job', () => {
+  const snapshot = fixture();
+  snapshot.jobs.push({
+    ...snapshot.jobs[1],
+    conclusion: 'failure',
+  });
+  assert.ok(codes(snapshot).includes('missing-candidate-job'));
+});
+
+test('collector retrieves every page for the exact CI attempt', async () => {
+  const paths = [];
+  const get = async (path) => {
+    paths.push(path);
+    const page = Number(new URL('https://api.github.com' + path).searchParams.get('page'));
+    return {
+      total_count: 101,
+      jobs: Array.from({ length: page === 1 ? 100 : 1 }, (_, index) => ({
+        id: (page - 1) * 100 + index,
+      })),
+    };
+  };
+  const jobs = await fetchAttemptJobs(get, '/repos/vlovers/ai-office', {
+    id: 500,
+    run_attempt: 3,
+  });
+  assert.equal(jobs.length, 101);
+  assert.equal(paths.length, 2);
+  assert.ok(paths.every((path) => path.includes('/runs/500/attempts/3/jobs?')));
+});
+
+test('collector fails closed when GitHub truncates candidate job evidence', async () => {
+  await assert.rejects(
+    fetchAttemptJobs(async () => ({ total_count: 101, jobs: [] }), '/repos/vlovers/ai-office', {
+      id: 500,
+      run_attempt: 3,
+    }),
+    /inconsistent/,
+  );
 });
 
 test('GitHub API failure cannot be reported as a successful audit', async () => {
