@@ -36,12 +36,13 @@ function jobSteps(job, fail) {
   if (starts.length === 0) fail('missing job steps');
   return starts.map((start, i) => {
     const lines = steps.slice(start, starts[i + 1] ?? steps.length);
+    const inlineRun = /^      - run:\s*(.*)$/.exec(lines[0]);
     const runIndex = lines.findIndex((line) => /^        run:/.test(line));
-    const run = runIndex < 0 ? null : lines[runIndex].slice(12).trim();
+    const run = inlineRun ? inlineRun[1].trim() : runIndex < 0 ? null : lines[runIndex].slice(12).trim();
     const commands =
       run === '|' || run === '>'
         ? lines
-            .slice(runIndex + 1)
+            .slice(inlineRun ? 1 : runIndex + 1)
             .filter((line) => indentOf(line) > 8)
             .map((line) => line.trim())
         : run === null
