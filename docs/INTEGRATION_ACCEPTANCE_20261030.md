@@ -76,7 +76,6 @@ human code review.
 4. Do not merge or deploy from this integration Draft without explicit
    authorization.
 
-
 ## Ancestry and concurrent-update safety
 
 The audit now verifies **every declared stack edge**, including both root PRs
