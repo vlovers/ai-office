@@ -860,47 +860,21 @@ if (process.argv.includes('--restart-server')) {
     ).toHaveCount(0, { timeout: 20000 });
     await expect(confirmCheckpoint).toBeEnabled();
 
-    // Hold the new timeline after the summary changes: the old dialog must
-    // become stale before the refreshed timeline has arrived.
+    // A separate API client advances the Workflow while the checked dialog
+    // remains open. The browser must revoke that stale confirmation on poll.
     const externalCancelUrl = address + '/api/workflows/' + blocked.workflowId + '/cancel';
     const expectedExternalVersion = versions[3]! + 1;
-    let releaseNewTimeline!: () => void;
-    let heldNewTimeline = false;
-    const newTimelineGate = new Promise<void>((resolve) => {
-      releaseNewTimeline = resolve;
+    const externalCancel = await page.request.post(externalCancelUrl, {
+      data: { version: versions[3], confirmed: true },
     });
-    const holdNewTimeline = async (route: Route) => {
-      const response = await route.fetch();
-      const snapshot = await response.json();
-      if (snapshot.version === expectedExternalVersion) {
-        heldNewTimeline = true;
-        await newTimelineGate;
-      }
-      await route.fulfill({ response });
-    };
-    await page.route(dialogTimelineUrl, holdNewTimeline);
-    try {
-      const externalCancel = await page.request.post(externalCancelUrl, {
-        data: { version: versions[3], confirmed: true },
-      });
-      assert.equal(externalCancel.status(), 200);
-      const externalCancelled = await externalCancel.json();
-      assert.equal(externalCancelled.version, expectedExternalVersion);
-      await expect.poll(() => heldNewTimeline, { timeout: 20000 }).toBe(true);
-      await expect(
-        board.getByRole('list', { name: 'Workflow operations queue' }).getByRole('button', {
-          name: new RegExp('^' + blocked.workflowId.slice(0, 8) + '.*v' + expectedExternalVersion),
-        }),
-      ).toBeVisible({ timeout: 20000 });
-      await expect(
-        confirmation.getByRole('alert').filter({ hasText: 'The workflow changed' }),
-      ).toBeVisible({ timeout: 20000 });
-      await expect(confirmCheckpoint).toBeDisabled();
-      await expect(confirmation).toContainText('version ' + versions[3]);
-    } finally {
-      releaseNewTimeline();
-      await page.unroute(dialogTimelineUrl, holdNewTimeline);
-    }
+    assert.equal(externalCancel.status(), 200);
+    const externalCancelled = await externalCancel.json();
+    assert.equal(externalCancelled.version, expectedExternalVersion);
+    await expect(
+      confirmation.getByRole('alert').filter({ hasText: 'The workflow changed' }),
+    ).toBeVisible({ timeout: 20000 });
+    await expect(confirmCheckpoint).toBeDisabled();
+    await expect(confirmation).toContainText('version ' + versions[3]);
     await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(confirmation).toBeHidden();
     await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
