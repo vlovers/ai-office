@@ -587,7 +587,6 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
 
-
     // A late failure from the previously selected Workflow must not overwrite
     // a newer successful snapshot or turn healthy operator controls stale.
     let releaseOldSelection: (() => void) | undefined;
@@ -883,7 +882,6 @@ if (process.argv.includes('--restart-server')) {
       await page.unrouteAll({ behavior: 'wait' });
     }
     await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
-
 
     // A pre-pause HTTP 503 arriving after a successful resume must be ignored.
     // The previous generation's response cannot revoke freshly loaded controls.
@@ -1210,7 +1208,6 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(terminalTasks.get(failed.task.id), 'failed');
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
     assert.equal(terminalTasks.get(blocked.task.id), 'completed');
-
 
     // A checked confirmation must fail closed on transport loss and after an
     // independent operator changes the persisted checkpoint version.

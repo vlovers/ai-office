@@ -318,12 +318,12 @@ export function WorkflowBoard({
   // Revoke it before the next snapshot finishes when selection/version changes.
   const staleAction = Boolean(
     action &&
-      (selected !== action.id ||
-        !chosen ||
-        chosen.version !== action.version ||
-        !timeline ||
-        action.id !== timeline.id ||
-        action.version !== timeline.version),
+    (selected !== action.id ||
+      !chosen ||
+      chosen.version !== action.version ||
+      !timeline ||
+      action.id !== timeline.id ||
+      action.version !== timeline.version),
   );
   // Pausing polling is for inspection only, never permission to act on a stale snapshot.
   // Resume requires a new successful refresh before operator actions are enabled.
