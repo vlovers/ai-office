@@ -18,10 +18,7 @@ export const STACK = [
 ];
 
 export const REQUIRED_ANCESTORS = [108, 110, 112];
-export const PINNED_PATHS = [
-  'src/server/qa-runner.ts',
-  'tests/qa-plan-preflight-race.test.ts',
-];
+export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const REQUIRED_JOBS = [
   'TypeScript, tests, smoke, build and formatting',
   'Native Codex filesystem policy (no inference)',
@@ -64,6 +61,16 @@ export function auditStack(snapshot) {
   }
 
   const candidate = prs[116];
+  const mainComparison = comparisons.main;
+  if (
+    !candidate ||
+    !mainComparison ||
+    mainComparison.behind_by !== 0 ||
+    !['ahead', 'identical'].includes(mainComparison.status) ||
+    mainComparison.merge_base_commit?.sha !== mainSha
+  ) {
+    issue('main-not-integrated', 'PR #116 does not include current main HEAD');
+  }
   for (const number of REQUIRED_ANCESTORS) {
     const source = prs[number];
     const comparison = comparisons[number];
@@ -147,7 +154,9 @@ export async function collectStack({
     ? (await get(`${root}/actions/runs/${latestCandidate.id}/jobs?per_page=100`)).jobs
     : [];
 
-  const comparisons = {};
+  const comparisons = {
+    main: await get(`${root}/compare/${main.commit.sha}...${prs[116].head.sha}`),
+  };
   await Promise.all(
     REQUIRED_ANCESTORS.map(async (number) => {
       comparisons[number] = await get(
@@ -161,9 +170,7 @@ export async function collectStack({
     PINNED_PATHS.map(async (path) => {
       const encoded = path.split('/').map(encodeURIComponent).join('/');
       const [source, candidate] = await Promise.all(
-        [109, 116].map((number) =>
-          get(`${root}/contents/${encoded}?ref=${prs[number].head.sha}`),
-        ),
+        [109, 116].map((number) => get(`${root}/contents/${encoded}?ref=${prs[number].head.sha}`)),
       );
       blobs[path] = { source: source.sha, candidate: candidate.sha };
     }),
@@ -179,8 +186,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(`Integration PR #116: ${snapshot.prs[116].head.sha}`);
     console.log(`Current main: ${snapshot.mainSha}`);
     for (const { number } of STACK) {
-      const run = snapshot.runs[number]?.[0];
-      console.log(`#${number}: ${snapshot.prs[number].head.sha.slice(0, 8)} CI ${run?.conclusion ?? 'missing'}`);
+      const run = snapshot.runs[number]?.find(
+        (entry) => entry.name === VALIDATION_WORKFLOW && entry.event === 'pull_request',
+      );
+      console.log(
+        `#${number}: ${snapshot.prs[number].head.sha.slice(0, 8)} CI ${run?.conclusion ?? 'missing'}`,
+      );
     }
     for (const entry of issues) console.error(`[${entry.code}] ${entry.detail}`);
     console.log(`Audit: ${issues.length === 0 ? 'PASS' : `${issues.length} blocker(s)`}`);

@@ -13,6 +13,11 @@ a green CI authorizes a merge, deployment or production write.
 - Combined server integration: #108 + #110 → #113.
 - Final browser/server integration: #113 + #112 → #116.
 
+The audit also compares the current `main` commit against #116. Merely
+checking a PR's `base.sha` is insufficient: GitHub updates that pointer when
+`main` moves, even if the integration branch has not incorporated the new
+commit.
+
 GitHub commit comparisons on 2026-10-30 confirmed that the exact heads of
 #108 (`42982df`), #110 (`6dc3fc2`), #112 (`629981d`) and #113
 (`737db92`) are ancestors of #116, with `behind_by=0`.
