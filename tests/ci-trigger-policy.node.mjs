@@ -66,3 +66,98 @@ test('rejects workflows without a pull_request event', () => {
     /missing pull_request/,
   );
 });
+
+test('rejects unexpected workflow event families', () => {
+  for (const event of ['workflow_run', 'repository_dispatch']) {
+    assert.match(
+      issues(workflow.replace('  pull_request:\n', '  pull_request:\n  ' + event + ':\n')).join(
+        ' ',
+      ),
+      /unexpected workflow trigger/,
+    );
+  }
+});
+
+test('rejects job-level permission escalation', () => {
+  assert.match(
+    issues(
+      workflow.replace(
+        '    runs-on: ubuntu-latest',
+        '    permissions:\n      contents: write\n    runs-on: ubuntu-latest',
+      ),
+    ).join(' '),
+    /override permissions/,
+  );
+});
+
+test('rejects conditional or failure-tolerant security jobs', () => {
+  for (const setting of ['if: false', 'continue-on-error: true']) {
+    assert.match(
+      issues(
+        workflow.replace(
+          '    runs-on: macos-latest',
+          '    ' + setting + '\n    runs-on: macos-latest',
+        ),
+      ).join(' '),
+      /skip execution or allow failure/,
+    );
+  }
+});
+
+test('rejects skipped or failure-tolerant required steps', () => {
+  for (const setting of ['if: false', 'continue-on-error: true']) {
+    assert.match(
+      issues(
+        workflow.replace(
+          '        run: npm run test:sandbox',
+          '        ' + setting + '\n        run: npm run test:sandbox',
+        ),
+      ).join(' '),
+      /cannot be conditional or allow failure/,
+    );
+  }
+});
+
+test('commented-out and echoed commands do not count as executed gates', () => {
+  for (const replacement of ['# run: npm run test:sandbox', 'run: echo npm run test:sandbox']) {
+    assert.match(
+      issues(workflow.replace('run: npm run test:sandbox', replacement)).join(' '),
+      /missing validation step/,
+    );
+  }
+});
+
+test('multiline commands cannot hide an ignored gate exit status', () => {
+  assert.match(
+    issues(
+      workflow.replace(
+        'run: npm run typecheck',
+        'run: |\n          npm run typecheck\n          exit 0',
+      ),
+    ).join(' '),
+    /missing validation step/,
+  );
+});
+
+test('requires native gates on macOS rather than Linux', () => {
+  assert.match(
+    issues(workflow.replace('runs-on: macos-latest', 'runs-on: ubuntu-latest')).join(' '),
+    /must run on macos-latest/,
+  );
+});
+
+test('rejects duplicated or missing native job definitions', () => {
+  for (const replacement of ['  native-other:', '  native-sandbox:\n  native-sandbox:']) {
+    assert.match(
+      issues(workflow.replace('  native-sandbox:', replacement)).join(' '),
+      /expected exactly one native-sandbox/,
+    );
+  }
+});
+
+test('rejects additional top-level permission grants', () => {
+  assert.match(
+    issues(workflow.replace('  contents: read', '  contents: read\n  id-token: write')).join(' '),
+    /read-only/,
+  );
+});
