@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   assertStableCIEvidence,
+  CANDIDATE_PR,
   auditStack,
   collectStack,
   fetchAttemptJobs,
@@ -64,6 +65,7 @@ function fixture() {
         {
           status: 'ahead',
           behind_by: 0,
+          base_commit: { sha: `head-${number}` },
           merge_base_commit: { sha: `head-${number}` },
         },
       ]),
@@ -75,7 +77,7 @@ function fixture() {
   const jobs = REQUIRED_JOBS.map((name, index) => ({
     id: index + 1,
     name,
-    run_id: 1116,
+    run_id: 1000 + CANDIDATE_PR,
     run_attempt: 1,
     status: 'completed',
     conclusion: 'success',
@@ -124,7 +126,7 @@ test('rejects a stale green run and an unverified pending run', () => {
 
 test('does not accept a successful run from an unrelated workflow', () => {
   const snapshot = fixture();
-  snapshot.runs[116][0].name = 'Unrelated validation';
+  snapshot.runs[CANDIDATE_PR][0].name = 'Unrelated validation';
   assert.ok(codes(snapshot).includes('missing-ci'));
 });
 
@@ -154,7 +156,7 @@ test('detects a copied security implementation that drifted from PR #109', () =>
 
 test('rejects a PR made ready for review without explicit audit update', () => {
   const snapshot = fixture();
-  snapshot.prs[116].draft = false;
+  snapshot.prs[CANDIDATE_PR].draft = false;
   assert.ok(codes(snapshot).includes('review-gate'));
 });
 
@@ -194,9 +196,9 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
       const number = Number(base.slice('head-'.length));
       const target = Number(path.split('...')[1].slice('head-'.length));
       body =
-        base === source.mainSha && target === 116
+        base === source.mainSha && target === CANDIDATE_PR
           ? source.comparisons.main
-          : REQUIRED_ANCESTORS.includes(number) && target === 116
+          : REQUIRED_ANCESTORS.includes(number) && target === CANDIDATE_PR
             ? source.comparisons[number]
             : source.comparisons.edges[target];
     } else if (path.includes('/contents/')) {
@@ -215,7 +217,9 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   };
   const actual = await collectStack({ request, token: 'fixture-token' });
   assert.deepEqual(auditStack(actual), []);
-  assert.ok(requested.some((path) => path.includes('/compare/main-head...head-116')));
+  assert.ok(requested.some((path) => path.includes('/compare/main-head...head-122')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-121...head-122')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-116...head-122')));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
@@ -467,9 +471,9 @@ test('collector rejects a main push while evidence is being collected', async ()
       const number = Number(base.slice('head-'.length));
       const target = Number(head.slice('head-'.length));
       const body =
-        base === source.mainSha && target === 116
+        base === source.mainSha && target === CANDIDATE_PR
           ? source.comparisons.main
-          : REQUIRED_ANCESTORS.includes(number) && target === 116
+          : REQUIRED_ANCESTORS.includes(number) && target === CANDIDATE_PR
             ? source.comparisons[number]
             : source.comparisons.edges[target];
       return { ok: true, json: async () => body };
@@ -510,10 +514,10 @@ test('CI recheck rejects a new failed run after the initial green snapshot', () 
 test('CI recheck rejects a rerun of the same run ID with a new attempt', () => {
   const snapshot = fixture();
   const refreshed = structuredClone(snapshot.runs);
-  refreshed[116][0].run_attempt = 2;
+  refreshed[CANDIDATE_PR][0].run_attempt = 2;
   assert.throws(
     () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
-    /PR #116 CI changed during stack audit/,
+    /PR #122 CI changed during stack audit/,
   );
 });
 
@@ -540,4 +544,51 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
       [...snapshot.jobs].reverse(),
     ),
   );
+});
+
+test('audits all post-integration Draft PRs through the native-security tip', () => {
+  assert.deepEqual(STACK.slice(-6), [
+    { number: 117, base: 116 },
+    { number: 118, base: 117 },
+    { number: 119, base: 118 },
+    { number: 120, base: 119 },
+    { number: 121, base: 120 },
+    { number: 122, base: 121 },
+  ]);
+  assert.equal(CANDIDATE_PR, 122);
+  assert.deepEqual(auditStack(fixture()), []);
+});
+
+test('rejects failed native-security tip even when historical integration CI is green', () => {
+  const snapshot = fixture();
+  snapshot.runs[CANDIDATE_PR][0].conclusion = 'failure';
+  assert.equal(snapshot.runs[116][0].conclusion, 'success');
+  assert.ok(codes(snapshot).includes('ci-not-green'));
+});
+
+test('rejects security tip losing its parent despite a green CI run', () => {
+  const snapshot = fixture();
+  snapshot.comparisons.edges[CANDIDATE_PR].behind_by = 1;
+  snapshot.comparisons.edges[CANDIDATE_PR].merge_base_commit.sha = 'old-121';
+  assert.ok(codes(snapshot).includes('lost-stack-parent'));
+});
+
+test('requires latest security tip to contain the original integration join', () => {
+  const snapshot = fixture();
+  snapshot.comparisons[116].behind_by = 2;
+  assert.ok(codes(snapshot).includes('lost-ancestor'));
+});
+
+test('requires Linux and native macOS jobs from latest security tip, not #116', () => {
+  const snapshot = fixture();
+  snapshot.jobs[0].run_id = snapshot.runs[116][0].id;
+  snapshot.jobs[1].run_id = snapshot.runs[116][0].id;
+  assert.equal(codes(snapshot).filter((code) => code === 'missing-candidate-job').length, 2);
+});
+
+test('fails closed when latest security PR disappears from the stack snapshot', () => {
+  const snapshot = fixture();
+  delete snapshot.prs[CANDIDATE_PR];
+  assert.ok(codes(snapshot).includes('missing-pr'));
+  assert.ok(codes(snapshot).includes('main-not-integrated'));
 });

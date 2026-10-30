@@ -15,9 +15,18 @@ export const STACK = [
   { number: 112, base: 111 },
   { number: 113, base: 108 },
   { number: 116, base: 113 },
+  { number: 117, base: 116 },
+  { number: 118, base: 117 },
+  { number: 119, base: 118 },
+  { number: 120, base: 119 },
+  { number: 121, base: 120 },
+  { number: 122, base: 121 },
 ];
 
-export const REQUIRED_ANCESTORS = [108, 110, 112];
+// The latest reviewed integration tip, not the older browser/server join PR.
+export const CANDIDATE_PR = 122;
+
+export const REQUIRED_ANCESTORS = [108, 110, 112, 116, 121];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const REQUIRED_JOBS = [
   'TypeScript, tests, smoke, build and formatting',
@@ -202,7 +211,7 @@ export function auditStack(snapshot) {
     }
   }
 
-  const candidate = prs[116];
+  const candidate = prs[CANDIDATE_PR];
   const mainComparison = comparisons.main;
   if (
     !candidate ||
@@ -211,19 +220,19 @@ export function auditStack(snapshot) {
     !['ahead', 'identical'].includes(mainComparison.status) ||
     mainComparison.merge_base_commit?.sha !== mainSha
   ) {
-    issue('main-not-integrated', 'PR #116 does not include current main HEAD');
+    issue('main-not-integrated', 'PR #122 does not include current main HEAD');
   }
   for (const number of REQUIRED_ANCESTORS) {
     const source = prs[number];
     const comparison = comparisons[number];
     if (!candidate || !source || !comparison) {
-      issue('missing-ancestry', `Cannot verify PR #${number} in PR #116`);
+      issue('missing-ancestry', `Cannot verify PR #${number} in PR #122`);
     } else if (
       comparison.behind_by !== 0 ||
       !['ahead', 'identical'].includes(comparison.status) ||
       comparison.merge_base_commit?.sha !== source.head.sha
     ) {
-      issue('lost-ancestor', `PR #${number} is not an ancestor of PR #116`);
+      issue('lost-ancestor', `PR #${number} is not an ancestor of PR #122`);
     }
   }
 
@@ -236,7 +245,7 @@ export function auditStack(snapshot) {
     }
   }
 
-  const candidateRun = selectValidationRun(runs[116], 116);
+  const candidateRun = selectValidationRun(runs[CANDIDATE_PR], CANDIDATE_PR);
   for (const name of REQUIRED_JOBS) {
     const matches = jobs.filter((entry) => entry.name === name);
     const job = matches[0];
@@ -249,7 +258,7 @@ export function auditStack(snapshot) {
       job.status !== 'completed' ||
       job.conclusion !== 'success'
     ) {
-      issue('missing-candidate-job', `PR #116 has no successful exact-attempt job: ${name}`);
+      issue('missing-candidate-job', `PR #122 has no successful exact-attempt job: ${name}`);
     }
   }
 
@@ -296,11 +305,11 @@ export async function collectStack({
     }),
   );
 
-  const latestCandidate = selectValidationRun(runs[116], 116);
+  const latestCandidate = selectValidationRun(runs[CANDIDATE_PR], CANDIDATE_PR);
   const jobs = latestCandidate ? await fetchAttemptJobs(get, root, latestCandidate) : [];
 
   const comparisons = {
-    main: await get(`${root}/compare/${main.commit.sha}...${prs[116].head.sha}`),
+    main: await get(`${root}/compare/${main.commit.sha}...${prs[CANDIDATE_PR].head.sha}`),
     edges: {},
   };
   await Promise.all(
@@ -314,7 +323,7 @@ export async function collectStack({
   await Promise.all(
     REQUIRED_ANCESTORS.map(async (number) => {
       comparisons[number] = await get(
-        `${root}/compare/${prs[number].head.sha}...${prs[116].head.sha}`,
+        `${root}/compare/${prs[number].head.sha}...${prs[CANDIDATE_PR].head.sha}`,
       );
     }),
   );
@@ -324,7 +333,9 @@ export async function collectStack({
     PINNED_PATHS.map(async (path) => {
       const encoded = path.split('/').map(encodeURIComponent).join('/');
       const [source, candidate] = await Promise.all(
-        [109, 116].map((number) => get(`${root}/contents/${encoded}?ref=${prs[number].head.sha}`)),
+        [109, CANDIDATE_PR].map((number) =>
+          get(`${root}/contents/${encoded}?ref=${prs[number].head.sha}`),
+        ),
       );
       blobs[path] = { source: source.sha, candidate: candidate.sha };
     }),
@@ -338,7 +349,7 @@ export async function collectStack({
       refreshedRuns[number] = await fetchWorkflowRuns(get, root, prs[number].head.sha);
     }),
   );
-  const refreshedCandidate = selectValidationRun(refreshedRuns[116], 116);
+  const refreshedCandidate = selectValidationRun(refreshedRuns[CANDIDATE_PR], CANDIDATE_PR);
   const refreshedJobs = refreshedCandidate
     ? await fetchAttemptJobs(get, root, refreshedCandidate)
     : [];
@@ -375,7 +386,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     const snapshot = await collectStack({ repo: process.argv[2] ?? 'vlovers/ai-office' });
     const issues = auditStack(snapshot);
-    console.log(`Integration PR #116: ${snapshot.prs[116].head.sha}`);
+    console.log(`Integration PR #${CANDIDATE_PR}: ${snapshot.prs[CANDIDATE_PR].head.sha}`);
     console.log(`Current main: ${snapshot.mainSha}`);
     for (const { number } of STACK) {
       const run = selectValidationRun(snapshot.runs[number], number);
