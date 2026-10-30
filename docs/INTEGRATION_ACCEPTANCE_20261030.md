@@ -58,7 +58,9 @@ returns nonzero when evidence is missing, pending, stale or contradictory.
 CI evidence is tied to the exact pull request, latest run ID and attempt,
 not merely a shared commit SHA. The candidate's Linux and macOS jobs must
 both belong to that run and attempt; duplicate, missing or truncated job
-records fail closed. All candidate job pages are fetched before evaluation.
+records fail closed. All candidate job pages and **all workflow-run pages** are fetched before
+evaluation. Missing pages, duplicate record IDs, inconsistent total counts,
+unexpected commit SHAs and missing run-attempt metadata fail closed.
 GitHub API failures are blockers, **not** successful validation. This tool
 checks the known stack; it does not discover every future PR or replace a
 human code review.

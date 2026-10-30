@@ -41,26 +41,68 @@ export function selectValidationRun(runs, number) {
     )[0];
 }
 
+// GitHub's first page is not complete evidence. A truncated page, changing
+// total_count or duplicate record ID must never be interpreted as green CI.
+export async function fetchPagedEvidence(get, path, field, label) {
+  const records = [];
+  const ids = new Set();
+  let total = null;
+  for (let page = 1; page <= 10; page += 1) {
+    const separator = path.includes('?') ? '&' : '?';
+    const result = await get(`${path}${separator}per_page=100&page=${page}`);
+    const entries = result?.[field];
+    if (
+      !Number.isSafeInteger(result?.total_count) ||
+      result.total_count < 0 ||
+      !Array.isArray(entries) ||
+      entries.length > 100
+    ) {
+      throw new Error(`GitHub returned incomplete ${label} evidence`);
+    }
+    if (total === null) total = result.total_count;
+    if (result.total_count !== total) {
+      throw new Error(`GitHub ${label} pages have inconsistent total_count`);
+    }
+    for (const entry of entries) {
+      if (!Number.isSafeInteger(entry?.id) || entry.id <= 0 || ids.has(entry.id)) {
+        throw new Error(`GitHub ${label} pages contain invalid or duplicate IDs`);
+      }
+      ids.add(entry.id);
+      records.push(entry);
+    }
+    if (records.length === total) return records;
+    if (records.length > total || entries.length !== 100) {
+      throw new Error(`GitHub ${label} pages are inconsistent`);
+    }
+  }
+  throw new Error(`GitHub ${label} evidence exceeds pagination limit`);
+}
+
+export async function fetchWorkflowRuns(get, root, headSha) {
+  if (typeof headSha !== 'string' || !headSha) throw new Error('Missing PR head SHA');
+  const runs = await fetchPagedEvidence(
+    get,
+    `${root}/actions/runs?head_sha=${encodeURIComponent(headSha)}&event=pull_request`,
+    'workflow_runs',
+    'workflow run',
+  );
+  if (runs.some((run) => run.head_sha !== headSha)) {
+    throw new Error('GitHub returned workflow run for a different commit');
+  }
+  return runs;
+}
+
 // Read the jobs for the exact attempt; never silently trust a truncated page.
 export async function fetchAttemptJobs(get, root, run) {
   if (!Number.isSafeInteger(run?.id) || !Number.isSafeInteger(run?.run_attempt)) {
     throw new Error('Candidate CI run has no verifiable ID and attempt');
   }
-  const jobs = [];
-  for (let page = 1; page <= 10; page += 1) {
-    const result = await get(
-      `${root}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100&page=${page}`,
-    );
-    if (!Number.isSafeInteger(result.total_count) || !Array.isArray(result.jobs)) {
-      throw new Error('GitHub returned incomplete candidate job evidence');
-    }
-    jobs.push(...result.jobs);
-    if (jobs.length === result.total_count) return jobs;
-    if (jobs.length > result.total_count || result.jobs.length === 0) {
-      throw new Error('GitHub candidate job pages are inconsistent');
-    }
-  }
-  throw new Error('GitHub candidate job evidence exceeds pagination limit');
+  return fetchPagedEvidence(
+    get,
+    `${root}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs`,
+    'jobs',
+    'candidate job',
+  );
 }
 
 // Pure, deterministic evaluation: tests never need a token or network access.
@@ -90,6 +132,12 @@ export function auditStack(snapshot) {
       issue('missing-ci', `PR #${number} has no pull_request validation run`);
     } else if (latest.head_sha !== pr.head?.sha) {
       issue('stale-ci', `PR #${number} CI belongs to a different commit`);
+    } else if (
+      !Number.isSafeInteger(latest.id) ||
+      !Number.isSafeInteger(latest.run_attempt) ||
+      latest.run_attempt < 1
+    ) {
+      issue('ci-evidence-invalid', `PR #${number} CI has no verifiable run ID and attempt`);
     } else if (latest.status !== 'completed' || latest.conclusion !== 'success') {
       issue('ci-not-green', `PR #${number} latest CI is ${latest.status}/${latest.conclusion}`);
     }
@@ -185,13 +233,7 @@ export async function collectStack({
   await Promise.all(
     STACK.map(async ({ number }) => {
       const head = prs[number].head.sha;
-      const result = await get(
-        `${root}/actions/runs?head_sha=${head}&event=pull_request&per_page=100`,
-      );
-      if (!Array.isArray(result.workflow_runs)) {
-        throw new Error(`GitHub returned incomplete PR #${number} CI evidence`);
-      }
-      runs[number] = result.workflow_runs;
+      runs[number] = await fetchWorkflowRuns(get, root, head);
     }),
   );
 
