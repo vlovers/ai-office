@@ -4,6 +4,7 @@ import {
   auditStack,
   collectStack,
   fetchAttemptJobs,
+  fetchWorkflowRuns,
   PINNED_PATHS,
   REQUIRED_ANCESTORS,
   REQUIRED_JOBS,
@@ -56,7 +57,8 @@ function fixture() {
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', candidate: 'same-blob' }]),
   );
-  const jobs = REQUIRED_JOBS.map((name) => ({
+  const jobs = REQUIRED_JOBS.map((name, index) => ({
+    id: index + 1,
     name,
     run_id: 1116,
     run_attempt: 1,
@@ -233,7 +235,7 @@ test('collector retrieves every page for the exact CI attempt', async () => {
     return {
       total_count: 101,
       jobs: Array.from({ length: page === 1 ? 100 : 1 }, (_, index) => ({
-        id: (page - 1) * 100 + index,
+        id: (page - 1) * 100 + index + 1,
       })),
     };
   };
@@ -254,6 +256,114 @@ test('collector fails closed when GitHub truncates candidate job evidence', asyn
     }),
     /inconsistent/,
   );
+});
+
+test('run pagination includes a failed newer run hidden beyond the first page', async () => {
+  const paths = [];
+  const source = fixture().runs[107][0];
+  const get = async (path) => {
+    paths.push(path);
+    const page = Number(new URL('https://api.github.com' + path).searchParams.get('page'));
+    return {
+      total_count: 101,
+      workflow_runs:
+        page === 1
+          ? Array.from({ length: 100 }, (_, index) => ({ ...source, id: 2000 + index }))
+          : [{ ...source, id: 9000, conclusion: 'failure' }],
+    };
+  };
+  const runs = await fetchWorkflowRuns(get, '/repos/vlovers/ai-office', 'head-107');
+  const snapshot = fixture();
+  snapshot.runs[107] = runs;
+  assert.equal(runs.length, 101);
+  assert.equal(paths.length, 2);
+  assert.ok(codes(snapshot).includes('ci-not-green'));
+});
+
+test('run pagination rejects an incomplete first page instead of trusting old green', async () => {
+  await assert.rejects(
+    fetchWorkflowRuns(
+      async () => ({ total_count: 101, workflow_runs: [{ id: 1, head_sha: 'head-107' }] }),
+      '/repos/vlovers/ai-office',
+      'head-107',
+    ),
+    /inconsistent/,
+  );
+});
+
+test('run pagination rejects repeated IDs across pages', async () => {
+  const get = async (path) => {
+    const page = Number(new URL('https://api.github.com' + path).searchParams.get('page'));
+    return {
+      total_count: 101,
+      workflow_runs:
+        page === 1
+          ? Array.from({ length: 100 }, (_, index) => ({
+              id: index + 1,
+              head_sha: 'head-107',
+            }))
+          : [{ id: 100, head_sha: 'head-107' }],
+    };
+  };
+  await assert.rejects(
+    fetchWorkflowRuns(get, '/repos/vlovers/ai-office', 'head-107'),
+    /duplicate IDs/,
+  );
+});
+
+test('run pagination rejects changing total_count between pages', async () => {
+  const get = async (path) => {
+    const page = Number(new URL('https://api.github.com' + path).searchParams.get('page'));
+    return {
+      total_count: page === 1 ? 101 : 102,
+      workflow_runs:
+        page === 1
+          ? Array.from({ length: 100 }, (_, index) => ({
+              id: index + 1,
+              head_sha: 'head-107',
+            }))
+          : [{ id: 101, head_sha: 'head-107' }],
+    };
+  };
+  await assert.rejects(
+    fetchWorkflowRuns(get, '/repos/vlovers/ai-office', 'head-107'),
+    /inconsistent total_count/,
+  );
+});
+
+test('run search rejects records for a different commit', async () => {
+  await assert.rejects(
+    fetchWorkflowRuns(
+      async () => ({
+        total_count: 1,
+        workflow_runs: [{ id: 1, head_sha: 'unrelated-commit' }],
+      }),
+      '/repos/vlovers/ai-office',
+      'head-107',
+    ),
+    /different commit/,
+  );
+});
+
+test('candidate job pagination rejects duplicate IDs across pages', async () => {
+  const get = async (path) => {
+    const page = Number(new URL('https://api.github.com' + path).searchParams.get('page'));
+    return {
+      total_count: 101,
+      jobs:
+        page === 1 ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1 })) : [{ id: 100 }],
+    };
+  };
+  await assert.rejects(
+    fetchAttemptJobs(get, '/repos/vlovers/ai-office', { id: 500, run_attempt: 1 }),
+    /duplicate IDs/,
+  );
+});
+
+test('green CI without a verifiable attempt is not accepted', () => {
+  const snapshot = fixture();
+  snapshot.runs[107][0].run_attempt = null;
+  assert.ok(codes(snapshot).includes('ci-evidence-invalid'));
 });
 
 test('GitHub API failure cannot be reported as a successful audit', async () => {
