@@ -31,11 +31,7 @@ function jobSteps(job, fail) {
   );
   if (starts.length === 0) fail('missing job steps');
   for (const line of steps) {
-    if (
-      indentOf(line) === 6 &&
-      /^      - /.test(line) &&
-      !/^      - [a-zA-Z][\w-]*:/.test(line)
-    ) {
+    if (indentOf(line) === 6 && /^      - /.test(line) && !/^      - [a-zA-Z][\w-]*:/.test(line)) {
       fail('unrecognized validation step declaration');
     }
   }
@@ -106,7 +102,7 @@ export function validateValidationWorkflow(source) {
     fail('validation must not reference repository or organization secrets');
   }
   const jobs = section(lines, 'jobs', 0, fail);
-  const jobNames = namedEntries(jobs, 2).filter((name) => name.endsWith(':'));
+  const jobNames = namedEntries(jobs, 2);
   if (
     jobNames.length !== 2 ||
     jobNames.some((name) => !['checks:', 'native-sandbox:'].includes(name))
@@ -160,7 +156,11 @@ export function validateValidationWorkflow(source) {
       if (
         step.uses.some(
           (action) =>
-            !['actions/checkout@v7', 'actions/setup-node@v7', 'actions/upload-artifact@v7'].includes(action),
+            ![
+              'actions/checkout@v7',
+              'actions/setup-node@v7',
+              'actions/upload-artifact@v7',
+            ].includes(action),
         )
       ) {
         fail(jobName + ' uses an unreviewed GitHub Action');

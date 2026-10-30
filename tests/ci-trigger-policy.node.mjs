@@ -173,13 +173,13 @@ test('rejects unreviewed sidecar jobs that escape the two-job security audit', (
 test('rejects repository secret interpolation in otherwise valid CI steps', () => {
   const injected = workflow.replace(
     '        run: npm ci',
-    '        run: npm ci\n        env:\n          TOKEN: \${{ secrets.PROVIDER_API_KEY }}',
+    '        run: npm ci\n        env:\n          TOKEN: ${{ secrets.PROVIDER_API_KEY }}',
   );
   assert.match(issues(injected).join(' '), /must not reference.*secrets/);
 });
 
 test('rejects unreviewed or dynamically resolved GitHub Actions', () => {
-  for (const action of ['attacker/checkout@v1', '\${{ inputs.action }}']) {
+  for (const action of ['attacker/checkout@v1', '${{ inputs.action }}']) {
     const injected = workflow.replace('uses: actions/checkout@v7', 'uses: ' + action);
     assert.match(issues(injected).join(' '), /unreviewed GitHub Action/);
   }
@@ -212,4 +212,12 @@ test('rejects unreviewed inline action steps and duplicate uses keys', () => {
     '        uses: actions/checkout@v7\n        uses: attacker/action@v1',
   );
   assert.match(issues(duplicate).join(' '), /duplicate uses keys/);
+});
+
+test('rejects an extra job with an inline YAML comment after its key', () => {
+  const extra = workflow.replace(
+    '  native-sandbox:',
+    '  hidden-sidecar: # executes elsewhere\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm run test:real\n\n  native-sandbox:',
+  );
+  assert.match(issues(extra).join(' '), /unexpected validation job/);
 });
