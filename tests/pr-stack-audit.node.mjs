@@ -175,7 +175,10 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
       const file = decodeURIComponent(path.split('/contents/')[1]);
       const ref = parsed.searchParams.get('ref');
       body = {
-        sha: ref === source.prs[109].head.sha ? source.blobs[file].source : source.blobs[file].candidate,
+        sha:
+          ref === source.prs[109].head.sha
+            ? source.blobs[file].source
+            : source.blobs[file].candidate,
       };
     } else {
       throw new Error('Unexpected GitHub endpoint: ' + path);
