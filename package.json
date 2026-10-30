@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@fastify/static": "^10.1.6",
+    "@fastify/static": "^10.1.7",
     "@openai/codex-sdk": "0.162.1",
     "fastify": "^5.12.7",
     "react": "^19.3.1",
