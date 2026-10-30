@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
@@ -94,6 +94,8 @@ export async function verifyNativeIsolation(
   // even when an executable masks a successful read with a failing exit code.
   const outsideCanary = `OUTSIDE_DENIED_${randomBytes(16).toString('hex')}`;
   const secretCanary = `SECRET_DENIED_${randomBytes(16).toString('hex')}`;
+  const gitMetadataCanary = `GIT_METADATA_DENIED_${randomBytes(16).toString('hex')}`;
+  const nestedCredentialsCanary = `NESTED_CREDENTIALS_DENIED_${randomBytes(16).toString('hex')}`;
   let networkEscape = false;
   const server = createServer((_request, response) => {
     networkEscape = true;
@@ -105,6 +107,12 @@ export async function verifyNativeIsolation(
     await writeFile(join(directory, 'allowed.txt'), 'READ_ALLOWED');
     await writeFile(join(root, 'outside.txt'), outsideCanary);
     await writeFile(join(directory, '.env'), secretCanary);
+    await mkdir(join(directory, 'nested'));
+    await mkdir(join(directory, 'nested', '.git'));
+    await mkdir(join(directory, 'nested', '.aws'));
+    await writeFile(join(directory, 'nested', '.git', 'config'), gitMetadataCanary);
+    await writeFile(join(directory, 'nested', '.aws', 'credentials'), nestedCredentialsCanary);
+    await symlink(join(root, 'outside.txt'), join(directory, 'outside-link'));
     await listenProbeServer(server);
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
@@ -132,10 +140,20 @@ export async function verifyNativeIsolation(
     const forbidden = [
       ['/bin/cat', join(root, 'outside.txt')],
       ['/bin/cat', join(directory, '.env')],
+      // Check nested protected paths and symlink traversal at runtime, not
+      // only in CI's native-sandbox smoke test.
+      ['/bin/cat', join(directory, 'nested', '.git', 'config')],
+      ['/bin/cat', join(directory, 'nested', '.aws', 'credentials')],
+      ['/bin/cat', join(directory, 'outside-link')],
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
-    await assertNativeDenials(forbidden, run, [outsideCanary, secretCanary]);
+    await assertNativeDenials(forbidden, run, [
+      outsideCanary,
+      secretCanary,
+      gitMetadataCanary,
+      nestedCredentialsCanary,
+    ]);
     if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
     if (networkEscape) throw new Error('Network isolation failed.');
     // Check effects as well as exit codes (a wrapper may hide its child's status).
