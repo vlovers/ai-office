@@ -258,7 +258,6 @@ test('collector fails closed when GitHub truncates candidate job evidence', asyn
   );
 });
 
-
 test('run pagination includes a failed newer run hidden beyond the first page', async () => {
   const paths = [];
   const source = fixture().runs[107][0];
@@ -352,9 +351,7 @@ test('candidate job pagination rejects duplicate IDs across pages', async () => 
     return {
       total_count: 101,
       jobs:
-        page === 1
-          ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1 }))
-          : [{ id: 100 }],
+        page === 1 ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1 })) : [{ id: 100 }],
     };
   };
   await assert.rejects(
