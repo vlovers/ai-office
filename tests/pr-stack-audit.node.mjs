@@ -57,7 +57,8 @@ function fixture() {
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', candidate: 'same-blob' }]),
   );
-  const jobs = REQUIRED_JOBS.map((name) => ({
+  const jobs = REQUIRED_JOBS.map((name, index) => ({
+    id: index + 1,
     name,
     run_id: 1116,
     run_attempt: 1,
@@ -234,7 +235,7 @@ test('collector retrieves every page for the exact CI attempt', async () => {
     return {
       total_count: 101,
       jobs: Array.from({ length: page === 1 ? 100 : 1 }, (_, index) => ({
-        id: (page - 1) * 100 + index,
+        id: (page - 1) * 100 + index + 1,
       })),
     };
   };
