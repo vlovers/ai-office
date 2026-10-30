@@ -57,8 +57,15 @@ Dashboard response must also invalidate previously selected Coder tasks and
 Reviewer/QA profiles that are no longer eligible; the creation button must
 remain disabled rather than submitting stale React form state. The process
 restart browser regression injects filtered Dashboard snapshots to exercise
-missing Coder and Reviewer choices. This does
-**not** prove that the persistent
+missing Coder and Reviewer choices. A confirmation-dialog regression opens
+a recovered Workflow cancellation, injects an HTTP 503 while the confirmation
+is checked, then restores transport and cancels the same Workflow through a
+separate API client. The open dialog must disable its submit button on the
+outage and again after the externally committed version change, display an
+explicit stale-checkpoint warning, and leave the externally committed version
+unchanged. An open confirmation must also be pinned to the selected Workflow
+and its latest summary version, even while the next timeline is loading. This
+does **not** prove that the persistent
 manual-review notice always appears or that arbitrary delayed failures cannot
 arrive after the observation window. Treat those as separate UX acceptance
 gaps; do not suppress the notice merely to make a browser test pass.
