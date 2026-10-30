@@ -314,8 +314,16 @@ export function WorkflowBoard({
     ? filteredWorkflows.filter((item) => item.id === selected)
     : filteredWorkflows;
   const workflowChoices = filteredWorkflows;
+  // A confirmation is pinned to the selected Workflow and its latest summary.
+  // Revoke it before the next snapshot finishes when selection/version changes.
   const staleAction = Boolean(
-    action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
+    action &&
+      (selected !== action.id ||
+        !chosen ||
+        chosen.version !== action.version ||
+        !timeline ||
+        action.id !== timeline.id ||
+        action.version !== timeline.version),
   );
   // Pausing polling is for inspection only, never permission to act on a stale snapshot.
   // Resume requires a new successful refresh before operator actions are enabled.
@@ -355,6 +363,7 @@ export function WorkflowBoard({
       !action ||
       !confirmed ||
       staleAction ||
+      loading ||
       paused ||
       refreshRequired ||
       error ||
@@ -863,7 +872,8 @@ export function WorkflowBoard({
             {error && <p role="alert">{error}</p>}
             {staleAction && (
               <p role="alert">
-                The workflow changed. Close this dialog and inspect the current checkpoint.
+                The workflow changed or another workflow was selected. Close this dialog and inspect
+                the current checkpoint.
               </p>
             )}
             <div className="button-row">

@@ -44,15 +44,22 @@ reconnection. It also injects a synthetic HTTP 503 during subsequent live
 polling against both the timeline and Dashboard endpoints and requires stale
 Workflow actions **and the Create gated workflow form** to become disabled;
 after transport recovery, errors must disappear and controls become available
-again without reloading the page. Pausing live polling must also disable
+again without reloading the page. Delayed-response tests also hold an older
+snapshot request while the operator switches Workflows or pauses and resumes
+polling. A newer successful checkpoint must win over an older HTTP 503;
+late errors must not replace the selected timeline or revoke fresh controls.
+Pausing live polling must also disable
 Workflow creation, cancellation, and checkpoint mutations; resuming requires a
 fresh successful refresh before these controls become actionable. A fresh
 Dashboard response must also invalidate previously selected Coder tasks and
 Reviewer/QA profiles that are no longer eligible; the creation button must
 remain disabled rather than submitting stale React form state. The process
 restart browser regression injects filtered Dashboard snapshots to exercise
-missing Coder and Reviewer choices. This does
-**not** prove that the persistent
+missing Coder and Reviewer choices. A checked confirmation dialog must
+be invalidated by an HTTP 503 and by a separate operator changing the
+checkpoint version. Its action must remain disabled until a fresh snapshot,
+and a changed Workflow summary or selection must revoke the open confirmation
+even before its next snapshot loads. This does **not** prove that the persistent
 manual-review notice always appears or that arbitrary delayed failures cannot
 arrive after the observation window. Treat those as separate UX acceptance
 gaps; do not suppress the notice merely to make a browser test pass.
