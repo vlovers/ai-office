@@ -333,7 +333,9 @@ export async function collectStack({
     PINNED_PATHS.map(async (path) => {
       const encoded = path.split('/').map(encodeURIComponent).join('/');
       const [source, candidate] = await Promise.all(
-        [109, CANDIDATE_PR].map((number) => get(`${root}/contents/${encoded}?ref=${prs[number].head.sha}`)),
+        [109, CANDIDATE_PR].map((number) =>
+          get(`${root}/contents/${encoded}?ref=${prs[number].head.sha}`),
+        ),
       );
       blobs[path] = { source: source.sha, candidate: candidate.sha };
     }),

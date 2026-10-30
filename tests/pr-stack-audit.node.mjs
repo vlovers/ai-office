@@ -546,7 +546,6 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
   );
 });
 
-
 test('audits all post-integration Draft PRs through the native-security tip', () => {
   assert.deepEqual(STACK.slice(-6), [
     { number: 117, base: 116 },
