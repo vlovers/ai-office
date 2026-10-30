@@ -828,6 +828,60 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(terminalTasks.get(failed.task.id), 'failed');
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
     assert.equal(terminalTasks.get(blocked.task.id), 'completed');
+    // An open confirmation must be revoked on transport failure and after an
+    // external operator changes the checkpoint. Use real browser + HTTP.
+    await selector.selectOption(blocked.workflowId);
+    await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
+    await board.getByRole('button', { name: 'Cancel workflow' }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+    const confirmCheckpoint = confirmation.getByRole('button', { name: 'Confirm checkpoint' });
+    await expect(confirmCheckpoint).toBeEnabled();
+
+    const dialogTimelineUrl = address + '/api/workflows/' + blocked.workflowId + '/timeline';
+    await page.route(dialogTimelineUrl, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic dialog checkpoint outage' }),
+      }),
+    );
+    try {
+      await expect(
+        confirmation.getByRole('alert').filter({ hasText: 'Synthetic dialog checkpoint outage' }),
+      ).toBeVisible({ timeout: 20000 });
+      await expect(confirmCheckpoint).toBeDisabled();
+    } finally {
+      await page.unroute(dialogTimelineUrl);
+    }
+    await expect(
+      confirmation.getByRole('alert').filter({ hasText: 'Synthetic dialog checkpoint outage' }),
+    ).toHaveCount(0, { timeout: 20000 });
+    await expect(confirmCheckpoint).toBeEnabled();
+
+    // A separate API client advances the Workflow while the checked dialog
+    // remains open. The browser must revoke that stale confirmation on poll.
+    const externalCancelUrl = address + '/api/workflows/' + blocked.workflowId + '/cancel';
+    const expectedExternalVersion = versions[3]! + 1;
+    const externalCancel = await page.request.post(externalCancelUrl, {
+      data: { version: versions[3], confirmed: true },
+    });
+    assert.equal(externalCancel.status(), 200);
+    const externalCancelled = await externalCancel.json();
+    assert.equal(externalCancelled.version, expectedExternalVersion);
+    await expect(
+      confirmation.getByRole('alert').filter({ hasText: 'The workflow changed' }),
+    ).toBeVisible({ timeout: 20000 });
+    await expect(confirmCheckpoint).toBeDisabled();
+    await expect(confirmation).toContainText('version ' + versions[3]);
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
+    const afterDialog = await page.request.get(address + '/api/workflows/' + blocked.workflowId);
+    assert.equal(afterDialog.status(), 200);
+    assert.equal((await afterDialog.json()).version, expectedExternalVersion);
+    await assertNoUnexpectedWorkflowAlerts();
     assert.deepEqual(pageErrors, []);
     passed = true;
     console.log(
