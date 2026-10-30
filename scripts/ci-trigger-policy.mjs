@@ -9,9 +9,7 @@ const normalize = (source) =>
 
 function section(lines, key, indent, fail) {
   const prefix = ' '.repeat(indent);
-  const matches = lines.flatMap((line, index) =>
-    line === prefix + key + ':' ? [index] : [],
-  );
+  const matches = lines.flatMap((line, index) => (line === prefix + key + ':' ? [index] : []));
   if (matches.length !== 1) {
     fail('expected exactly one ' + key + ' section at indentation ' + indent);
     return [];
@@ -23,9 +21,7 @@ function section(lines, key, indent, fail) {
 }
 
 function namedEntries(lines, indent) {
-  return lines
-    .filter((line) => indentOf(line) === indent)
-    .map((line) => line.trim());
+  return lines.filter((line) => indentOf(line) === indent).map((line) => line.trim());
 }
 
 function jobSteps(job, fail) {
@@ -38,7 +34,11 @@ function jobSteps(job, fail) {
     const lines = steps.slice(start, starts[i + 1] ?? steps.length);
     const inlineRun = /^      - run:\s*(.*)$/.exec(lines[0]);
     const runIndex = lines.findIndex((line) => /^        run:/.test(line));
-    const run = inlineRun ? inlineRun[1].trim() : runIndex < 0 ? null : lines[runIndex].slice(12).trim();
+    const run = inlineRun
+      ? inlineRun[1].trim()
+      : runIndex < 0
+        ? null
+        : lines[runIndex].slice(12).trim();
     const commands =
       run === '|' || run === '>'
         ? lines
@@ -119,7 +119,9 @@ export function validateValidationWorkflow(source) {
       if (matches.length !== 1) {
         fail(jobName + ' missing validation step or duplicate: ' + command);
       } else if (matches[0].conditional || matches[0].allowFailure) {
-        fail(jobName + ' required validation step cannot be conditional or allow failure: ' + command);
+        fail(
+          jobName + ' required validation step cannot be conditional or allow failure: ' + command,
+        );
       }
     }
     for (const step of steps) {

@@ -70,7 +70,9 @@ test('rejects workflows without a pull_request event', () => {
 test('rejects unexpected workflow event families', () => {
   for (const event of ['workflow_run', 'repository_dispatch']) {
     assert.match(
-      issues(workflow.replace('  pull_request:\n', '  pull_request:\n  ' + event + ':\n')).join(' '),
+      issues(workflow.replace('  pull_request:\n', '  pull_request:\n  ' + event + ':\n')).join(
+        ' ',
+      ),
       /unexpected workflow trigger/,
     );
   }
@@ -78,7 +80,12 @@ test('rejects unexpected workflow event families', () => {
 
 test('rejects job-level permission escalation', () => {
   assert.match(
-    issues(workflow.replace('    runs-on: ubuntu-latest', '    permissions:\n      contents: write\n    runs-on: ubuntu-latest')).join(' '),
+    issues(
+      workflow.replace(
+        '    runs-on: ubuntu-latest',
+        '    permissions:\n      contents: write\n    runs-on: ubuntu-latest',
+      ),
+    ).join(' '),
     /override permissions/,
   );
 });
@@ -86,7 +93,12 @@ test('rejects job-level permission escalation', () => {
 test('rejects conditional or failure-tolerant security jobs', () => {
   for (const setting of ['if: false', 'continue-on-error: true']) {
     assert.match(
-      issues(workflow.replace('    runs-on: macos-latest', '    ' + setting + '\n    runs-on: macos-latest')).join(' '),
+      issues(
+        workflow.replace(
+          '    runs-on: macos-latest',
+          '    ' + setting + '\n    runs-on: macos-latest',
+        ),
+      ).join(' '),
       /skip execution or allow failure/,
     );
   }
@@ -95,7 +107,12 @@ test('rejects conditional or failure-tolerant security jobs', () => {
 test('rejects skipped or failure-tolerant required steps', () => {
   for (const setting of ['if: false', 'continue-on-error: true']) {
     assert.match(
-      issues(workflow.replace('        run: npm run test:sandbox', '        ' + setting + '\n        run: npm run test:sandbox')).join(' '),
+      issues(
+        workflow.replace(
+          '        run: npm run test:sandbox',
+          '        ' + setting + '\n        run: npm run test:sandbox',
+        ),
+      ).join(' '),
       /cannot be conditional or allow failure/,
     );
   }
@@ -112,7 +129,12 @@ test('commented-out and echoed commands do not count as executed gates', () => {
 
 test('multiline commands cannot hide an ignored gate exit status', () => {
   assert.match(
-    issues(workflow.replace('run: npm run typecheck', 'run: |\n          npm run typecheck\n          exit 0')).join(' '),
+    issues(
+      workflow.replace(
+        'run: npm run typecheck',
+        'run: |\n          npm run typecheck\n          exit 0',
+      ),
+    ).join(' '),
     /missing validation step/,
   );
 });
