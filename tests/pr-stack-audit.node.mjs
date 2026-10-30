@@ -219,14 +219,8 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
-  assert.equal(
-    requested.filter((path) => path.endsWith('/actions/runs')).length,
-    STACK.length * 2,
-  );
-  assert.equal(
-    requested.filter((path) => /\/attempts\/\d+\/jobs$/.test(path)).length,
-    2,
-  );
+  assert.equal(requested.filter((path) => path.endsWith('/actions/runs')).length, STACK.length * 2);
+  assert.equal(requested.filter((path) => /\/attempts\/\d+\/jobs$/.test(path)).length, 2);
 });
 
 test('newer failed CI overrides older green CI regardless of API array order', () => {
