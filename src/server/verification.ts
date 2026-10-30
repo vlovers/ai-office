@@ -5,6 +5,20 @@ import { killProcessGroup, reapProcessGroup } from './process-group.js';
 export interface VerificationResult {
   output: string;
   passed: boolean;
+  /** Not an attested sandbox denial: spawn failure, timeout, output cap or signal. */
+  incomplete?: boolean;
+}
+/** An IPC message is evidence only if it matches the worker's result protocol. */
+function isAttestedResult(value: unknown): value is VerificationResult {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.passed === 'boolean' &&
+    typeof candidate.output === 'string' &&
+    candidate.output.length <= 128_100 &&
+    (candidate.incomplete === undefined || typeof candidate.incomplete === 'boolean') &&
+    !(candidate.passed && candidate.incomplete === true)
+  );
 }
 export async function runVerification(
   argv: string[],
@@ -17,7 +31,8 @@ export async function runVerification(
     throw new AppError(409, 'Verification requires macOS or Linux process groups.');
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
     throw new AppError(400, 'Verification timeout must be positive and finite.');
-  if (signal?.aborted) return { passed: false, output: 'Verification interrupted before launch.' };
+  if (signal?.aborted)
+    return { passed: false, output: 'Verification interrupted before launch.', incomplete: true };
   return new Promise((resolve, reject) => {
     const child = fork(
       new URL(
@@ -34,11 +49,27 @@ export async function runVerification(
     );
     let result: VerificationResult | undefined;
     let startupError = false;
+    let protocolError = false;
     let interrupted = false;
     let cleanupError: unknown;
-    child.on('message', (value: VerificationResult) => {
-      if (!interrupted)
-        result = { passed: value.passed === true, output: String(value.output).slice(0, 128_100) };
+    child.on('message', (value: unknown) => {
+      if (interrupted || protocolError) return;
+      // A malformed or repeated message must never be coerced into a denial.
+      // It can otherwise crash the backend (null) or overwrite a real result.
+      if (result || !isAttestedResult(value)) {
+        protocolError = true;
+        try {
+          if (child.pid) killProcessGroup(child.pid);
+        } catch (error) {
+          cleanupError = error;
+        }
+        return;
+      }
+      result = {
+        passed: value.passed,
+        output: value.output,
+        ...(value.incomplete === true ? { incomplete: true } : {}),
+      };
     });
     child.on('error', () => {
       startupError = true;
@@ -53,7 +84,11 @@ export async function runVerification(
     }, timeoutMs + 5000);
     const abort = () => {
       interrupted = true;
-      result = { passed: false, output: 'Verification interrupted during application shutdown.' };
+      result = {
+        passed: false,
+        output: 'Verification interrupted during application shutdown.',
+        incomplete: true,
+      };
       try {
         if (child.pid) killProcessGroup(child.pid);
       } catch (error) {
@@ -75,16 +110,22 @@ export async function runVerification(
         reject(cleanupError);
         return;
       }
+      if (protocolError) {
+        reject(new AppError(409, 'Verification supervisor sent an invalid result.'));
+        return;
+      }
       if (startupError && !interrupted) {
         reject(new AppError(409, 'Verification supervisor could not start.'));
         return;
       }
-      resolve(
-        result ?? {
-          passed: false,
-          output: 'Verification supervisor interrupted; no successful completion was confirmed.',
-        },
-      );
+      // An unreported worker exit is not an attested sandbox denial. In
+      // particular, native capability probes must never interpret a crashed
+      // supervisor as evidence that a forbidden operation was blocked.
+      if (!result) {
+        reject(new AppError(409, 'Verification supervisor closed without an attested result.'));
+        return;
+      }
+      resolve(result);
     });
     child.send({ argv, cwd, timeoutMs, environment }, (error) => {
       if (error) {
