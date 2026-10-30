@@ -191,7 +191,13 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
     } else if (path.includes('/compare/')) {
       const base = path.split('/compare/')[1].split('...')[0];
       const number = Number(base.slice('head-'.length));
-      body = base === source.mainSha ? source.comparisons.main : source.comparisons[number];
+      const target = Number(path.split('...')[1].slice('head-'.length));
+      body =
+        base === source.mainSha && target === 116
+          ? source.comparisons.main
+          : REQUIRED_ANCESTORS.includes(number) && target === 116
+            ? source.comparisons[number]
+            : source.comparisons.edges[target];
     } else if (path.includes('/contents/')) {
       const file = decodeURIComponent(path.split('/contents/')[1]);
       const ref = parsed.searchParams.get('ref');
@@ -460,7 +466,9 @@ test('collector rejects a main push while evidence is being collected', async ()
       const body =
         base === source.mainSha && target === 116
           ? source.comparisons.main
-          : source.comparisons.edges[target] ?? source.comparisons[number];
+          : REQUIRED_ANCESTORS.includes(number) && target === 116
+            ? source.comparisons[number]
+            : source.comparisons.edges[target];
       return { ok: true, json: async () => body };
     }
     if (path.includes('/contents/')) {
