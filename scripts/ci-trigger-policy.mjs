@@ -75,6 +75,110 @@ function jobSteps(job, fail) {
   });
 }
 
+// Pin the complete executable CI surface: extra steps, shell/env/defaults changes,
+// artifact paths and action inputs require an explicit policy review.
+const approvedValidationStructure = {
+  top: ['name: AI Office validation', 'on:', 'permissions:', 'concurrency:', 'jobs:'],
+  push: ['    branches: [main]'],
+  concurrency: [
+    '  group: ai-office-validation-${{ github.workflow }}-${{ github.ref }}',
+    '  cancel-in-progress: true',
+  ],
+  jobs: {
+    checks: {
+      header: [
+        'name: TypeScript, tests, smoke, build and formatting',
+        'runs-on: ubuntu-latest',
+        'timeout-minutes: 20',
+        'steps:',
+      ],
+      blocks: [
+        '- name: Checkout\nuses: actions/checkout@v7',
+        "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
+        '- name: Install dependencies\nrun: npm ci',
+        '- name: TypeScript\nrun: npm run typecheck',
+        '- name: Delivery security lint\nrun: npm run lint',
+        '- name: Unit and integration tests\nrun: npm test',
+        '- name: Offline integration stack audit regressions\nrun: node --test tests/pr-stack-audit.node.mjs',
+        '- name: CI trigger and security policy regressions\nrun: node --test tests/ci-trigger-policy.node.mjs',
+        '- name: HTTP/SSE smoke tests\nrun: npm run test:smoke',
+        '- name: Production build\nrun: npm run build',
+        '- name: Formatting\nid: formatting\nrun: npm run format:check',
+        "- name: Show formatting diff on failure\nif: failure() && steps.formatting.outcome == 'failure'\nrun: |\n  npx prettier --write . > /dev/null\n  git diff -- .",
+        '- name: Install Chromium and browser dependencies\nrun: npx playwright install --with-deps chromium',
+        '- name: Browser smoke (deterministic fixtures)\nrun: npm run test:browser',
+        '- name: Office V4 scene and state browser smoke (no model calls)\nrun: npm run test:browser:office\nenv:\n  AI_OFFICE_BROWSER_ARTIFACTS: ${{ runner.temp }}/office-v4',
+        '- name: Upload office screenshots\nif: always()\nuses: actions/upload-artifact@v7\nwith:\n  name: office-v4-browser\n  path: ${{ runner.temp }}/office-v4\n  if-no-files-found: ignore\n  retention-days: 7',
+        '- name: Isolated write browser smoke (no model calls)\nrun: npm run test:browser:write',
+        '- name: Agent Studio browser and restart smoke (no model calls)\nrun: npm run test:browser:studio',
+      ],
+    },
+    'native-sandbox': {
+      header: [
+        'name: Native Codex filesystem policy (no inference)',
+        'runs-on: macos-latest',
+        'timeout-minutes: 10',
+        'steps:',
+      ],
+      blocks: [
+        '- name: Checkout\nuses: actions/checkout@v7',
+        "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
+        '- name: Install dependencies\nrun: npm ci',
+        '- name: Native read-only and isolated-write policy\nrun: npm run test:sandbox',
+        '- name: Reviewer, QA, workflow recovery and security integration (native sandbox, no inference)\nrun: npm run test:workflow:native',
+        '- name: Build production dashboard\nrun: npm run build',
+        '- name: Install Chromium\nrun: npx playwright install chromium',
+        '- name: Coder to Reviewer to QA browser approval journey (native sandbox, no inference)\nrun: npm run test:browser:workflow\nenv:\n  AI_OFFICE_BROWSER_ARTIFACTS: ${{ runner.temp }}/workflow-browser',
+        '- name: Upload workflow browser evidence\nif: always()\nuses: actions/upload-artifact@v7\nwith:\n  name: workflow-browser\n  path: ${{ runner.temp }}/workflow-browser\n  if-no-files-found: ignore\n  retention-days: 7',
+      ],
+    },
+  },
+};
+
+function validateApprovedStructure(lines, fail) {
+  const same = (actual, expected) => JSON.stringify(actual) === JSON.stringify(expected);
+  const top = lines.filter((line) => indentOf(line) === 0);
+  if (!same(top, approvedValidationStructure.top)) {
+    fail('unreviewed top-level validation configuration');
+  }
+  const events = section(lines, 'on', 0, fail);
+  if (!same(section(events, 'push', 2, fail), approvedValidationStructure.push)) {
+    fail('push must target main only');
+  }
+  if (section(events, 'workflow_dispatch', 2, fail).length) {
+    fail('workflow_dispatch must not accept unreviewed inputs');
+  }
+  if (!same(section(lines, 'concurrency', 0, fail), approvedValidationStructure.concurrency)) {
+    fail('unreviewed workflow concurrency policy');
+  }
+  const jobs = section(lines, 'jobs', 0, fail);
+  for (const [name, approved] of Object.entries(approvedValidationStructure.jobs)) {
+    const job = section(jobs, name, 2, fail);
+    const header = job.filter((line) => indentOf(line) === 4).map((line) => line.trim());
+    if (!same(header, approved.header)) {
+      fail(name + ' has unreviewed job settings');
+    }
+    const stepLines = section(job, 'steps', 4, fail);
+    const starts = stepLines.flatMap((line, index) =>
+      indentOf(line) === 6 && line.startsWith('      - ') ? [index] : [],
+    );
+    const blocks = starts.map((start, index) =>
+      stepLines
+        .slice(start, starts[index + 1] ?? stepLines.length)
+        .map((line, offset) => line.slice(offset === 0 ? 6 : 8))
+        .join('\n'),
+    );
+    if (blocks.length !== approved.blocks.length) {
+      fail(name + ' has unreviewed validation step count');
+    }
+    for (let index = 0; index < blocks.length; index++) {
+      if (blocks[index] !== approved.blocks[index]) {
+        fail(name + ' has unreviewed validation step at index ' + index);
+      }
+    }
+  }
+}
+
 export function validateValidationWorkflow(source) {
   const issues = [];
   const fail = (reason) => issues.push(reason);
@@ -176,5 +280,6 @@ export function validateValidationWorkflow(source) {
       }
     }
   }
+  validateApprovedStructure(lines, fail);
   return issues;
 }
