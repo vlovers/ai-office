@@ -199,10 +199,7 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
 test('newer failed CI overrides older green CI regardless of API array order', () => {
   const snapshot = fixture();
   const oldRun = snapshot.runs[107][0];
-  snapshot.runs[107] = [
-    oldRun,
-    { ...oldRun, id: oldRun.id + 10000, conclusion: 'failure' },
-  ];
+  snapshot.runs[107] = [oldRun, { ...oldRun, id: oldRun.id + 10000, conclusion: 'failure' }];
   assert.ok(codes(snapshot).includes('ci-not-green'));
 });
 
@@ -251,11 +248,10 @@ test('collector retrieves every page for the exact CI attempt', async () => {
 
 test('collector fails closed when GitHub truncates candidate job evidence', async () => {
   await assert.rejects(
-    fetchAttemptJobs(
-      async () => ({ total_count: 101, jobs: [] }),
-      '/repos/vlovers/ai-office',
-      { id: 500, run_attempt: 3 },
-    ),
+    fetchAttemptJobs(async () => ({ total_count: 101, jobs: [] }), '/repos/vlovers/ai-office', {
+      id: 500,
+      run_attempt: 3,
+    }),
     /inconsistent/,
   );
 });

@@ -37,8 +37,7 @@ export function selectValidationRun(runs, number) {
         run.pull_requests?.some((pr) => pr.number === number),
     )
     .sort(
-      (left, right) =>
-        right.id - left.id || (right.run_attempt ?? 0) - (left.run_attempt ?? 0),
+      (left, right) => right.id - left.id || (right.run_attempt ?? 0) - (left.run_attempt ?? 0),
     )[0];
 }
 
