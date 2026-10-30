@@ -30,9 +30,18 @@ export async function qaPlan(
     throw new AppError(409, 'QA requires a configured command with an absolute executable.');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000)
     throw new AppError(409, 'QA timeout must be between 1 and 120000 ms.');
-  const executable = await realpath(argv[0]!);
-  const info = await stat(executable);
-  if (!info.isFile()) throw new AppError(409, 'QA executable is not a file.');
+  // A missing, inaccessible or non-executable command must fail approval
+  // deterministically rather than leaking a filesystem error as HTTP 500.
+  let executable: string;
+  let info: Awaited<ReturnType<typeof stat>>;
+  try {
+    executable = await realpath(argv[0]!);
+    info = await stat(executable);
+  } catch {
+    throw new AppError(409, 'QA executable is unavailable. Configure a valid command.');
+  }
+  if (!info.isFile() || (info.mode & 0o111) === 0)
+    throw new AppError(409, 'QA executable must be an executable file.');
   const selected = { commandId, argv: [executable, ...argv.slice(1)], timeoutMs };
   return {
     ...selected,
@@ -40,19 +49,61 @@ export async function qaPlan(
       .update(
         JSON.stringify({
           ...selected,
-          identity: [info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs],
+          identity: [
+            info.dev,
+            info.ino,
+            info.mode,
+            info.uid,
+            info.gid,
+            info.size,
+            info.mtimeMs,
+            info.ctimeMs,
+          ],
         }),
       )
       .digest('hex'),
   };
 }
 
+/**
+ * QA approval pins the executable's file identity and the exact command.
+ * Reject changed plans before expensive preflight and again after it, since
+ * the executable can be replaced while native capability probes are running.
+ */
+async function requireUnchangedQAPlan(plan: QAPlan): Promise<void> {
+  let current: QAPlan;
+  try {
+    current = await qaPlan(plan.commandId, plan.argv, plan.timeoutMs);
+  } catch {
+    throw new AppError(409, 'Approved QA command changed. Request a new approval.');
+  }
+  if (current.digest !== plan.digest)
+    throw new AppError(409, 'Approved QA command changed. Request a new approval.');
+}
+
 /** Untrusted repository commands run INSIDE the same restrictive native policy. */
 export async function runSandboxedQA(directory: string, plan: QAPlan, signal: AbortSignal) {
-  await verifyNativeIsolation();
+  // A cancelled queued QA must not launch even the expensive native capability
+  // probes. Keep the second check: cancellation may arrive during verification.
+  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+  await requireUnchangedQAPlan(plan);
+  // File identity resolution is asynchronous: cancellation can arrive while
+  // the approval digest is being revalidated, before native probes start.
+  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+  try {
+    await verifyNativeIsolation(undefined, signal);
+  } catch (error) {
+    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+    throw error;
+  }
   if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
   const home = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-')));
   try {
+    // Narrow the replacement window: re-check after all asynchronous setup
+    // and immediately before handing the approved argv to the supervisor.
+    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+    await requireUnchangedQAPlan(plan);
+    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
     return await runVerification(
       [process.execPath, nativeCodex, ...sandboxArguments(directory, plan.argv)],
       directory,
