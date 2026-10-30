@@ -252,7 +252,7 @@ esac
 );
 
 fakeNative(
-  'interrupts all four concurrent native denial probes on cancellation',
+  'interrupts concurrent native denial probes on cancellation',
   async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-denial-abort-')));
     const controller = new AbortController();
@@ -447,6 +447,67 @@ esac
   15000,
 );
 
+fakeNative(
+  'accepts complete denials of nested metadata and symlink reads',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-nested-deny-')));
+    try {
+      const fake = join(root, 'fake-sandbox.sh');
+      await writeFile(
+        fake,
+        `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 9
+shift
+case "$*" in
+  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  *) exit 7 ;;
+esac
+`,
+      );
+      await chmod(fake, 0o700);
+      await expect(verifyNativeIsolation(fake)).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  15000,
+);
+
+for (const [label, match] of [
+  ['nested Git metadata', '*nested/.git/config*'],
+  ['nested cloud credentials', '*nested/.aws/credentials*'],
+  ['symlink traversal', '*outside-link*'],
+] as const) {
+  fakeNative(
+    `rejects masked forbidden reads of ${label} despite a nonzero sandbox exit`,
+    async () => {
+      const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-nested-leak-')));
+      try {
+        const fake = join(root, 'fake-sandbox.sh');
+        await writeFile(
+          fake,
+          `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 9
+shift
+case "$*" in
+  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  ${match}) /bin/cat "$2"; exit 7 ;;
+  *) exit 7 ;;
+esac
+`,
+        );
+        await chmod(fake, 0o700);
+        await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    15000,
+  );
+}
+
 for (const [label, match, redirect] of [
   ['outside file', '*outside.txt*', ''],
   ['secret file', '*.env*', '>&2'],
@@ -518,6 +579,9 @@ shift
 case "$*" in
   *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
+  *outside-link*) marker=link ;;
+  *nested/.git/config*) marker=git ;;
+  *nested/.aws/credentials*) marker=aws ;;
   *.env*) marker=secret ;;
   *write-escape*) marker=write ;;
   *127.0.0.1:*) marker=network ;;
@@ -526,7 +590,7 @@ esac
 touch "${root}/$marker"
 i=0
 while [ "$i" -lt 200 ]; do
-  if [ -f "${root}/outside" ] && [ -f "${root}/secret" ] && [ -f "${root}/write" ] && [ -f "${root}/network" ]; then
+  if [ -f "${root}/outside" ] && [ -f "${root}/link" ] && [ -f "${root}/git" ] && [ -f "${root}/aws" ] && [ -f "${root}/secret" ] && [ -f "${root}/write" ] && [ -f "${root}/network" ]; then
     exit 1
   fi
   sleep 0.02

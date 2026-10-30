@@ -92,3 +92,14 @@ the audit rather than reporting an outdated snapshot as current. Offline
 regressions cover missing/diverged edges, forged comparison metadata,
 new failed CI runs, rerun attempts, changed native jobs and a concurrent main
 push. This is a read-only safety gate, not merge authorization.
+
+## Runtime native sandbox regression gate
+
+The per-request native capability preflight now probes eight independent
+operations: an allowed read; denied reads of an outside file, a root `.env`,
+nested Git metadata, nested cloud credentials and an in-workspace symlink
+pointing outside; plus denied repository writes and loopback networking.
+Each forbidden read uses a fresh canary. A nonzero sandbox exit that prints a
+canary is a failure, not evidence of isolation. All denial supervisors must
+complete normally before QA is allowed to launch. The additional probes use
+only temporary synthetic fixtures and never invoke a model provider.
