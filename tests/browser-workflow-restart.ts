@@ -587,6 +587,55 @@ if (process.argv.includes('--restart-server')) {
     await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
     await assertNoUnexpectedWorkflowAlerts();
 
+    // A late failure from the previously selected Workflow must not overwrite
+    // a newer successful snapshot or turn healthy operator controls stale.
+    let releaseOldSelection: (() => void) | undefined;
+    let markOldSelectionStarted: (() => void) | undefined;
+    const oldSelectionStarted = new Promise<void>((resolve) => {
+      markOldSelectionStarted = resolve;
+    });
+    const oldSelectionGate = new Promise<void>((resolve) => {
+      releaseOldSelection = resolve;
+    });
+    let oldSelectionHeld = false;
+    await page.route(timelineUrl, async (route) => {
+      if (oldSelectionHeld) {
+        await route.continue();
+        return;
+      }
+      oldSelectionHeld = true;
+      markOldSelectionStarted?.();
+      await oldSelectionGate;
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic stale selection response' }),
+      });
+    });
+    try {
+      await board.getByRole('button', { name: 'Refresh workflow' }).click();
+      await oldSelectionStarted;
+      await selector.selectOption(failed.workflowId);
+      await expect(board).toContainText('QA — failed', { timeout: 20000 });
+      const staleSelectionResponse = page.waitForResponse(
+        (response) => response.url() === timelineUrl && response.status() === 503,
+        { timeout: 20000 },
+      );
+      releaseOldSelection?.();
+      await staleSelectionResponse;
+      await expect(selector).toHaveValue(failed.workflowId);
+      await expect(
+        board.getByRole('alert').filter({ hasText: 'Synthetic stale selection response' }),
+      ).toHaveCount(0);
+    } finally {
+      releaseOldSelection?.();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await selector.selectOption(blocked.workflowId);
+    await expect(board).toContainText('QA — blocked');
+    await expect(createWorkflow).toBeEnabled();
+    await assertNoUnexpectedWorkflowAlerts();
+
     // The list and atomic checkpoint can still describe different versions
     // after a concurrent transition. Reject inconsistent snapshot metadata.
     const mixedCheckpointAlert = board.getByRole('alert').filter({
@@ -833,6 +882,67 @@ if (process.argv.includes('--restart-server')) {
       await page.unrouteAll({ behavior: 'wait' });
     }
     await expect(createWorkflow).toBeEnabled({ timeout: 10000 });
+
+    // A pre-pause HTTP 503 arriving after a successful resume must be ignored.
+    // The previous generation's response cannot revoke freshly loaded controls.
+    let releaseOldPause: (() => void) | undefined;
+    let markOldPauseStarted: (() => void) | undefined;
+    const oldPauseStarted = new Promise<void>((resolve) => {
+      markOldPauseStarted = resolve;
+    });
+    const oldPauseGate = new Promise<void>((resolve) => {
+      releaseOldPause = resolve;
+    });
+    let oldPauseHeld = false;
+    await page.route(boardPollUrl, async (route) => {
+      if (oldPauseHeld) {
+        await route.continue();
+        return;
+      }
+      oldPauseHeld = true;
+      markOldPauseStarted?.();
+      await oldPauseGate;
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic stale paused response' }),
+      });
+    });
+    try {
+      // Use a background poll: a manually held Refresh workflow keeps its
+      // loading flag true until the old request resolves, independently of
+      // the newer resumed checkpoint.
+      await Promise.race([
+        oldPauseStarted,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Stale paused poll never started')), 15000),
+        ),
+      ]);
+      await board.getByRole('button', { name: 'Pause live updates' }).click();
+      await expect(createWorkflow).toBeDisabled();
+      const freshAfterResume = page.waitForResponse(
+        (response) => response.url() === boardPollUrl && response.ok(),
+        { timeout: 20000 },
+      );
+      await board.getByRole('button', { name: 'Resume live updates' }).click();
+      await freshAfterResume;
+      await expect(createWorkflow).toBeEnabled({ timeout: 20000 });
+      const stalePauseResponse = page.waitForResponse(
+        (response) => response.url() === boardPollUrl && response.status() === 503,
+        { timeout: 20000 },
+      );
+      releaseOldPause?.();
+      await stalePauseResponse;
+      await expect(
+        board.getByRole('alert').filter({ hasText: 'Synthetic stale paused response' }),
+      ).toHaveCount(0);
+      await expect(createWorkflow).toBeEnabled();
+      await expect(board.getByRole('button', { name: 'Cancel workflow' })).toBeEnabled();
+    } finally {
+      releaseOldPause?.();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+    await assertNoUnexpectedWorkflowAlerts();
 
     // A response slower than the 3s polling interval must not starve the UI.
     // While that poll is pending, an explicit refresh must supersede it.
@@ -1105,6 +1215,59 @@ if (process.argv.includes('--restart-server')) {
     assert.equal(terminalTasks.get(failed.task.id), 'failed');
     assert.equal(terminalTasks.get(stopped.task.id), 'stopped');
     assert.equal(terminalTasks.get(blocked.task.id), 'completed');
+
+    // A checked confirmation must fail closed on transport loss and after an
+    // independent operator changes the persisted checkpoint version.
+    await selector.selectOption(blocked.workflowId);
+    await expect(board.getByText(/^State: blocked/)).toBeVisible({ timeout: 20000 });
+    await board.getByRole('button', { name: 'Cancel workflow' }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('checkbox', { name: 'I approve this exact checkpoint' }).check();
+    const confirmCheckpoint = confirmation.getByRole('button', { name: 'Confirm checkpoint' });
+    await expect(confirmCheckpoint).toBeEnabled();
+
+    const dialogSnapshotUrl = address + '/api/workflows/' + blocked.workflowId + '/snapshot';
+    await page.route(dialogSnapshotUrl, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Synthetic dialog checkpoint outage' }),
+      }),
+    );
+    try {
+      await expect(
+        confirmation.getByRole('alert').filter({ hasText: 'Synthetic dialog checkpoint outage' }),
+      ).toBeVisible({ timeout: 20000 });
+      await expect(confirmCheckpoint).toBeDisabled();
+    } finally {
+      await page.unroute(dialogSnapshotUrl);
+    }
+    await expect(
+      confirmation.getByRole('alert').filter({ hasText: 'Synthetic dialog checkpoint outage' }),
+    ).toHaveCount(0, { timeout: 20000 });
+    await expect(confirmCheckpoint).toBeEnabled();
+
+    const externalCancelUrl = address + '/api/workflows/' + blocked.workflowId + '/cancel';
+    const expectedExternalVersion = versions[3]! + 1;
+    const externalCancel = await page.request.post(externalCancelUrl, {
+      data: { version: versions[3], confirmed: true },
+    });
+    assert.equal(externalCancel.status(), 200);
+    const externalCancelled = await externalCancel.json();
+    assert.equal(externalCancelled.version, expectedExternalVersion);
+    await expect(
+      confirmation.getByRole('alert').filter({ hasText: 'The workflow changed' }),
+    ).toBeVisible({ timeout: 20000 });
+    await expect(confirmCheckpoint).toBeDisabled();
+    await expect(confirmation).toContainText('version ' + versions[3]);
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await expect(board.getByText(/^State: cancelled/)).toBeVisible({ timeout: 20000 });
+    const afterDialog = await page.request.get(address + '/api/workflows/' + blocked.workflowId);
+    assert.equal(afterDialog.status(), 200);
+    assert.equal((await afterDialog.json()).version, expectedExternalVersion);
+    await assertNoUnexpectedWorkflowAlerts();
 
     // Use a separate disposable Git repository for the creation test. The
     // recovery fixtures above intentionally reference a nonexistent worktree;
