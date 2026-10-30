@@ -118,3 +118,20 @@ Each forbidden read uses a fresh canary. A nonzero sandbox exit that prints a
 canary is a failure, not evidence of isolation. All denial supervisors must
 complete normally before QA is allowed to launch. The additional probes use
 only temporary synthetic fixtures and never invoke a model provider.
+
+## CI-policy branch reconciliation — 2026-10-31
+
+The integration-audit PR #123 and executable-CI-gate PR #124 were sibling
+branches based on #122. This follow-up branch starts from #123 and incorporates
+the executable gate validator and 17 offline tests from #124 without merging
+either PR. It also closes further static-policy bypasses: extra CI jobs,
+unreviewed GitHub Actions, secret references, duplicate YAML run/uses keys,
+and provider commands hidden in id-first steps. The validator intentionally
+fails closed when the workflow structure changes; legitimate new jobs or
+Actions require a reviewed policy update.
+
+This branch is **not** a Git ancestor of #124; the integration is a copied,
+extended implementation. The read-only stack audit still pins #122 as its
+historical integration candidate and must not be represented as attesting this
+new branch. Review this branch's own exact-HEAD Linux/macOS CI separately.
+No merge, deployment, production writes, provider calls or secrets are authorized.
