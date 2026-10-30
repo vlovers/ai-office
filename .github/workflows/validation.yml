@@ -2,8 +2,8 @@ name: AI Office validation
 
 on:
   pull_request:
-    # Validate stacked workflow PRs against their integration base.
-    branches: [main, 'test/**', 'fix/**']
+    # Validate every PR base, including security/** and future stacked branches.
+    # Branch filters silently suppress checks for otherwise valid draft PRs.
   push:
     branches: [main]
   workflow_dispatch:
@@ -38,6 +38,8 @@ jobs:
         run: npm test
       - name: Offline integration stack audit regressions
         run: node --test tests/pr-stack-audit.node.mjs
+      - name: CI trigger and security policy regressions
+        run: node --test tests/ci-trigger-policy.node.mjs
       - name: HTTP/SSE smoke tests
         run: npm run test:smoke
       - name: Production build
