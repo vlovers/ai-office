@@ -65,6 +65,7 @@ function fixture() {
         {
           status: 'ahead',
           behind_by: 0,
+          base_commit: { sha: `head-${number}` },
           merge_base_commit: { sha: `head-${number}` },
         },
       ]),
