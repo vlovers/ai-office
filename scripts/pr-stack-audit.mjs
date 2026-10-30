@@ -127,6 +127,23 @@ export function auditStack(snapshot) {
       issue('base-drift', `PR #${number} base does not match ${base ?? 'main'} HEAD`);
     }
 
+    // GitHub's base ref and base SHA are metadata, not proof that the
+    // proposed head actually contains that parent commit. A force-push can
+    // leave both fields looking correct while silently dropping changes.
+    if (parent?.sha) {
+      const edge = comparisons.edges?.[number];
+      if (!edge) {
+        issue('missing-edge-evidence', `PR #${number} has no verified ancestry comparison`);
+      } else if (
+        edge.behind_by !== 0 ||
+        !['ahead', 'identical'].includes(edge.status) ||
+        edge.base_commit?.sha !== parent.sha ||
+        edge.merge_base_commit?.sha !== parent.sha
+      ) {
+        issue('lost-stack-parent', `PR #${number} does not contain its declared base HEAD`);
+      }
+    }
+
     const latest = selectValidationRun(runs[number], number);
     if (!latest) {
       issue('missing-ci', `PR #${number} has no pull_request validation run`);
@@ -242,7 +259,16 @@ export async function collectStack({
 
   const comparisons = {
     main: await get(`${root}/compare/${main.commit.sha}...${prs[116].head.sha}`),
+    edges: {},
   };
+  await Promise.all(
+    STACK.map(async ({ number, base }) => {
+      const parentSha = base === null ? main.commit.sha : prs[base].head.sha;
+      comparisons.edges[number] = await get(
+        `${root}/compare/${parentSha}...${prs[number].head.sha}`,
+      );
+    }),
+  );
   await Promise.all(
     REQUIRED_ANCESTORS.map(async (number) => {
       comparisons[number] = await get(
@@ -261,6 +287,30 @@ export async function collectStack({
       blobs[path] = { source: source.sha, candidate: candidate.sha };
     }),
   );
+
+  // Ref reads and comparisons are not atomic across GitHub API requests.
+  // A concurrent push must invalidate the snapshot rather than letting a
+  // formerly green commit masquerade as the current integration candidate.
+  const [finalMain, ...finalPrs] = await Promise.all([
+    get(`${root}/branches/main`),
+    ...STACK.map(({ number }) => get(`${root}/pulls/${number}`)),
+  ]);
+  if (finalMain.commit?.sha !== main.commit.sha) {
+    throw new Error('GitHub main HEAD changed during stack audit');
+  }
+  for (const [index, { number }] of STACK.entries()) {
+    const before = prs[number];
+    const after = finalPrs[index];
+    if (
+      before.head?.sha !== after.head?.sha ||
+      before.base?.sha !== after.base?.sha ||
+      before.base?.ref !== after.base?.ref ||
+      before.state !== after.state ||
+      before.draft !== after.draft
+    ) {
+      throw new Error(`GitHub PR #${number} changed during stack audit`);
+    }
+  }
 
   return { mainSha: main.commit.sha, prs, runs, jobs, comparisons, blobs };
 }

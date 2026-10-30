@@ -43,6 +43,20 @@ function fixture() {
       behind_by: 0,
       merge_base_commit: { sha: 'main-head' },
     },
+    edges: Object.fromEntries(
+      STACK.map(({ number, base }) => {
+        const parentSha = base === null ? 'main-head' : `head-${base}`;
+        return [
+          number,
+          {
+            status: 'ahead',
+            behind_by: 0,
+            base_commit: { sha: parentSha },
+            merge_base_commit: { sha: parentSha },
+          },
+        ];
+      }),
+    ),
     ...Object.fromEntries(
       REQUIRED_ANCESTORS.map((number) => [
         number,
@@ -195,6 +209,8 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   const actual = await collectStack({ request, token: 'fixture-token' });
   assert.deepEqual(auditStack(actual), []);
   assert.ok(requested.some((path) => path.includes('/compare/main-head...head-116')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
 });
 
@@ -374,4 +390,97 @@ test('GitHub API failure cannot be reported as a successful audit', async () => 
     }),
     /GitHub read failed \(503\)/,
   );
+});
+
+test('rejects a force-pushed child that no longer contains its declared parent', () => {
+  const snapshot = fixture();
+  // The GitHub PR metadata still points to the expected parent HEAD.
+  snapshot.comparisons.edges[107] = {
+    status: 'diverged',
+    behind_by: 1,
+    base_commit: { sha: 'head-96' },
+    merge_base_commit: { sha: 'older-ancestor' },
+  };
+  assert.equal(codes(snapshot).includes('base-drift'), false);
+  assert.ok(codes(snapshot).includes('lost-stack-parent'));
+});
+
+test('rejects root branches that omit current main even when base metadata matches', () => {
+  const snapshot = fixture();
+  snapshot.comparisons.edges[97].merge_base_commit.sha = 'old-main';
+  assert.ok(codes(snapshot).includes('lost-stack-parent'));
+});
+
+test('rejects missing or forged edge ancestry evidence', () => {
+  const snapshot = fixture();
+  delete snapshot.comparisons.edges[103];
+  snapshot.comparisons.edges[96].base_commit.sha = 'unrelated-commit';
+  const found = codes(snapshot);
+  assert.ok(found.includes('missing-edge-evidence'));
+  assert.ok(found.includes('lost-stack-parent'));
+});
+
+test('collector rejects a main push while evidence is being collected', async () => {
+  const source = fixture();
+  let mainReads = 0;
+  const request = async (url) => {
+    const parsed = new URL(url);
+    const path = parsed.pathname;
+    if (path.endsWith('/branches/main')) {
+      mainReads += 1;
+      return {
+        ok: true,
+        json: async () => ({ commit: { sha: mainReads === 1 ? source.mainSha : 'moved-main' } }),
+      };
+    }
+    if (/\/pulls\/(\d+)$/.test(path)) {
+      const number = Number(path.match(/\/pulls\/(\d+)$/)[1]);
+      return { ok: true, json: async () => source.prs[number] };
+    }
+    if (path.endsWith('/actions/runs')) {
+      const number = Number(parsed.searchParams.get('head_sha').slice('head-'.length));
+      return {
+        ok: true,
+        json: async () => ({
+          total_count: source.runs[number].length,
+          workflow_runs: source.runs[number],
+        }),
+      };
+    }
+    if (/\/actions\/runs\/\d+\/attempts\/\d+\/jobs$/.test(path)) {
+      return {
+        ok: true,
+        json: async () => ({ total_count: source.jobs.length, jobs: source.jobs }),
+      };
+    }
+    if (path.includes('/compare/')) {
+      const [base, head] = path.split('/compare/')[1].split('...');
+      const number = Number(base.slice('head-'.length));
+      const target = Number(head.slice('head-'.length));
+      const body =
+        base === source.mainSha && target === 116
+          ? source.comparisons.main
+          : source.comparisons.edges[target] ?? source.comparisons[number];
+      return { ok: true, json: async () => body };
+    }
+    if (path.includes('/contents/')) {
+      const file = decodeURIComponent(path.split('/contents/')[1]);
+      const ref = parsed.searchParams.get('ref');
+      return {
+        ok: true,
+        json: async () => ({
+          sha:
+            ref === source.prs[109].head.sha
+              ? source.blobs[file].source
+              : source.blobs[file].candidate,
+        }),
+      };
+    }
+    throw new Error('Unexpected endpoint: ' + path);
+  };
+  await assert.rejects(
+    collectStack({ request, token: 'fixture-token' }),
+    /main HEAD changed during stack audit/,
+  );
+  assert.equal(mainReads, 2);
 });

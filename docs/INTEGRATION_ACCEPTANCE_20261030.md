@@ -75,3 +75,19 @@ human code review.
    Synthetic tests intentionally never invoke real model providers.
 4. Do not merge or deploy from this integration Draft without explicit
    authorization.
+
+
+## Ancestry and concurrent-update safety
+
+The audit now verifies **every declared stack edge**, including both root PRs
+against the current `main`, using GitHub compare results. A PR's `base.ref`
+and `base.sha` alone do not prove its head contains that commit: a force-push
+could discard the parent while leaving the PR metadata unchanged. Every edge
+must have `behind_by=0`, a valid ahead/identical status, and both its
+`base_commit` and `merge_base_commit` equal to the expected parent SHA.
+
+After collecting CI, ancestry and blob evidence, the audit re-reads `main`
+and all 12 pinned PRs. A changed head, base, Draft state or main commit aborts
+the audit rather than reporting an outdated snapshot as current. Offline
+regressions cover missing/diverged edges, forged comparison metadata and a
+concurrent main push. This is a read-only safety gate, not merge authorization.
