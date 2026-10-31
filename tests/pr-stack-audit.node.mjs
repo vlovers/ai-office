@@ -713,8 +713,9 @@ test('upstream job mutation during collection invalidates the audit', () => {
 test('rejects a skipped native sandbox step despite a successful macOS job', () => {
   const snapshot = fixture();
   const native = snapshot.jobsByPr[124][1];
-  native.steps.find((step) => step.name === 'Native read-only and isolated-write policy').conclusion =
-    'skipped';
+  native.steps.find(
+    (step) => step.name === 'Native read-only and isolated-write policy',
+  ).conclusion = 'skipped';
   assert.equal(native.conclusion, 'success');
   assert.ok(codes(snapshot).includes('missing-ci-step'));
 });
@@ -748,8 +749,18 @@ test('requires the offline policy regressions from PR #124 onward', () => {
     (step) => step.name !== 'CI trigger and security policy regressions',
   );
   assert.ok(codes(snapshot).includes('missing-ci-step'));
-  assert.equal(requiredStepsForPr(123, REQUIRED_JOBS[0]).includes('CI trigger and security policy regressions'), false);
-  assert.equal(requiredStepsForPr(124, REQUIRED_JOBS[0]).includes('CI trigger and security policy regressions'), true);
+  assert.equal(
+    requiredStepsForPr(123, REQUIRED_JOBS[0]).includes(
+      'CI trigger and security policy regressions',
+    ),
+    false,
+  );
+  assert.equal(
+    requiredStepsForPr(124, REQUIRED_JOBS[0]).includes(
+      'CI trigger and security policy regressions',
+    ),
+    true,
+  );
 });
 
 test('CI recheck detects an upstream step changing after a green snapshot', () => {
