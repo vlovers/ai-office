@@ -160,3 +160,73 @@ it.each([
     vi.useRealTimers();
   }
 });
+
+it('does not accept IPC success when shutdown aborts during asynchronous group reaping', async () => {
+  const controller = new AbortController();
+  let finishReaping!: () => void;
+  const reaping = new Promise<void>((resolve) => {
+    finishReaping = resolve;
+  });
+  vi.mocked(reapProcessGroup).mockImplementationOnce(() => reaping);
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525255,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000, controller.signal);
+  worker.emit('message', { passed: true, output: 'ok' });
+  worker.emit('close', null, 'SIGKILL');
+  // The close handler has entered reapProcessGroup but not completed it.
+  controller.abort();
+  finishReaping();
+
+  await expect(pending).resolves.toEqual({
+    passed: false,
+    output: 'Verification interrupted during application shutdown.',
+    incomplete: true,
+  });
+  expect(killProcessGroup).toHaveBeenCalledWith(525255);
+});
+
+it.each(['synchronous throw', 'callback failure'])(
+  'reaps a detached worker after IPC send %s rather than returning before cleanup',
+  async (failureMode) => {
+    const worker = Object.assign(new EventEmitter(), {
+      pid: 525256,
+      send: vi.fn((_message: unknown, callback: (error?: Error) => void) => {
+        if (failureMode === 'synchronous throw') throw new Error('IPC closed');
+        callback(new Error('IPC closed'));
+      }),
+    });
+    vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+    vi.mocked(killProcessGroup).mockClear();
+    vi.mocked(reapProcessGroup).mockClear();
+
+    const pending = runVerification(['/bin/true'], '/tmp', 1000);
+    expect(killProcessGroup).toHaveBeenCalledWith(525256);
+    worker.emit('close', null, 'SIGKILL');
+
+    await expect(pending).rejects.toThrow('Verification supervisor could not start');
+    expect(reapProcessGroup).toHaveBeenCalledWith(525256);
+  },
+);
+
+it('does not send a launch message when cancellation races with worker fork', async () => {
+  const controller = new AbortController();
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525257,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockImplementationOnce(() => {
+    controller.abort();
+    return worker as unknown as ChildProcess;
+  });
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000, controller.signal);
+  expect(worker.send).not.toHaveBeenCalled();
+  expect(killProcessGroup).toHaveBeenCalledWith(525257);
+  worker.emit('close', null, 'SIGKILL');
+  await expect(pending).resolves.toMatchObject({ passed: false, incomplete: true });
+  expect(reapProcessGroup).toHaveBeenCalledWith(525257);
+});
