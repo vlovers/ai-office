@@ -82,6 +82,8 @@ function fixture() {
     filename,
     status: 'modified',
   }));
+  // The #139 -> #140 compare is fetched both as an edge and an ancestor.
+  comparisons[QA_PIN_BASE_PR].files = comparisons.edges[CANDIDATE_PR].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
