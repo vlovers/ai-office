@@ -32,6 +32,29 @@ export function listenProbeServer(server: Server): Promise<void> {
   });
 }
 
+/** A successful TCP handshake is already a network escape, even without HTTP. */
+export function createNetworkProbeServer(onEscape: () => void): Server {
+  const server = createServer((_request, response) => {
+    onEscape();
+    response.end('NETWORK_ESCAPE');
+  });
+  server.on('connection', onEscape);
+  return server;
+}
+
+/** Drain listener closure before deciding whether a late connection escaped. */
+export async function closeProbeServer(server: Server): Promise<void> {
+  if (!server.listening) return;
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+    // Do not let a permitted connection hold preflight open indefinitely.
+    server.closeAllConnections();
+  });
+}
+
 /** A denied command is evidence only when its supervisor completed normally. */
 export async function assertNativeDenials(
   forbidden: string[][],
@@ -97,9 +120,8 @@ export async function verifyNativeIsolation(
   const gitMetadataCanary = `GIT_METADATA_DENIED_${randomBytes(16).toString('hex')}`;
   const nestedCredentialsCanary = `NESTED_CREDENTIALS_DENIED_${randomBytes(16).toString('hex')}`;
   let networkEscape = false;
-  const server = createServer((_request, response) => {
+  const server = createNetworkProbeServer(() => {
     networkEscape = true;
-    response.end('NETWORK_ESCAPE');
   });
   try {
     await mkdir(directory);
@@ -154,6 +176,9 @@ export async function verifyNativeIsolation(
       gitMetadataCanary,
       nestedCredentialsCanary,
     ]);
+    // A request/connection callback may be queued when the sandbox process exits.
+    // Close the listener first, then inspect the complete observed escape state.
+    await closeProbeServer(server);
     if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
     if (networkEscape) throw new Error('Network isolation failed.');
     // Check effects as well as exit codes (a wrapper may hide its child's status).
@@ -170,7 +195,10 @@ export async function verifyNativeIsolation(
       'Native sandbox capability verification failed. No downstream execution is allowed.',
     );
   } finally {
-    server.close();
-    await rm(root, { recursive: true, force: true });
+    try {
+      await closeProbeServer(server);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   }
 }

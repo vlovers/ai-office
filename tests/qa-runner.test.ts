@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { createServer } from 'node:http';
+import { connect } from 'node:net';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import {
@@ -16,9 +17,41 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA, type QAPlan } from '../src/server/qa-runner.js';
 import {
+  closeProbeServer,
+  createNetworkProbeServer,
   listenProbeServer,
   verifyNativeIsolation,
 } from '../src/server/providers/native-isolation.js';
+
+it('detects raw TCP network access without requiring an HTTP request', async () => {
+  let escapes = 0;
+  const server = createNetworkProbeServer(() => {
+    escapes++;
+  });
+  try {
+    await listenProbeServer(server);
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing probe port.');
+    const connected = once(server, 'connection');
+    const socket = connect(address.port, '127.0.0.1');
+    try {
+      await connected;
+      expect(escapes).toBeGreaterThan(0);
+    } finally {
+      socket.destroy();
+    }
+  } finally {
+    await closeProbeServer(server);
+  }
+});
+
+it('waits for native probe listener shutdown and permits repeated closure', async () => {
+  const server = createNetworkProbeServer(() => {});
+  await listenProbeServer(server);
+  await closeProbeServer(server);
+  expect(server.listening).toBe(false);
+  await expect(closeProbeServer(server)).resolves.toBeUndefined();
+});
 
 it('removes transient HTTP listener callbacks after successful native probe bind', async () => {
   const server = createServer();
