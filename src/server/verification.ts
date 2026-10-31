@@ -1,6 +1,6 @@
 import { fork } from 'node:child_process';
 import { AppError } from './errors.js';
-import { killProcessGroup, reapProcessGroup } from './process-group.js';
+import { killProcessGroup, reapProcessGroup, UncertainCleanupError } from './process-group.js';
 
 export interface VerificationResult {
   output: string;
@@ -56,8 +56,28 @@ export async function runVerification(
     let interrupted = false;
     let watchdogExpired = false;
     let cleanupError: unknown;
+    let closeObserved = false;
+    let closeDeadlineExpired = false;
+    let closeDeadline: ReturnType<typeof setTimeout> | undefined;
+    // SIGKILL is not proof that Node observed the supervisor's close event.
+    // A missing close must retain the workspace lease instead of hanging forever.
+    const armCloseDeadline = () => {
+      if (closeObserved || closeDeadline) return;
+      closeDeadline = setTimeout(() => {
+        if (closeObserved) return;
+        closeDeadlineExpired = true;
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+        reject(
+          new UncertainCleanupError(
+            new Error('Verification supervisor did not close after SIGKILL.'),
+          ),
+        );
+      }, 1500);
+    };
     child.on('message', (value: unknown) => {
-      if (interrupted || protocolError || watchdogExpired) return;
+      if (closeObserved || closeDeadlineExpired || interrupted || protocolError || watchdogExpired)
+        return;
       // A malformed or repeated message must never be coerced into a denial.
       // It can otherwise crash the backend (null) or overwrite a real result.
       if (result || !isAttestedResult(value)) {
@@ -87,8 +107,10 @@ export async function runVerification(
       } catch (error) {
         cleanupError = error;
       }
+      armCloseDeadline();
     }, timeoutMs + 5000);
     const abort = () => {
+      if (closeDeadlineExpired) return;
       interrupted = true;
       result = {
         passed: false,
@@ -100,11 +122,17 @@ export async function runVerification(
       } catch (error) {
         cleanupError = error;
       }
+      armCloseDeadline();
     };
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
     child.on('close', async (code, exitSignal) => {
+      // After the deadline the caller already has an uncertain-cleanup error.
+      // Do not send another SIGKILL to a PID that may have been recycled.
+      if (closeObserved || closeDeadlineExpired) return;
+      closeObserved = true;
       clearTimeout(timer);
+      if (closeDeadline) clearTimeout(closeDeadline);
       // Keep cancellation observable while asynchronous process-group cleanup
       // runs. Otherwise an abort during reaping can accept a stale IPC success.
       try {
@@ -161,7 +189,10 @@ export async function runVerification(
       resolve(result);
     });
     const sendFailed = () => {
+      if (closeDeadlineExpired) return;
       startupError = true;
+      // A late IPC callback must not signal a reaped/reused process group.
+      if (closeObserved) return;
       try {
         if (child.pid) killProcessGroup(child.pid);
       } catch (failure) {
