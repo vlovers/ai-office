@@ -64,9 +64,7 @@ beforeEach(() => {
   native.verification.mockResolvedValue({ passed: true, output: 'approved' });
 });
 
-async function withApprovedPlan(
-  run: (plan: Awaited<ReturnType<typeof qaPlan>>) => Promise<void>,
-) {
+async function withApprovedPlan(run: (plan: Awaited<ReturnType<typeof qaPlan>>) => Promise<void>) {
   const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 2000);
   try {
     await run(plan);
@@ -92,9 +90,9 @@ it('removes the created QA HOME if realpath fails before supervisor launch', asy
 it('quarantines cleanup failure instead of returning an attested QA success', async () => {
   await withApprovedPlan(async (plan) => {
     controls.failRemoval = true;
-    await expect(
-      runSandboxedQA('/tmp', plan, new AbortController().signal),
-    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
     expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
   });
@@ -104,9 +102,9 @@ it('preserves uncertain cleanup when verification also fails', async () => {
   await withApprovedPlan(async (plan) => {
     native.verification.mockRejectedValueOnce(new Error('supervisor failed'));
     controls.failRemoval = true;
-    await expect(
-      runSandboxedQA('/tmp', plan, new AbortController().signal),
-    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
     expect(native.verification).toHaveBeenCalledOnce();
   });
 });
