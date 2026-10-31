@@ -274,7 +274,10 @@ export function auditStack(snapshot) {
       job.status !== 'completed' ||
       job.conclusion !== 'success'
     ) {
-      issue('missing-candidate-job', `PR #${CANDIDATE_PR} has no successful exact-attempt job: ${name}`);
+      issue(
+        'missing-candidate-job',
+        `PR #${CANDIDATE_PR} has no successful exact-attempt job: ${name}`,
+      );
     }
   }
 
