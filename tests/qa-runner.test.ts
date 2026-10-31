@@ -237,6 +237,42 @@ it('does not start native capability probes for an already-cancelled QA request'
 });
 const fakeNative = it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux');
 
+fakeNative(
+  'fails closed on a sandbox TCP connection that never sends an HTTP request',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-raw-tcp-')));
+    try {
+      const fake = join(root, 'fake-sandbox.sh');
+      await writeFile(
+        fake,
+        `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 9
+shift
+case "$*" in
+  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  *127.0.0.1:*)
+    for value in "$@"; do
+      case "$value" in
+        http://127.0.0.1:*) port="\${value##*:}" ;;
+      esac
+    done
+    "${process.execPath}" -e 'const s=require("node:net").connect(+process.argv[1],"127.0.0.1");s.on("connect",()=>require("node:fs").writeFileSync(${JSON.stringify(join(root, 'connected'))},"yes"));s.on("error",()=>process.exit(7));s.on("close",()=>process.exit(7));' "$port"
+    exit 7 ;;
+  *) exit 7 ;;
+esac
+`,
+      );
+      await chmod(fake, 0o700);
+      await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
+      expect(await readFile(join(root, 'connected'), 'utf8')).toBe('yes');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  15000,
+);
+
 async function waitForProbeMarkers(paths: string[]) {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
