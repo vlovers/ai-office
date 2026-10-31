@@ -58,6 +58,7 @@ export async function runVerification(
     let cleanupError: unknown;
     let closeObserved = false;
     let closeDeadlineExpired = false;
+    let terminationRequested = false;
     let closeDeadline: ReturnType<typeof setTimeout> | undefined;
     // SIGKILL is not proof that Node observed the supervisor's close event.
     // A missing close must retain the workspace lease instead of hanging forever.
@@ -75,6 +76,19 @@ export async function runVerification(
         );
       }, 1500);
     };
+    // Every forced termination path must have a bounded wait for close.
+    // Signal only once: an abort can race with IPC errors and with reaping,
+    // when the supervisor PID may already have been recycled.
+    const requestTermination = () => {
+      if (closeObserved || closeDeadlineExpired || terminationRequested) return;
+      terminationRequested = true;
+      try {
+        if (child.pid) killProcessGroup(child.pid);
+      } catch (error) {
+        cleanupError = error;
+      }
+      armCloseDeadline();
+    };
     child.on('message', (value: unknown) => {
       if (closeObserved || closeDeadlineExpired || interrupted || protocolError || watchdogExpired)
         return;
@@ -82,11 +96,7 @@ export async function runVerification(
       // It can otherwise crash the backend (null) or overwrite a real result.
       if (result || !isAttestedResult(value)) {
         protocolError = true;
-        try {
-          if (child.pid) killProcessGroup(child.pid);
-        } catch (error) {
-          cleanupError = error;
-        }
+        requestTermination();
         return;
       }
       result = {
@@ -97,17 +107,13 @@ export async function runVerification(
     });
     child.on('error', () => {
       startupError = true;
+      requestTermination();
     });
     // Backstop for worker startup/IPC failures. The worker also owns its own bound.
     const timer = setTimeout(() => {
       // A late supervisor result cannot attest success after forced termination.
       watchdogExpired = true;
-      try {
-        if (child.pid) killProcessGroup(child.pid);
-      } catch (error) {
-        cleanupError = error;
-      }
-      armCloseDeadline();
+      requestTermination();
     }, timeoutMs + 5000);
     const abort = () => {
       if (closeDeadlineExpired) return;
@@ -117,12 +123,7 @@ export async function runVerification(
         output: 'Verification interrupted during application shutdown.',
         incomplete: true,
       };
-      try {
-        if (child.pid) killProcessGroup(child.pid);
-      } catch (error) {
-        cleanupError = error;
-      }
-      armCloseDeadline();
+      requestTermination();
     };
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
@@ -193,11 +194,7 @@ export async function runVerification(
       startupError = true;
       // A late IPC callback must not signal a reaped/reused process group.
       if (closeObserved) return;
-      try {
-        if (child.pid) killProcessGroup(child.pid);
-      } catch (failure) {
-        cleanupError = failure;
-      }
+      requestTermination();
     };
     // A synchronous IPC send failure must not reject the Promise before the
     // detached worker's close/reaping path has run. Never launch work after an
