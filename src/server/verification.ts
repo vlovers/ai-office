@@ -106,8 +106,23 @@ export async function runVerification(
       };
     });
     child.on('error', () => {
+      // A late child error cannot invalidate an already closed, reaping worker.
+      if (closeObserved || closeDeadlineExpired) return;
       startupError = true;
       requestTermination();
+    });
+    // An IPC disconnect before attestation means no further trusted result
+    // can arrive. Do not wait for the full execution watchdog to fail closed.
+    child.on('disconnect', () => {
+      if (closeObserved || closeDeadlineExpired || result) return;
+      startupError = true;
+      // If Node already observed exit, the PID may be recycled. Preserve the
+      // uncertain-cleanup deadline without signaling that former process group.
+      if (child.exitCode !== null && child.exitCode !== undefined || child.signalCode != null) {
+        armCloseDeadline();
+      } else {
+        requestTermination();
+      }
     });
     // Backstop for worker startup/IPC failures. The worker also owns its own bound.
     const timer = setTimeout(() => {
@@ -190,10 +205,10 @@ export async function runVerification(
       resolve(result);
     });
     const sendFailed = () => {
-      if (closeDeadlineExpired) return;
+      // A late IPC callback must not invalidate a result while reaping, nor
+      // signal a process group whose leader has already closed.
+      if (closeDeadlineExpired || closeObserved) return;
       startupError = true;
-      // A late IPC callback must not signal a reaped/reused process group.
-      if (closeObserved) return;
       requestTermination();
     };
     // A synchronous IPC send failure must not reject the Promise before the
