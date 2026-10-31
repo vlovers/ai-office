@@ -5,7 +5,8 @@ import { killProcessGroup, reapProcessGroup } from '../src/server/process-group.
 import { runVerification } from '../src/server/verification.js';
 
 vi.mock('node:child_process', () => ({ fork: vi.fn() }));
-vi.mock('../src/server/process-group.js', () => ({
+vi.mock('../src/server/process-group.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/server/process-group.js')>()),
   killProcessGroup: vi.fn(),
   reapProcessGroup: vi.fn(async () => {}),
 }));
@@ -229,4 +230,94 @@ it('does not send a launch message when cancellation races with worker fork', as
   worker.emit('close', null, 'SIGKILL');
   await expect(pending).resolves.toMatchObject({ passed: false, incomplete: true });
   expect(reapProcessGroup).toHaveBeenCalledWith(525257);
+});
+
+it('fails closed if an aborted supervisor never closes after SIGKILL', async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = new AbortController();
+    const worker = Object.assign(new EventEmitter(), {
+      pid: 525258,
+      send: vi.fn(),
+    });
+    vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+    vi.mocked(killProcessGroup).mockClear();
+
+    const pending = runVerification(['/bin/true'], '/tmp', 120000, controller.signal);
+    // Attach the rejection assertion before fake timers fire to avoid an
+    // unhandled-rejection race in Vitest.
+    const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+    controller.abort();
+    expect(killProcessGroup).toHaveBeenCalledWith(525258);
+    await vi.advanceTimersByTimeAsync(1500);
+    await rejected;
+    // The original long watchdog must be disarmed after uncertain cleanup.
+    await vi.advanceTimersByTimeAsync(125000);
+    expect(killProcessGroup).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('fails closed if the watchdog kills a supervisor but close never arrives', async () => {
+  vi.useFakeTimers();
+  try {
+    const worker = Object.assign(new EventEmitter(), {
+      pid: 525259,
+      send: vi.fn(),
+    });
+    vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+    vi.mocked(killProcessGroup).mockClear();
+
+    const pending = runVerification(['/bin/true'], '/tmp', 1000);
+    const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(killProcessGroup).toHaveBeenCalledWith(525259);
+    await vi.advanceTimersByTimeAsync(1500);
+    await rejected;
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('clears the close deadline when cancellation is followed by a reaped supervisor', async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = new AbortController();
+    const worker = Object.assign(new EventEmitter(), {
+      pid: 525260,
+      send: vi.fn(),
+    });
+    vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+    vi.mocked(killProcessGroup).mockClear();
+
+    const pending = runVerification(['/bin/true'], '/tmp', 1000, controller.signal);
+    controller.abort();
+    worker.emit('close', null, 'SIGKILL');
+    await expect(pending).resolves.toMatchObject({ passed: false, incomplete: true });
+    await vi.advanceTimersByTimeAsync(7500);
+    expect(killProcessGroup).toHaveBeenCalledTimes(1);
+    expect(reapProcessGroup).toHaveBeenCalledWith(525260);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('ignores a late IPC send callback after the supervisor has closed', async () => {
+  let reportSend!: (error?: Error) => void;
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525261,
+    send: vi.fn((_message: unknown, callback: (error?: Error) => void) => {
+      reportSend = callback;
+    }),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000);
+  worker.emit('message', { passed: true, output: 'ok' });
+  worker.emit('close', null, 'SIGKILL');
+  await expect(pending).resolves.toEqual({ passed: true, output: 'ok' });
+  reportSend(new Error('Late IPC error'));
+  expect(killProcessGroup).not.toHaveBeenCalledWith(525261);
 });
