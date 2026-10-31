@@ -217,9 +217,9 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   };
   const actual = await collectStack({ request, token: 'fixture-token' });
   assert.deepEqual(auditStack(actual), []);
-  assert.ok(requested.some((path) => path.includes('/compare/main-head...head-122')));
-  assert.ok(requested.some((path) => path.includes('/compare/head-121...head-122')));
-  assert.ok(requested.some((path) => path.includes('/compare/head-116...head-122')));
+  assert.ok(requested.some((path) => path.includes(`/compare/main-head...head-${CANDIDATE_PR}`)));
+  assert.ok(requested.some((path) => path.includes('/compare/head-133...head-134')));
+  assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
@@ -517,7 +517,7 @@ test('CI recheck rejects a rerun of the same run ID with a new attempt', () => {
   refreshed[CANDIDATE_PR][0].run_attempt = 2;
   assert.throws(
     () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
-    /PR #122 CI changed during stack audit/,
+    new RegExp(`PR #${CANDIDATE_PR} CI changed during stack audit`),
   );
 });
 
@@ -546,16 +546,23 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
   );
 });
 
-test('audits all post-integration Draft PRs through the native-security tip', () => {
-  assert.deepEqual(STACK.slice(-6), [
-    { number: 117, base: 116 },
-    { number: 118, base: 117 },
-    { number: 119, base: 118 },
-    { number: 120, base: 119 },
-    { number: 121, base: 120 },
-    { number: 122, base: 121 },
+test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
+  assert.deepEqual(STACK.slice(-12), [
+    { number: 123, base: 122 },
+    { number: 124, base: 122 },
+    { number: 125, base: 123 },
+    { number: 126, base: 125 },
+    { number: 127, base: 126 },
+    { number: 128, base: 127 },
+    { number: 129, base: 128 },
+    { number: 130, base: 129 },
+    { number: 131, base: 130 },
+    { number: 132, base: 131 },
+    { number: 133, base: 132 },
+    { number: 134, base: 133 },
   ]);
-  assert.equal(CANDIDATE_PR, 122);
+  assert.equal(CANDIDATE_PR, 134);
+  assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
 
@@ -569,7 +576,7 @@ test('rejects failed native-security tip even when historical integration CI is 
 test('rejects security tip losing its parent despite a green CI run', () => {
   const snapshot = fixture();
   snapshot.comparisons.edges[CANDIDATE_PR].behind_by = 1;
-  snapshot.comparisons.edges[CANDIDATE_PR].merge_base_commit.sha = 'old-121';
+  snapshot.comparisons.edges[CANDIDATE_PR].merge_base_commit.sha = 'old-133';
   assert.ok(codes(snapshot).includes('lost-stack-parent'));
 });
 
@@ -591,4 +598,46 @@ test('fails closed when latest security PR disappears from the stack snapshot', 
   delete snapshot.prs[CANDIDATE_PR];
   assert.ok(codes(snapshot).includes('missing-pr'));
   assert.ok(codes(snapshot).includes('main-not-integrated'));
+});
+
+// A sibling with a separate Git history still requires its own exact CI
+// evidence; it must not be falsely asserted as an ancestor of the tip.
+test('requires independent CI evidence for divergent PR #124', () => {
+  const snapshot = fixture();
+  delete snapshot.runs[124];
+  assert.ok(codes(snapshot).includes('missing-ci'));
+  assert.equal(REQUIRED_ANCESTORS.includes(124), false);
+});
+
+test('rejects missing PR #123 ancestry even when sibling #124 is green', () => {
+  const snapshot = fixture();
+  snapshot.comparisons[123].behind_by = 1;
+  snapshot.comparisons[123].merge_base_commit.sha = 'old-123';
+  assert.equal(snapshot.runs[124][0].conclusion, 'success');
+  assert.ok(codes(snapshot).includes('lost-ancestor'));
+});
+
+test('rejects intermediate security PR losing its declared parent', () => {
+  const snapshot = fixture();
+  snapshot.comparisons.edges[129].behind_by = 1;
+  snapshot.comparisons.edges[129].merge_base_commit.sha = 'old-128';
+  assert.equal(snapshot.runs[CANDIDATE_PR][0].conclusion, 'success');
+  assert.ok(codes(snapshot).includes('lost-stack-parent'));
+});
+
+test('rejects failed intermediate security CI despite green integration tip', () => {
+  const snapshot = fixture();
+  snapshot.runs[130][0].conclusion = 'failure';
+  assert.equal(snapshot.runs[CANDIDATE_PR][0].conclusion, 'success');
+  assert.ok(codes(snapshot).includes('ci-not-green'));
+});
+
+test('CI recheck includes newly monitored post-122 security PRs', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.runs);
+  refreshed[132][0].conclusion = 'failure';
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+    /PR #132 CI changed during stack audit/,
+  );
 });
