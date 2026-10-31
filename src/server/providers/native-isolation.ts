@@ -239,6 +239,8 @@ export async function verifyNativeIsolation(
       join(root, 'outside.txt'),
       join(directory, 'outside-link'),
       join(directory, '.env'),
+      // Read-only workspace isolation must protect existing ordinary files too.
+      join(directory, 'allowed.txt'),
       join(directory, 'nested', '.git', 'config'),
       join(directory, 'nested', '.aws', 'credentials'),
       // A forbidden write can create and immediately remove a file, leaving
@@ -284,6 +286,9 @@ export async function verifyNativeIsolation(
       ['/bin/cat', join(directory, 'outside-link')],
       // tee truncates a target even with empty stdin. A forged wrapper can
       // mutate protected files and then return a denial exit code.
+      // Denying new file creation does not prove existing files cannot be truncated.
+      ['/usr/bin/tee', join(directory, 'allowed.txt')],
+      ['/usr/bin/tee', join(directory, '.env')],
       ['/usr/bin/tee', join(root, 'outside.txt')],
       ['/usr/bin/tee', join(directory, 'outside-link')],
       ['/usr/bin/tee', join(directory, 'nested', '.git', 'config')],
@@ -308,6 +313,7 @@ export async function verifyNativeIsolation(
       [join(root, 'outside.txt'), outsideCanary],
       [join(directory, 'outside-link'), outsideCanary],
       [join(directory, '.env'), secretCanary],
+      [join(directory, 'allowed.txt'), 'READ_ALLOWED'],
       [join(directory, 'nested', '.git', 'config'), gitMetadataCanary],
       [join(directory, 'nested', '.aws', 'credentials'), nestedCredentialsCanary],
     ]);

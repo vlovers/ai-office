@@ -288,7 +288,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 9
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  */bin/cat*allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *127.0.0.1:*)
     for value in "$@"; do
       case "$value" in
@@ -346,6 +346,50 @@ exit 7
   20000,
 );
 
+for (const [label, target] of [
+  ['ordinary workspace file', 'allowed.txt'],
+  ['workspace secret', '.env'],
+] as const) {
+  fakeNative(
+    `rejects a masked overwrite of an existing ${label} during native preflight`,
+    async () => {
+      const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-existing-write-')));
+      try {
+        const fake = join(root, 'fake-sandbox.sh');
+        await writeFile(
+          fake,
+          `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 9
+shift
+if [ "$1" = "/bin/cat" ]; then
+  case "$2" in
+    */allowed.txt) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  esac
+fi
+if [ "$1" = "/usr/bin/tee" ]; then
+  case "$2" in
+    */${target})
+      printf 'MUTATED' > "$2"
+      printf 'yes' > "${root}/overwrote"
+      exit 7 ;;
+  esac
+fi
+exit 7
+`,
+        );
+        await chmod(fake, 0o700);
+        await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
+        // A nonzero exit alone cannot attest a safe denial.
+        expect(await readFile(join(root, 'overwrote'), 'utf8')).toBe('yes');
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    20000,
+  );
+}
+
 async function waitForProbeMarkers(paths: string[]) {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
@@ -373,7 +417,7 @@ fakeNative(
       fake,
       `#!/bin/sh
 case "$*" in
-  *allowed.txt*) touch "${root}/read-started"; exec /bin/sleep 30 ;;
+  */bin/cat*allowed.txt*) touch "${root}/read-started"; exec /bin/sleep 30 ;;
   *) exit 1 ;;
 esac
 `,
@@ -410,7 +454,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 1
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  */bin/cat*allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *outside.txt*) marker=outside ;;
   *.env*) marker=secret ;;
   *write-escape*) marker=write ;;
@@ -449,7 +493,7 @@ fakeNative(
       fake,
       `#!/bin/sh
 case "$*" in
-  *allowed.txt*)
+  */bin/cat*allowed.txt*)
     ( /bin/sleep 1; /usr/bin/touch "${root}/late-write" ) &
     /usr/bin/touch "${root}/child-started"
     wait
@@ -488,7 +532,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 1
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  */bin/cat*allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *outside.txt*)
     ( /bin/sleep 1; /usr/bin/touch "${root}/late-write" ) &
     /usr/bin/touch "${root}/denial-started"
@@ -525,7 +569,7 @@ fakeNative(
       fake,
       `#!/bin/sh
 case "$*" in
-  *allowed.txt*)
+  */bin/cat*allowed.txt*)
     ( /bin/sleep 1; /usr/bin/touch "${root}/late-write" ) &
     /usr/bin/touch "${root}/child-started"
     wait
@@ -572,7 +616,7 @@ fakeNative(
         fake,
         `#!/bin/sh
 case "$*" in
-  *allowed.txt*)
+  */bin/cat*allowed.txt*)
     /bin/rm -f "$0"
     printf 'READ_ALLOWED\\n'
     exit 0 ;;
@@ -604,7 +648,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 9
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  */bin/cat*allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   *) exit 7 ;;
 esac
 `,
@@ -636,7 +680,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 9
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  */bin/cat*allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
   ${match}) /bin/cat "$2"; exit 7 ;;
   *) exit 7 ;;
 esac
@@ -669,7 +713,7 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 9
 shift
 case "$*" in
-  *allowed.txt*) /bin/cat "$2"; exit 0 ;;
+  */bin/cat*allowed.txt*) /bin/cat "$2"; exit 0 ;;
   ${match}) /bin/cat "$2" ${redirect}; exit 7 ;;
   *) exit 7 ;;
 esac
@@ -694,7 +738,7 @@ native(
         fake,
         `#!/bin/sh
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n' ;;
+  */bin/cat*allowed.txt*) printf 'READ_ALLOWED\\n' ;;
   *) exit 0 ;;
 esac
 `,
@@ -721,7 +765,13 @@ while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 0
 shift
 case "$*" in
-  *allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  */bin/cat*allowed.txt*) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  */usr/bin/tee*allowed.txt*) marker=existing ;;
+  */usr/bin/tee*.env*) marker=secret-write ;;
+  */usr/bin/tee*outside.txt*) marker=outside-write ;;
+  */usr/bin/tee*outside-link*) marker=link-write ;;
+  */usr/bin/tee*nested/.git/config*) marker=git-write ;;
+  */usr/bin/tee*nested/.aws/credentials*) marker=aws-write ;;
   *outside.txt*) marker=outside ;;
   *outside-link*) marker=link ;;
   *nested/.git/config*) marker=git ;;
@@ -734,7 +784,7 @@ esac
 touch "${root}/$marker"
 i=0
 while [ "$i" -lt 200 ]; do
-  if [ -f "${root}/outside" ] && [ -f "${root}/link" ] && [ -f "${root}/git" ] && [ -f "${root}/aws" ] && [ -f "${root}/secret" ] && [ -f "${root}/write" ] && [ -f "${root}/network" ]; then
+  if [ -f "${root}/outside" ] && [ -f "${root}/link" ] && [ -f "${root}/git" ] && [ -f "${root}/aws" ] && [ -f "${root}/secret" ] && [ -f "${root}/write" ] && [ -f "${root}/network" ] && [ -f "${root}/existing" ] && [ -f "${root}/secret-write" ] && [ -f "${root}/outside-write" ] && [ -f "${root}/link-write" ] && [ -f "${root}/git-write" ] && [ -f "${root}/aws-write" ]; then
     exit 1
   fi
   sleep 0.02
