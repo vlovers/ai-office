@@ -82,10 +82,14 @@ export async function runVerification(
     const requestTermination = () => {
       if (closeObserved || closeDeadlineExpired || terminationRequested) return;
       terminationRequested = true;
-      try {
-        if (child.pid) killProcessGroup(child.pid);
-      } catch (error) {
-        cleanupError = error;
+      // Node may emit exit before close if descendants retain stdio or IPC.
+      // Once exit is observed, the process-group leader PID can be recycled.
+      if (child.exitCode == null && child.signalCode == null) {
+        try {
+          if (child.pid) killProcessGroup(child.pid);
+        } catch (error) {
+          cleanupError = error;
+        }
       }
       armCloseDeadline();
     };
@@ -106,6 +110,15 @@ export async function runVerification(
       };
     });
     child.on('error', () => {
+      // A late child error cannot invalidate an already closed, reaping worker.
+      if (closeObserved || closeDeadlineExpired) return;
+      startupError = true;
+      requestTermination();
+    });
+    // An IPC disconnect before attestation means no further trusted result
+    // can arrive. Do not wait for the full execution watchdog to fail closed.
+    child.on('disconnect', () => {
+      if (closeObserved || closeDeadlineExpired || result) return;
       startupError = true;
       requestTermination();
     });
@@ -190,10 +203,10 @@ export async function runVerification(
       resolve(result);
     });
     const sendFailed = () => {
-      if (closeDeadlineExpired) return;
+      // A late IPC callback must not invalidate a result while reaping, nor
+      // signal a process group whose leader has already closed.
+      if (closeDeadlineExpired || closeObserved) return;
       startupError = true;
-      // A late IPC callback must not signal a reaped/reused process group.
-      if (closeObserved) return;
       requestTermination();
     };
     // A synchronous IPC send failure must not reject the Promise before the
