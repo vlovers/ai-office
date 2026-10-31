@@ -1148,7 +1148,6 @@ test('detects a new failed supervisor run during the final CI recheck', () => {
   );
 });
 
-
 test('integration candidate pins the supervisor exit-to-close deadline stack tip', () => {
   assert.equal(CANDIDATE_PR, 148);
   assert.deepEqual(STACK.slice(-3), [
