@@ -51,7 +51,6 @@ export const REQUIRED_JOBS = [
   'Native Codex filesystem policy (no inference)',
 ];
 
-
 /**
  * A successful job does not prove that security-critical steps ran. Keep the
  * common contract valid for historical PRs, then require the additional
@@ -336,7 +335,10 @@ export function auditStack(snapshot) {
             step.status !== 'completed' ||
             step.conclusion !== 'success'
           ) {
-            issue('missing-ci-step', `PR #${number} has no successful ordered step: ${name} / ${required}`);
+            issue(
+              'missing-ci-step',
+              `PR #${number} has no successful ordered step: ${name} / ${required}`,
+            );
           } else {
             lastStepNumber = step.number;
           }
