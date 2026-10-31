@@ -660,7 +660,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-24), [
+  assert.deepEqual(STACK.slice(-26), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -685,8 +685,10 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 144, base: 143 },
     { number: 145, base: 144 },
     { number: 146, base: 145 },
+    { number: 147, base: 146 },
+    { number: 148, base: 147 },
   ]);
-  assert.equal(CANDIDATE_PR, 146);
+  assert.equal(CANDIDATE_PR, 148);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -1081,7 +1083,7 @@ test('attests the supervisor runtime and regression scope of #144 through #146',
   ];
   for (const number of [144, 145, 146]) {
     assert.deepEqual(REVIEWED_DELTAS[number], expected);
-    assert.equal(REQUIRED_ANCESTORS.includes(number), number !== 146);
+    assert.ok(REQUIRED_ANCESTORS.includes(number));
   }
   assert.deepEqual(auditStack(fixture()), []);
 });
