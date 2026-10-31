@@ -35,6 +35,8 @@ function fixture() {
         run_attempt: 1,
         pull_requests: [{ number }],
         name: 'AI Office validation',
+        path: '.github/workflows/validation.yml',
+        workflow_id: 386408063,
         event: 'pull_request',
         head_sha: `head-${number}`,
         status: 'completed',
@@ -149,6 +151,47 @@ test('does not accept a successful run from an unrelated workflow', () => {
   assert.ok(codes(snapshot).includes('missing-ci'));
 });
 
+test('rejects a same-name decoy workflow for both upstream and candidate CI', () => {
+  const snapshot = fixture();
+  snapshot.runs[107][0].path = '.github/workflows/decoy.yml';
+  snapshot.runs[CANDIDATE_PR][0].path = '.github/workflows/decoy.yml';
+  assert.equal(codes(snapshot).filter((code) => code === 'missing-ci').length, 2);
+});
+
+test('rejects a replaced workflow identity even when name and path match', () => {
+  const snapshot = fixture();
+  snapshot.runs[124][0].workflow_id = 999999;
+  assert.ok(codes(snapshot).includes('missing-ci'));
+});
+
+test('a newer same-name decoy cannot conceal a failed validation workflow', () => {
+  const snapshot = fixture();
+  const real = snapshot.runs[107][0];
+  real.conclusion = 'failure';
+  snapshot.runs[107].push({
+    ...real,
+    id: real.id + 10000,
+    path: '.github/workflows/decoy.yml',
+    conclusion: 'success',
+  });
+  assert.ok(codes(snapshot).includes('ci-not-green'));
+});
+
+test('CI recheck rejects workflow path or identity drift without a status change', () => {
+  for (const [field, replacement] of [
+    ['path', '.github/workflows/decoy.yml'],
+    ['workflow_id', 999999],
+  ]) {
+    const snapshot = fixture();
+    const refreshed = structuredClone(snapshot.runs);
+    refreshed[124][0][field] = replacement;
+    assert.throws(
+      () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+      /PR #124 CI changed during stack audit/,
+    );
+  }
+});
+
 test('rejects an incomplete or skipped native security job', () => {
   const snapshot = fixture();
   snapshot.jobs[1].conclusion = 'skipped';
@@ -251,6 +294,7 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.deepEqual(auditStack(actual), []);
   assert.ok(requested.some((path) => path.includes(`/compare/main-head...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-136...head-137')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-137...head-138')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
@@ -597,7 +641,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-15), [
+  assert.deepEqual(STACK.slice(-16), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -613,8 +657,9 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 135, base: 134 },
     { number: 136, base: 135 },
     { number: 137, base: 136 },
+    { number: 138, base: 137 },
   ]);
-  assert.equal(CANDIDATE_PR, 137);
+  assert.equal(CANDIDATE_PR, 138);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
