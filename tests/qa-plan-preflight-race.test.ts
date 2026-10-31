@@ -157,6 +157,7 @@ it('skips native preflight when cancelled during asynchronous approval revalidat
   await expect(pending).resolves.toEqual({
     passed: false,
     output: 'QA stopped before launch.',
+    incomplete: true,
   });
   expect(native.preflight).not.toHaveBeenCalled();
   expect(native.verification).not.toHaveBeenCalled();
