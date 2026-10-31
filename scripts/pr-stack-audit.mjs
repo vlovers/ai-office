@@ -38,13 +38,15 @@ export const STACK = [
   { number: 135, base: 134 },
   { number: 136, base: 135 },
   { number: 137, base: 136 },
+  { number: 138, base: 137 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 137;
+export const CANDIDATE_PR = 138;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
+  137,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
@@ -97,7 +99,11 @@ export function requiredStepsForPr(number, jobName) {
   return [...common.slice(0, 6), ...POLICY_STEPS, ...common.slice(6)];
 }
 
+// The workflow name is not unique: another file can reuse it and spoof green jobs.
+// Pin both GitHub's immutable workflow identity and the reviewed workflow path.
 const VALIDATION_WORKFLOW = 'AI Office validation';
+const VALIDATION_WORKFLOW_PATH = '.github/workflows/validation.yml';
+const VALIDATION_WORKFLOW_ID = 386408063;
 
 // The same commit may have checks from different PRs. Only a run attached to
 // this exact PR is evidence, and a newer failure must override an older green.
@@ -106,6 +112,8 @@ export function selectValidationRun(runs, number) {
     .filter(
       (run) =>
         run.name === VALIDATION_WORKFLOW &&
+        run.path === VALIDATION_WORKFLOW_PATH &&
+        run.workflow_id === VALIDATION_WORKFLOW_ID &&
         run.event === 'pull_request' &&
         run.pull_requests?.some((pr) => pr.number === number),
     )
@@ -195,6 +203,8 @@ export function assertStableCIEvidence(
           id: run.id,
           run_attempt: run.run_attempt,
           name: run.name,
+          path: run.path,
+          workflow_id: run.workflow_id,
           event: run.event,
           head_sha: run.head_sha,
           status: run.status,
