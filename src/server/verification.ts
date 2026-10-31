@@ -103,7 +103,7 @@ export async function runVerification(
     };
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
-    child.on('close', async () => {
+    child.on('close', async (code, exitSignal) => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       try {
@@ -133,6 +133,16 @@ export async function runVerification(
       // supervisor as evidence that a forbidden operation was blocked.
       if (!result) {
         reject(new AppError(409, 'Verification supervisor closed without an attested result.'));
+        return;
+      }
+      // The trusted worker always terminates its own detached process group
+      // with SIGKILL after sending IPC. A normal exit, nonzero crash, or
+      // different signal after a plausible message is not proof of cleanup.
+      // Reject it even when reapProcessGroup() subsequently succeeds.
+      if (code !== null || exitSignal !== 'SIGKILL') {
+        reject(
+          new AppError(409, 'Verification supervisor exited without expected group termination.'),
+        );
         return;
       }
       resolve(result);
