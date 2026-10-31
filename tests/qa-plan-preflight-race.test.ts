@@ -92,9 +92,10 @@ it('stops a QA request cancelled while native preflight is pending', async () =>
   }
 }, 10000);
 
-
 it('prioritizes cancellation over an executable swap during native preflight', async () => {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-abort-swap-')));
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-abort-swap-')),
+  );
   const executable = join(root, 'approved.sh');
   const replacement = join(root, 'replacement.sh');
   const { started, release } = preflightGate();
