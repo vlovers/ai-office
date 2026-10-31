@@ -83,7 +83,7 @@ function fixture() {
   }
   // The #139 -> #140 compare is fetched both as an edge and an ancestor.
   comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
-  // The #141 -> #142 compare is both the candidate edge and an ancestor comparison.
+  // The #141 -> #142 compare is both an edge and an ancestor comparison.
   comparisons[141].files = comparisons.edges[142].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
@@ -308,6 +308,10 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.ok(requested.some((path) => path.includes('/compare/head-139...head-140')));
   assert.ok(requested.some((path) => path.includes('/compare/head-140...head-141')));
   assert.ok(requested.some((path) => path.includes('/compare/head-141...head-142')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-142...head-143')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-143...head-144')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-144...head-145')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-145...head-146')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
@@ -654,7 +658,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-20), [
+  assert.deepEqual(STACK.slice(-24), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -675,8 +679,12 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 140, base: 139 },
     { number: 141, base: 140 },
     { number: 142, base: 141 },
+    { number: 143, base: 142 },
+    { number: 144, base: 143 },
+    { number: 145, base: 144 },
+    { number: 146, base: 145 },
   ]);
-  assert.equal(CANDIDATE_PR, 142);
+  assert.equal(CANDIDATE_PR, 146);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -1046,6 +1054,88 @@ test('rejects a failed #142 native CI and a missing #141 ancestor independently'
   const snapshot = fixture();
   snapshot.jobsByPr[142][1].conclusion = 'failure';
   snapshot.comparisons[141].behind_by = 1;
-  assert.ok(codes(snapshot).includes('missing-candidate-job'));
+  assert.ok(codes(snapshot).includes('missing-upstream-job'));
   assert.ok(codes(snapshot).includes('lost-ancestor'));
+});
+
+test('attests the exact integration-only scope of #143', () => {
+  const snapshot = fixture();
+  assert.deepEqual(auditStack(snapshot), []);
+  assert.deepEqual(REVIEWED_DELTAS[143], [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+  ]);
+  snapshot.comparisons.edges[143].files.push({
+    filename: 'src/server/verification.ts',
+    status: 'modified',
+  });
+  assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+});
+
+test('attests the supervisor runtime and regression scope of #144 through #146', () => {
+  const expected = [
+    { filename: 'src/server/verification.ts', status: 'modified' },
+    { filename: 'tests/verification-supervisor-failclosed.test.ts', status: 'modified' },
+  ];
+  for (const number of [144, 145, 146]) {
+    assert.deepEqual(REVIEWED_DELTAS[number], expected);
+    assert.equal(REQUIRED_ANCESTORS.includes(number), number !== 146);
+  }
+  assert.deepEqual(auditStack(fixture()), []);
+});
+
+test('rejects unexpected, missing, duplicated and misclassified supervisor changes', () => {
+  for (const number of [144, 145, 146]) {
+    for (const mutation of [
+      (files) => files.push({ filename: 'src/server/process-group.ts', status: 'modified' }),
+      (files) => files.pop(),
+      (files) => { files[0].filename = 'src/server/verification-worker.ts'; },
+      (files) => { files[1].status = 'added'; },
+      (files) => { files[1] = { ...files[0] }; },
+    ]) {
+      const snapshot = fixture();
+      mutation(snapshot.comparisons.edges[number].files);
+      assert.ok(
+        codes(snapshot).includes('unreviewed-qa-delta'),
+        `Expected PR #${number} to reject unreviewed supervisor changes`,
+      );
+    }
+  }
+});
+
+test('rejects missing compare file evidence for each supervisor lifecycle PR', () => {
+  for (const number of [143, 144, 145, 146]) {
+    const snapshot = fixture();
+    delete snapshot.comparisons.edges[number].files;
+    assert.equal(snapshot.runs[CANDIDATE_PR][0].conclusion, 'success');
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+  }
+});
+
+test('rejects a lost supervisor parent or ancestor despite green tip CI', () => {
+  const snapshot = fixture();
+  snapshot.comparisons.edges[145].behind_by = 1;
+  snapshot.comparisons.edges[145].merge_base_commit.sha = 'stale-144';
+  snapshot.comparisons[144].behind_by = 1;
+  assert.ok(codes(snapshot).includes('lost-stack-parent'));
+  assert.ok(codes(snapshot).includes('lost-ancestor'));
+});
+
+test('requires exact Linux and macOS CI for every supervisor PR', () => {
+  const snapshot = fixture();
+  snapshot.jobsByPr[144][0].conclusion = 'failure';
+  snapshot.jobsByPr[145][1].conclusion = 'skipped';
+  snapshot.jobs[1].conclusion = 'failure';
+  assert.equal(codes(snapshot).filter((code) => code === 'missing-upstream-job').length, 2);
+  assert.ok(codes(snapshot).includes('missing-candidate-job'));
+});
+
+test('detects a new failed supervisor run during the final CI recheck', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.runs);
+  refreshed[145][0].conclusion = 'failure';
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+    /PR #145 CI changed during stack audit/,
+  );
 });
