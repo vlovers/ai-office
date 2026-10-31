@@ -10,6 +10,8 @@ import {
   fetchWorkflowRuns,
   PINNED_PATHS,
   POLICY_REGRESSION_PATH,
+  QA_CHANGE_PATHS,
+  QA_PIN_BASE_PR,
   REQUIRED_ANCESTORS,
   REQUIRED_JOBS,
   requiredStepsForPr,
@@ -76,8 +78,14 @@ function fixture() {
       ]),
     ),
   };
+  comparisons.edges[CANDIDATE_PR].files = QA_CHANGE_PATHS.map((filename) => ({
+    filename,
+    status: 'modified',
+  }));
+  // The #139 -> #140 compare is fetched both as an edge and an ancestor.
+  comparisons[QA_PIN_BASE_PR].files = comparisons.edges[CANDIDATE_PR].files;
   const blobs = Object.fromEntries(
-    PINNED_PATHS.map((path) => [path, { source: 'same-blob', candidate: 'same-blob' }]),
+    PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
   const jobsByPr = Object.fromEntries(
     STACK.map(({ number }) => [
@@ -212,7 +220,7 @@ test('detects missing merge ancestry even if CI is green', () => {
 
 test('detects a copied security implementation that drifted from PR #109', () => {
   const snapshot = fixture();
-  snapshot.blobs[PINNED_PATHS[0]].candidate = 'different-blob';
+  snapshot.blobs[PINNED_PATHS[0]].baseline = 'different-blob';
   assert.ok(codes(snapshot).includes('copied-security-drift'));
 });
 
@@ -282,7 +290,7 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
           sha:
             ref === source.prs[109].head.sha
               ? source.blobs[file].source
-              : source.blobs[file].candidate,
+              : source.blobs[file].baseline,
         };
       }
     } else {
@@ -295,6 +303,8 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.ok(requested.some((path) => path.includes(`/compare/main-head...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-136...head-137')));
   assert.ok(requested.some((path) => path.includes('/compare/head-137...head-138')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-138...head-139')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-139...head-140')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
@@ -581,7 +591,7 @@ test('collector rejects a main push while evidence is being collected', async ()
                 sha:
                   ref === source.prs[109].head.sha
                     ? source.blobs[file].source
-                    : source.blobs[file].candidate,
+                    : source.blobs[file].baseline,
               },
       };
     }
@@ -641,7 +651,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-16), [
+  assert.deepEqual(STACK.slice(-18), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -658,8 +668,10 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 136, base: 135 },
     { number: 137, base: 136 },
     { number: 138, base: 137 },
+    { number: 139, base: 138 },
+    { number: 140, base: 139 },
   ]);
-  assert.equal(CANDIDATE_PR, 138);
+  assert.equal(CANDIDATE_PR, 140);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -915,4 +927,56 @@ test('strictly decodes GitHub policy regression source without accepting malform
   ]) {
     assert.throws(() => decodePolicyRegressionSource(invalid), /CI-policy regression source/);
   }
+});
+
+test('pins the original QA files at #139 before the reviewed #140 cancellation change', () => {
+  const snapshot = fixture();
+  assert.equal(QA_PIN_BASE_PR, 139);
+  assert.equal(REQUIRED_ANCESTORS.includes(139), true);
+  assert.deepEqual(auditStack(snapshot), []);
+
+  snapshot.blobs[PINNED_PATHS[1]].baseline = 'unexpected-pre-cancellation-change';
+  assert.ok(codes(snapshot).includes('copied-security-drift'));
+});
+
+test('rejects an extra or missing file in the reviewed QA cancellation change set', () => {
+  for (const mutation of [
+    (files) => files.push({ filename: 'src/server/verification.ts', status: 'modified' }),
+    (files) => files.pop(),
+    (files) => {
+      files[0].filename = 'src/server/verification.ts';
+    },
+    (files) => {
+      files[0].status = 'added';
+    },
+    (files) => {
+      files[1].filename = files[0].filename;
+    },
+  ]) {
+    const snapshot = fixture();
+    mutation(snapshot.comparisons.edges[CANDIDATE_PR].files);
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+  }
+});
+
+test('rejects missing QA delta evidence despite a green #140 CI run', () => {
+  const snapshot = fixture();
+  delete snapshot.comparisons.edges[CANDIDATE_PR].files;
+  assert.equal(snapshot.runs[CANDIDATE_PR][0].conclusion, 'success');
+  assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+});
+
+test('detects new Draft #139/#140 CI and ancestry drift independently', () => {
+  const snapshot = fixture();
+  snapshot.runs[139][0].conclusion = 'failure';
+  snapshot.comparisons.edges[140].behind_by = 1;
+  assert.ok(codes(snapshot).includes('ci-not-green'));
+  assert.ok(codes(snapshot).includes('lost-stack-parent'));
+
+  const refreshed = structuredClone(snapshot.runs);
+  refreshed[140][0].run_attempt += 1;
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+    /PR #140 CI changed during stack audit/,
+  );
 });
