@@ -39,17 +39,27 @@ export const STACK = [
   { number: 136, base: 135 },
   { number: 137, base: 136 },
   { number: 138, base: 137 },
+  { number: 139, base: 138 },
+  { number: 140, base: 139 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 138;
+export const CANDIDATE_PR = 140;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
-  137,
+  137, 138, 139,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
+// PR #140 deliberately changes these two QA files. Verify the original #109
+// copies survived through #139, then attest the exact #139 -> #140 change set.
+export const QA_PIN_BASE_PR = 139;
+export const QA_CHANGE_PATHS = [
+  'src/server/qa-runner.ts',
+  'tests/qa-plan-preflight-race.test.ts',
+  'tests/qa-runner.test.ts',
+];
 export const REQUIRED_JOBS = [
   'TypeScript, tests, smoke, build and formatting',
   'Native Codex filesystem policy (no inference)',
@@ -385,13 +395,31 @@ export function auditStack(snapshot) {
     }
   }
 
-  // #109 was copied into #110 rather than merged as a parent. Check the
-  // security-critical executable pinning implementation and race fixture.
+  // #109 was copied into #110 rather than merged as a parent. Verify its
+  // executable pinning implementation survived until the reviewed #140 change.
   for (const path of PINNED_PATHS) {
     const pin = blobs[path];
-    if (!pin?.source || !pin?.candidate || pin.source !== pin.candidate) {
-      issue('copied-security-drift', `PR #109 security file differs in #${CANDIDATE_PR}: ${path}`);
+    if (!pin?.source || !pin?.baseline || pin.source !== pin.baseline) {
+      issue(
+        'copied-security-drift',
+        `PR #109 security file differs in pre-cancellation PR #${QA_PIN_BASE_PR}: ${path}`,
+      );
     }
+  }
+
+  // PR #140 modifies only the reviewed cancellation implementation and tests.
+  // An extra file, a missing test, or a non-modification needs fresh review.
+  const qaDelta = comparisons.edges?.[CANDIDATE_PR];
+  const expectedQAChanges = new Set(QA_CHANGE_PATHS);
+  if (
+    !Array.isArray(qaDelta?.files) ||
+    qaDelta.files.length !== QA_CHANGE_PATHS.length ||
+    qaDelta.files.some(
+      (file) => file?.status !== 'modified' || !expectedQAChanges.delete(file.filename),
+    ) ||
+    expectedQAChanges.size !== 0
+  ) {
+    issue('unreviewed-qa-delta', 'PR #140 changes files outside its reviewed QA cancellation scope');
   }
 
   // #124 is a divergent sibling of #123, not a Git ancestor. Its exact
@@ -505,12 +533,12 @@ export async function collectStack({
   await Promise.all(
     PINNED_PATHS.map(async (path) => {
       const encoded = path.split('/').map(encodeURIComponent).join('/');
-      const [source, candidate] = await Promise.all(
-        [109, CANDIDATE_PR].map((number) =>
+      const [source, baseline] = await Promise.all(
+        [109, QA_PIN_BASE_PR].map((number) =>
           get(`${root}/contents/${encoded}?ref=${prs[number].head.sha}`),
         ),
       );
-      blobs[path] = { source: source.sha, candidate: candidate.sha };
+      blobs[path] = { source: source.sha, baseline: baseline.sha };
     }),
   );
 
