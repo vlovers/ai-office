@@ -419,7 +419,10 @@ export function auditStack(snapshot) {
     ) ||
     expectedQAChanges.size !== 0
   ) {
-    issue('unreviewed-qa-delta', 'PR #140 changes files outside its reviewed QA cancellation scope');
+    issue(
+      'unreviewed-qa-delta',
+      'PR #140 changes files outside its reviewed QA cancellation scope',
+    );
   }
 
   // #124 is a divergent sibling of #123, not a Git ancestor. Its exact
