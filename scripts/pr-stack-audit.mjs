@@ -21,12 +21,28 @@ export const STACK = [
   { number: 120, base: 119 },
   { number: 121, base: 120 },
   { number: 122, base: 121 },
+  { number: 123, base: 122 },
+  // #124 is a sibling of #123. #125 reconciles its policy checks but does
+  // not contain its Git commits: audit #124 without claiming it as an ancestor.
+  { number: 124, base: 122 },
+  { number: 125, base: 123 },
+  { number: 126, base: 125 },
+  { number: 127, base: 126 },
+  { number: 128, base: 127 },
+  { number: 129, base: 128 },
+  { number: 130, base: 129 },
+  { number: 131, base: 130 },
+  { number: 132, base: 131 },
+  { number: 133, base: 132 },
+  { number: 134, base: 133 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 122;
+export const CANDIDATE_PR = 134;
 
-export const REQUIRED_ANCESTORS = [108, 110, 112, 116, 121];
+export const REQUIRED_ANCESTORS = [
+  108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133,
+];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const REQUIRED_JOBS = [
   'TypeScript, tests, smoke, build and formatting',
@@ -220,19 +236,19 @@ export function auditStack(snapshot) {
     !['ahead', 'identical'].includes(mainComparison.status) ||
     mainComparison.merge_base_commit?.sha !== mainSha
   ) {
-    issue('main-not-integrated', 'PR #122 does not include current main HEAD');
+    issue('main-not-integrated', `PR #${CANDIDATE_PR} does not include current main HEAD`);
   }
   for (const number of REQUIRED_ANCESTORS) {
     const source = prs[number];
     const comparison = comparisons[number];
     if (!candidate || !source || !comparison) {
-      issue('missing-ancestry', `Cannot verify PR #${number} in PR #122`);
+      issue('missing-ancestry', `Cannot verify PR #${number} in PR #${CANDIDATE_PR}`);
     } else if (
       comparison.behind_by !== 0 ||
       !['ahead', 'identical'].includes(comparison.status) ||
       comparison.merge_base_commit?.sha !== source.head.sha
     ) {
-      issue('lost-ancestor', `PR #${number} is not an ancestor of PR #122`);
+      issue('lost-ancestor', `PR #${number} is not an ancestor of PR #${CANDIDATE_PR}`);
     }
   }
 
@@ -241,7 +257,7 @@ export function auditStack(snapshot) {
   for (const path of PINNED_PATHS) {
     const pin = blobs[path];
     if (!pin?.source || !pin?.candidate || pin.source !== pin.candidate) {
-      issue('copied-security-drift', `PR #109 security file differs in #116: ${path}`);
+      issue('copied-security-drift', `PR #109 security file differs in #${CANDIDATE_PR}: ${path}`);
     }
   }
 
@@ -258,7 +274,7 @@ export function auditStack(snapshot) {
       job.status !== 'completed' ||
       job.conclusion !== 'success'
     ) {
-      issue('missing-candidate-job', `PR #122 has no successful exact-attempt job: ${name}`);
+      issue('missing-candidate-job', `PR #${CANDIDATE_PR} has no successful exact-attempt job: ${name}`);
     }
   }
 
