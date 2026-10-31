@@ -1089,9 +1089,15 @@ test('rejects unexpected, missing, duplicated and misclassified supervisor chang
     for (const mutation of [
       (files) => files.push({ filename: 'src/server/process-group.ts', status: 'modified' }),
       (files) => files.pop(),
-      (files) => { files[0].filename = 'src/server/verification-worker.ts'; },
-      (files) => { files[1].status = 'added'; },
-      (files) => { files[1] = { ...files[0] }; },
+      (files) => {
+        files[0].filename = 'src/server/verification-worker.ts';
+      },
+      (files) => {
+        files[1].status = 'added';
+      },
+      (files) => {
+        files[1] = { ...files[0] };
+      },
     ]) {
       const snapshot = fixture();
       mutation(snapshot.comparisons.edges[number].files);
