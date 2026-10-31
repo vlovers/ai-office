@@ -293,6 +293,13 @@ export async function verifyNativeIsolation(
       ['/usr/bin/tee', join(directory, 'outside-link')],
       ['/usr/bin/tee', join(directory, 'nested', '.git', 'config')],
       ['/usr/bin/tee', join(directory, 'nested', '.aws', 'credentials')],
+      // Read-only isolation must also reject namespace and metadata changes:
+      // denying writes through tee does not prove unlink, rename, chmod or
+      // directory creation are forbidden.
+      ['/bin/rm', join(directory, 'allowed.txt')],
+      ['/bin/mv', join(directory, 'allowed.txt'), join(directory, 'renamed-allowed')],
+      ['/bin/chmod', '600', join(directory, 'allowed.txt')],
+      ['/bin/mkdir', join(directory, 'new-directory')],
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
@@ -326,6 +333,14 @@ export async function verifyNativeIsolation(
       )
     )
       throw new Error('Write isolation failed.');
+    // A wrapper can perform a forbidden mkdir and then report a nonzero exit.
+    // Verify the resulting namespace, not only the command status.
+    try {
+      await lstat(join(directory, 'new-directory'));
+      throw new Error('Directory creation isolation failed.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   } catch {
     throw new AppError(
       409,

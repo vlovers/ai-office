@@ -772,6 +772,10 @@ case "$*" in
   */usr/bin/tee*outside-link*) marker=link-write ;;
   */usr/bin/tee*nested/.git/config*) marker=git-write ;;
   */usr/bin/tee*nested/.aws/credentials*) marker=aws-write ;;
+  */bin/rm*allowed.txt*) marker=unlink ;;
+  */bin/mv*allowed.txt*) marker=rename ;;
+  */bin/chmod*allowed.txt*) marker=chmod ;;
+  */bin/mkdir*new-directory*) marker=mkdir ;;
   *outside.txt*) marker=outside ;;
   *outside-link*) marker=link ;;
   *nested/.git/config*) marker=git ;;
@@ -784,7 +788,7 @@ esac
 touch "${root}/$marker"
 i=0
 while [ "$i" -lt 200 ]; do
-  if [ -f "${root}/outside" ] && [ -f "${root}/link" ] && [ -f "${root}/git" ] && [ -f "${root}/aws" ] && [ -f "${root}/secret" ] && [ -f "${root}/write" ] && [ -f "${root}/network" ] && [ -f "${root}/existing" ] && [ -f "${root}/secret-write" ] && [ -f "${root}/outside-write" ] && [ -f "${root}/link-write" ] && [ -f "${root}/git-write" ] && [ -f "${root}/aws-write" ]; then
+  if [ -f "${root}/outside" ] && [ -f "${root}/link" ] && [ -f "${root}/git" ] && [ -f "${root}/aws" ] && [ -f "${root}/secret" ] && [ -f "${root}/write" ] && [ -f "${root}/network" ] && [ -f "${root}/existing" ] && [ -f "${root}/secret-write" ] && [ -f "${root}/outside-write" ] && [ -f "${root}/link-write" ] && [ -f "${root}/git-write" ] && [ -f "${root}/aws-write" ] && [ -f "${root}/unlink" ] && [ -f "${root}/rename" ] && [ -f "${root}/chmod" ] && [ -f "${root}/mkdir" ]; then
     exit 1
   fi
   sleep 0.02
