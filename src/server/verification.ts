@@ -71,7 +71,7 @@ export async function runVerification(
         signal?.removeEventListener('abort', abort);
         reject(
           new UncertainCleanupError(
-            new Error('Verification supervisor did not close after SIGKILL.'),
+            new Error('Verification supervisor did not close after termination.'),
           ),
         );
       }, 1500);
@@ -128,6 +128,13 @@ export async function runVerification(
       watchdogExpired = true;
       requestTermination();
     }, timeoutMs + 5000);
+    // Node emits exit before close. A dead supervisor can leave the IPC
+    // channel open (for example, through an inherited descriptor), so waiting
+    // for the full verification watchdog would retain a hung operation. Do not
+    // send SIGKILL here: after exit, the leader PID may already be recycled.
+    child.on('exit', () => {
+      if (!closeObserved && !closeDeadlineExpired) armCloseDeadline();
+    });
     const abort = () => {
       if (closeDeadlineExpired) return;
       interrupted = true;
