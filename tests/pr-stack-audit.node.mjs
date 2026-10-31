@@ -1164,8 +1164,12 @@ test('PR #147 is audit-only and rejects added, removed or renamed runtime files'
   for (const mutate of [
     (files) => files.push({ filename: 'src/server/verification.ts', status: 'modified' }),
     (files) => files.pop(),
-    (files) => { files[0].filename = 'src/server/process-group.ts'; },
-    (files) => { files[1].status = 'added'; },
+    (files) => {
+      files[0].filename = 'src/server/process-group.ts';
+    },
+    (files) => {
+      files[1].status = 'added';
+    },
   ]) {
     const snapshot = fixture();
     mutate(snapshot.comparisons.edges[147].files);
@@ -1177,8 +1181,12 @@ test('PR #148 may change only verification supervisor and its regression tests',
   for (const mutate of [
     (files) => files.push({ filename: 'src/server/verification-worker.ts', status: 'modified' }),
     (files) => files.pop(),
-    (files) => { files[0].filename = 'src/server/process-group.ts'; },
-    (files) => { files[1].status = 'added'; },
+    (files) => {
+      files[0].filename = 'src/server/process-group.ts';
+    },
+    (files) => {
+      files[1].status = 'added';
+    },
   ]) {
     const snapshot = fixture();
     mutate(snapshot.comparisons.edges[148].files);
