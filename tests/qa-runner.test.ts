@@ -271,6 +271,7 @@ it('does not start native capability probes for an already-cancelled QA request'
   expect(await runSandboxedQA('/does-not-exist', plan, controller.signal)).toEqual({
     passed: false,
     output: 'QA stopped before launch.',
+    incomplete: true,
   });
 });
 const fakeNative = it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux');
