@@ -83,27 +83,43 @@ async function requireUnchangedQAPlan(plan: QAPlan): Promise<void> {
 
 /** Untrusted repository commands run INSIDE the same restrictive native policy. */
 export async function runSandboxedQA(directory: string, plan: QAPlan, signal: AbortSignal) {
+  const stopped = () => ({
+    passed: false,
+    output: 'QA stopped before launch.',
+    incomplete: true,
+  });
   // A cancelled queued QA must not launch even the expensive native capability
   // probes. Keep the second check: cancellation may arrive during verification.
-  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
-  await requireUnchangedQAPlan(plan);
+  if (signal.aborted) return stopped();
+  try {
+    await requireUnchangedQAPlan(plan);
+  } catch (error) {
+    // Cancellation takes precedence over a concurrent executable change.
+    if (signal.aborted) return stopped();
+    throw error;
+  }
   // File identity resolution is asynchronous: cancellation can arrive while
   // the approval digest is being revalidated, before native probes start.
-  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+  if (signal.aborted) return stopped();
   try {
     await verifyNativeIsolation(undefined, signal);
   } catch (error) {
-    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+    if (signal.aborted) return stopped();
     throw error;
   }
-  if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+  if (signal.aborted) return stopped();
   const home = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-')));
   try {
     // Narrow the replacement window: re-check after all asynchronous setup
     // and immediately before handing the approved argv to the supervisor.
-    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
-    await requireUnchangedQAPlan(plan);
-    if (signal.aborted) return { passed: false, output: 'QA stopped before launch.' };
+    if (signal.aborted) return stopped();
+    try {
+      await requireUnchangedQAPlan(plan);
+    } catch (error) {
+      if (signal.aborted) return stopped();
+      throw error;
+    }
+    if (signal.aborted) return stopped();
     return await runVerification(
       [process.execPath, nativeCodex, ...sandboxArguments(directory, plan.argv)],
       directory,
