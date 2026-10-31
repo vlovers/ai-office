@@ -105,12 +105,15 @@ export async function runVerification(
     if (signal?.aborted) abort();
     child.on('close', async (code, exitSignal) => {
       clearTimeout(timer);
-      signal?.removeEventListener('abort', abort);
+      // Keep cancellation observable while asynchronous process-group cleanup
+      // runs. Otherwise an abort during reaping can accept a stale IPC success.
       try {
         if (child.pid) await reapProcessGroup(child.pid);
         cleanupError = undefined;
       } catch (error) {
         cleanupError = error;
+      } finally {
+        signal?.removeEventListener('abort', abort);
       }
       if (cleanupError) {
         reject(cleanupError);
@@ -126,6 +129,16 @@ export async function runVerification(
       }
       if (startupError && !interrupted) {
         reject(new AppError(409, 'Verification supervisor could not start.'));
+        return;
+      }
+      // An abort during process-group reaping is still a cancellation, not an
+      // attested success or denial, even if IPC arrived before the abort.
+      if (interrupted) {
+        resolve({
+          passed: false,
+          output: 'Verification interrupted during application shutdown.',
+          incomplete: true,
+        });
         return;
       }
       // An unreported worker exit is not an attested sandbox denial. In
@@ -147,15 +160,25 @@ export async function runVerification(
       }
       resolve(result);
     });
-    child.send({ argv, cwd, timeoutMs, environment }, (error) => {
-      if (error) {
-        startupError = true;
-        try {
-          if (child.pid) killProcessGroup(child.pid);
-        } catch (failure) {
-          cleanupError = failure;
-        }
+    const sendFailed = () => {
+      startupError = true;
+      try {
+        if (child.pid) killProcessGroup(child.pid);
+      } catch (failure) {
+        cleanupError = failure;
       }
-    });
+    };
+    // A synchronous IPC send failure must not reject the Promise before the
+    // detached worker's close/reaping path has run. Never launch work after an
+    // abort that races with fork() and listener registration.
+    if (!interrupted) {
+      try {
+        child.send({ argv, cwd, timeoutMs, environment }, (error) => {
+          if (error) sendFailed();
+        });
+      } catch {
+        sendFailed();
+      }
+    }
   });
 }
