@@ -162,13 +162,14 @@ it.each([
   }
 });
 
-it('does not accept IPC success when shutdown aborts during asynchronous group reaping', async () => {
+it('does not accept IPC success or signal a recycled PID when abort races with reaping', async () => {
   const controller = new AbortController();
   let finishReaping!: () => void;
   const reaping = new Promise<void>((resolve) => {
     finishReaping = resolve;
   });
   vi.mocked(reapProcessGroup).mockImplementationOnce(() => reaping);
+  vi.mocked(killProcessGroup).mockClear();
   const worker = Object.assign(new EventEmitter(), {
     pid: 525255,
     send: vi.fn(),
@@ -187,7 +188,7 @@ it('does not accept IPC success when shutdown aborts during asynchronous group r
     output: 'Verification interrupted during application shutdown.',
     incomplete: true,
   });
-  expect(killProcessGroup).toHaveBeenCalledWith(525255);
+  expect(killProcessGroup).not.toHaveBeenCalledWith(525255);
 });
 
 it.each(['synchronous throw', 'callback failure'])(
@@ -320,4 +321,56 @@ it('ignores a late IPC send callback after the supervisor has closed', async () 
   await expect(pending).resolves.toEqual({ passed: true, output: 'ok' });
   reportSend(new Error('Late IPC error'));
   expect(killProcessGroup).not.toHaveBeenCalledWith(525261);
+});
+
+it.each(['malformed IPC', 'IPC send failure', 'child process error'])(
+  'fails closed within the termination deadline when %s never yields close',
+  async (failureMode) => {
+    vi.useFakeTimers();
+    try {
+      let sendCallback!: (error?: Error) => void;
+      const worker = Object.assign(new EventEmitter(), {
+        pid: 525262,
+        send: vi.fn((_message: unknown, callback: (error?: Error) => void) => {
+          sendCallback = callback;
+        }),
+      });
+      vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+      vi.mocked(killProcessGroup).mockClear();
+
+      const pending = runVerification(['/bin/true'], '/tmp', 120000);
+      const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+      if (failureMode === 'malformed IPC') worker.emit('message', null);
+      else if (failureMode === 'IPC send failure') sendCallback(new Error('IPC failure'));
+      else worker.emit('error', new Error('Child process failure'));
+
+      expect(killProcessGroup).toHaveBeenCalledTimes(1);
+      expect(killProcessGroup).toHaveBeenCalledWith(525262);
+      await vi.advanceTimersByTimeAsync(1500);
+      await rejected;
+      await vi.advanceTimersByTimeAsync(125000);
+      expect(killProcessGroup).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+
+it('signals the supervisor group only once when invalid IPC races with abort', async () => {
+  const controller = new AbortController();
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525264,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000, controller.signal);
+  worker.emit('message', null);
+  controller.abort();
+  expect(killProcessGroup).toHaveBeenCalledTimes(1);
+  worker.emit('close', null, 'SIGKILL');
+
+  await expect(pending).rejects.toThrow('Verification supervisor sent an invalid result');
+  expect(reapProcessGroup).toHaveBeenCalledWith(525264);
 });
