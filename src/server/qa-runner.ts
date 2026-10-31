@@ -109,6 +109,7 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
   }
   if (signal.aborted) return stopped();
   const home = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-')));
+  let outcome: Awaited<ReturnType<typeof runVerification>>;
   try {
     // Narrow the replacement window: re-check after all asynchronous setup
     // and immediately before handing the approved argv to the supervisor.
@@ -120,7 +121,7 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
       throw error;
     }
     if (signal.aborted) return stopped();
-    return await runVerification(
+    outcome = await runVerification(
       [process.execPath, nativeCodex, ...sandboxArguments(directory, plan.argv)],
       directory,
       plan.timeoutMs,
@@ -130,4 +131,8 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
   } finally {
     await rm(home, { recursive: true, force: true });
   }
+  // Cancellation may arrive after the supervisor closes while isolated HOME
+  // cleanup is still pending. Do not publish a stale successful QA result.
+  if (signal.aborted) return stopped();
+  return outcome;
 }
