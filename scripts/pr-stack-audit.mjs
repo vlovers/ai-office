@@ -43,14 +43,18 @@ export const STACK = [
   { number: 140, base: 139 },
   { number: 141, base: 140 },
   { number: 142, base: 141 },
+  { number: 143, base: 142 },
+  { number: 144, base: 143 },
+  { number: 145, base: 144 },
+  { number: 146, base: 145 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 142;
+export const CANDIDATE_PR = 146;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
-  137, 138, 139, 140, 141,
+  137, 138, 139, 140, 141, 142, 143, 144, 145,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
@@ -62,9 +66,9 @@ export const QA_CHANGE_PATHS = [
   'tests/qa-plan-preflight-race.test.ts',
   'tests/qa-runner.test.ts',
 ];
-// Pin the exact file scope of each post-#139 integration step. The #141
-// audit update must not silently introduce runtime changes; #142 may add
-// only its two cancellation regression suites and modify the two QA modules.
+// Pin the exact file scope of each post-#139 integration step. Audit-only
+// PRs #141 and #143 must not introduce runtime changes; #144-#146 may change
+// only verification supervision and its existing regression suite.
 export const REVIEWED_DELTAS = {
   140: QA_CHANGE_PATHS.map((filename) => ({ filename, status: 'modified' })),
   141: [
@@ -76,6 +80,22 @@ export const REVIEWED_DELTAS = {
     { filename: 'src/server/qa-runner.ts', status: 'modified' },
     { filename: 'tests/native-preflight-teardown-cancellation.test.ts', status: 'added' },
     { filename: 'tests/qa-cancellation-cleanup-race.test.ts', status: 'added' },
+  ],
+  143: [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+  ],
+  144: [
+    { filename: 'src/server/verification.ts', status: 'modified' },
+    { filename: 'tests/verification-supervisor-failclosed.test.ts', status: 'modified' },
+  ],
+  145: [
+    { filename: 'src/server/verification.ts', status: 'modified' },
+    { filename: 'tests/verification-supervisor-failclosed.test.ts', status: 'modified' },
+  ],
+  146: [
+    { filename: 'src/server/verification.ts', status: 'modified' },
+    { filename: 'tests/verification-supervisor-failclosed.test.ts', status: 'modified' },
   ],
 };
 
@@ -426,7 +446,7 @@ export function auditStack(snapshot) {
     }
   }
 
-  // Preserve the reviewed scope of #140, #141 and #142 independently.
+  // Preserve the reviewed scope of each QA and supervisor PR independently.
   // A successful final CI run cannot justify an unexpected intermediate file.
   for (const [number, expected] of Object.entries(REVIEWED_DELTAS)) {
     const actual = comparisons.edges?.[number]?.files;
