@@ -74,15 +74,21 @@ function fixture() {
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', candidate: 'same-blob' }]),
   );
-  const jobs = REQUIRED_JOBS.map((name, index) => ({
-    id: index + 1,
-    name,
-    run_id: 1000 + CANDIDATE_PR,
-    run_attempt: 1,
-    status: 'completed',
-    conclusion: 'success',
-  }));
-  return { mainSha: 'main-head', prs, runs, comparisons, blobs, jobs };
+  const jobsByPr = Object.fromEntries(
+    STACK.map(({ number }) => [
+      number,
+      REQUIRED_JOBS.map((name, index) => ({
+        id: number * 10 + index + 1,
+        name,
+        run_id: 1000 + number,
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'success',
+      })),
+    ]),
+  );
+  const jobs = jobsByPr[CANDIDATE_PR];
+  return { mainSha: 'main-head', prs, runs, comparisons, blobs, jobs, jobsByPr };
 }
 
 function codes(snapshot) {
@@ -190,7 +196,8 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
       const number = Number(parsed.searchParams.get('head_sha').slice('head-'.length));
       body = { total_count: source.runs[number].length, workflow_runs: source.runs[number] };
     } else if (/\/actions\/runs\/\d+\/attempts\/\d+\/jobs$/.test(path)) {
-      body = { total_count: source.jobs.length, jobs: source.jobs };
+      const number = Number(path.match(/\/actions\/runs\/(\d+)\/attempts/)[1]) - 1000;
+      body = { total_count: source.jobsByPr[number].length, jobs: source.jobsByPr[number] };
     } else if (path.includes('/compare/')) {
       const base = path.split('/compare/')[1].split('...')[0];
       const number = Number(base.slice('head-'.length));
@@ -218,13 +225,13 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   const actual = await collectStack({ request, token: 'fixture-token' });
   assert.deepEqual(auditStack(actual), []);
   assert.ok(requested.some((path) => path.includes(`/compare/main-head...head-${CANDIDATE_PR}`)));
-  assert.ok(requested.some((path) => path.includes('/compare/head-133...head-134')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-134...head-135')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
   assert.equal(requested.filter((path) => path.endsWith('/actions/runs')).length, STACK.length * 2);
-  assert.equal(requested.filter((path) => /\/attempts\/\d+\/jobs$/.test(path)).length, 2);
+  assert.equal(requested.filter((path) => /\/attempts\/\d+\/jobs$/.test(path)).length, STACK.length * 2);
 });
 
 test('newer failed CI overrides older green CI regardless of API array order', () => {
@@ -461,9 +468,10 @@ test('collector rejects a main push while evidence is being collected', async ()
       };
     }
     if (/\/actions\/runs\/\d+\/attempts\/\d+\/jobs$/.test(path)) {
+      const number = Number(path.match(/\/actions\/runs\/(\d+)\/attempts/)[1]) - 1000;
       return {
         ok: true,
-        json: async () => ({ total_count: source.jobs.length, jobs: source.jobs }),
+        json: async () => ({ total_count: source.jobsByPr[number].length, jobs: source.jobsByPr[number] }),
       };
     }
     if (path.includes('/compare/')) {
@@ -547,7 +555,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-12), [
+  assert.deepEqual(STACK.slice(-13), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -560,8 +568,9 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 132, base: 131 },
     { number: 133, base: 132 },
     { number: 134, base: 133 },
+    { number: 135, base: 134 },
   ]);
-  assert.equal(CANDIDATE_PR, 134);
+  assert.equal(CANDIDATE_PR, 135);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -639,5 +648,50 @@ test('CI recheck includes newly monitored post-122 security PRs', () => {
   assert.throws(
     () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
     /PR #132 CI changed during stack audit/,
+  );
+});
+
+test('rejects a skipped upstream macOS job despite a successful workflow conclusion', () => {
+  const snapshot = fixture();
+  snapshot.jobsByPr[124][1].conclusion = 'skipped';
+  assert.equal(snapshot.runs[124][0].conclusion, 'success');
+  assert.ok(codes(snapshot).includes('missing-upstream-job'));
+});
+
+test('rejects missing or duplicated upstream security jobs', () => {
+  const snapshot = fixture();
+  snapshot.jobsByPr[107].pop();
+  snapshot.jobsByPr[124].push({ ...snapshot.jobsByPr[124][1], id: 99999 });
+  assert.equal(codes(snapshot).filter((code) => code === 'missing-upstream-job').length, 2);
+});
+
+test('rejects upstream jobs belonging to a different run or attempt', () => {
+  const snapshot = fixture();
+  snapshot.jobsByPr[95][0].run_id += 1;
+  snapshot.jobsByPr[97][1].run_attempt += 1;
+  assert.equal(codes(snapshot).filter((code) => code === 'missing-upstream-job').length, 2);
+});
+
+test('missing upstream job evidence is not silently accepted as green', () => {
+  const snapshot = fixture();
+  delete snapshot.jobsByPr[124];
+  assert.equal(codes(snapshot).filter((code) => code === 'missing-upstream-job').length, 2);
+});
+
+test('upstream job mutation during collection invalidates the audit', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.jobsByPr);
+  refreshed[124][1].conclusion = 'failure';
+  assert.throws(
+    () =>
+      assertStableCIEvidence(
+        snapshot.runs,
+        snapshot.runs,
+        snapshot.jobs,
+        snapshot.jobs,
+        snapshot.jobsByPr,
+        refreshed,
+      ),
+    /PR #124 CI jobs changed during stack audit/,
   );
 });
