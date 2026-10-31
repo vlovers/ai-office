@@ -41,25 +41,44 @@ export const STACK = [
   { number: 138, base: 137 },
   { number: 139, base: 138 },
   { number: 140, base: 139 },
+  { number: 141, base: 140 },
+  { number: 142, base: 141 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 140;
+export const CANDIDATE_PR = 142;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
-  137, 138, 139,
+  137, 138, 139, 140, 141,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
-// PR #140 deliberately changes these two QA files. Verify the original #109
-// copies survived through #139, then attest the exact #139 -> #140 change set.
+// PR #140 deliberately changes these QA files. Verify the original #109
+// copies survived through #139, then attest each subsequent reviewed change set.
 export const QA_PIN_BASE_PR = 139;
 export const QA_CHANGE_PATHS = [
   'src/server/qa-runner.ts',
   'tests/qa-plan-preflight-race.test.ts',
   'tests/qa-runner.test.ts',
 ];
+// Pin the exact file scope of each post-#139 integration step. The #141
+// audit update must not silently introduce runtime changes; #142 may add
+// only its two cancellation regression suites and modify the two QA modules.
+export const REVIEWED_DELTAS = {
+  140: QA_CHANGE_PATHS.map((filename) => ({ filename, status: 'modified' })),
+  141: [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+  ],
+  142: [
+    { filename: 'src/server/providers/native-isolation.ts', status: 'modified' },
+    { filename: 'src/server/qa-runner.ts', status: 'modified' },
+    { filename: 'tests/native-preflight-teardown-cancellation.test.ts', status: 'added' },
+    { filename: 'tests/qa-cancellation-cleanup-race.test.ts', status: 'added' },
+  ],
+};
+
 export const REQUIRED_JOBS = [
   'TypeScript, tests, smoke, build and formatting',
   'Native Codex filesystem policy (no inference)',
@@ -407,22 +426,24 @@ export function auditStack(snapshot) {
     }
   }
 
-  // PR #140 modifies only the reviewed cancellation implementation and tests.
-  // An extra file, a missing test, or a non-modification needs fresh review.
-  const qaDelta = comparisons.edges?.[CANDIDATE_PR];
-  const expectedQAChanges = new Set(QA_CHANGE_PATHS);
-  if (
-    !Array.isArray(qaDelta?.files) ||
-    qaDelta.files.length !== QA_CHANGE_PATHS.length ||
-    qaDelta.files.some(
-      (file) => file?.status !== 'modified' || !expectedQAChanges.delete(file.filename),
-    ) ||
-    expectedQAChanges.size !== 0
-  ) {
-    issue(
-      'unreviewed-qa-delta',
-      'PR #140 changes files outside its reviewed QA cancellation scope',
-    );
+  // Preserve the reviewed scope of #140, #141 and #142 independently.
+  // A successful final CI run cannot justify an unexpected intermediate file.
+  for (const [number, expected] of Object.entries(REVIEWED_DELTAS)) {
+    const actual = comparisons.edges?.[number]?.files;
+    const remaining = new Map(expected.map((file) => [file.filename, file.status]));
+    let valid = Array.isArray(actual) && actual.length === expected.length;
+    if (valid) {
+      for (const file of actual) {
+        if (!remaining.has(file?.filename) || remaining.get(file.filename) !== file.status) {
+          valid = false;
+          break;
+        }
+        remaining.delete(file.filename);
+      }
+    }
+    if (!valid || remaining.size !== 0) {
+      issue('unreviewed-qa-delta', `PR #${number} changes files outside its reviewed scope`);
+    }
   }
 
   // #124 is a divergent sibling of #123, not a Git ancestor. Its exact
