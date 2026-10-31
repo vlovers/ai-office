@@ -82,10 +82,14 @@ export async function runVerification(
     const requestTermination = () => {
       if (closeObserved || closeDeadlineExpired || terminationRequested) return;
       terminationRequested = true;
-      try {
-        if (child.pid) killProcessGroup(child.pid);
-      } catch (error) {
-        cleanupError = error;
+      // Node may emit exit before close if descendants retain stdio or IPC.
+      // Once exit is observed, the process-group leader PID can be recycled.
+      if (child.exitCode == null && child.signalCode == null) {
+        try {
+          if (child.pid) killProcessGroup(child.pid);
+        } catch (error) {
+          cleanupError = error;
+        }
       }
       armCloseDeadline();
     };
@@ -116,13 +120,7 @@ export async function runVerification(
     child.on('disconnect', () => {
       if (closeObserved || closeDeadlineExpired || result) return;
       startupError = true;
-      // If Node already observed exit, the PID may be recycled. Preserve the
-      // uncertain-cleanup deadline without signaling that former process group.
-      if (child.exitCode !== null && child.exitCode !== undefined || child.signalCode != null) {
-        armCloseDeadline();
-      } else {
-        requestTermination();
-      }
+      requestTermination();
     });
     // Backstop for worker startup/IPC failures. The worker also owns its own bound.
     const timer = setTimeout(() => {
