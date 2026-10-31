@@ -91,6 +91,22 @@ export async function assertNativeDenials(
     throw new Error('Sandbox leaked forbidden read contents.');
 }
 
+/** A nonzero sandbox exit cannot prove that a forbidden write had no side effect. */
+export async function assertProtectedFilesUnchanged(
+  protectedFiles: ReadonlyArray<readonly [string, string]>,
+): Promise<void> {
+  const unchanged = await Promise.all(
+    protectedFiles.map(async ([path, expected]) => {
+      try {
+        return (await readFile(path, 'utf8')) === expected;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  if (unchanged.some((value) => !value)) throw new Error('Sandbox modified a protected file.');
+}
+
 /** Identical permission table to SDK execution, without legacy --sandbox overrides. */
 export function sandboxArguments(directory: string, argv: string[]): string[] {
   const options = codexOptions(directory, {});
@@ -172,6 +188,12 @@ export async function verifyNativeIsolation(
       ['/bin/cat', join(directory, 'nested', '.git', 'config')],
       ['/bin/cat', join(directory, 'nested', '.aws', 'credentials')],
       ['/bin/cat', join(directory, 'outside-link')],
+      // tee truncates a target even with empty stdin. A forged wrapper can
+      // mutate protected files and then return a denial exit code.
+      ['/usr/bin/tee', join(root, 'outside.txt')],
+      ['/usr/bin/tee', join(directory, 'outside-link')],
+      ['/usr/bin/tee', join(directory, 'nested', '.git', 'config')],
+      ['/usr/bin/tee', join(directory, 'nested', '.aws', 'credentials')],
       ['/usr/bin/touch', join(directory, 'write-escape')],
       ['/usr/bin/curl', '--silent', '--max-time', '2', `http://127.0.0.1:${address.port}`],
     ];
@@ -186,6 +208,15 @@ export async function verifyNativeIsolation(
     await closeProbeServer(server);
     if (signal?.aborted) throw new Error('Native sandbox capability verification cancelled.');
     if (networkEscape) throw new Error('Network isolation failed.');
+    // Verify the original canaries after every concurrent denial probe has
+    // finished. This detects masked writes through direct and symlink paths.
+    await assertProtectedFilesUnchanged([
+      [join(root, 'outside.txt'), outsideCanary],
+      [join(directory, 'outside-link'), outsideCanary],
+      [join(directory, '.env'), secretCanary],
+      [join(directory, 'nested', '.git', 'config'), gitMetadataCanary],
+      [join(directory, 'nested', '.aws', 'credentials'), nestedCredentialsCanary],
+    ]);
     // Check effects as well as exit codes (a wrapper may hide its child's status).
     if (
       await readFile(join(directory, 'write-escape')).then(
