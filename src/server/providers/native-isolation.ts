@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, mkdir, readFile, readlink, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
@@ -107,6 +107,75 @@ export async function assertProtectedFilesUnchanged(
   if (unchanged.some((value) => !value)) throw new Error('Sandbox modified a protected file.');
 }
 
+/** Capture file identity and metadata, not just the readable canary bytes. */
+export interface ProtectedFileMetadata {
+  path: string;
+  dev: number;
+  ino: number;
+  mode: number;
+  uid: number;
+  gid: number;
+  nlink: number;
+  ctimeMs: number;
+  mtimeMs: number;
+  linkTarget: string | null;
+}
+
+async function protectedFileMetadata(path: string): Promise<ProtectedFileMetadata> {
+  const info = await lstat(path);
+  return {
+    path,
+    dev: info.dev,
+    ino: info.ino,
+    mode: info.mode,
+    uid: info.uid,
+    gid: info.gid,
+    nlink: info.nlink,
+    ctimeMs: info.ctimeMs,
+    mtimeMs: info.mtimeMs,
+    linkTarget: info.isSymbolicLink() ? await readlink(path) : null,
+  };
+}
+
+export async function captureProtectedMetadata(
+  paths: readonly string[],
+): Promise<ProtectedFileMetadata[]> {
+  return Promise.all(paths.map((path) => protectedFileMetadata(path)));
+}
+
+/** A forged denial must not be able to chmod, replace or retarget protected files. */
+export async function assertProtectedMetadataUnchanged(
+  expected: readonly ProtectedFileMetadata[],
+): Promise<void> {
+  const actual = await Promise.all(
+    expected.map(async ({ path }) => {
+      try {
+        return await protectedFileMetadata(path);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  if (
+    actual.some((state, index) => {
+      const original = expected[index]!;
+      return (
+        !state ||
+        state.dev !== original.dev ||
+        state.ino !== original.ino ||
+        state.mode !== original.mode ||
+        state.uid !== original.uid ||
+        state.gid !== original.gid ||
+        state.nlink !== original.nlink ||
+        state.ctimeMs !== original.ctimeMs ||
+        state.mtimeMs !== original.mtimeMs ||
+        state.linkTarget !== original.linkTarget
+      );
+    })
+  )
+    throw new Error('Sandbox modified protected filesystem metadata.');
+}
+
 /** Identical permission table to SDK execution, without legacy --sandbox overrides. */
 export function sandboxArguments(directory: string, argv: string[]): string[] {
   const options = codexOptions(directory, {});
@@ -156,6 +225,13 @@ export async function verifyNativeIsolation(
     await writeFile(join(directory, 'nested', '.git', 'config'), gitMetadataCanary);
     await writeFile(join(directory, 'nested', '.aws', 'credentials'), nestedCredentialsCanary);
     await symlink(join(root, 'outside.txt'), join(directory, 'outside-link'));
+    const protectedMetadata = await captureProtectedMetadata([
+      join(root, 'outside.txt'),
+      join(directory, 'outside-link'),
+      join(directory, '.env'),
+      join(directory, 'nested', '.git', 'config'),
+      join(directory, 'nested', '.aws', 'credentials'),
+    ]);
     await listenProbeServer(server);
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
@@ -217,6 +293,7 @@ export async function verifyNativeIsolation(
       [join(directory, 'nested', '.git', 'config'), gitMetadataCanary],
       [join(directory, 'nested', '.aws', 'credentials'), nestedCredentialsCanary],
     ]);
+    await assertProtectedMetadataUnchanged(protectedMetadata);
     // Check effects as well as exit codes (a wrapper may hide its child's status).
     if (
       await readFile(join(directory, 'write-escape')).then(
