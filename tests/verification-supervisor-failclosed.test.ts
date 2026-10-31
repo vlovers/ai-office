@@ -37,10 +37,51 @@ it('preserves an explicitly reported denied operation', async () => {
 
   const pending = runVerification(['/bin/false'], '/tmp', 1000);
   worker.emit('message', { passed: false, output: 'Permission denied' });
-  worker.emit('close', 1);
+  // The worker kills its detached process group after delivering IPC.
+  worker.emit('close', null, 'SIGKILL');
 
   await expect(pending).resolves.toEqual({ passed: false, output: 'Permission denied' });
   expect(reapProcessGroup).toHaveBeenCalledWith(424243);
+});
+
+// A plausible IPC result is insufficient if the supervisor never completed
+// its expected detached process-group termination. In particular, a crashed
+// worker must not attest a sandbox denial merely by sending IPC first.
+it.each([
+  ['normal exit', 0, null],
+  ['nonzero crash', 1, null],
+  ['unexpected signal', null, 'SIGTERM'],
+])('rejects a reported denial followed by %s', async (_case, code, signal) => {
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 424244,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(reapProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/false'], '/tmp', 1000);
+  worker.emit('message', { passed: false, output: 'Permission denied' });
+  worker.emit('close', code, signal);
+
+  await expect(pending).rejects.toThrow(
+    'Verification supervisor exited without expected group termination',
+  );
+  expect(reapProcessGroup).toHaveBeenCalledWith(424244);
+});
+
+it('preserves a successful result after the expected supervisor group termination', async () => {
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 424245,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000);
+  worker.emit('message', { passed: true, output: 'ok' });
+  worker.emit('close', null, 'SIGKILL');
+
+  await expect(pending).resolves.toEqual({ passed: true, output: 'ok' });
+  expect(reapProcessGroup).toHaveBeenCalledWith(424245);
 });
 
 // The IPC boundary is not an attestation if the worker payload is malformed.
