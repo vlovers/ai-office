@@ -5,7 +5,8 @@ import { killProcessGroup, reapProcessGroup } from '../src/server/process-group.
 import { runVerification } from '../src/server/verification.js';
 
 vi.mock('node:child_process', () => ({ fork: vi.fn() }));
-vi.mock('../src/server/process-group.js', () => ({
+vi.mock('../src/server/process-group.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/server/process-group.js')>()),
   killProcessGroup: vi.fn(),
   reapProcessGroup: vi.fn(async () => {}),
 }));
