@@ -83,6 +83,8 @@ function fixture() {
   }
   // The #139 -> #140 compare is fetched both as an edge and an ancestor.
   comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
+  // The #141 -> #142 compare is both the candidate edge and an ancestor comparison.
+  comparisons[141].files = comparisons.edges[142].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
@@ -304,6 +306,8 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.ok(requested.some((path) => path.includes('/compare/head-137...head-138')));
   assert.ok(requested.some((path) => path.includes('/compare/head-138...head-139')));
   assert.ok(requested.some((path) => path.includes('/compare/head-139...head-140')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-140...head-141')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-141...head-142')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
