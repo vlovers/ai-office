@@ -374,3 +374,134 @@ it('signals the supervisor group only once when invalid IPC races with abort', a
   await expect(pending).rejects.toThrow('Verification supervisor sent an invalid result');
   expect(reapProcessGroup).toHaveBeenCalledWith(525264);
 });
+
+it('fails closed when IPC disconnects before any attested supervisor result', async () => {
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525265,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+  vi.mocked(reapProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/true'], '/tmp', 120000);
+  worker.emit('disconnect');
+  expect(killProcessGroup).toHaveBeenCalledTimes(1);
+  expect(killProcessGroup).toHaveBeenCalledWith(525265);
+  worker.emit('close', null, 'SIGKILL');
+
+  await expect(pending).rejects.toThrow('Verification supervisor could not start');
+  expect(reapProcessGroup).toHaveBeenCalledWith(525265);
+});
+
+it('bounds a lost IPC channel even if supervisor close never arrives', async () => {
+  vi.useFakeTimers();
+  try {
+    const worker = Object.assign(new EventEmitter(), {
+      pid: 525266,
+      send: vi.fn(),
+    });
+    vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+    vi.mocked(killProcessGroup).mockClear();
+
+    const pending = runVerification(['/bin/true'], '/tmp', 120000);
+    const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+    worker.emit('disconnect');
+    expect(killProcessGroup).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1500);
+    await rejected;
+    await vi.advanceTimersByTimeAsync(125000);
+    expect(killProcessGroup).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('does not discard an attested result when the IPC channel then disconnects', async () => {
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525267,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000);
+  worker.emit('message', { passed: true, output: 'ok' });
+  worker.emit('disconnect');
+  expect(killProcessGroup).not.toHaveBeenCalledWith(525267);
+  worker.emit('close', null, 'SIGKILL');
+
+  await expect(pending).resolves.toEqual({ passed: true, output: 'ok' });
+});
+
+it('never signals a possibly recycled PID after IPC disconnect observes child exit', async () => {
+  vi.useFakeTimers();
+  try {
+    const worker = Object.assign(new EventEmitter(), {
+      pid: 525268,
+      exitCode: 0,
+      signalCode: null,
+      send: vi.fn(),
+    });
+    vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+    vi.mocked(killProcessGroup).mockClear();
+
+    const pending = runVerification(['/bin/true'], '/tmp', 120000);
+    const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+    worker.emit('disconnect');
+    expect(killProcessGroup).not.toHaveBeenCalledWith(525268);
+    await vi.advanceTimersByTimeAsync(1500);
+    await rejected;
+    worker.emit('close', 0);
+    await vi.advanceTimersByTimeAsync(125000);
+    expect(killProcessGroup).not.toHaveBeenCalledWith(525268);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('ignores late IPC send and child errors while a closed supervisor is being reaped', async () => {
+  let reportSend!: (error?: Error) => void;
+  let finishReaping!: () => void;
+  const reaping = new Promise<void>((resolve) => {
+    finishReaping = resolve;
+  });
+  vi.mocked(reapProcessGroup).mockImplementationOnce(() => reaping);
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525269,
+    send: vi.fn((_message: unknown, callback: (error?: Error) => void) => {
+      reportSend = callback;
+    }),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000);
+  worker.emit('message', { passed: true, output: 'ok' });
+  worker.emit('close', null, 'SIGKILL');
+  reportSend(new Error('Late IPC failure'));
+  worker.emit('error', new Error('Late child error'));
+  worker.emit('disconnect');
+  finishReaping();
+
+  await expect(pending).resolves.toEqual({ passed: true, output: 'ok' });
+  expect(killProcessGroup).not.toHaveBeenCalledWith(525269);
+});
+
+it('sends only one termination signal when IPC disconnect races with cancellation', async () => {
+  const controller = new AbortController();
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525270,
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000, controller.signal);
+  worker.emit('disconnect');
+  controller.abort();
+  expect(killProcessGroup).toHaveBeenCalledTimes(1);
+  worker.emit('close', null, 'SIGKILL');
+
+  await expect(pending).resolves.toMatchObject({ passed: false, incomplete: true });
+});
