@@ -231,7 +231,10 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
   assert.ok(requested.every((path) => path.startsWith('/repos/vlovers/ai-office/')));
   assert.equal(requested.filter((path) => path.endsWith('/actions/runs')).length, STACK.length * 2);
-  assert.equal(requested.filter((path) => /\/attempts\/\d+\/jobs$/.test(path)).length, STACK.length * 2);
+  assert.equal(
+    requested.filter((path) => /\/attempts\/\d+\/jobs$/.test(path)).length,
+    STACK.length * 2,
+  );
 });
 
 test('newer failed CI overrides older green CI regardless of API array order', () => {
@@ -471,7 +474,10 @@ test('collector rejects a main push while evidence is being collected', async ()
       const number = Number(path.match(/\/actions\/runs\/(\d+)\/attempts/)[1]) - 1000;
       return {
         ok: true,
-        json: async () => ({ total_count: source.jobsByPr[number].length, jobs: source.jobsByPr[number] }),
+        json: async () => ({
+          total_count: source.jobsByPr[number].length,
+          jobs: source.jobsByPr[number],
+        }),
       };
     }
     if (path.includes('/compare/')) {
