@@ -529,33 +529,36 @@ it('does not signal a recycled process-group PID if cancellation follows child e
 it.each([
   ['no result', null],
   ['attested success', { passed: true, output: 'ok' }],
-])('fails closed promptly when supervisor exits but close never arrives: %s', async (_label, result) => {
-  vi.useFakeTimers();
-  try {
-    const worker = Object.assign(new EventEmitter(), {
-      pid: 525272,
-      exitCode: null as number | null,
-      signalCode: 'SIGKILL',
-      send: vi.fn(),
-    });
-    vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
-    vi.mocked(killProcessGroup).mockClear();
-    vi.mocked(reapProcessGroup).mockClear();
+])(
+  'fails closed promptly when supervisor exits but close never arrives: %s',
+  async (_label, result) => {
+    vi.useFakeTimers();
+    try {
+      const worker = Object.assign(new EventEmitter(), {
+        pid: 525272,
+        exitCode: null as number | null,
+        signalCode: 'SIGKILL',
+        send: vi.fn(),
+      });
+      vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+      vi.mocked(killProcessGroup).mockClear();
+      vi.mocked(reapProcessGroup).mockClear();
 
-    const pending = runVerification(['/bin/true'], '/tmp', 120000);
-    const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
-    if (result) worker.emit('message', result);
-    worker.emit('exit', null, 'SIGKILL');
-    await vi.advanceTimersByTimeAsync(1500);
-    await rejected;
-    // The original long watchdog must not fire or signal a recycled PID.
-    await vi.advanceTimersByTimeAsync(125000);
-    expect(killProcessGroup).not.toHaveBeenCalledWith(525272);
-    expect(reapProcessGroup).not.toHaveBeenCalledWith(525272);
-  } finally {
-    vi.useRealTimers();
-  }
-});
+      const pending = runVerification(['/bin/true'], '/tmp', 120000);
+      const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+      if (result) worker.emit('message', result);
+      worker.emit('exit', null, 'SIGKILL');
+      await vi.advanceTimersByTimeAsync(1500);
+      await rejected;
+      // The original long watchdog must not fire or signal a recycled PID.
+      await vi.advanceTimersByTimeAsync(125000);
+      expect(killProcessGroup).not.toHaveBeenCalledWith(525272);
+      expect(reapProcessGroup).not.toHaveBeenCalledWith(525272);
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
 
 it('accepts an attested supervisor result when close follows exit before the deadline', async () => {
   vi.useFakeTimers();
