@@ -4,6 +4,7 @@ import { UncertainCleanupError } from '../src/server/process-group.js';
 
 const controls = vi.hoisted(() => ({
   createdHome: '',
+  canonicalHome: '',
   failCanonicalization: false,
   failRemoval: false,
 }));
@@ -26,10 +27,15 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         controls.failCanonicalization = false;
         throw new Error('injected QA HOME canonicalization failure');
       }
-      return actual.realpath(path);
+      const resolved = await actual.realpath(path);
+      if (path === controls.createdHome) controls.canonicalHome = resolved;
+      return resolved;
     },
     rm: async (path: string, options?: { recursive?: boolean; force?: boolean }) => {
-      if (controls.failRemoval && path === controls.createdHome) {
+      if (
+        controls.failRemoval &&
+        (path === controls.createdHome || path === controls.canonicalHome)
+      ) {
         controls.failRemoval = false;
         throw new Error('injected QA HOME removal failure');
       }
@@ -51,6 +57,7 @@ const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:
 beforeEach(() => {
   vi.clearAllMocks();
   controls.createdHome = '';
+  controls.canonicalHome = '';
   controls.failCanonicalization = false;
   controls.failRemoval = false;
   native.preflight.mockResolvedValue(undefined);
