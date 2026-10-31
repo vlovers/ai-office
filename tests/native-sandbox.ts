@@ -1,5 +1,15 @@
 // Credential-free safety probe of the INSTALLED Codex runtime, with no model call.
-import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink, stat, lstat } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  readFile,
+  rm,
+  realpath,
+  symlink,
+  stat,
+  lstat,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -94,7 +104,11 @@ try {
     ['/bin/mkdir', [join(repository, 'new-directory')]],
   ] as [string, string[]][]) {
     const denied = command(executable, args);
-    assert.notEqual(denied.status, 0, `Read-only namespace/metadata mutation allowed: ${executable}`);
+    assert.notEqual(
+      denied.status,
+      0,
+      `Read-only namespace/metadata mutation allowed: ${executable}`,
+    );
   }
   assert.equal(await readFile(readOnlyFile, 'utf8'), 'registered repository');
   assert.equal((await stat(readOnlyFile)).mode, originalMode);
