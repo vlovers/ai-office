@@ -35,13 +35,14 @@ export const STACK = [
   { number: 132, base: 131 },
   { number: 133, base: 132 },
   { number: 134, base: 133 },
+  { number: 135, base: 134 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 134;
+export const CANDIDATE_PR = 135;
 
 export const REQUIRED_ANCESTORS = [
-  108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133,
+  108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const REQUIRED_JOBS = [
@@ -132,7 +133,14 @@ export async function fetchAttemptJobs(get, root, run) {
 
 // GitHub Actions can start a new run or rerun the same ID while the audit
 // reads unrelated PRs. Recheck relevant CI fields before trusting a snapshot.
-export function assertStableCIEvidence(initialRuns, refreshedRuns, initialJobs, refreshedJobs) {
+export function assertStableCIEvidence(
+  initialRuns,
+  refreshedRuns,
+  initialJobs,
+  refreshedJobs,
+  initialJobsByPr = {},
+  refreshedJobsByPr = {},
+) {
   const runFingerprint = (entries) =>
     JSON.stringify(
       (entries ?? [])
@@ -170,13 +178,19 @@ export function assertStableCIEvidence(initialRuns, refreshedRuns, initialJobs, 
   if (jobFingerprint(initialJobs) !== jobFingerprint(refreshedJobs)) {
     throw new Error('GitHub candidate CI jobs changed during stack audit');
   }
+  for (const { number } of STACK) {
+    if (number === CANDIDATE_PR) continue;
+    if (jobFingerprint(initialJobsByPr[number]) !== jobFingerprint(refreshedJobsByPr[number])) {
+      throw new Error(`GitHub PR #${number} CI jobs changed during stack audit`);
+    }
+  }
 }
 
 // Pure, deterministic evaluation: tests never need a token or network access.
 export function auditStack(snapshot) {
   const issues = [];
   const issue = (code, detail) => issues.push({ code, detail });
-  const { prs = {}, runs = {}, comparisons = {}, blobs = {}, jobs = [], mainSha } = snapshot;
+  const { prs = {}, runs = {}, comparisons = {}, blobs = {}, jobs = [], jobsByPr = {}, mainSha } = snapshot;
 
   for (const { number, base } of STACK) {
     const pr = prs[number];
@@ -225,6 +239,29 @@ export function auditStack(snapshot) {
     } else if (latest.status !== 'completed' || latest.conclusion !== 'success') {
       issue('ci-not-green', `PR #${number} latest CI is ${latest.status}/${latest.conclusion}`);
     }
+
+    // A successful workflow conclusion alone is not proof that both required
+    // security jobs actually executed on the exact run attempt. This applies
+    // to every upstream PR, including divergent sibling #124.
+    const attemptJobs = number === CANDIDATE_PR ? jobs : (jobsByPr[number] ?? []);
+    for (const name of REQUIRED_JOBS) {
+      const matches = attemptJobs.filter((entry) => entry.name === name);
+      const job = matches[0];
+      if (
+        matches.length !== 1 ||
+        !latest ||
+        !job ||
+        job.run_id !== latest.id ||
+        job.run_attempt !== latest.run_attempt ||
+        job.status !== 'completed' ||
+        job.conclusion !== 'success'
+      ) {
+        issue(
+          number === CANDIDATE_PR ? 'missing-candidate-job' : 'missing-upstream-job',
+          `PR #${number} has no successful exact-attempt job: ${name}`,
+        );
+      }
+    }
   }
 
   const candidate = prs[CANDIDATE_PR];
@@ -261,25 +298,6 @@ export function auditStack(snapshot) {
     }
   }
 
-  const candidateRun = selectValidationRun(runs[CANDIDATE_PR], CANDIDATE_PR);
-  for (const name of REQUIRED_JOBS) {
-    const matches = jobs.filter((entry) => entry.name === name);
-    const job = matches[0];
-    if (
-      matches.length !== 1 ||
-      !candidateRun ||
-      !job ||
-      job.run_id !== candidateRun.id ||
-      job.run_attempt !== candidateRun.run_attempt ||
-      job.status !== 'completed' ||
-      job.conclusion !== 'success'
-    ) {
-      issue(
-        'missing-candidate-job',
-        `PR #${CANDIDATE_PR} has no successful exact-attempt job: ${name}`,
-      );
-    }
-  }
 
   return issues;
 }
@@ -324,8 +342,14 @@ export async function collectStack({
     }),
   );
 
-  const latestCandidate = selectValidationRun(runs[CANDIDATE_PR], CANDIDATE_PR);
-  const jobs = latestCandidate ? await fetchAttemptJobs(get, root, latestCandidate) : [];
+  const jobsByPr = {};
+  await Promise.all(
+    STACK.map(async ({ number }) => {
+      const latest = selectValidationRun(runs[number], number);
+      jobsByPr[number] = latest ? await fetchAttemptJobs(get, root, latest) : [];
+    }),
+  );
+  const jobs = jobsByPr[CANDIDATE_PR];
 
   const comparisons = {
     main: await get(`${root}/compare/${main.commit.sha}...${prs[CANDIDATE_PR].head.sha}`),
@@ -368,11 +392,22 @@ export async function collectStack({
       refreshedRuns[number] = await fetchWorkflowRuns(get, root, prs[number].head.sha);
     }),
   );
-  const refreshedCandidate = selectValidationRun(refreshedRuns[CANDIDATE_PR], CANDIDATE_PR);
-  const refreshedJobs = refreshedCandidate
-    ? await fetchAttemptJobs(get, root, refreshedCandidate)
-    : [];
-  assertStableCIEvidence(runs, refreshedRuns, jobs, refreshedJobs);
+  const refreshedJobsByPr = {};
+  await Promise.all(
+    STACK.map(async ({ number }) => {
+      const latest = selectValidationRun(refreshedRuns[number], number);
+      refreshedJobsByPr[number] = latest ? await fetchAttemptJobs(get, root, latest) : [];
+    }),
+  );
+  const refreshedJobs = refreshedJobsByPr[CANDIDATE_PR];
+  assertStableCIEvidence(
+    runs,
+    refreshedRuns,
+    jobs,
+    refreshedJobs,
+    jobsByPr,
+    refreshedJobsByPr,
+  );
 
   // Ref reads and comparisons are not atomic across GitHub API requests.
   // A concurrent push must invalidate the snapshot rather than letting a
@@ -398,7 +433,7 @@ export async function collectStack({
     }
   }
 
-  return { mainSha: main.commit.sha, prs, runs, jobs, comparisons, blobs };
+  return { mainSha: main.commit.sha, prs, runs, jobs, jobsByPr, comparisons, blobs };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
