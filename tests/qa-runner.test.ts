@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import {
   mkdtemp,
+  mkdir,
   realpath,
   writeFile,
   rm,
@@ -17,6 +18,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { qaPlan, runSandboxedQA, type QAPlan } from '../src/server/qa-runner.js';
 import {
+  assertProtectedFilesUnchanged,
   closeProbeServer,
   createNetworkProbeServer,
   listenProbeServer,
@@ -102,6 +104,42 @@ it('cleans native probe listeners after an asynchronous bind error', async () =>
   } finally {
     if (contender.listening) contender.close();
     if (occupied.listening) occupied.close();
+  }
+});
+
+it('rejects protected file mutation, symlink writes and deletion after denial', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-write-canary-')));
+  const outside = join(root, 'outside.txt');
+  const link = join(root, 'outside-link');
+  const git = join(root, 'nested', '.git', 'config');
+  const credentials = join(root, 'nested', '.aws', 'credentials');
+  try {
+    await mkdir(join(root, 'nested', '.git'), { recursive: true });
+    await mkdir(join(root, 'nested', '.aws'), { recursive: true });
+    await writeFile(outside, 'OUTSIDE_CANARY');
+    await symlink(outside, link);
+    await writeFile(git, 'GIT_CANARY');
+    await writeFile(credentials, 'CREDENTIALS_CANARY');
+    const protectedFiles = [
+      [outside, 'OUTSIDE_CANARY'],
+      [link, 'OUTSIDE_CANARY'],
+      [git, 'GIT_CANARY'],
+      [credentials, 'CREDENTIALS_CANARY'],
+    ] as const;
+    await expect(assertProtectedFilesUnchanged(protectedFiles)).resolves.toBeUndefined();
+    for (const [path, expected] of protectedFiles) {
+      await writeFile(path, 'MUTATED');
+      await expect(assertProtectedFilesUnchanged(protectedFiles)).rejects.toThrow(
+        'Sandbox modified a protected file.',
+      );
+      await writeFile(path, expected);
+    }
+    await rm(git);
+    await expect(assertProtectedFilesUnchanged(protectedFiles)).rejects.toThrow(
+      'Sandbox modified a protected file.',
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 
@@ -271,6 +309,41 @@ esac
     }
   },
   15000,
+);
+
+fakeNative(
+  'rejects a forged sandbox that modifies protected files before reporting denial',
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-masked-write-')));
+    try {
+      const fake = join(root, 'fake-sandbox.sh');
+      await writeFile(
+        fake,
+        `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 9
+shift
+if [ "$1" = "/bin/cat" ]; then
+  case "$2" in
+    */allowed.txt) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  esac
+fi
+if [ "$1" = "/usr/bin/tee" ]; then
+  printf 'MUTATED' > "$2"
+  /usr/bin/touch "${root}/mutated"
+  exit 7
+fi
+exit 7
+`,
+      );
+      await chmod(fake, 0o700);
+      await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
+      await expect(readFile(join(root, 'mutated'), 'utf8')).resolves.toBe('');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  20000,
 );
 
 async function waitForProbeMarkers(paths: string[]) {
