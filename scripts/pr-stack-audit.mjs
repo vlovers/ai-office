@@ -190,7 +190,15 @@ export function assertStableCIEvidence(
 export function auditStack(snapshot) {
   const issues = [];
   const issue = (code, detail) => issues.push({ code, detail });
-  const { prs = {}, runs = {}, comparisons = {}, blobs = {}, jobs = [], jobsByPr = {}, mainSha } = snapshot;
+  const {
+    prs = {},
+    runs = {},
+    comparisons = {},
+    blobs = {},
+    jobs = [],
+    jobsByPr = {},
+    mainSha,
+  } = snapshot;
 
   for (const { number, base } of STACK) {
     const pr = prs[number];
@@ -298,7 +306,6 @@ export function auditStack(snapshot) {
     }
   }
 
-
   return issues;
 }
 
@@ -400,14 +407,7 @@ export async function collectStack({
     }),
   );
   const refreshedJobs = refreshedJobsByPr[CANDIDATE_PR];
-  assertStableCIEvidence(
-    runs,
-    refreshedRuns,
-    jobs,
-    refreshedJobs,
-    jobsByPr,
-    refreshedJobsByPr,
-  );
+  assertStableCIEvidence(runs, refreshedRuns, jobs, refreshedJobs, jobsByPr, refreshedJobsByPr);
 
   // Ref reads and comparisons are not atomic across GitHub API requests.
   // A concurrent push must invalidate the snapshot rather than letting a
