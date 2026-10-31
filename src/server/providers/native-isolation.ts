@@ -257,7 +257,11 @@ export async function verifyNativeIsolation(
     if (!address || typeof address === 'string') throw new Error('Probe listener unavailable.');
     const run = (argv: string[]) => {
       if (signal?.aborted)
-        return Promise.resolve({ passed: false, output: 'Verification cancelled before launch.' });
+        return Promise.resolve({
+          passed: false,
+          output: 'Verification cancelled before launch.',
+          incomplete: true,
+        });
       // A sandbox denial is a completed verification returning passed: false.
       // A rejected supervisor (startup, IPC or uncertain process cleanup) is
       // NOT evidence of denial: propagate it and fail the entire preflight.
@@ -353,4 +357,8 @@ export async function verifyNativeIsolation(
       await rm(root, { recursive: true, force: true });
     }
   }
+  // A cancellation during asynchronous canary inspection or teardown is not
+  // an attested successful preflight, even if all denial probes were green.
+  if (signal?.aborted)
+    throw new AppError(409, 'Native sandbox capability verification was cancelled.');
 }
