@@ -56,34 +56,38 @@ function pausePolicyRemoval() {
 it.each([
   { label: 'abort during teardown', cancelled: true },
   { label: 'normal teardown', cancelled: false },
-])('attests native preflight cancellation after all probes: $label', async (scenario) => {
-  fixtures.verification.mockImplementation(async (argv: unknown) => {
-    const command = argv as string[];
-    const allowedRead =
-      command.includes('/bin/cat') && command.some((arg) => arg.endsWith('/allowed.txt'));
-    return allowedRead
-      ? { passed: true, output: 'READ_ALLOWED' }
-      : { passed: false, output: 'denied' };
-  });
-  const controller = new AbortController();
-  const { started, release } = pausePolicyRemoval();
-  try {
-    const pending = verifyNativeIsolation('/mock-native-codex', controller.signal);
-    await started;
-    expect(fixtures.verification).toHaveBeenCalled();
-    if (scenario.cancelled) controller.abort();
-    release();
-    if (scenario.cancelled) {
-      await expect(pending).rejects.toMatchObject({ statusCode: 409 });
-    } else {
-      await expect(pending).resolves.toBeUndefined();
+])(
+  'attests native preflight cancellation after all probes: $label',
+  async (scenario) => {
+    fixtures.verification.mockImplementation(async (argv: unknown) => {
+      const command = argv as string[];
+      const allowedRead =
+        command.includes('/bin/cat') && command.some((arg) => arg.endsWith('/allowed.txt'));
+      return allowedRead
+        ? { passed: true, output: 'READ_ALLOWED' }
+        : { passed: false, output: 'denied' };
+    });
+    const controller = new AbortController();
+    const { started, release } = pausePolicyRemoval();
+    try {
+      const pending = verifyNativeIsolation('/mock-native-codex', controller.signal);
+      await started;
+      expect(fixtures.verification).toHaveBeenCalled();
+      if (scenario.cancelled) controller.abort();
+      release();
+      if (scenario.cancelled) {
+        await expect(pending).rejects.toMatchObject({ statusCode: 409 });
+      } else {
+        await expect(pending).resolves.toBeUndefined();
+      }
+    } finally {
+      controller.abort();
+      release();
+      fixtures.cleanup = null;
     }
-  } finally {
-    controller.abort();
-    release();
-    fixtures.cleanup = null;
-  }
-}, 15000);
+  },
+  15000,
+);
 
 it('never treats a cancelled denial probe as completed sandbox evidence', async () => {
   await expect(
