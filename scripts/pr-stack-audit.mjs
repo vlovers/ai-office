@@ -47,14 +47,16 @@ export const STACK = [
   { number: 144, base: 143 },
   { number: 145, base: 144 },
   { number: 146, base: 145 },
+  { number: 147, base: 146 },
+  { number: 148, base: 147 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 146;
+export const CANDIDATE_PR = 148;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
-  137, 138, 139, 140, 141, 142, 143, 144, 145,
+  137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
@@ -67,8 +69,8 @@ export const QA_CHANGE_PATHS = [
   'tests/qa-runner.test.ts',
 ];
 // Pin the exact file scope of each post-#139 integration step. Audit-only
-// PRs #141 and #143 must not introduce runtime changes; #144-#146 may change
-// only verification supervision and its existing regression suite.
+// PRs #141, #143 and #147 must not introduce runtime changes; #144-#146
+// and #148 may change only verification supervision and its regression suite.
 export const REVIEWED_DELTAS = {
   140: QA_CHANGE_PATHS.map((filename) => ({ filename, status: 'modified' })),
   141: [
@@ -94,6 +96,14 @@ export const REVIEWED_DELTAS = {
     { filename: 'tests/verification-supervisor-failclosed.test.ts', status: 'modified' },
   ],
   146: [
+    { filename: 'src/server/verification.ts', status: 'modified' },
+    { filename: 'tests/verification-supervisor-failclosed.test.ts', status: 'modified' },
+  ],
+  147: [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+  ],
+  148: [
     { filename: 'src/server/verification.ts', status: 'modified' },
     { filename: 'tests/verification-supervisor-failclosed.test.ts', status: 'modified' },
   ],
