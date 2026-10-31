@@ -140,7 +140,9 @@ export async function runVerification(
       // different signal after a plausible message is not proof of cleanup.
       // Reject it even when reapProcessGroup() subsequently succeeds.
       if (code !== null || exitSignal !== 'SIGKILL') {
-        reject(new AppError(409, 'Verification supervisor exited without expected group termination.'));
+        reject(
+          new AppError(409, 'Verification supervisor exited without expected group termination.'),
+        );
         return;
       }
       resolve(result);
