@@ -83,8 +83,8 @@ function fixture() {
   }
   // The #139 -> #140 compare is fetched both as an edge and an ancestor.
   comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
-  // The #141 -> #142 compare is both an edge and an ancestor comparison.
-  comparisons[141].files = comparisons.edges[142].files;
+  // The #145 -> #146 compare is both the candidate edge and an ancestor comparison.
+  comparisons[145].files = comparisons.edges[146].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
