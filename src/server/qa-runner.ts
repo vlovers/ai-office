@@ -3,6 +3,7 @@ import { mkdtemp, realpath, rm, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AppError } from './errors.js';
+import { UncertainCleanupError } from './process-group.js';
 import { runVerification } from './verification.js';
 import {
   nativeCodex,
@@ -108,9 +109,14 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
     throw error;
   }
   if (signal.aborted) return stopped();
-  const home = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-')));
+  // Keep the created path available for cleanup even if canonicalization fails.
+  // A failed removal is uncertain cleanup, not an ordinary QA failure: the
+  // workflow manager must quarantine the workspace instead of releasing it.
+  const createdHome = await mkdtemp(join(tmpdir(), 'ai-office-qa-'));
+  let home = createdHome;
   let outcome: Awaited<ReturnType<typeof runVerification>>;
   try {
+    home = await realpath(createdHome);
     // Narrow the replacement window: re-check after all asynchronous setup
     // and immediately before handing the approved argv to the supervisor.
     if (signal.aborted) return stopped();
@@ -129,7 +135,11 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
       { HOME: home, CODEX_HOME: home },
     );
   } finally {
-    await rm(home, { recursive: true, force: true });
+    try {
+      await rm(home, { recursive: true, force: true });
+    } catch (error) {
+      throw new UncertainCleanupError(error);
+    }
   }
   // Cancellation may arrive after the supervisor closes while isolated HOME
   // cleanup is still pending. Do not publish a stale successful QA result.
