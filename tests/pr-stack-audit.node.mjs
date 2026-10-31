@@ -5,9 +5,11 @@ import {
   CANDIDATE_PR,
   auditStack,
   collectStack,
+  decodePolicyRegressionSource,
   fetchAttemptJobs,
   fetchWorkflowRuns,
   PINNED_PATHS,
+  POLICY_REGRESSION_PATH,
   REQUIRED_ANCESTORS,
   REQUIRED_JOBS,
   requiredStepsForPr,
@@ -95,7 +97,11 @@ function fixture() {
     ]),
   );
   const jobs = jobsByPr[CANDIDATE_PR];
-  return { mainSha: 'main-head', prs, runs, comparisons, blobs, jobs, jobsByPr };
+  const policyRegressions = {
+    source: "test('PR 124 policy regression', () => {});\n",
+    candidate: "test('PR 124 policy regression', () => {});\n// additional tests\n",
+  };
+  return { mainSha: 'main-head', prs, runs, comparisons, blobs, jobs, jobsByPr, policyRegressions };
 }
 
 function codes(snapshot) {
@@ -218,12 +224,24 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
     } else if (path.includes('/contents/')) {
       const file = decodeURIComponent(path.split('/contents/')[1]);
       const ref = parsed.searchParams.get('ref');
-      body = {
-        sha:
-          ref === source.prs[109].head.sha
-            ? source.blobs[file].source
-            : source.blobs[file].candidate,
-      };
+      if (file === POLICY_REGRESSION_PATH) {
+        const content =
+          ref === source.prs[124].head.sha
+            ? source.policyRegressions.source
+            : source.policyRegressions.candidate;
+        body = {
+          sha: 'policy-fixture',
+          encoding: 'base64',
+          content: Buffer.from(content).toString('base64'),
+        };
+      } else {
+        body = {
+          sha:
+            ref === source.prs[109].head.sha
+              ? source.blobs[file].source
+              : source.blobs[file].candidate,
+        };
+      }
     } else {
       throw new Error('Unexpected GitHub endpoint: ' + path);
     }
@@ -232,7 +250,7 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   const actual = await collectStack({ request, token: 'fixture-token' });
   assert.deepEqual(auditStack(actual), []);
   assert.ok(requested.some((path) => path.includes(`/compare/main-head...head-${CANDIDATE_PR}`)));
-  assert.ok(requested.some((path) => path.includes('/compare/head-135...head-136')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-136...head-137')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
@@ -504,12 +522,23 @@ test('collector rejects a main push while evidence is being collected', async ()
       const ref = parsed.searchParams.get('ref');
       return {
         ok: true,
-        json: async () => ({
-          sha:
-            ref === source.prs[109].head.sha
-              ? source.blobs[file].source
-              : source.blobs[file].candidate,
-        }),
+        json: async () =>
+          file === POLICY_REGRESSION_PATH
+            ? {
+                sha: 'policy-fixture',
+                encoding: 'base64',
+                content: Buffer.from(
+                  ref === source.prs[124].head.sha
+                    ? source.policyRegressions.source
+                    : source.policyRegressions.candidate,
+                ).toString('base64'),
+              }
+            : {
+                sha:
+                  ref === source.prs[109].head.sha
+                    ? source.blobs[file].source
+                    : source.blobs[file].candidate,
+              },
       };
     }
     throw new Error('Unexpected endpoint: ' + path);
@@ -568,7 +597,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-14), [
+  assert.deepEqual(STACK.slice(-15), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -583,8 +612,9 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 134, base: 133 },
     { number: 135, base: 134 },
     { number: 136, base: 135 },
+    { number: 137, base: 136 },
   ]);
-  assert.equal(CANDIDATE_PR, 136);
+  assert.equal(CANDIDATE_PR, 137);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -789,4 +819,55 @@ test('CI recheck detects a candidate step changing without changing job conclusi
     () => assertStableCIEvidence(snapshot.runs, snapshot.runs, snapshot.jobs, refreshed),
     /candidate CI jobs changed during stack audit/,
   );
+});
+
+test('attests verbatim preservation of divergent PR #124 policy regressions', () => {
+  const snapshot = fixture();
+  assert.equal(codes(snapshot).includes('divergent-policy-regressions-drift'), false);
+
+  snapshot.policyRegressions.candidate = '// changed\n' + snapshot.policyRegressions.candidate;
+  assert.ok(codes(snapshot).includes('divergent-policy-regressions-drift'));
+});
+
+test('rejects edited, truncated or missing PR #124 regression evidence', () => {
+  for (const mutation of [
+    (policy) => {
+      policy.source = "test('different source', () => {});\n";
+    },
+    (policy) => {
+      policy.candidate = policy.source.slice(0, -2);
+    },
+    (policy) => {
+      policy.source = '';
+    },
+    (policy) => {
+      delete policy.candidate;
+    },
+  ]) {
+    const snapshot = fixture();
+    mutation(snapshot.policyRegressions);
+    assert.ok(codes(snapshot).includes('divergent-policy-regressions-drift'));
+  }
+});
+
+test('strictly decodes GitHub policy regression source without accepting malformed evidence', () => {
+  const valid = {
+    sha: 'fixture-sha',
+    encoding: 'base64',
+    content: Buffer.from('test suite\n').toString('base64'),
+  };
+  assert.equal(decodePolicyRegressionSource(valid), 'test suite\n');
+  assert.equal(
+    decodePolicyRegressionSource({ ...valid, content: valid.content + '\n' }),
+    'test suite\n',
+  );
+  for (const invalid of [
+    { ...valid, encoding: 'utf-8' },
+    { ...valid, sha: undefined },
+    { ...valid, content: 'not base64!' },
+    { ...valid, content: '' },
+    { ...valid, content: Buffer.alloc(128 * 1024 + 1).toString('base64') },
+  ]) {
+    assert.throws(() => decodePolicyRegressionSource(invalid), /CI-policy regression source/);
+  }
 });
