@@ -431,17 +431,17 @@ export function auditStack(snapshot) {
   for (const [number, expected] of Object.entries(REVIEWED_DELTAS)) {
     const actual = comparisons.edges?.[number]?.files;
     const remaining = new Map(expected.map((file) => [file.filename, file.status]));
-    if (
-      !Array.isArray(actual) ||
-      actual.length !== expected.length ||
-      actual.some(
-        (file) =>
-          !remaining.has(file?.filename) ||
-          remaining.get(file.filename) !== file.status ||
-          (remaining.delete(file.filename), false),
-      ) ||
-      remaining.size !== 0
-    ) {
+    let valid = Array.isArray(actual) && actual.length === expected.length;
+    if (valid) {
+      for (const file of actual) {
+        if (!remaining.has(file?.filename) || remaining.get(file.filename) !== file.status) {
+          valid = false;
+          break;
+        }
+        remaining.delete(file.filename);
+      }
+    }
+    if (!valid || remaining.size !== 0) {
       issue('unreviewed-qa-delta', `PR #${number} changes files outside its reviewed scope`);
     }
   }
