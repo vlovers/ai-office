@@ -229,7 +229,11 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
           ref === source.prs[124].head.sha
             ? source.policyRegressions.source
             : source.policyRegressions.candidate;
-        body = { sha: 'policy-fixture', encoding: 'base64', content: Buffer.from(content).toString('base64') };
+        body = {
+          sha: 'policy-fixture',
+          encoding: 'base64',
+          content: Buffer.from(content).toString('base64'),
+        };
       } else {
         body = {
           sha:
@@ -821,16 +825,24 @@ test('attests verbatim preservation of divergent PR #124 policy regressions', ()
   const snapshot = fixture();
   assert.equal(codes(snapshot).includes('divergent-policy-regressions-drift'), false);
 
-  snapshot.policyRegressions.candidate = "// changed\n" + snapshot.policyRegressions.candidate;
+  snapshot.policyRegressions.candidate = '// changed\n' + snapshot.policyRegressions.candidate;
   assert.ok(codes(snapshot).includes('divergent-policy-regressions-drift'));
 });
 
 test('rejects edited, truncated or missing PR #124 regression evidence', () => {
   for (const mutation of [
-    (policy) => { policy.source = "test('different source', () => {});\n"; },
-    (policy) => { policy.candidate = policy.source.slice(0, -2); },
-    (policy) => { policy.source = ''; },
-    (policy) => { delete policy.candidate; },
+    (policy) => {
+      policy.source = "test('different source', () => {});\n";
+    },
+    (policy) => {
+      policy.candidate = policy.source.slice(0, -2);
+    },
+    (policy) => {
+      policy.source = '';
+    },
+    (policy) => {
+      delete policy.candidate;
+    },
   ]) {
     const snapshot = fixture();
     mutation(snapshot.policyRegressions);
@@ -839,9 +851,16 @@ test('rejects edited, truncated or missing PR #124 regression evidence', () => {
 });
 
 test('strictly decodes GitHub policy regression source without accepting malformed evidence', () => {
-  const valid = { sha: 'fixture-sha', encoding: 'base64', content: Buffer.from('test suite\n').toString('base64') };
+  const valid = {
+    sha: 'fixture-sha',
+    encoding: 'base64',
+    content: Buffer.from('test suite\n').toString('base64'),
+  };
   assert.equal(decodePolicyRegressionSource(valid), 'test suite\n');
-  assert.equal(decodePolicyRegressionSource({ ...valid, content: valid.content + '\n' }), 'test suite\n');
+  assert.equal(
+    decodePolicyRegressionSource({ ...valid, content: valid.content + '\n' }),
+    'test suite\n',
+  );
   for (const invalid of [
     { ...valid, encoding: 'utf-8' },
     { ...valid, sha: undefined },
