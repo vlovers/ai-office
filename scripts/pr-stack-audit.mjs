@@ -37,15 +37,17 @@ export const STACK = [
   { number: 134, base: 133 },
   { number: 135, base: 134 },
   { number: 136, base: 135 },
+  { number: 137, base: 136 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 136;
+export const CANDIDATE_PR = 137;
 
 export const REQUIRED_ANCESTORS = [
-  108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135,
+  108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
+export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
 export const REQUIRED_JOBS = [
   'TypeScript, tests, smoke, build and formatting',
   'Native Codex filesystem policy (no inference)',
@@ -248,6 +250,7 @@ export function auditStack(snapshot) {
     runs = {},
     comparisons = {},
     blobs = {},
+    policyRegressions,
     jobs = [],
     jobsByPr = {},
     mainSha,
@@ -381,7 +384,42 @@ export function auditStack(snapshot) {
     }
   }
 
+  // #124 is a divergent sibling of #123, not a Git ancestor. Its exact
+  // executable regression corpus must survive the #125 reconciliation.
+  // The candidate may append new tests, but must not edit or drop old ones.
+  if (
+    typeof policyRegressions?.source !== 'string' ||
+    policyRegressions.source.length === 0 ||
+    typeof policyRegressions.candidate !== 'string' ||
+    !policyRegressions.candidate.startsWith(policyRegressions.source)
+  ) {
+    issue(
+      'divergent-policy-regressions-drift',
+      `PR #124 CI-policy regression corpus is not preserved in #${CANDIDATE_PR}`,
+    );
+  }
+
   return issues;
+}
+
+export function decodePolicyRegressionSource(file) {
+  if (
+    file?.encoding !== 'base64' ||
+    typeof file.content !== 'string' ||
+    typeof file.sha !== 'string'
+  ) {
+    throw new Error('GitHub returned incomplete CI-policy regression source');
+  }
+  const base64 = file.content.replace(/\s/g, '');
+  const decoded = Buffer.from(base64, 'base64');
+  if (
+    decoded.length === 0 ||
+    decoded.length > 128 * 1024 ||
+    decoded.toString('base64') !== base64
+  ) {
+    throw new Error('GitHub returned invalid CI-policy regression source');
+  }
+  return decoded.toString('utf8');
 }
 
 export async function collectStack({
@@ -466,6 +504,19 @@ export async function collectStack({
     }),
   );
 
+  // PR #124 was reconciled without its Git commits. Fetch both exact source
+  // files and attest the original regression suite is preserved verbatim.
+  const policyPath = POLICY_REGRESSION_PATH.split('/').map(encodeURIComponent).join('/');
+  const [policySource, policyCandidate] = await Promise.all(
+    [124, CANDIDATE_PR].map((number) =>
+      get(`${root}/contents/${policyPath}?ref=${prs[number].head.sha}`),
+    ),
+  );
+  const policyRegressions = {
+    source: decodePolicyRegressionSource(policySource),
+    candidate: decodePolicyRegressionSource(policyCandidate),
+  };
+
   // A new failed run or a rerun of the candidate's native job may appear
   // while ancestry is checked. Re-read CI before the final branch snapshot.
   const refreshedRuns = {};
@@ -508,7 +559,7 @@ export async function collectStack({
     }
   }
 
-  return { mainSha: main.commit.sha, prs, runs, jobs, jobsByPr, comparisons, blobs };
+  return { mainSha: main.commit.sha, prs, runs, jobs, jobsByPr, comparisons, blobs, policyRegressions };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
