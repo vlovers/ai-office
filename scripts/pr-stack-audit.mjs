@@ -559,7 +559,16 @@ export async function collectStack({
     }
   }
 
-  return { mainSha: main.commit.sha, prs, runs, jobs, jobsByPr, comparisons, blobs, policyRegressions };
+  return {
+    mainSha: main.commit.sha,
+    prs,
+    runs,
+    jobs,
+    jobsByPr,
+    comparisons,
+    blobs,
+    policyRegressions,
+  };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
