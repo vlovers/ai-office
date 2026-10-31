@@ -14,6 +14,7 @@ import {
   QA_PIN_BASE_PR,
   REQUIRED_ANCESTORS,
   REQUIRED_JOBS,
+  REVIEWED_DELTAS,
   requiredStepsForPr,
   STACK,
 } from '../scripts/pr-stack-audit.mjs';
@@ -78,12 +79,11 @@ function fixture() {
       ]),
     ),
   };
-  comparisons.edges[CANDIDATE_PR].files = QA_CHANGE_PATHS.map((filename) => ({
-    filename,
-    status: 'modified',
-  }));
+  for (const [number, files] of Object.entries(REVIEWED_DELTAS)) {
+    comparisons.edges[number].files = structuredClone(files);
+  }
   // The #139 -> #140 compare is fetched both as an edge and an ancestor.
-  comparisons[QA_PIN_BASE_PR].files = comparisons.edges[CANDIDATE_PR].files;
+  comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
@@ -651,7 +651,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-18), [
+  assert.deepEqual(STACK.slice(-20), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -670,8 +670,10 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 138, base: 137 },
     { number: 139, base: 138 },
     { number: 140, base: 139 },
+    { number: 141, base: 140 },
+    { number: 142, base: 141 },
   ]);
-  assert.equal(CANDIDATE_PR, 140);
+  assert.equal(CANDIDATE_PR, 142);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -954,29 +956,93 @@ test('rejects an extra or missing file in the reviewed QA cancellation change se
     },
   ]) {
     const snapshot = fixture();
-    mutation(snapshot.comparisons.edges[CANDIDATE_PR].files);
+    mutation(snapshot.comparisons.edges[140].files);
     assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
   }
 });
 
 test('rejects missing QA delta evidence despite a green #140 CI run', () => {
   const snapshot = fixture();
-  delete snapshot.comparisons.edges[CANDIDATE_PR].files;
+  delete snapshot.comparisons.edges[140].files;
   assert.equal(snapshot.runs[CANDIDATE_PR][0].conclusion, 'success');
   assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
 });
 
-test('detects new Draft #139/#140 CI and ancestry drift independently', () => {
+test('detects new Draft #141/#142 CI and ancestry drift independently', () => {
   const snapshot = fixture();
-  snapshot.runs[139][0].conclusion = 'failure';
-  snapshot.comparisons.edges[140].behind_by = 1;
+  snapshot.runs[141][0].conclusion = 'failure';
+  snapshot.comparisons.edges[142].behind_by = 1;
   assert.ok(codes(snapshot).includes('ci-not-green'));
   assert.ok(codes(snapshot).includes('lost-stack-parent'));
 
   const refreshed = structuredClone(snapshot.runs);
-  refreshed[140][0].run_attempt += 1;
+  refreshed[142][0].run_attempt += 1;
   assert.throws(
     () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
-    /PR #140 CI changed during stack audit/,
+    /PR #142 CI changed during stack audit/,
   );
+});
+
+test('attests #141 audit-only delta and #142 cancellation teardown delta', () => {
+  const snapshot = fixture();
+  assert.deepEqual(auditStack(snapshot), []);
+  assert.deepEqual(
+    REVIEWED_DELTAS[141].map((file) => file.filename),
+    ['scripts/pr-stack-audit.mjs', 'tests/pr-stack-audit.node.mjs'],
+  );
+  assert.deepEqual(
+    REVIEWED_DELTAS[142].filter((file) => file.status === 'added').map((file) => file.filename),
+    [
+      'tests/native-preflight-teardown-cancellation.test.ts',
+      'tests/qa-cancellation-cleanup-race.test.ts',
+    ],
+  );
+  assert.equal(REQUIRED_ANCESTORS.includes(140), true);
+  assert.equal(REQUIRED_ANCESTORS.includes(141), true);
+});
+
+test('rejects unexpected runtime files in #141 integration-only PR', () => {
+  const snapshot = fixture();
+  snapshot.comparisons.edges[141].files.push({
+    filename: 'src/server/verification.ts',
+    status: 'modified',
+  });
+  assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+});
+
+test('rejects missing, renamed or misclassified #142 teardown regression files', () => {
+  for (const mutation of [
+    (files) => files.pop(),
+    (files) => {
+      files[2].filename = 'tests/other.test.ts';
+    },
+    (files) => {
+      files[2].status = 'modified';
+    },
+    (files) => {
+      files[0].status = 'added';
+    },
+    (files) => files.push({ ...files[3] }),
+  ]) {
+    const snapshot = fixture();
+    mutation(snapshot.comparisons.edges[142].files);
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+  }
+});
+
+test('rejects missing #141/#142 compare evidence despite successful final CI', () => {
+  for (const number of [141, 142]) {
+    const snapshot = fixture();
+    delete snapshot.comparisons.edges[number].files;
+    assert.equal(snapshot.runs[CANDIDATE_PR][0].conclusion, 'success');
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+  }
+});
+
+test('rejects a failed #142 native CI and a missing #141 ancestor independently', () => {
+  const snapshot = fixture();
+  snapshot.jobsByPr[142][1].conclusion = 'failure';
+  snapshot.comparisons[141].behind_by = 1;
+  assert.ok(codes(snapshot).includes('missing-candidate-job'));
+  assert.ok(codes(snapshot).includes('lost-ancestor'));
 });
