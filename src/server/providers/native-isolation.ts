@@ -241,6 +241,14 @@ export async function verifyNativeIsolation(
       join(directory, '.env'),
       join(directory, 'nested', '.git', 'config'),
       join(directory, 'nested', '.aws', 'credentials'),
+      // A forbidden write can create and immediately remove a file, leaving
+      // no content or inode to inspect. Directory mtime/ctime attests those
+      // transient mutations, including changes inside protected metadata.
+      root,
+      directory,
+      join(directory, 'nested'),
+      join(directory, 'nested', '.git'),
+      join(directory, 'nested', '.aws'),
     ]);
     await listenProbeServer(server);
     const address = server.address();
