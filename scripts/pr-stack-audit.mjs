@@ -36,19 +36,64 @@ export const STACK = [
   { number: 133, base: 132 },
   { number: 134, base: 133 },
   { number: 135, base: 134 },
+  { number: 136, base: 135 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 135;
+export const CANDIDATE_PR = 136;
 
 export const REQUIRED_ANCESTORS = [
-  108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134,
+  108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const REQUIRED_JOBS = [
   'TypeScript, tests, smoke, build and formatting',
   'Native Codex filesystem policy (no inference)',
 ];
+
+/**
+ * A successful job does not prove that security-critical steps ran. Keep the
+ * common contract valid for historical PRs, then require the additional
+ * offline policy gates from the first PR (#124) that introduced them.
+ */
+export const REQUIRED_STEPS = {
+  [REQUIRED_JOBS[0]]: [
+    'Checkout',
+    'Set up Node.js',
+    'Install dependencies',
+    'TypeScript',
+    'Delivery security lint',
+    'Unit and integration tests',
+    'HTTP/SSE smoke tests',
+    'Production build',
+    'Formatting',
+    'Install Chromium and browser dependencies',
+    'Browser smoke (deterministic fixtures)',
+    'Office V4 scene and state browser smoke (no model calls)',
+    'Isolated write browser smoke (no model calls)',
+    'Agent Studio browser and restart smoke (no model calls)',
+  ],
+  [REQUIRED_JOBS[1]]: [
+    'Checkout',
+    'Set up Node.js',
+    'Install dependencies',
+    'Native read-only and isolated-write policy',
+    'Reviewer, QA, workflow recovery and security integration (native sandbox, no inference)',
+    'Build production dashboard',
+    'Install Chromium',
+    'Coder to Reviewer to QA browser approval journey (native sandbox, no inference)',
+  ],
+};
+export const POLICY_STEPS = [
+  'Offline integration stack audit regressions',
+  'CI trigger and security policy regressions',
+];
+
+export function requiredStepsForPr(number, jobName) {
+  const common = REQUIRED_STEPS[jobName] ?? [];
+  if (number < 124 || jobName !== REQUIRED_JOBS[0]) return common;
+  return [...common.slice(0, 6), ...POLICY_STEPS, ...common.slice(6)];
+}
 
 const VALIDATION_WORKFLOW = 'AI Office validation';
 
@@ -166,6 +211,14 @@ export function assertStableCIEvidence(
           run_attempt: job.run_attempt,
           status: job.status,
           conclusion: job.conclusion,
+          steps: (job.steps ?? [])
+            .map((step) => ({
+              name: step.name,
+              number: step.number,
+              status: step.status,
+              conclusion: step.conclusion,
+            }))
+            .sort((a, b) => a.number - b.number),
         }))
         .sort((a, b) => a.id - b.id),
     );
@@ -268,6 +321,28 @@ export function auditStack(snapshot) {
           number === CANDIDATE_PR ? 'missing-candidate-job' : 'missing-upstream-job',
           `PR #${number} has no successful exact-attempt job: ${name}`,
         );
+      } else {
+        // A green job can contain skipped or failed security steps. Require
+        // each gate exactly once, in execution order, on the attested attempt.
+        let lastStepNumber = 0;
+        for (const required of requiredStepsForPr(number, name)) {
+          const steps = (job.steps ?? []).filter((step) => step.name === required);
+          const step = steps[0];
+          if (
+            steps.length !== 1 ||
+            !Number.isSafeInteger(step?.number) ||
+            step.number <= lastStepNumber ||
+            step.status !== 'completed' ||
+            step.conclusion !== 'success'
+          ) {
+            issue(
+              'missing-ci-step',
+              `PR #${number} has no successful ordered step: ${name} / ${required}`,
+            );
+          } else {
+            lastStepNumber = step.number;
+          }
+        }
       }
     }
   }

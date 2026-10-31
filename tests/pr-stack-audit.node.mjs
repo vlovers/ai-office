@@ -10,6 +10,7 @@ import {
   PINNED_PATHS,
   REQUIRED_ANCESTORS,
   REQUIRED_JOBS,
+  requiredStepsForPr,
   STACK,
 } from '../scripts/pr-stack-audit.mjs';
 
@@ -84,6 +85,12 @@ function fixture() {
         run_attempt: 1,
         status: 'completed',
         conclusion: 'success',
+        steps: requiredStepsForPr(number, name).map((stepName, stepIndex) => ({
+          name: stepName,
+          number: stepIndex + 1,
+          status: 'completed',
+          conclusion: 'success',
+        })),
       })),
     ]),
   );
@@ -225,7 +232,7 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   const actual = await collectStack({ request, token: 'fixture-token' });
   assert.deepEqual(auditStack(actual), []);
   assert.ok(requested.some((path) => path.includes(`/compare/main-head...head-${CANDIDATE_PR}`)));
-  assert.ok(requested.some((path) => path.includes('/compare/head-134...head-135')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-135...head-136')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
@@ -561,7 +568,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-13), [
+  assert.deepEqual(STACK.slice(-14), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -575,8 +582,9 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 133, base: 132 },
     { number: 134, base: 133 },
     { number: 135, base: 134 },
+    { number: 136, base: 135 },
   ]);
-  assert.equal(CANDIDATE_PR, 135);
+  assert.equal(CANDIDATE_PR, 136);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -699,5 +707,86 @@ test('upstream job mutation during collection invalidates the audit', () => {
         refreshed,
       ),
     /PR #124 CI jobs changed during stack audit/,
+  );
+});
+
+test('rejects a skipped native sandbox step despite a successful macOS job', () => {
+  const snapshot = fixture();
+  const native = snapshot.jobsByPr[124][1];
+  native.steps.find(
+    (step) => step.name === 'Native read-only and isolated-write policy',
+  ).conclusion = 'skipped';
+  assert.equal(native.conclusion, 'success');
+  assert.ok(codes(snapshot).includes('missing-ci-step'));
+});
+
+test('rejects missing and duplicated candidate security steps', () => {
+  const snapshot = fixture();
+  const steps = snapshot.jobs[0].steps;
+  const target = steps.find((step) => step.name === 'TypeScript');
+  steps.push({ ...target, number: 99 });
+  assert.ok(codes(snapshot).includes('missing-ci-step'));
+
+  const missing = fixture();
+  missing.jobs[1].steps = missing.jobs[1].steps.filter(
+    (step) => step.name !== 'Native read-only and isolated-write policy',
+  );
+  assert.ok(codes(missing).includes('missing-ci-step'));
+});
+
+test('rejects security gates executed out of order', () => {
+  const snapshot = fixture();
+  const steps = snapshot.jobsByPr[107][0].steps;
+  const typecheck = steps.find((step) => step.name === 'TypeScript');
+  const lint = steps.find((step) => step.name === 'Delivery security lint');
+  [typecheck.number, lint.number] = [lint.number, typecheck.number];
+  assert.ok(codes(snapshot).includes('missing-ci-step'));
+});
+
+test('requires the offline policy regressions from PR #124 onward', () => {
+  const snapshot = fixture();
+  snapshot.jobsByPr[124][0].steps = snapshot.jobsByPr[124][0].steps.filter(
+    (step) => step.name !== 'CI trigger and security policy regressions',
+  );
+  assert.ok(codes(snapshot).includes('missing-ci-step'));
+  assert.equal(
+    requiredStepsForPr(123, REQUIRED_JOBS[0]).includes(
+      'CI trigger and security policy regressions',
+    ),
+    false,
+  );
+  assert.equal(
+    requiredStepsForPr(124, REQUIRED_JOBS[0]).includes(
+      'CI trigger and security policy regressions',
+    ),
+    true,
+  );
+});
+
+test('CI recheck detects an upstream step changing after a green snapshot', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.jobsByPr);
+  refreshed[124][1].steps[3].conclusion = 'skipped';
+  assert.throws(
+    () =>
+      assertStableCIEvidence(
+        snapshot.runs,
+        snapshot.runs,
+        snapshot.jobs,
+        snapshot.jobs,
+        snapshot.jobsByPr,
+        refreshed,
+      ),
+    /PR #124 CI jobs changed during stack audit/,
+  );
+});
+
+test('CI recheck detects a candidate step changing without changing job conclusion', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.jobs);
+  refreshed[0].steps[3].conclusion = 'failure';
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, snapshot.runs, snapshot.jobs, refreshed),
+    /candidate CI jobs changed during stack audit/,
   );
 });
