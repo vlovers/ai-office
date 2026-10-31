@@ -162,13 +162,14 @@ it.each([
   }
 });
 
-it('does not accept IPC success when shutdown aborts during asynchronous group reaping', async () => {
+it('does not accept IPC success or signal a recycled PID when abort races with reaping', async () => {
   const controller = new AbortController();
   let finishReaping!: () => void;
   const reaping = new Promise<void>((resolve) => {
     finishReaping = resolve;
   });
   vi.mocked(reapProcessGroup).mockImplementationOnce(() => reaping);
+  vi.mocked(killProcessGroup).mockClear();
   const worker = Object.assign(new EventEmitter(), {
     pid: 525255,
     send: vi.fn(),
@@ -187,7 +188,7 @@ it('does not accept IPC success when shutdown aborts during asynchronous group r
     output: 'Verification interrupted during application shutdown.',
     incomplete: true,
   });
-  expect(killProcessGroup).toHaveBeenCalledWith(525255);
+  expect(killProcessGroup).not.toHaveBeenCalledWith(525255);
 });
 
 it.each(['synchronous throw', 'callback failure'])(
@@ -354,35 +355,6 @@ it.each(['malformed IPC', 'IPC send failure', 'child process error'])(
     }
   },
 );
-
-it('does not signal a closed supervisor PID when abort races with asynchronous reaping', async () => {
-  const controller = new AbortController();
-  let finishReaping!: () => void;
-  const reaping = new Promise<void>((resolve) => {
-    finishReaping = resolve;
-  });
-  vi.mocked(reapProcessGroup).mockImplementationOnce(() => reaping);
-  const worker = Object.assign(new EventEmitter(), {
-    pid: 525263,
-    send: vi.fn(),
-  });
-  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
-  vi.mocked(killProcessGroup).mockClear();
-
-  const pending = runVerification(['/bin/true'], '/tmp', 1000, controller.signal);
-  worker.emit('message', { passed: true, output: 'ok' });
-  worker.emit('close', null, 'SIGKILL');
-  controller.abort();
-  expect(killProcessGroup).not.toHaveBeenCalledWith(525263);
-  finishReaping();
-
-  await expect(pending).resolves.toEqual({
-    passed: false,
-    output: 'Verification interrupted during application shutdown.',
-    incomplete: true,
-  });
-  expect(reapProcessGroup).toHaveBeenCalledWith(525263);
-});
 
 it('signals the supervisor group only once when invalid IPC races with abort', async () => {
   const controller = new AbortController();
