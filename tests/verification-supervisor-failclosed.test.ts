@@ -244,10 +244,13 @@ it('fails closed if an aborted supervisor never closes after SIGKILL', async () 
     vi.mocked(killProcessGroup).mockClear();
 
     const pending = runVerification(['/bin/true'], '/tmp', 120000, controller.signal);
+    // Attach the rejection assertion before fake timers fire to avoid an
+    // unhandled-rejection race in Vitest.
+    const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
     controller.abort();
     expect(killProcessGroup).toHaveBeenCalledWith(525258);
     await vi.advanceTimersByTimeAsync(1500);
-    await expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+    await rejected;
     // The original long watchdog must be disarmed after uncertain cleanup.
     await vi.advanceTimersByTimeAsync(125000);
     expect(killProcessGroup).toHaveBeenCalledTimes(1);
@@ -267,10 +270,11 @@ it('fails closed if the watchdog kills a supervisor but close never arrives', as
     vi.mocked(killProcessGroup).mockClear();
 
     const pending = runVerification(['/bin/true'], '/tmp', 1000);
+    const rejected = expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
     await vi.advanceTimersByTimeAsync(6000);
     expect(killProcessGroup).toHaveBeenCalledWith(525259);
     await vi.advanceTimersByTimeAsync(1500);
-    await expect(pending).rejects.toThrow('Process cleanup could not be confirmed');
+    await rejected;
   } finally {
     vi.useRealTimers();
   }
