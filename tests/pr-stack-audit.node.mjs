@@ -83,8 +83,8 @@ function fixture() {
   }
   // The #139 -> #140 compare is fetched both as an edge and an ancestor.
   comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
-  // The #145 -> #146 compare is both the candidate edge and an ancestor comparison.
-  comparisons[145].files = comparisons.edges[146].files;
+  // The #147 -> #148 compare is both the candidate edge and an ancestor comparison.
+  comparisons[147].files = comparisons.edges[148].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
@@ -312,6 +312,8 @@ test('live collector uses only read-only GitHub API calls and exact source refs'
   assert.ok(requested.some((path) => path.includes('/compare/head-143...head-144')));
   assert.ok(requested.some((path) => path.includes('/compare/head-144...head-145')));
   assert.ok(requested.some((path) => path.includes('/compare/head-145...head-146')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-146...head-147')));
+  assert.ok(requested.some((path) => path.includes('/compare/head-147...head-148')));
   assert.ok(requested.some((path) => path.includes(`/compare/head-116...head-${CANDIDATE_PR}`)));
   assert.ok(requested.some((path) => path.includes('/compare/head-96...head-107')));
   assert.ok(requested.some((path) => path.includes('/compare/head-103...head-110')));
@@ -1143,5 +1145,78 @@ test('detects a new failed supervisor run during the final CI recheck', () => {
   assert.throws(
     () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
     /PR #145 CI changed during stack audit/,
+  );
+});
+
+
+test('integration candidate pins the supervisor exit-to-close deadline stack tip', () => {
+  assert.equal(CANDIDATE_PR, 148);
+  assert.deepEqual(STACK.slice(-3), [
+    { number: 146, base: 145 },
+    { number: 147, base: 146 },
+    { number: 148, base: 147 },
+  ]);
+  assert.ok(REQUIRED_ANCESTORS.includes(147));
+  assert.deepEqual(auditStack(fixture()), []);
+});
+
+test('PR #147 is audit-only and rejects added, removed or renamed runtime files', () => {
+  for (const mutate of [
+    (files) => files.push({ filename: 'src/server/verification.ts', status: 'modified' }),
+    (files) => files.pop(),
+    (files) => { files[0].filename = 'src/server/process-group.ts'; },
+    (files) => { files[1].status = 'added'; },
+  ]) {
+    const snapshot = fixture();
+    mutate(snapshot.comparisons.edges[147].files);
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+  }
+});
+
+test('PR #148 may change only verification supervisor and its regression tests', () => {
+  for (const mutate of [
+    (files) => files.push({ filename: 'src/server/verification-worker.ts', status: 'modified' }),
+    (files) => files.pop(),
+    (files) => { files[0].filename = 'src/server/process-group.ts'; },
+    (files) => { files[1].status = 'added'; },
+  ]) {
+    const snapshot = fixture();
+    mutate(snapshot.comparisons.edges[148].files);
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+  }
+});
+
+test('PR #147 and #148 require complete compare file evidence', () => {
+  for (const number of [147, 148]) {
+    const snapshot = fixture();
+    delete snapshot.comparisons.edges[number].files;
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'));
+  }
+});
+
+test('a green candidate cannot conceal lost #147 ancestry or #148 parent', () => {
+  const snapshot = fixture();
+  snapshot.comparisons.edges[148].behind_by = 1;
+  snapshot.comparisons.edges[148].merge_base_commit.sha = 'stale-147';
+  snapshot.comparisons[147].behind_by = 1;
+  assert.ok(codes(snapshot).includes('lost-stack-parent'));
+  assert.ok(codes(snapshot).includes('lost-ancestor'));
+});
+
+test('both new Draft PRs require exact Linux/macOS jobs on the latest run', () => {
+  const snapshot = fixture();
+  snapshot.jobsByPr[147][0].conclusion = 'failure';
+  snapshot.jobs[1].conclusion = 'skipped';
+  assert.ok(codes(snapshot).includes('missing-upstream-job'));
+  assert.ok(codes(snapshot).includes('missing-candidate-job'));
+});
+
+test('recheck detects an updated failed #148 CI run after a green snapshot', () => {
+  const snapshot = fixture();
+  const refreshed = structuredClone(snapshot.runs);
+  refreshed[148][0].conclusion = 'failure';
+  assert.throws(
+    () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+    /PR #148 CI changed during stack audit/,
   );
 });
