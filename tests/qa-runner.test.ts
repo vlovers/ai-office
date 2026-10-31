@@ -346,6 +346,50 @@ exit 7
   20000,
 );
 
+for (const [label, target] of [
+  ['ordinary workspace file', 'allowed.txt'],
+  ['workspace secret', '.env'],
+] as const) {
+  fakeNative(
+    `rejects a masked overwrite of an existing ${label} during native preflight`,
+    async () => {
+      const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-probe-existing-write-')));
+      try {
+        const fake = join(root, 'fake-sandbox.sh');
+        await writeFile(
+          fake,
+          `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
+[ "$#" -gt 0 ] || exit 9
+shift
+if [ "$1" = "/bin/cat" ]; then
+  case "$2" in
+    */allowed.txt) printf 'READ_ALLOWED\\n'; exit 0 ;;
+  esac
+fi
+if [ "$1" = "/usr/bin/tee" ]; then
+  case "$2" in
+    */${target})
+      printf 'MUTATED' > "$2"
+      printf 'yes' > "${root}/overwrote"
+      exit 7 ;;
+  esac
+fi
+exit 7
+`,
+        );
+        await chmod(fake, 0o700);
+        await expect(verifyNativeIsolation(fake)).rejects.toThrow('capability verification failed');
+        // A nonzero exit alone cannot attest a safe denial.
+        expect(await readFile(join(root, 'overwrote'), 'utf8')).toBe('yes');
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    20000,
+  );
+}
+
 async function waitForProbeMarkers(paths: string[]) {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {

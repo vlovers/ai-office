@@ -74,6 +74,15 @@ try {
   const write = command('/usr/bin/touch', [join(repository, 'must-not-exist')]);
   assert.notEqual(write.status, 0, 'Read-only repository unexpectedly writable');
   await assert.rejects(readFile(join(repository, 'must-not-exist')));
+  // Existing-file truncation is a distinct boundary from new-file creation.
+  for (const [file, original] of [
+    [join(repository, 'README.md'), 'registered repository'],
+    [join(repository, '.env'), 'FAKE_SECRET_MUST_NOT_BE_READ'],
+  ] as const) {
+    const denied = command('/usr/bin/tee', [file]);
+    assert.notEqual(denied.status, 0, `Read-only sandbox allowed overwrite: ${file}`);
+    assert.equal(await readFile(file, 'utf8'), original);
+  }
   options = codexOptions(repository, env, undefined, true);
   overrides.length = 0;
   flatten(options.config, '');
