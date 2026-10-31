@@ -14,11 +14,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...original,
     rm: async (...args: Parameters<typeof original.rm>) => {
-      if (
-        typeof args[0] === 'string' &&
-        args[0].includes('ai-office-qa-') &&
-        fixtures.cleanup
-      ) {
+      if (typeof args[0] === 'string' && args[0].includes('ai-office-qa-') && fixtures.cleanup) {
         fixtures.cleanup.entered();
         await fixtures.cleanup.resume;
       }
@@ -63,31 +59,35 @@ it.each([
   { label: 'denied verification', passed: false, cancelled: true },
   { label: 'successful verification without cancellation', passed: true, cancelled: false },
   { label: 'denied verification without cancellation', passed: false, cancelled: false },
-])('preserves QA cancellation provenance during HOME cleanup: $label', async (scenario) => {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-cleanup-fixture-')));
-  const controller = new AbortController();
-  const { started, release } = pauseHomeRemoval();
-  const result = { passed: scenario.passed, output: 'supervisor finished' };
-  try {
-    const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 2000);
-    fixtures.verification.mockResolvedValueOnce(result);
-    const pending = runSandboxedQA(root, plan, controller.signal);
-    await started;
-    expect(fixtures.verification).toHaveBeenCalledOnce();
-    if (scenario.cancelled) controller.abort();
-    release();
+])(
+  'preserves QA cancellation provenance during HOME cleanup: $label',
+  async (scenario) => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-cleanup-fixture-')));
+    const controller = new AbortController();
+    const { started, release } = pauseHomeRemoval();
+    const result = { passed: scenario.passed, output: 'supervisor finished' };
+    try {
+      const plan = await qaPlan('approved', ['/bin/echo', 'safe'], 2000);
+      fixtures.verification.mockResolvedValueOnce(result);
+      const pending = runSandboxedQA(root, plan, controller.signal);
+      await started;
+      expect(fixtures.verification).toHaveBeenCalledOnce();
+      if (scenario.cancelled) controller.abort();
+      release();
 
-    await expect(pending).resolves.toEqual(
-      scenario.cancelled
-        ? { passed: false, output: 'QA stopped before launch.', incomplete: true }
-        : result,
-    );
-    const environment = fixtures.verification.mock.calls[0]?.[4] as { HOME: string };
-    await expect(lstat(environment.HOME)).rejects.toMatchObject({ code: 'ENOENT' });
-  } finally {
-    controller.abort();
-    release();
-    fixtures.cleanup = null;
-    await rm(root, { recursive: true, force: true });
-  }
-}, 10000);
+      await expect(pending).resolves.toEqual(
+        scenario.cancelled
+          ? { passed: false, output: 'QA stopped before launch.', incomplete: true }
+          : result,
+      );
+      const environment = fixtures.verification.mock.calls[0]?.[4] as { HOME: string };
+      await expect(lstat(environment.HOME)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      controller.abort();
+      release();
+      fixtures.cleanup = null;
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  10000,
+);
