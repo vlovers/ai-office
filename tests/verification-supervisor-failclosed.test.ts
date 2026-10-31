@@ -505,3 +505,23 @@ it('sends only one termination signal when IPC disconnect races with cancellatio
 
   await expect(pending).resolves.toMatchObject({ passed: false, incomplete: true });
 });
+
+it('does not signal a recycled process-group PID if cancellation follows child exit', async () => {
+  const controller = new AbortController();
+  const worker = Object.assign(new EventEmitter(), {
+    pid: 525271,
+    exitCode: null,
+    signalCode: 'SIGKILL',
+    send: vi.fn(),
+  });
+  vi.mocked(fork).mockReturnValue(worker as unknown as ChildProcess);
+  vi.mocked(killProcessGroup).mockClear();
+
+  const pending = runVerification(['/bin/true'], '/tmp', 1000, controller.signal);
+  controller.abort();
+  expect(killProcessGroup).not.toHaveBeenCalledWith(525271);
+  worker.emit('close', null, 'SIGKILL');
+
+  await expect(pending).resolves.toMatchObject({ passed: false, incomplete: true });
+  expect(reapProcessGroup).toHaveBeenCalledWith(525271);
+});
