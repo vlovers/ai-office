@@ -82,6 +82,39 @@ it('stops a QA request cancelled while native preflight is pending', async () =>
     await expect(pending).resolves.toEqual({
       passed: false,
       output: 'QA stopped before launch.',
+      incomplete: true,
+    });
+    expect(native.verification).not.toHaveBeenCalled();
+  } finally {
+    controller.abort();
+    release();
+    await rm(root, { recursive: true, force: true });
+  }
+}, 10000);
+
+
+it('prioritizes cancellation over an executable swap during native preflight', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-qa-preflight-abort-swap-')));
+  const executable = join(root, 'approved.sh');
+  const replacement = join(root, 'replacement.sh');
+  const { started, release } = preflightGate();
+  const controller = new AbortController();
+  try {
+    await writeFile(executable, '#!/bin/sh\nexit 0\n');
+    await chmod(executable, 0o700);
+    const plan = await qaPlan('approved', [executable], 2000);
+    const pending = runSandboxedQA(root, plan, controller.signal);
+    await started;
+    await writeFile(replacement, '#!/bin/sh\nexit 0\n');
+    await chmod(replacement, 0o700);
+    await rename(replacement, executable);
+    controller.abort();
+    release();
+
+    await expect(pending).resolves.toEqual({
+      passed: false,
+      output: 'QA stopped before launch.',
+      incomplete: true,
     });
     expect(native.verification).not.toHaveBeenCalled();
   } finally {
@@ -162,6 +195,7 @@ it('does not launch verification if cancellation arrives as native preflight fin
     await expect(runSandboxedQA(root, plan, controller.signal)).resolves.toEqual({
       passed: false,
       output: 'QA stopped before launch.',
+      incomplete: true,
     });
     expect(native.verification).not.toHaveBeenCalled();
   } finally {
