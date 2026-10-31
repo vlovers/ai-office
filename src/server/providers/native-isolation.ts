@@ -38,7 +38,12 @@ export function createNetworkProbeServer(onEscape: () => void): Server {
     onEscape();
     response.end('NETWORK_ESCAPE');
   });
-  server.on('connection', onEscape);
+  server.on('connection', (socket) => {
+    onEscape();
+    // A raw TCP peer may never send HTTP; do not retain an open socket while
+    // waiting for the listener to close or for native preflight to finish.
+    socket.destroy();
+  });
   return server;
 }
 

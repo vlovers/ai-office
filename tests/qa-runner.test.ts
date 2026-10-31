@@ -34,8 +34,10 @@ it('detects raw TCP network access without requiring an HTTP request', async () 
     if (!address || typeof address === 'string') throw new Error('Missing probe port.');
     const connected = once(server, 'connection');
     const socket = connect(address.port, '127.0.0.1');
+    const closed = once(socket, 'close');
     try {
       await connected;
+      await closed;
       expect(escapes).toBeGreaterThan(0);
     } finally {
       socket.destroy();
