@@ -1,5 +1,5 @@
 // Credential-free safety probe of the INSTALLED Codex runtime, with no model call.
-import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink, stat, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -83,6 +83,23 @@ try {
     assert.notEqual(denied.status, 0, `Read-only sandbox allowed overwrite: ${file}`);
     assert.equal(await readFile(file, 'utf8'), original);
   }
+  // A read-only profile must also prevent unlink, rename, chmod and mkdir.
+  // These operations can bypass a preflight that only checks tee/touch.
+  const readOnlyFile = join(repository, 'README.md');
+  const originalMode = (await stat(readOnlyFile)).mode;
+  for (const [executable, args] of [
+    ['/bin/rm', [readOnlyFile]],
+    ['/bin/mv', [readOnlyFile, join(repository, 'renamed-readme')]],
+    ['/bin/chmod', ['600', readOnlyFile]],
+    ['/bin/mkdir', [join(repository, 'new-directory')]],
+  ] as [string, string[]][]) {
+    const denied = command(executable, args);
+    assert.notEqual(denied.status, 0, `Read-only namespace/metadata mutation allowed: ${executable}`);
+  }
+  assert.equal(await readFile(readOnlyFile, 'utf8'), 'registered repository');
+  assert.equal((await stat(readOnlyFile)).mode, originalMode);
+  await assert.rejects(lstat(join(repository, 'renamed-readme')));
+  await assert.rejects(lstat(join(repository, 'new-directory')));
   options = codexOptions(repository, env, undefined, true);
   overrides.length = 0;
   flatten(options.config, '');
