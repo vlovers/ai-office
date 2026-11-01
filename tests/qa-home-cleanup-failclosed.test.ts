@@ -335,9 +335,9 @@ it('quarantines a missing HOME after supervisor completion instead of reporting 
 it('quarantines a replacement swapped in immediately before cleanup rename', async () => {
   await withApprovedPlan(async (plan) => {
     controls.swapDuringCleanupRename = true;
-    await expect(
-      runSandboxedQA('/tmp', plan, new AbortController().signal),
-    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
     expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
     await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
