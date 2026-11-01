@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { qaPlan, runSandboxedQA } from '../src/server/qa-runner.js';
 import { UncertainCleanupError } from '../src/server/process-group.js';
@@ -7,6 +9,9 @@ const controls = vi.hoisted(() => ({
   canonicalHome: '',
   failCanonicalization: false,
   failRemoval: false,
+  replaceHome: '' as '' | 'symlink' | 'directory',
+  protectedHome: '',
+  replacedHomeBackup: '',
 }));
 const native = vi.hoisted(() => ({
   preflight: vi.fn(async () => {}),
@@ -23,6 +28,18 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       return home;
     },
     realpath: async (path: string) => {
+      if (path === controls.createdHome && controls.replaceHome) {
+        const replacement = controls.replaceHome;
+        controls.replaceHome = '';
+        if (replacement === 'symlink') {
+          await actual.rm(path, { recursive: true, force: true });
+          await actual.symlink(controls.protectedHome, path, 'dir');
+        } else {
+          controls.replacedHomeBackup = path + '-original';
+          await actual.rename(path, controls.replacedHomeBackup);
+          await actual.mkdir(path);
+        }
+      }
       if (controls.failCanonicalization && path === controls.createdHome) {
         controls.failCanonicalization = false;
         throw new Error('injected QA HOME canonicalization failure');
@@ -60,6 +77,9 @@ beforeEach(() => {
   controls.canonicalHome = '';
   controls.failCanonicalization = false;
   controls.failRemoval = false;
+  controls.replaceHome = '';
+  controls.protectedHome = '';
+  controls.replacedHomeBackup = '';
   native.preflight.mockResolvedValue(undefined);
   native.verification.mockResolvedValue({ passed: true, output: 'approved' });
 });
@@ -71,6 +91,9 @@ async function withApprovedPlan(run: (plan: Awaited<ReturnType<typeof qaPlan>>) 
   } finally {
     if (controls.createdHome) {
       await actualFs.rm(controls.createdHome, { recursive: true, force: true });
+    }
+    if (controls.replacedHomeBackup) {
+      await actualFs.rm(controls.replacedHomeBackup, { recursive: true, force: true });
     }
   }
 }
@@ -121,5 +144,37 @@ it('does not turn failed HOME removal into a harmless cancellation', async () =>
       UncertainCleanupError,
     );
     expect(native.verification).toHaveBeenCalledOnce();
+  });
+});
+
+
+it('rejects a symlink swap and never removes the external resolved HOME', async () => {
+  const protectedHome = await actualFs.mkdtemp(join(tmpdir(), 'ai-office-protected-'));
+  try {
+    await actualFs.writeFile(join(protectedHome, 'keep'), 'untouched');
+    await withApprovedPlan(async (plan) => {
+      controls.protectedHome = protectedHome;
+      controls.replaceHome = 'symlink';
+      await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+        UncertainCleanupError,
+      );
+      expect(native.verification).not.toHaveBeenCalled();
+      await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
+    });
+  } finally {
+    await actualFs.rm(protectedHome, { recursive: true, force: true });
+  }
+});
+
+it('rejects a replaced directory inode before launching the supervisor', async () => {
+  await withApprovedPlan(async (plan) => {
+    controls.replaceHome = 'directory';
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
+    expect(native.verification).not.toHaveBeenCalled();
+    await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
   });
 });
