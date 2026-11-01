@@ -361,9 +361,11 @@ it('quarantines a replacement swapped in immediately before cleanup rename', asy
 
 it('removes both quarantined HOME and cleanup root after successful verification', async () => {
   await withApprovedPlan(async (plan) => {
-    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).resolves.toMatchObject({
-      passed: true,
-    });
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).resolves.toMatchObject(
+      {
+        passed: true,
+      },
+    );
     expect(controls.quarantinedHome).not.toBe('');
     await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(actualFs.lstat(join(controls.quarantinedHome, '..'))).rejects.toMatchObject({
@@ -379,9 +381,9 @@ it('quarantines a symlink swapped in immediately before cleanup rename', async (
     await withApprovedPlan(async (plan) => {
       controls.protectedHome = protectedHome;
       controls.swapSymlinkDuringCleanupRename = true;
-      await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
-        UncertainCleanupError,
-      );
+      await expect(
+        runSandboxedQA('/tmp', plan, new AbortController().signal),
+      ).rejects.toBeInstanceOf(UncertainCleanupError);
       expect(native.verification).toHaveBeenCalledOnce();
       expect((await actualFs.lstat(controls.quarantinedHome)).isSymbolicLink()).toBe(true);
       expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
