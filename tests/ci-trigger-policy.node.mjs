@@ -22,6 +22,28 @@ test('current CI covers all stacked PR base branches without privileged triggers
   assert.deepEqual(issues(workflow), []);
 });
 
+test('pre-install policy executes before npm install with lifecycle scripts disabled on both runners', () => {
+  const preflight =
+    '      - name: Pre-install checkout and CI policy (dependency-free)\\n' +
+    '        run: node --test tests/ci-trigger-policy.node.mjs\\n';
+  const install = '      - name: Install dependencies\\n        run: npm ci --ignore-scripts\\n';
+  const linux = workflow.slice(workflow.indexOf('  checks:'), workflow.indexOf('  native-sandbox:'));
+  const macos = workflow.slice(workflow.indexOf('  native-sandbox:'));
+  for (const job of [linux, macos]) {
+    assert.equal(job.split(preflight).length - 1, 1);
+    assert.equal(job.split(install).length - 1, 1);
+    assert.ok(job.indexOf(preflight) < job.indexOf(install));
+  }
+  for (const bypass of [
+    workflow.replace('run: npm ci --ignore-scripts', 'run: npm ci'),
+    workflow.replace('run: npm ci --ignore-scripts', 'run: npm ci --ignore-scripts=false'),
+    workflow.replace(preflight, ''),
+    workflow.replace(preflight + install, install + preflight),
+  ]) {
+    assert.match(issues(bypass).join(' '), /unreviewed validation step/);
+  }
+});
+
 test('rejects a branch filter that suppresses security and future stacked PR checks', () => {
   const restricted = workflow.replace(
     '  pull_request:\n',
