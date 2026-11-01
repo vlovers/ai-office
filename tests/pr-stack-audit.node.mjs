@@ -15,6 +15,7 @@ import {
   REQUIRED_JOBS,
   REVIEWED_DELTAS,
   requiredStepsForPr,
+  retainsPolicyRegressionCorpus,
   STACK,
 } from '../scripts/pr-stack-audit.mjs';
 
@@ -1489,4 +1490,51 @@ test('divergent PR #124 regression corpus still survives the CI provenance tip',
   const snapshot = fixture();
   snapshot.policyRegressions.candidate = 'test("replacement", () => {});';
   assert.ok(codes(snapshot).includes('divergent-policy-regressions-drift'));
+});
+
+test('preserves exact divergent test bodies across new imports and interleaved regressions', () => {
+  const source = [
+    "import { readFile } from 'node:fs/promises';",
+    "test('first', () => {",
+    '  assert.ok(true);',
+    '});',
+    "test('second', () => {",
+    '  assert.equal(1 + 1, 2);',
+    '});',
+    '',
+  ].join('\n');
+  const candidate = [
+    "import { lstat, readFile } from 'node:fs/promises';",
+    "test('first', () => {",
+    '  assert.ok(true);',
+    '});',
+    "test('new regression', () => {",
+    '  assert.ok(true);',
+    '});',
+    "test('second', () => {",
+    '  assert.equal(1 + 1, 2);',
+    '});',
+    '',
+  ].join('\n');
+  assert.equal(retainsPolicyRegressionCorpus(source, candidate), true);
+  for (const altered of [
+    candidate.replace('assert.ok(true);', 'assert.ok(false);'),
+    candidate.replace('assert.equal(1 + 1, 2);', 'assert.equal(2, 3);'),
+    candidate.replace("test('second'", "test('renamed'"),
+    candidate.replace("test('second', () => {\n  assert.equal(1 + 1, 2);\n});", ''),
+    candidate + "test('first', () => {\n  assert.ok(true);\n});\n",
+  ]) {
+    assert.equal(retainsPolicyRegressionCorpus(source, altered), false);
+  }
+});
+
+test('divergent corpus verification rejects missing, reordered and invalid declarations', () => {
+  const one = "test('first', () => {\n  assert.ok(true);\n});\n";
+  const two = "test('second', () => {\n  assert.ok(true);\n});\n";
+  assert.equal(retainsPolicyRegressionCorpus(one + two, two + one), false);
+  assert.equal(retainsPolicyRegressionCorpus(one, ''), false);
+  assert.equal(retainsPolicyRegressionCorpus('', one), false);
+  assert.equal(retainsPolicyRegressionCorpus(null, one), false);
+  assert.equal(retainsPolicyRegressionCorpus(one, null), false);
+  assert.equal(retainsPolicyRegressionCorpus(one + one, one), false);
 });
