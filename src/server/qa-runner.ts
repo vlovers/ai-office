@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
+import { lstat, mkdtemp, realpath, rename, rm, rmdir, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AppError } from './errors.js';
@@ -180,7 +180,24 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
         );
       }
       await assertHomeIdentity();
-      await rm(createdHome, { recursive: true, force: true });
+      // Atomically move HOME into a private cleanup directory. Verify the
+      // moved inode: a replacement raced in before rename must be quarantined,
+      // never recursively deleted.
+      const quarantine = await mkdtemp(join(tmpdir(), 'ai-office-qa-cleanup-'));
+      const movedHome = join(quarantine, 'home');
+      await rename(createdHome, movedHome);
+      const movedIdentity = await lstat(movedHome);
+      if (
+        !movedIdentity.isDirectory() ||
+        movedIdentity.dev !== initialIdentity.dev ||
+        movedIdentity.ino !== initialIdentity.ino
+      ) {
+        throw new UncertainCleanupError(
+          new Error('Temporary QA HOME identity changed during cleanup rename.'),
+        );
+      }
+      await rm(movedHome, { recursive: true, force: true });
+      await rmdir(quarantine);
     } catch (error) {
       if (error instanceof UncertainCleanupError) throw error;
       throw new UncertainCleanupError(error);
