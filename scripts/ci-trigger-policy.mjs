@@ -345,3 +345,31 @@ export function validateValidationPackage(source) {
   }
   return issues;
 }
+
+/**
+ * validation.yml is not the entire GitHub Actions attack surface: another
+ * workflow can add privileged triggers or silently skip the required gates.
+ * Fail closed on any additional workflow file, directory or symlink until the
+ * repository security policy explicitly reviews it.
+ */
+export function validateValidationWorkflowInventory(directoryKind, entries) {
+  const issues = [];
+  if (directoryKind !== 'directory') {
+    issues.push('workflow directory must be a real directory');
+  }
+  if (!Array.isArray(entries)) {
+    return [...issues, 'workflow inventory is unavailable'];
+  }
+  const approved = entries.filter(
+    (entry) => entry?.name === 'validation.yml' && entry?.kind === 'file',
+  );
+  if (approved.length !== 1) {
+    issues.push('expected exactly one regular validation.yml workflow');
+  }
+  for (const entry of entries) {
+    if (entry?.name !== 'validation.yml' || entry?.kind !== 'file') {
+      issues.push(`unreviewed workflow directory entry: ${String(entry?.name ?? '<invalid>')}`);
+    }
+  }
+  return issues;
+}
