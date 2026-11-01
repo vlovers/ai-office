@@ -16,6 +16,7 @@ const controls = vi.hoisted(() => ({
   protectedHome: '',
   replacedHomeBackup: '',
   swapDuringCleanupRename: false,
+  quarantinedHome: '',
 }));
 const native = vi.hoisted(() => ({
   preflight: vi.fn(async () => {}),
@@ -81,6 +82,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         await actual.mkdir(oldPath);
         await actual.writeFile(join(oldPath, 'keep'), 'replacement');
       }
+      if (oldPath === controls.createdHome) controls.quarantinedHome = newPath;
       return actual.rename(oldPath, newPath);
     },
     rm: async (path: string, options?: { recursive?: boolean; force?: boolean }) => {
@@ -119,6 +121,7 @@ beforeEach(() => {
   controls.protectedHome = '';
   controls.replacedHomeBackup = '';
   controls.swapDuringCleanupRename = false;
+  controls.quarantinedHome = '';
   native.preflight.mockResolvedValue(undefined);
   native.verification.mockResolvedValue({ passed: true, output: 'approved' });
 });
@@ -133,6 +136,9 @@ async function withApprovedPlan(run: (plan: Awaited<ReturnType<typeof qaPlan>>) 
     }
     if (controls.replacedHomeBackup) {
       await actualFs.rm(controls.replacedHomeBackup, { recursive: true, force: true });
+    }
+    if (controls.quarantinedHome) {
+      await actualFs.rm(join(controls.quarantinedHome, '..'), { recursive: true, force: true });
     }
   }
 }
@@ -207,7 +213,7 @@ it('quarantines cleanup failure instead of returning an attested QA success', as
       UncertainCleanupError,
     );
     expect(native.verification).toHaveBeenCalledOnce();
-    await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.quarantinedHome)).resolves.toBeDefined();
   });
 });
 
