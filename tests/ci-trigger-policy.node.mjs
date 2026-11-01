@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 import {
   REQUIRED_VALIDATION_SCRIPTS,
   validateValidationPackage,
   validateValidationWorkflow,
+  validateValidationWorkflowInventory,
 } from '../scripts/ci-trigger-policy.mjs';
 
 const workflow = await readFile(
@@ -396,4 +397,82 @@ test('rejects invalid package manifests without rejecting unrelated offline scri
   const candidate = JSON.parse(packageManifest);
   candidate.scripts['test:offline-extra'] = 'node --test tests/offline-extra.node.mjs';
   assert.deepEqual(packageIssues(JSON.stringify(candidate)), []);
+});
+
+const approvedWorkflows = [{ name: 'validation.yml', kind: 'file' }];
+
+test('checked-out workflow directory contains only the reviewed regular workflow', async () => {
+  const path = new URL('../.github/workflows/', import.meta.url);
+  const [directory, entries] = await Promise.all([
+    lstat(path),
+    readdir(path, { withFileTypes: true }),
+  ]);
+  const directoryKind = directory.isSymbolicLink()
+    ? 'symlink'
+    : directory.isDirectory()
+      ? 'directory'
+      : 'other';
+  const inventory = entries.map((entry) => ({
+    name: entry.name,
+    kind: entry.isSymbolicLink()
+      ? 'symlink'
+      : entry.isFile()
+        ? 'file'
+        : entry.isDirectory()
+          ? 'directory'
+          : 'other',
+  }));
+  assert.deepEqual(validateValidationWorkflowInventory(directoryKind, inventory), []);
+});
+
+test('workflow inventory rejects additional workflows, including hidden and YAML variants', () => {
+  for (const name of ['shadow.yml', 'deploy.yaml', '.hidden.yml', 'README.md']) {
+    assert.match(
+      validateValidationWorkflowInventory('directory', [
+        ...approvedWorkflows,
+        { name, kind: 'file' },
+      ]).join(' '),
+      /unreviewed workflow directory entry/,
+    );
+  }
+});
+
+test('workflow inventory rejects missing or duplicate approved workflows', () => {
+  for (const inventory of [[], [...approvedWorkflows, ...approvedWorkflows]]) {
+    assert.match(
+      validateValidationWorkflowInventory('directory', inventory).join(' '),
+      /expected exactly one regular validation.yml workflow/,
+    );
+  }
+});
+
+test('workflow inventory rejects symlinked or non-regular workflow entries', () => {
+  for (const kind of ['symlink', 'directory', 'other']) {
+    assert.match(
+      validateValidationWorkflowInventory('directory', [{ name: 'validation.yml', kind }]).join(
+        ' ',
+      ),
+      /expected exactly one regular validation.yml workflow/,
+    );
+    assert.match(
+      validateValidationWorkflowInventory('directory', [
+        ...approvedWorkflows,
+        { name: 'nested', kind },
+      ]).join(' '),
+      /unreviewed workflow directory entry/,
+    );
+  }
+});
+
+test('workflow inventory fails closed on an untrusted or unreadable directory', () => {
+  for (const kind of ['symlink', 'file', 'other']) {
+    assert.match(
+      validateValidationWorkflowInventory(kind, approvedWorkflows).join(' '),
+      /workflow directory must be a real directory/,
+    );
+  }
+  assert.match(
+    validateValidationWorkflowInventory('directory', undefined).join(' '),
+    /workflow inventory is unavailable/,
+  );
 });
