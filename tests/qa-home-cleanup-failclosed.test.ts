@@ -145,9 +145,9 @@ it('never removes a swapped symlink when initial HOME lstat fails', async () => 
       controls.protectedHome = protectedHome;
       controls.failInitialIdentity = true;
       controls.swapBeforeInitialIdentity = true;
-      await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
-        UncertainCleanupError,
-      );
+      await expect(
+        runSandboxedQA('/tmp', plan, new AbortController().signal),
+      ).rejects.toBeInstanceOf(UncertainCleanupError);
       expect(native.verification).not.toHaveBeenCalled();
       expect((await actualFs.lstat(controls.createdHome)).isSymbolicLink()).toBe(true);
       expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
@@ -163,9 +163,9 @@ it('rejects a transient realpath redirect even if the original HOME inode is res
     await withApprovedPlan(async (plan) => {
       controls.protectedHome = protectedHome;
       controls.transientCanonicalRedirect = true;
-      await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
-        UncertainCleanupError,
-      );
+      await expect(
+        runSandboxedQA('/tmp', plan, new AbortController().signal),
+      ).rejects.toBeInstanceOf(UncertainCleanupError);
       expect(native.verification).not.toHaveBeenCalled();
       // The original directory was restored, so its identity was verified and
       // the ordinary safe cleanup path can still remove it.
