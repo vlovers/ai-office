@@ -912,7 +912,10 @@ test('attests verbatim preservation of divergent PR #124 policy regressions', ()
   const snapshot = fixture();
   assert.equal(codes(snapshot).includes('divergent-policy-regressions-drift'), false);
 
-  snapshot.policyRegressions.candidate = '// changed\n' + snapshot.policyRegressions.candidate;
+  snapshot.policyRegressions.candidate = snapshot.policyRegressions.candidate.replace(
+    "test('PR 124 policy regression', () => {});",
+    "test('PR 124 policy regression', () => { throw new Error('changed'); });",
+  );
   assert.ok(codes(snapshot).includes('divergent-policy-regressions-drift'));
 });
 
