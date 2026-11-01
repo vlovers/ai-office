@@ -7,6 +7,10 @@ import { UncertainCleanupError } from '../src/server/process-group.js';
 const controls = vi.hoisted(() => ({
   createdHome: '',
   canonicalHome: '',
+  stagedRoot: '',
+  stagedHome: '',
+  swapBeforeStageRename: '' as '' | 'symlink' | 'directory',
+  failStageRename: false,
   failCanonicalization: false,
   failInitialIdentity: false,
   swapBeforeInitialIdentity: false,
@@ -27,7 +31,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     mkdtemp: async (prefix: string) => {
       const home = await actual.mkdtemp(prefix);
-      if (prefix.includes('ai-office-qa-')) controls.createdHome = home;
+      if (prefix.includes('ai-office-qa-cleanup-')) controls.stagedRoot = home;
+      else if (prefix.includes('ai-office-qa-')) controls.createdHome = home;
       return home;
     },
     lstat: async (path: string) => {
@@ -72,11 +77,30 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (path === controls.createdHome) controls.canonicalHome = resolved;
       return resolved;
     },
+    rename: async (from: string, to: string) => {
+      if (from === controls.createdHome && to === join(controls.stagedRoot, 'home')) {
+        controls.stagedHome = to;
+        if (controls.failStageRename) {
+          controls.failStageRename = false;
+          throw new Error('injected QA HOME staging rename failure');
+        }
+        if (controls.swapBeforeStageRename) {
+          const replacement = controls.swapBeforeStageRename;
+          controls.swapBeforeStageRename = '';
+          controls.replacedHomeBackup = from + '-original';
+          await actual.rename(from, controls.replacedHomeBackup);
+          if (replacement === 'symlink') {
+            await actual.symlink(controls.protectedHome, from, 'dir');
+          } else {
+            await actual.mkdir(from);
+            await actual.writeFile(join(from, 'keep'), 'replacement');
+          }
+        }
+      }
+      return actual.rename(from, to);
+    },
     rm: async (path: string, options?: { recursive?: boolean; force?: boolean }) => {
-      if (
-        controls.failRemoval &&
-        (path === controls.createdHome || path === controls.canonicalHome)
-      ) {
+      if (controls.failRemoval && path === controls.stagedHome) {
         controls.failRemoval = false;
         throw new Error('injected QA HOME removal failure');
       }
@@ -99,6 +123,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   controls.createdHome = '';
   controls.canonicalHome = '';
+  controls.stagedRoot = '';
+  controls.stagedHome = '';
+  controls.swapBeforeStageRename = '';
+  controls.failStageRename = false;
   controls.failCanonicalization = false;
   controls.failInitialIdentity = false;
   controls.swapBeforeInitialIdentity = false;
@@ -121,6 +149,9 @@ async function withApprovedPlan(run: (plan: Awaited<ReturnType<typeof qaPlan>>) 
     }
     if (controls.replacedHomeBackup) {
       await actualFs.rm(controls.replacedHomeBackup, { recursive: true, force: true });
+    }
+    if (controls.stagedRoot) {
+      await actualFs.rm(controls.stagedRoot, { recursive: true, force: true });
     }
   }
 }
@@ -311,5 +342,63 @@ it('quarantines a missing HOME after supervisor completion instead of reporting 
     expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+  });
+});
+
+it('stages an attested HOME under a private root and removes both on success', async () => {
+  await withApprovedPlan(async (plan) => {
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).resolves.toMatchObject({
+      passed: true,
+    });
+    expect(native.verification).toHaveBeenCalledOnce();
+    expect(controls.stagedRoot).not.toBe('');
+    expect(controls.stagedHome).toBe(join(controls.stagedRoot, 'home'));
+    await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(actualFs.lstat(controls.stagedRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+it('quarantines a directory swapped between the final lstat and staging rename', async () => {
+  await withApprovedPlan(async (plan) => {
+    controls.swapBeforeStageRename = 'directory';
+    await expect(
+      runSandboxedQA('/tmp', plan, new AbortController().signal),
+    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    expect(native.verification).toHaveBeenCalledOnce();
+    expect(await actualFs.readFile(join(controls.stagedHome, 'keep'), 'utf8')).toBe('replacement');
+    await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.stagedRoot)).resolves.toBeDefined();
+  });
+});
+
+it('quarantines a symlink swapped at staging without touching its external target', async () => {
+  const protectedHome = await actualFs.mkdtemp(join(tmpdir(), 'ai-office-protected-'));
+  try {
+    await actualFs.writeFile(join(protectedHome, 'keep'), 'untouched');
+    await withApprovedPlan(async (plan) => {
+      controls.protectedHome = protectedHome;
+      controls.swapBeforeStageRename = 'symlink';
+      await expect(
+        runSandboxedQA('/tmp', plan, new AbortController().signal),
+      ).rejects.toBeInstanceOf(UncertainCleanupError);
+      expect(native.verification).toHaveBeenCalledOnce();
+      expect((await actualFs.lstat(controls.stagedHome)).isSymbolicLink()).toBe(true);
+      expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
+      await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+    });
+  } finally {
+    await actualFs.rm(protectedHome, { recursive: true, force: true });
+  }
+});
+
+it('quarantines a failed staging rename instead of deleting the original HOME', async () => {
+  await withApprovedPlan(async (plan) => {
+    controls.failStageRename = true;
+    await expect(
+      runSandboxedQA('/tmp', plan, new AbortController().signal),
+    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    expect(native.verification).toHaveBeenCalledOnce();
+    await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.stagedRoot)).resolves.toBeDefined();
   });
 });
