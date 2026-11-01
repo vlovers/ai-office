@@ -373,3 +373,38 @@ export function validateValidationWorkflowInventory(directoryKind, entries) {
   }
   return issues;
 }
+
+/**
+ * The reviewed workflow and npm scripts must resolve to files in the checked
+ * out repository. A repository .npmrc can override npm's script shell or
+ * registry even when package.json and validation.yml are unchanged.
+ *
+ * This is a CI detection gate, not a substitute for restricting execution of
+ * untrusted install scripts before validation runs.
+ */
+export const REQUIRED_VALIDATION_CHECKOUT_PATHS = Object.freeze({
+  '.github': 'directory',
+  '.github/workflows': 'directory',
+  '.github/workflows/validation.yml': 'file',
+  scripts: 'directory',
+  tests: 'directory',
+  'scripts/ci-trigger-policy.mjs': 'file',
+  'scripts/pr-stack-audit.mjs': 'file',
+  'tests/ci-trigger-policy.node.mjs': 'file',
+  'tests/pr-stack-audit.node.mjs': 'file',
+  'package.json': 'file',
+  'package-lock.json': 'file',
+  '.npmrc': 'missing',
+});
+
+export function validateValidationCheckoutPaths(actual) {
+  const issues = [];
+  for (const [path, expectedKind] of Object.entries(REQUIRED_VALIDATION_CHECKOUT_PATHS)) {
+    if (actual?.[path] !== expectedKind) {
+      issues.push(
+        `checkout path ${path} must be ${expectedKind}, got ${String(actual?.[path] ?? 'unknown')}`,
+      );
+    }
+  }
+  return issues;
+}
