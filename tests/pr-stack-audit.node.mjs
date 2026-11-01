@@ -925,7 +925,10 @@ test('rejects edited, truncated or missing PR #124 regression evidence', () => {
       policy.source = "test('different source', () => {});\n";
     },
     (policy) => {
-      policy.candidate = policy.source.slice(0, -2);
+      policy.candidate = policy.candidate.replace(
+        "test('PR 124 policy regression', () => {});",
+        "test('PR 124 policy regression', () => {}",
+      );
     },
     (policy) => {
       policy.source = '';
