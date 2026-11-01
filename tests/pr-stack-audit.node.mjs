@@ -1549,3 +1549,34 @@ test('divergent corpus verification rejects missing, reordered and invalid decla
   assert.equal(retainsPolicyRegressionCorpus(one, null), false);
   assert.equal(retainsPolicyRegressionCorpus(one + one, one), false);
 });
+
+test('divergent corpus audit rejects commented-out or inert original tests', () => {
+  const original = "test('security gate', () => {\n  assert.ok(true);\n});\n";
+  for (const inert of [
+    '/*\n' + original + '*/\n',
+    'if (false) {\n' + original + '}\n',
+    'const ignored = `\n' + original + '`;\n',
+    original.replace("test('security gate'", "test.skip('security gate'"),
+    original.replace("test('security gate'", "test.only('security gate'"),
+  ]) {
+    assert.equal(retainsPolicyRegressionCorpus(original, inert), false);
+  }
+});
+
+test('divergent corpus audit ignores decoys preceding executable tests', () => {
+  const original = "test('security gate', () => {\n  assert.ok(true);\n});\n";
+  const commented = '/*\n' + original + '*/\n' + original;
+  const stringDecoy = 'const ignored = `\n' + original + '`;\n' + original;
+  assert.equal(retainsPolicyRegressionCorpus(original, commented), true);
+  assert.equal(retainsPolicyRegressionCorpus(original, stringDecoy), true);
+});
+
+test('divergent corpus audit rejects a disabled wrapper around multiple tests', () => {
+  const first = "test('first', () => {\n  assert.ok(true);\n});\n";
+  const second = "test('second', () => {\n  assert.ok(true);\n});\n";
+  assert.equal(retainsPolicyRegressionCorpus(first + second, first + second), true);
+  assert.equal(
+    retainsPolicyRegressionCorpus(first + second, 'if (false) {\n' + first + second + '}\n'),
+    false,
+  );
+});

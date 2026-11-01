@@ -564,7 +564,23 @@ export function auditStack(snapshot) {
 export function retainsPolicyRegressionCorpus(source, candidate) {
   if (typeof source !== 'string' || typeof candidate !== 'string') return false;
   const blocks = (text) => {
-    const starts = [...text.matchAll(/^test\('([^']+)', \(\) => \{/gm)];
+    // A verbatim corpus inside a block comment, template literal, or disabled
+    // wrapper is not executable regression coverage.
+    const masked = text.replace(
+      /\/\*[\s\S]*?\*\/|\/\/[^\n]*|`(?:\\[\s\S]|[^`])*`|'(?:\\[\s\S]|[^'])*'|"(?:\\[\s\S]|[^"])*"/g,
+      (literal) => literal.replace(/[^\n]/g, ' '),
+    );
+    const matches = [...text.matchAll(/^test\('([^']+)', \(\) => \{/gm)];
+    const starts = [];
+    let depth = 0;
+    let offset = 0;
+    for (const match of matches) {
+      for (; offset < match.index; offset++) {
+        if (masked[offset] === '{') depth++;
+        if (masked[offset] === '}') depth--;
+      }
+      if (depth === 0 && masked.startsWith('test(', match.index)) starts.push(match);
+    }
     return starts.map((match, index) => ({
       name: match[1],
       body: text.slice(match.index, starts[index + 1]?.index ?? text.length).trimEnd(),
