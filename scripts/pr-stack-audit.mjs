@@ -566,7 +566,7 @@ export function auditStack(snapshot) {
 export function retainsPolicyRegressionCorpus(source, candidate) {
   if (typeof source !== 'string' || typeof candidate !== 'string') return false;
   const blocks = (text) => {
-    const starts = [...text.matchAll(/^test\\('([^']+)', \\(\\) => \\{/gm)];
+    const starts = [...text.matchAll(/^test\('([^']+)', \(\) => \{/gm)];
     return starts.map((match, index) => ({
       name: match[1],
       body: text.slice(match.index, starts[index + 1]?.index ?? text.length).trimEnd(),
