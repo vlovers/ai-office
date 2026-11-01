@@ -540,14 +540,11 @@ export function auditStack(snapshot) {
     }
   }
 
-  // #124 is a divergent sibling of #123, not a Git ancestor. Its exact
-  // executable regression corpus must survive the #125 reconciliation.
-  // The candidate may append new tests, but must not edit or drop old ones.
+  // #124 is a divergent sibling of #123, not a Git ancestor. The
+  // candidate can add imports and interleave new tests, but must preserve
+  // each original named regression verbatim, once and in source order.
   if (
-    typeof policyRegressions?.source !== 'string' ||
-    policyRegressions.source.length === 0 ||
-    typeof policyRegressions.candidate !== 'string' ||
-    !policyRegressions.candidate.startsWith(policyRegressions.source)
+    !retainsPolicyRegressionCorpus(policyRegressions?.source, policyRegressions?.candidate)
   ) {
     issue(
       'divergent-policy-regressions-drift',
@@ -556,6 +553,44 @@ export function auditStack(snapshot) {
   }
 
   return issues;
+}
+
+/**
+ * Compare the executable named test declarations, not the entire file prefix.
+ * Later CI hardening adds imports and interleaves tests before old declarations;
+ * the old startsWith check incorrectly rejected the real reviewed stack.
+ *
+ * This attests the original test bodies, not semantic equivalence of every
+ * helper or CI policy implementation from divergent PR #124.
+ */
+export function retainsPolicyRegressionCorpus(source, candidate) {
+  if (typeof source !== 'string' || typeof candidate !== 'string') return false;
+  const blocks = (text) => {
+    const starts = [...text.matchAll(/^test\\('([^']+)', \\(\\) => \\{/gm)];
+    return starts.map((match, index) => ({
+      name: match[1],
+      body: text.slice(match.index, starts[index + 1]?.index ?? text.length).trimEnd(),
+    }));
+  };
+  const originals = blocks(source);
+  const current = blocks(candidate);
+  if (originals.length === 0) return false;
+  if (new Set(originals.map((entry) => entry.name)).size !== originals.length) return false;
+  let previousIndex = -1;
+  for (const original of originals) {
+    const matches = current.flatMap((entry, index) =>
+      entry.name === original.name ? [index] : [],
+    );
+    if (
+      matches.length !== 1 ||
+      matches[0] <= previousIndex ||
+      current[matches[0]].body !== original.body
+    ) {
+      return false;
+    }
+    previousIndex = matches[0];
+  }
+  return true;
 }
 
 export function decodePolicyRegressionSource(file) {
