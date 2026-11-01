@@ -22,7 +22,7 @@ test('current CI covers all stacked PR base branches without privileged triggers
   assert.deepEqual(issues(workflow), []);
 });
 
-test('pre-install policy executes before npm install with lifecycle scripts disabled on both runners', () => {
+test('preinstall guard precedes script-free npm ci on both runners', () => {
   const preflight =
     '      - name: Pre-install checkout and CI policy (dependency-free)\n' +
     '        run: node --test tests/ci-trigger-policy.node.mjs\n';
