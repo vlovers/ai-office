@@ -211,9 +211,9 @@ it('does not recursively delete a replacement directory after supervisor complet
       await actualFs.writeFile(join(controls.createdHome, 'keep'), 'replacement');
       return { passed: true, output: 'stale success' };
     });
-    await expect(
-      runSandboxedQA('/tmp', plan, new AbortController().signal),
-    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
     expect(native.verification).toHaveBeenCalledOnce();
     expect(await actualFs.readFile(join(controls.createdHome, 'keep'), 'utf8')).toBe('replacement');
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
@@ -227,9 +227,9 @@ it('quarantines a missing HOME after supervisor completion instead of reporting 
       await actualFs.rename(controls.createdHome, controls.replacedHomeBackup);
       return { passed: true, output: 'stale success' };
     });
-    await expect(
-      runSandboxedQA('/tmp', plan, new AbortController().signal),
-    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
     expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
