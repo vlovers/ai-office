@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { lstat, readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  REQUIRED_VALIDATION_CHECKOUT_PATHS,
   REQUIRED_VALIDATION_SCRIPTS,
+  validateValidationCheckoutPaths,
   validateValidationPackage,
   validateValidationWorkflow,
   validateValidationWorkflowInventory,
@@ -474,5 +476,83 @@ test('workflow inventory fails closed on an untrusted or unreadable directory', 
   assert.match(
     validateValidationWorkflowInventory('directory', undefined).join(' '),
     /workflow inventory is unavailable/,
+  );
+});
+
+const checkoutPathKinds = async () => {
+  const kinds = {};
+  for (const path of Object.keys(REQUIRED_VALIDATION_CHECKOUT_PATHS)) {
+    let info;
+    try {
+      info = await lstat(new URL(`../${path}`, import.meta.url));
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        kinds[path] = 'missing';
+        continue;
+      }
+      throw error;
+    }
+    kinds[path] = info.isSymbolicLink()
+      ? 'symlink'
+      : info.isFile()
+        ? 'file'
+        : info.isDirectory()
+          ? 'directory'
+          : 'other';
+  }
+  return kinds;
+};
+
+test('CI checkout has trusted file types and no npm overrides', async () => {
+  assert.deepEqual(validateValidationCheckoutPaths(await checkoutPathKinds()), []);
+});
+
+test('CI checkout rejects symlinks at every protected path', () => {
+  for (const path of Object.keys(REQUIRED_VALIDATION_CHECKOUT_PATHS)) {
+    const candidate = { ...REQUIRED_VALIDATION_CHECKOUT_PATHS, [path]: 'symlink' };
+    assert.ok(
+      validateValidationCheckoutPaths(candidate).some((issue) =>
+        issue.startsWith(`checkout path ${path} must be`),
+      ),
+      `must reject a symlink at ${path}`,
+    );
+  }
+});
+
+test('CI checkout rejects missing and wrongly typed validation source files', () => {
+  for (const [path, expectedKind] of Object.entries(REQUIRED_VALIDATION_CHECKOUT_PATHS)) {
+    if (expectedKind === 'missing') continue;
+    for (const kind of ['missing', expectedKind === 'file' ? 'directory' : 'file']) {
+      const candidate = { ...REQUIRED_VALIDATION_CHECKOUT_PATHS, [path]: kind };
+      assert.ok(
+        validateValidationCheckoutPaths(candidate).some((issue) =>
+          issue.startsWith(`checkout path ${path} must be ${expectedKind}`),
+        ),
+        `must reject ${kind} at ${path}`,
+      );
+    }
+  }
+});
+
+test('CI checkout rejects repository npmrc, including npm script-shell overrides', () => {
+  for (const kind of ['file', 'symlink', 'directory', 'other']) {
+    const candidate = { ...REQUIRED_VALIDATION_CHECKOUT_PATHS, '.npmrc': kind };
+    assert.match(
+      validateValidationCheckoutPaths(candidate).join(' '),
+      /checkout path \.npmrc must be missing/,
+    );
+  }
+});
+
+test('CI checkout fails closed on unavailable or incomplete path evidence', () => {
+  assert.equal(
+    validateValidationCheckoutPaths(undefined).length,
+    Object.keys(REQUIRED_VALIDATION_CHECKOUT_PATHS).length,
+  );
+  const candidate = { ...REQUIRED_VALIDATION_CHECKOUT_PATHS };
+  delete candidate['package-lock.json'];
+  assert.match(
+    validateValidationCheckoutPaths(candidate).join(' '),
+    /checkout path package-lock.json must be file/,
   );
 });
