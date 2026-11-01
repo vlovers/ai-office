@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
+import { lstat, mkdtemp, realpath, rename, rm, rmdir, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AppError } from './errors.js';
@@ -169,18 +169,42 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
     );
   } finally {
     try {
-      // A supervisor can run for minutes. Do not recursively delete a new
-      // directory placed at this path during execution, or follow a symlink
-      // swapped in after the pre-launch identity check. Quarantine instead.
-      // An initial lstat failure means we never attested what mkdtemp created.
-      // Do not blindly delete a path that may already have been substituted.
+      // Do not recursively remove the public /tmp path after an asynchronous
+      // identity check: it can be replaced between lstat() and rm(). Atomically
+      // move the directory into a fresh, private (0700) cleanup root first.
+      // A replacement moved by rename() must fail the post-move inode check,
+      // and is quarantined instead of being recursively removed.
       if (!initialIdentity) {
         throw new UncertainCleanupError(
           new Error('Temporary QA HOME identity was not established.'),
         );
       }
       await assertHomeIdentity();
-      await rm(createdHome, { recursive: true, force: true });
+      const cleanupRoot = await mkdtemp(join(tmpdir(), 'ai-office-qa-cleanup-'));
+      const stagedHome = join(cleanupRoot, 'home');
+      const cleanupIdentity = await lstat(cleanupRoot);
+      if (!cleanupIdentity.isDirectory()) {
+        throw new UncertainCleanupError(new Error('Temporary QA cleanup root is not a directory.'));
+      }
+      await rename(createdHome, stagedHome);
+      const [movedIdentity, currentCleanupIdentity] = await Promise.all([
+        lstat(stagedHome),
+        lstat(cleanupRoot),
+      ]);
+      if (
+        !movedIdentity.isDirectory() ||
+        movedIdentity.dev !== initialIdentity.dev ||
+        movedIdentity.ino !== initialIdentity.ino ||
+        !currentCleanupIdentity.isDirectory() ||
+        currentCleanupIdentity.dev !== cleanupIdentity.dev ||
+        currentCleanupIdentity.ino !== cleanupIdentity.ino
+      ) {
+        throw new UncertainCleanupError(new Error('Staged QA HOME or cleanup root identity changed.'));
+      }
+      await rm(stagedHome, { recursive: true, force: true });
+      // Never recursively delete the cleanup root: rmdir() fails closed if
+      // another entry appears or the root was replaced by a non-directory.
+      await rmdir(cleanupRoot);
     } catch (error) {
       if (error instanceof UncertainCleanupError) throw error;
       throw new UncertainCleanupError(error);
