@@ -86,6 +86,7 @@ function fixture() {
   comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
   // Preserve the latest reviewed edge in the ancestry comparison fixture.
   comparisons[157].files = comparisons.edges[158].files;
+  comparisons[159].files = comparisons.edges[160].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
@@ -663,7 +664,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-36), [
+  assert.deepEqual(STACK.slice(-38), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -700,8 +701,10 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 156, base: 155 },
     { number: 157, base: 156 },
     { number: 158, base: 157 },
+    { number: 159, base: 158 },
+    { number: 160, base: 159 },
   ]);
-  assert.equal(CANDIDATE_PR, 158);
+  assert.equal(CANDIDATE_PR, 160);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -1170,8 +1173,8 @@ test('detects a new failed supervisor run during the final CI recheck', () => {
 });
 
 test('integration candidate retains the supervisor exit-to-close deadline chain', () => {
-  assert.equal(CANDIDATE_PR, 158);
-  assert.deepEqual(STACK.slice(-13, -10), [
+  assert.equal(CANDIDATE_PR, 160);
+  assert.deepEqual(STACK.filter(({ number }) => [146, 147, 148].includes(number)), [
     { number: 146, base: 145 },
     { number: 147, base: 146 },
     { number: 148, base: 147 },
@@ -1250,8 +1253,8 @@ test('recheck detects an updated failed #148 CI run after a green snapshot', () 
 });
 
 test('preserves the reviewed QA HOME and CI script chain through #154', () => {
-  assert.equal(CANDIDATE_PR, 158);
-  assert.deepEqual(STACK.slice(-10, -4), [
+  assert.equal(CANDIDATE_PR, 160);
+  assert.deepEqual(STACK.filter(({ number }) => number >= 149 && number <= 154), [
     { number: 149, base: 148 },
     { number: 150, base: 149 },
     { number: 151, base: 150 },
@@ -1354,8 +1357,8 @@ test('attests the three-file QA HOME introduction and subsequent two-file change
 });
 
 test('attests the CI provenance and preinstall stack through PR #158', () => {
-  assert.equal(CANDIDATE_PR, 158);
-  assert.deepEqual(STACK.slice(-4), [
+  assert.equal(CANDIDATE_PR, 160);
+  assert.deepEqual(STACK.filter(({ number }) => number >= 155 && number <= 158), [
     { number: 155, base: 154 },
     { number: 156, base: 155 },
     { number: 157, base: 156 },
@@ -1578,5 +1581,112 @@ test('divergent corpus audit rejects a disabled wrapper around multiple tests', 
   assert.equal(
     retainsPolicyRegressionCorpus(first + second, 'if (false) {\n' + first + second + '}\n'),
     false,
+  );
+});
+
+test('attests audit-only #159 and #160 as the current integration tip', () => {
+  assert.equal(CANDIDATE_PR, 160);
+  assert.deepEqual(STACK.slice(-3), [
+    { number: 158, base: 157 },
+    { number: 159, base: 158 },
+    { number: 160, base: 159 },
+  ]);
+  for (const number of [158, 159]) {
+    assert.ok(REQUIRED_ANCESTORS.includes(number), `PR #${number} must be an ancestor`);
+  }
+  for (const number of [159, 160]) {
+    assert.deepEqual(REVIEWED_DELTAS[number], [
+      { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+      { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+    ]);
+  }
+  assert.deepEqual(auditStack(fixture()), []);
+});
+
+test('rejects runtime changes, missing files and duplicate entries in audit-only PRs', () => {
+  for (const number of [159, 160]) {
+    for (const mutate of [
+      (files) => files.push({ filename: 'src/server/qa-runner.ts', status: 'modified' }),
+      (files) => files.pop(),
+      (files) => {
+        files[0].filename = 'src/server/verification.ts';
+      },
+      (files) => {
+        files[0].status = 'added';
+      },
+      (files) => {
+        files[1] = { ...files[0] };
+      },
+    ]) {
+      const snapshot = fixture();
+      mutate(snapshot.comparisons.edges[number].files);
+      assert.ok(codes(snapshot).includes('unreviewed-qa-delta'), `PR #${number} scope`);
+    }
+    const snapshot = fixture();
+    delete snapshot.comparisons.edges[number].files;
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'), `PR #${number} missing compare`);
+  }
+});
+
+test('rejects missing parents, stale heads and lost ancestors in audit-only PRs', () => {
+  for (const number of [159, 160]) {
+    const drift = fixture();
+    drift.prs[number].base.sha = 'stale-parent';
+    assert.ok(codes(drift).includes('base-drift'), `PR #${number} stale base`);
+
+    const lostParent = fixture();
+    lostParent.comparisons.edges[number].behind_by = 1;
+    assert.ok(codes(lostParent).includes('lost-stack-parent'), `PR #${number} lost parent`);
+
+    const staleCI = fixture();
+    staleCI.runs[number][0].head_sha = 'outdated-commit';
+    assert.ok(codes(staleCI).includes('stale-ci'), `PR #${number} stale CI`);
+  }
+  const lostAncestor = fixture();
+  lostAncestor.comparisons[159].behind_by = 1;
+  assert.ok(codes(lostAncestor).includes('lost-ancestor'));
+});
+
+test('requires exact successful preinstall and native jobs for audit-only PRs', () => {
+  const gate = 'Pre-install checkout and CI policy (dependency-free)';
+  for (const number of [159, 160]) {
+    for (const jobName of REQUIRED_JOBS) {
+      const required = requiredStepsForPr(number, jobName);
+      assert.ok(required.indexOf(gate) >= 0);
+      assert.ok(required.indexOf(gate) < required.indexOf('Install dependencies'));
+    }
+    for (const index of [0, 1]) {
+      const snapshot = fixture();
+      const jobs = number === CANDIDATE_PR ? snapshot.jobs : snapshot.jobsByPr[number];
+      jobs[index].steps.find((step) => step.name === gate).conclusion = 'skipped';
+      assert.ok(codes(snapshot).includes('missing-ci-step'), `PR #${number} job ${index}`);
+    }
+  }
+});
+
+test('detects a new failure in audit-only PR CI and candidate job rechecks', () => {
+  for (const number of [159, 160]) {
+    const snapshot = fixture();
+    const refreshed = structuredClone(snapshot.runs);
+    refreshed[number][0].conclusion = 'failure';
+    assert.throws(
+      () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+      new RegExp(`PR #${number} CI changed during stack audit`),
+    );
+  }
+  const snapshot = fixture();
+  const refreshedJobs = structuredClone(snapshot.jobsByPr);
+  refreshedJobs[159][1].steps[0].conclusion = 'failure';
+  assert.throws(
+    () =>
+      assertStableCIEvidence(
+        snapshot.runs,
+        snapshot.runs,
+        snapshot.jobs,
+        snapshot.jobs,
+        snapshot.jobsByPr,
+        refreshedJobs,
+      ),
+    /PR #159 CI jobs changed during stack audit/,
   );
 });
