@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { validateValidationWorkflow } from '../scripts/ci-trigger-policy.mjs';
+import {
+  REQUIRED_VALIDATION_SCRIPTS,
+  validateValidationPackage,
+  validateValidationWorkflow,
+} from '../scripts/ci-trigger-policy.mjs';
 
 const workflow = await readFile(
   new URL('../.github/workflows/validation.yml', import.meta.url),
   'utf8',
 );
 const issues = (text) => validateValidationWorkflow(text);
+const packageManifest = await readFile(new URL('../package.json', import.meta.url), 'utf8');
+const packageIssues = (source) => validateValidationPackage(source);
 
 test('current CI covers all stacked PR base branches without privileged triggers', () => {
   assert.deepEqual(issues(workflow), []);
@@ -331,4 +337,63 @@ test('rejects rearranged security gates even if all commands remain present', ()
     '      - name: Delivery security lint\n        run: npm run lint\n      - name: TypeScript\n        run: npm run typecheck',
   );
   assert.match(issues(injected).join(' '), /unreviewed validation step/);
+});
+
+test('pins every npm command executed by the Linux and macOS validation jobs', () => {
+  assert.deepEqual(packageIssues(packageManifest), []);
+  for (const name of Object.keys(REQUIRED_VALIDATION_SCRIPTS)) {
+    const candidate = JSON.parse(packageManifest);
+    candidate.scripts[name] = 'echo skipped';
+    assert.ok(
+      packageIssues(JSON.stringify(candidate)).some((issue) =>
+        issue.includes(`validation script ${name} changed or missing`),
+      ),
+      `must reject bypass of ${name}`,
+    );
+  }
+});
+
+test('rejects missing native QA and browser recovery scripts', () => {
+  for (const name of ['test:sandbox', 'test:workflow:native', 'test:browser:workflow']) {
+    const candidate = JSON.parse(packageManifest);
+    delete candidate.scripts[name];
+    assert.ok(packageIssues(JSON.stringify(candidate)).some((issue) => issue.includes(name)));
+  }
+});
+
+test('rejects implicit npm lifecycle execution around required validation gates', () => {
+  for (const name of [
+    'pretest',
+    'postbuild',
+    'pretypecheck',
+    'pretest:sandbox',
+    'posttest:workflow:native',
+    'pretest:browser:workflow',
+    'preinstall',
+    'install',
+    'postinstall',
+    'prepublish',
+    'preprepare',
+    'prepare',
+    'postprepare',
+    'dependencies',
+  ]) {
+    const candidate = JSON.parse(packageManifest);
+    candidate.scripts[name] = 'node scripts/real-codex-smoke.ts';
+    assert.ok(
+      packageIssues(JSON.stringify(candidate)).some((issue) =>
+        issue.includes(`lifecycle hook ${name}`),
+      ),
+      `must reject implicit hook ${name}`,
+    );
+  }
+});
+
+test('rejects invalid package manifests without rejecting unrelated offline scripts', () => {
+  for (const source of ['{', '{}', '{"scripts":[]}', '{"scripts":null}']) {
+    assert.notEqual(packageIssues(source).length, 0);
+  }
+  const candidate = JSON.parse(packageManifest);
+  candidate.scripts['test:offline-extra'] = 'node --test tests/offline-extra.node.mjs';
+  assert.deepEqual(packageIssues(JSON.stringify(candidate)), []);
 });
