@@ -111,7 +111,9 @@ function fixture() {
   const jobs = jobsByPr[CANDIDATE_PR];
   const policyRegressions = {
     source: "test('PR 124 policy regression', () => {});\n",
-    candidate: "test('PR 124 policy regression', () => {});\n// additional tests\n",
+    candidate:
+      "test('PR 124 policy regression', () => {});\n" +
+      "test('additional regression', () => {});\n",
   };
   return { mainSha: 'main-head', prs, runs, comparisons, blobs, jobs, jobsByPr, policyRegressions };
 }
