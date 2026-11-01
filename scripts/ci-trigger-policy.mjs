@@ -283,3 +283,63 @@ export function validateValidationWorkflow(source) {
   validateApprovedStructure(lines, fail);
   return issues;
 }
+
+/**
+ * A pinned workflow command is not a security gate if its npm script can
+ * silently become a no-op. Review the executable package scripts alongside
+ * validation.yml, including lifecycle hooks that npm runs implicitly.
+ */
+export const REQUIRED_VALIDATION_SCRIPTS = Object.freeze({
+  typecheck: 'tsc --noEmit',
+  lint: 'eslint src/server/delivery-*.ts scripts/delivery-admin.ts tests/delivery-*.ts tests/fixtures/delivery-security.ts --max-warnings=0',
+  test: 'vitest run --exclude tests/smoke.test.ts',
+  'test:smoke': 'vitest run tests/smoke.test.ts',
+  build: 'tsc -p tsconfig.server.json && vite build',
+  'format:check': 'prettier --check .',
+  'test:browser': 'node --import tsx tests/browser-smoke.ts',
+  'test:browser:office': 'node --import tsx tests/browser-office-smoke.ts',
+  'test:browser:write': 'node --import tsx tests/browser-write-smoke.ts',
+  'test:browser:studio': 'node --import tsx tests/browser-studio-smoke.ts',
+  'test:sandbox': 'node --import tsx tests/native-sandbox.ts',
+  'test:workflow:native': 'vitest run tests/workflow-execution.test.ts tests/qa-runner.test.ts tests/qa-home-cleanup-failclosed.test.ts tests/workflow-sigkill-recovery.test.ts',
+  'test:browser:workflow': 'node --import tsx tests/browser-workflow-smoke.ts && node --import tsx tests/browser-workflow-restart.ts',
+});
+
+export function validateValidationPackage(source) {
+  let manifest;
+  try {
+    manifest = JSON.parse(source);
+  } catch {
+    return ['package.json must contain valid JSON'];
+  }
+  const scripts = manifest?.scripts;
+  if (!scripts || typeof scripts !== 'object' || Array.isArray(scripts)) {
+    return ['package.json must declare validation scripts'];
+  }
+  const issues = [];
+  for (const [name, command] of Object.entries(REQUIRED_VALIDATION_SCRIPTS)) {
+    if (!Object.hasOwn(scripts, name) || scripts[name] !== command) {
+      issues.push(`package.json validation script ${name} changed or missing`);
+    }
+  }
+  const hooks = new Set([
+    'preinstall',
+    'install',
+    'postinstall',
+    'prepublish',
+    'preprepare',
+    'prepare',
+    'postprepare',
+    'dependencies',
+  ]);
+  for (const name of Object.keys(REQUIRED_VALIDATION_SCRIPTS)) {
+    hooks.add(`pre${name}`);
+    hooks.add(`post${name}`);
+  }
+  for (const name of hooks) {
+    if (Object.hasOwn(scripts, name)) {
+      issues.push(`package.json lifecycle hook ${name} is not permitted in validation`);
+    }
+  }
+  return issues;
+}
