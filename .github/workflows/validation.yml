@@ -28,8 +28,10 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Pre-install checkout and CI policy (dependency-free)
+        run: node --test tests/ci-trigger-policy.node.mjs
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: TypeScript
         run: npm run typecheck
       - name: Delivery security lint
@@ -89,8 +91,10 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Pre-install checkout and CI policy (dependency-free)
+        run: node --test tests/ci-trigger-policy.node.mjs
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: Native read-only and isolated-write policy
         run: npm run test:sandbox
       - name: Reviewer, QA, workflow recovery and security integration (native sandbox, no inference)

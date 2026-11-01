@@ -95,7 +95,8 @@ const approvedValidationStructure = {
       blocks: [
         '- name: Checkout\nuses: actions/checkout@v7',
         "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
-        '- name: Install dependencies\nrun: npm ci',
+        '- name: Pre-install checkout and CI policy (dependency-free)\nrun: node --test tests/ci-trigger-policy.node.mjs',
+        '- name: Install dependencies\nrun: npm ci --ignore-scripts',
         '- name: TypeScript\nrun: npm run typecheck',
         '- name: Delivery security lint\nrun: npm run lint',
         '- name: Unit and integration tests\nrun: npm test',
@@ -123,7 +124,8 @@ const approvedValidationStructure = {
       blocks: [
         '- name: Checkout\nuses: actions/checkout@v7',
         "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
-        '- name: Install dependencies\nrun: npm ci',
+        '- name: Pre-install checkout and CI policy (dependency-free)\nrun: node --test tests/ci-trigger-policy.node.mjs',
+        '- name: Install dependencies\nrun: npm ci --ignore-scripts',
         '- name: Native read-only and isolated-write policy\nrun: npm run test:sandbox',
         '- name: Reviewer, QA, workflow recovery and security integration (native sandbox, no inference)\nrun: npm run test:workflow:native',
         '- name: Build production dashboard\nrun: npm run build',
@@ -235,7 +237,12 @@ export function validateValidationWorkflow(source) {
     [
       'native-sandbox',
       'macos-latest',
-      ['npm run test:sandbox', 'npm run test:workflow:native', 'npm run test:browser:workflow'],
+      [
+        'node --test tests/ci-trigger-policy.node.mjs',
+        'npm run test:sandbox',
+        'npm run test:workflow:native',
+        'npm run test:browser:workflow',
+      ],
     ],
   ]) {
     const job = section(jobs, jobName, 2, fail);
@@ -248,9 +255,11 @@ export function validateValidationWorkflow(source) {
     const steps = jobSteps(job, fail);
     for (const command of requiredCommands) {
       const matches = steps.filter((step) => step.scalarRun === command);
-      if (matches.length !== 1) {
+      const expectedCount =
+        jobName === 'checks' && command === 'node --test tests/ci-trigger-policy.node.mjs' ? 2 : 1;
+      if (matches.length !== expectedCount) {
         fail(jobName + ' missing validation step or duplicate: ' + command);
-      } else if (matches[0].conditional || matches[0].allowFailure) {
+      } else if (matches.some((step) => step.conditional || step.allowFailure)) {
         fail(
           jobName + ' required validation step cannot be conditional or allow failure: ' + command,
         );
