@@ -237,7 +237,12 @@ export function validateValidationWorkflow(source) {
     [
       'native-sandbox',
       'macos-latest',
-      ['npm run test:sandbox', 'npm run test:workflow:native', 'npm run test:browser:workflow'],
+      [
+        'node --test tests/ci-trigger-policy.node.mjs',
+        'npm run test:sandbox',
+        'npm run test:workflow:native',
+        'npm run test:browser:workflow',
+      ],
     ],
   ]) {
     const job = section(jobs, jobName, 2, fail);
@@ -250,9 +255,13 @@ export function validateValidationWorkflow(source) {
     const steps = jobSteps(job, fail);
     for (const command of requiredCommands) {
       const matches = steps.filter((step) => step.scalarRun === command);
-      if (matches.length !== 1) {
+      const expectedCount =
+        jobName === 'checks' && command === 'node --test tests/ci-trigger-policy.node.mjs'
+          ? 2
+          : 1;
+      if (matches.length !== expectedCount) {
         fail(jobName + ' missing validation step or duplicate: ' + command);
-      } else if (matches[0].conditional || matches[0].allowFailure) {
+      } else if (matches.some((step) => step.conditional || step.allowFailure)) {
         fail(
           jobName + ' required validation step cannot be conditional or allow failure: ' + command,
         );
