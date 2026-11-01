@@ -226,7 +226,8 @@ it('quarantines cleanup failure instead of returning an attested QA success', as
       UncertainCleanupError,
     );
     expect(native.verification).toHaveBeenCalledOnce();
-    await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(actualFs.lstat(controls.stagedHome)).resolves.toBeDefined();
   });
 });
 
