@@ -29,7 +29,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     mkdtemp: async (prefix: string) => {
       const home = await actual.mkdtemp(prefix);
-      if (prefix.includes('ai-office-qa-')) controls.createdHome = home;
+      if (prefix === join(tmpdir(), 'ai-office-qa-')) controls.createdHome = home;
       return home;
     },
     lstat: async (path: string) => {
