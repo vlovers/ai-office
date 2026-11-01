@@ -402,7 +402,7 @@ test('rejects invalid package manifests without rejecting unrelated offline scri
 const approvedWorkflows = [{ name: 'validation.yml', kind: 'file' }];
 
 test('checked-out workflow directory contains only the reviewed regular workflow', async () => {
-  const path = new URL('../.github/workflows/', import.meta.url);
+  const path = new URL('../.github/workflows', import.meta.url);
   const [directory, entries] = await Promise.all([
     lstat(path),
     readdir(path, { withFileTypes: true }),
