@@ -15,6 +15,7 @@ const controls = vi.hoisted(() => ({
   replaceHome: '' as '' | 'symlink' | 'directory',
   protectedHome: '',
   replacedHomeBackup: '',
+  swapDuringCleanupRename: false,
 }));
 const native = vi.hoisted(() => ({
   preflight: vi.fn(async () => {}),
@@ -72,10 +73,20 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (path === controls.createdHome) controls.canonicalHome = resolved;
       return resolved;
     },
+    rename: async (oldPath: string, newPath: string) => {
+      if (oldPath === controls.createdHome && controls.swapDuringCleanupRename) {
+        controls.swapDuringCleanupRename = false;
+        controls.replacedHomeBackup = oldPath + '-original';
+        await actual.rename(oldPath, controls.replacedHomeBackup);
+        await actual.mkdir(oldPath);
+        await actual.writeFile(join(oldPath, 'keep'), 'replacement');
+      }
+      return actual.rename(oldPath, newPath);
+    },
     rm: async (path: string, options?: { recursive?: boolean; force?: boolean }) => {
       if (
         controls.failRemoval &&
-        (path === controls.createdHome || path === controls.canonicalHome)
+        (path === controls.createdHome || path === controls.canonicalHome || path.endsWith('/home'))
       ) {
         controls.failRemoval = false;
         throw new Error('injected QA HOME removal failure');
@@ -107,6 +118,7 @@ beforeEach(() => {
   controls.replaceHome = '';
   controls.protectedHome = '';
   controls.replacedHomeBackup = '';
+  controls.swapDuringCleanupRename = false;
   native.preflight.mockResolvedValue(undefined);
   native.verification.mockResolvedValue({ passed: true, output: 'approved' });
 });
@@ -311,5 +323,17 @@ it('quarantines a missing HOME after supervisor completion instead of reporting 
     expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+  });
+});
+
+it('quarantines a replacement swapped in immediately before cleanup rename', async () => {
+  await withApprovedPlan(async (plan) => {
+    controls.swapDuringCleanupRename = true;
+    await expect(
+      runSandboxedQA('/tmp', plan, new AbortController().signal),
+    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    expect(native.verification).toHaveBeenCalledOnce();
+    await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
