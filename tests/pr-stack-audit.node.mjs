@@ -1457,7 +1457,10 @@ test('preinstall security step must succeed before npm ci on both runners from #
           steps.find((step) => step.name === 'Install dependencies').number + 1;
       },
       (steps) => {
-        steps.splice(steps.findIndex((step) => step.name === gate), 1);
+        steps.splice(
+          steps.findIndex((step) => step.name === gate),
+          1,
+        );
       },
     ]) {
       const snapshot = fixture();
