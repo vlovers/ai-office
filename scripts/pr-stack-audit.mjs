@@ -62,8 +62,7 @@ export const CANDIDATE_PR = 154;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
-  137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152,
-  153,
+  137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
