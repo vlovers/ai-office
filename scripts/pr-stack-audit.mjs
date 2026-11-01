@@ -55,14 +55,19 @@ export const STACK = [
   { number: 152, base: 151 },
   { number: 153, base: 152 },
   { number: 154, base: 153 },
+  { number: 155, base: 154 },
+  { number: 156, base: 155 },
+  { number: 157, base: 156 },
+  { number: 158, base: 157 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 154;
+export const CANDIDATE_PR = 158;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
   137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153,
+  154, 155, 156, 157,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
@@ -75,9 +80,9 @@ export const QA_CHANGE_PATHS = [
   'tests/qa-runner.test.ts',
 ];
 // Pin the exact file scope of each post-#139 integration step. Audit-only
-// PRs #141, #143, #147 and #149 must not introduce runtime changes.
+// PRs #141, #143, #147, #149 and #155 must not introduce runtime changes.
 // #144-#146 and #148 may change only verification supervision; #150-#154
-// cover the QA HOME cleanup and CI validation-script contract.
+// cover QA HOME cleanup and CI scripts; #156-#158 harden CI provenance.
 export const REVIEWED_DELTAS = {
   140: QA_CHANGE_PATHS.map((filename) => ({ filename, status: 'modified' })),
   141: [
@@ -139,6 +144,23 @@ export const REVIEWED_DELTAS = {
     { filename: 'src/server/qa-runner.ts', status: 'modified' },
     { filename: 'tests/qa-home-cleanup-failclosed.test.ts', status: 'modified' },
   ],
+  155: [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+  ],
+  156: [
+    { filename: 'scripts/ci-trigger-policy.mjs', status: 'modified' },
+    { filename: 'tests/ci-trigger-policy.node.mjs', status: 'modified' },
+  ],
+  157: [
+    { filename: 'scripts/ci-trigger-policy.mjs', status: 'modified' },
+    { filename: 'tests/ci-trigger-policy.node.mjs', status: 'modified' },
+  ],
+  158: [
+    { filename: '.github/workflows/validation.yml', status: 'modified' },
+    { filename: 'scripts/ci-trigger-policy.mjs', status: 'modified' },
+    { filename: 'tests/ci-trigger-policy.node.mjs', status: 'modified' },
+  ],
 };
 
 export const REQUIRED_JOBS = [
@@ -186,8 +208,18 @@ export const POLICY_STEPS = [
 
 export function requiredStepsForPr(number, jobName) {
   const common = REQUIRED_STEPS[jobName] ?? [];
-  if (number < 124 || jobName !== REQUIRED_JOBS[0]) return common;
-  return [...common.slice(0, 6), ...POLICY_STEPS, ...common.slice(6)];
+  const withPolicy =
+    number >= 124 && jobName === REQUIRED_JOBS[0]
+      ? [...common.slice(0, 6), ...POLICY_STEPS, ...common.slice(6)]
+      : common;
+  if (number < 158) return withPolicy;
+  const installIndex = withPolicy.indexOf('Install dependencies');
+  if (installIndex < 0) throw new Error('Missing required install step');
+  return [
+    ...withPolicy.slice(0, installIndex),
+    'Pre-install checkout and CI policy (dependency-free)',
+    ...withPolicy.slice(installIndex),
+  ];
 }
 
 // The workflow name is not unique: another file can reuse it and spoof green jobs.
