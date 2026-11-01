@@ -15,6 +15,10 @@ const controls = vi.hoisted(() => ({
   replaceHome: '' as '' | 'symlink' | 'directory',
   protectedHome: '',
   replacedHomeBackup: '',
+  swapDuringCleanupRename: false,
+  swapSymlinkDuringCleanupRename: false,
+  failCleanupRename: false,
+  quarantinedHome: '',
 }));
 const native = vi.hoisted(() => ({
   preflight: vi.fn(async () => {}),
@@ -27,7 +31,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     mkdtemp: async (prefix: string) => {
       const home = await actual.mkdtemp(prefix);
-      if (prefix.includes('ai-office-qa-')) controls.createdHome = home;
+      if (prefix === join(tmpdir(), 'ai-office-qa-')) controls.createdHome = home;
       return home;
     },
     lstat: async (path: string) => {
@@ -72,10 +76,32 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (path === controls.createdHome) controls.canonicalHome = resolved;
       return resolved;
     },
+    rename: async (oldPath: string, newPath: string) => {
+      if (oldPath === controls.createdHome && controls.failCleanupRename) {
+        controls.failCleanupRename = false;
+        controls.quarantinedHome = newPath;
+        throw new Error('injected QA HOME quarantine rename failure');
+      }
+      if (oldPath === controls.createdHome && controls.swapSymlinkDuringCleanupRename) {
+        controls.swapSymlinkDuringCleanupRename = false;
+        controls.replacedHomeBackup = oldPath + '-original';
+        await actual.rename(oldPath, controls.replacedHomeBackup);
+        await actual.symlink(controls.protectedHome, oldPath, 'dir');
+      }
+      if (oldPath === controls.createdHome && controls.swapDuringCleanupRename) {
+        controls.swapDuringCleanupRename = false;
+        controls.replacedHomeBackup = oldPath + '-original';
+        await actual.rename(oldPath, controls.replacedHomeBackup);
+        await actual.mkdir(oldPath);
+        await actual.writeFile(join(oldPath, 'keep'), 'replacement');
+      }
+      if (oldPath === controls.createdHome) controls.quarantinedHome = newPath;
+      return actual.rename(oldPath, newPath);
+    },
     rm: async (path: string, options?: { recursive?: boolean; force?: boolean }) => {
       if (
         controls.failRemoval &&
-        (path === controls.createdHome || path === controls.canonicalHome)
+        (path === controls.createdHome || path === controls.canonicalHome || path.endsWith('/home'))
       ) {
         controls.failRemoval = false;
         throw new Error('injected QA HOME removal failure');
@@ -107,6 +133,10 @@ beforeEach(() => {
   controls.replaceHome = '';
   controls.protectedHome = '';
   controls.replacedHomeBackup = '';
+  controls.swapDuringCleanupRename = false;
+  controls.swapSymlinkDuringCleanupRename = false;
+  controls.failCleanupRename = false;
+  controls.quarantinedHome = '';
   native.preflight.mockResolvedValue(undefined);
   native.verification.mockResolvedValue({ passed: true, output: 'approved' });
 });
@@ -121,6 +151,9 @@ async function withApprovedPlan(run: (plan: Awaited<ReturnType<typeof qaPlan>>) 
     }
     if (controls.replacedHomeBackup) {
       await actualFs.rm(controls.replacedHomeBackup, { recursive: true, force: true });
+    }
+    if (controls.quarantinedHome) {
+      await actualFs.rm(join(controls.quarantinedHome, '..'), { recursive: true, force: true });
     }
   }
 }
@@ -195,7 +228,7 @@ it('quarantines cleanup failure instead of returning an attested QA success', as
       UncertainCleanupError,
     );
     expect(native.verification).toHaveBeenCalledOnce();
-    await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.quarantinedHome)).resolves.toBeDefined();
   });
 });
 
@@ -311,5 +344,63 @@ it('quarantines a missing HOME after supervisor completion instead of reporting 
     expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+  });
+});
+
+it('quarantines a replacement swapped in immediately before cleanup rename', async () => {
+  await withApprovedPlan(async (plan) => {
+    controls.swapDuringCleanupRename = true;
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
+    expect(native.verification).toHaveBeenCalledOnce();
+    await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+it('removes both quarantined HOME and cleanup root after successful verification', async () => {
+  await withApprovedPlan(async (plan) => {
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).resolves.toMatchObject(
+      {
+        passed: true,
+      },
+    );
+    expect(controls.quarantinedHome).not.toBe('');
+    await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(actualFs.lstat(join(controls.quarantinedHome, '..'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+});
+
+it('quarantines a symlink swapped in immediately before cleanup rename', async () => {
+  const protectedHome = await actualFs.mkdtemp(join(tmpdir(), 'ai-office-protected-'));
+  try {
+    await actualFs.writeFile(join(protectedHome, 'keep'), 'untouched');
+    await withApprovedPlan(async (plan) => {
+      controls.protectedHome = protectedHome;
+      controls.swapSymlinkDuringCleanupRename = true;
+      await expect(
+        runSandboxedQA('/tmp', plan, new AbortController().signal),
+      ).rejects.toBeInstanceOf(UncertainCleanupError);
+      expect(native.verification).toHaveBeenCalledOnce();
+      expect((await actualFs.lstat(controls.quarantinedHome)).isSymbolicLink()).toBe(true);
+      expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
+      await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+    });
+  } finally {
+    await actualFs.rm(protectedHome, { recursive: true, force: true });
+  }
+});
+
+it('quarantines a failed cleanup rename without deleting original HOME', async () => {
+  await withApprovedPlan(async (plan) => {
+    controls.failCleanupRename = true;
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
+    expect(native.verification).toHaveBeenCalledOnce();
+    await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
   });
 });
