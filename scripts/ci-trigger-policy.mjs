@@ -95,7 +95,8 @@ const approvedValidationStructure = {
       blocks: [
         '- name: Checkout\nuses: actions/checkout@v7',
         "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
-        '- name: Install dependencies\nrun: npm ci',
+        '- name: Pre-install checkout and CI policy (dependency-free)\nrun: node --test tests/ci-trigger-policy.node.mjs',
+        '- name: Install dependencies\nrun: npm ci --ignore-scripts',
         '- name: TypeScript\nrun: npm run typecheck',
         '- name: Delivery security lint\nrun: npm run lint',
         '- name: Unit and integration tests\nrun: npm test',
@@ -123,7 +124,8 @@ const approvedValidationStructure = {
       blocks: [
         '- name: Checkout\nuses: actions/checkout@v7',
         "- name: Set up Node.js\nuses: actions/setup-node@v7\nwith:\n  node-version: '24'\n  cache: npm",
-        '- name: Install dependencies\nrun: npm ci',
+        '- name: Pre-install checkout and CI policy (dependency-free)\nrun: node --test tests/ci-trigger-policy.node.mjs',
+        '- name: Install dependencies\nrun: npm ci --ignore-scripts',
         '- name: Native read-only and isolated-write policy\nrun: npm run test:sandbox',
         '- name: Reviewer, QA, workflow recovery and security integration (native sandbox, no inference)\nrun: npm run test:workflow:native',
         '- name: Build production dashboard\nrun: npm run build',
