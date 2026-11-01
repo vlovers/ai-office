@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AppError } from './errors.js';
 import { UncertainCleanupError } from './process-group.js';
@@ -139,7 +139,14 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
     initialIdentity = await lstat(createdHome).catch((error: unknown) => {
       throw new UncertainCleanupError(error);
     });
+    // A transient symlink swap can redirect realpath() and then restore the
+    // original inode before lstat(). Pin the canonical result to the actual
+    // temporary parent, not just the identity observed after resolution.
+    const expectedHome = join(await realpath(dirname(createdHome)), basename(createdHome));
     home = await realpath(createdHome);
+    if (home !== expectedHome) {
+      throw new UncertainCleanupError(new Error('Temporary QA HOME canonical path changed.'));
+    }
     await assertHomeIdentity();
     // Narrow the replacement window: re-check after all asynchronous setup
     // and immediately before handing the approved argv to the supervisor.
@@ -165,7 +172,12 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
       // A supervisor can run for minutes. Do not recursively delete a new
       // directory placed at this path during execution, or follow a symlink
       // swapped in after the pre-launch identity check. Quarantine instead.
-      if (initialIdentity) await assertHomeIdentity();
+      // An initial lstat failure means we never attested what mkdtemp created.
+      // Do not blindly delete a path that may already have been substituted.
+      if (!initialIdentity) {
+        throw new UncertainCleanupError(new Error('Temporary QA HOME identity was not established.'));
+      }
+      await assertHomeIdentity();
       await rm(createdHome, { recursive: true, force: true });
     } catch (error) {
       if (error instanceof UncertainCleanupError) throw error;
