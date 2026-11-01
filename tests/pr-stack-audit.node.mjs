@@ -15,6 +15,7 @@ import {
   REQUIRED_JOBS,
   REVIEWED_DELTAS,
   requiredStepsForPr,
+  retainsPolicyRegressionCorpus,
   STACK,
 } from '../scripts/pr-stack-audit.mjs';
 
@@ -83,8 +84,8 @@ function fixture() {
   }
   // The #139 -> #140 compare is fetched both as an edge and an ancestor.
   comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
-  // The #153 -> #154 compare is both the candidate edge and an ancestor comparison.
-  comparisons[153].files = comparisons.edges[154].files;
+  // Preserve the latest reviewed edge in the ancestry comparison fixture.
+  comparisons[157].files = comparisons.edges[158].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
@@ -110,7 +111,9 @@ function fixture() {
   const jobs = jobsByPr[CANDIDATE_PR];
   const policyRegressions = {
     source: "test('PR 124 policy regression', () => {});\n",
-    candidate: "test('PR 124 policy regression', () => {});\n// additional tests\n",
+    candidate:
+      "test('PR 124 policy regression', () => {});\n" +
+      "test('additional regression', () => {});\n",
   };
   return { mainSha: 'main-head', prs, runs, comparisons, blobs, jobs, jobsByPr, policyRegressions };
 }
@@ -660,7 +663,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-32), [
+  assert.deepEqual(STACK.slice(-36), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -693,8 +696,12 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 152, base: 151 },
     { number: 153, base: 152 },
     { number: 154, base: 153 },
+    { number: 155, base: 154 },
+    { number: 156, base: 155 },
+    { number: 157, base: 156 },
+    { number: 158, base: 157 },
   ]);
-  assert.equal(CANDIDATE_PR, 154);
+  assert.equal(CANDIDATE_PR, 158);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -905,7 +912,10 @@ test('attests verbatim preservation of divergent PR #124 policy regressions', ()
   const snapshot = fixture();
   assert.equal(codes(snapshot).includes('divergent-policy-regressions-drift'), false);
 
-  snapshot.policyRegressions.candidate = '// changed\n' + snapshot.policyRegressions.candidate;
+  snapshot.policyRegressions.candidate = snapshot.policyRegressions.candidate.replace(
+    "test('PR 124 policy regression', () => {});",
+    "test('PR 124 policy regression', () => { throw new Error('changed'); });",
+  );
   assert.ok(codes(snapshot).includes('divergent-policy-regressions-drift'));
 });
 
@@ -915,7 +925,10 @@ test('rejects edited, truncated or missing PR #124 regression evidence', () => {
       policy.source = "test('different source', () => {});\n";
     },
     (policy) => {
-      policy.candidate = policy.source.slice(0, -2);
+      policy.candidate = policy.candidate.replace(
+        "test('PR 124 policy regression', () => {});",
+        "test('PR 124 policy regression', () => {}",
+      );
     },
     (policy) => {
       policy.source = '';
@@ -1157,8 +1170,8 @@ test('detects a new failed supervisor run during the final CI recheck', () => {
 });
 
 test('integration candidate retains the supervisor exit-to-close deadline chain', () => {
-  assert.equal(CANDIDATE_PR, 154);
-  assert.deepEqual(STACK.slice(-9, -6), [
+  assert.equal(CANDIDATE_PR, 158);
+  assert.deepEqual(STACK.slice(-13, -10), [
     { number: 146, base: 145 },
     { number: 147, base: 146 },
     { number: 148, base: 147 },
@@ -1236,9 +1249,9 @@ test('recheck detects an updated failed #148 CI run after a green snapshot', () 
   );
 });
 
-test('attests QA HOME and CI validation-script integration through #154', () => {
-  assert.equal(CANDIDATE_PR, 154);
-  assert.deepEqual(STACK.slice(-6), [
+test('preserves the reviewed QA HOME and CI script chain through #154', () => {
+  assert.equal(CANDIDATE_PR, 158);
+  assert.deepEqual(STACK.slice(-10, -4), [
     { number: 149, base: 148 },
     { number: 150, base: 149 },
     { number: 151, base: 150 },
@@ -1338,4 +1351,201 @@ test('attests the three-file QA HOME introduction and subsequent two-file change
       { filename: 'tests/qa-home-cleanup-failclosed.test.ts', status: 'modified' },
     ]);
   }
+});
+
+test('attests the CI provenance and preinstall stack through PR #158', () => {
+  assert.equal(CANDIDATE_PR, 158);
+  assert.deepEqual(STACK.slice(-4), [
+    { number: 155, base: 154 },
+    { number: 156, base: 155 },
+    { number: 157, base: 156 },
+    { number: 158, base: 157 },
+  ]);
+  for (const number of [154, 155, 156, 157]) {
+    assert.ok(REQUIRED_ANCESTORS.includes(number), `PR #${number} ancestor`);
+  }
+  assert.equal(REQUIRED_ANCESTORS.includes(124), false);
+  assert.deepEqual(auditStack(fixture()), []);
+});
+
+test('pins audit-only #155, CI policy #156-#157 and workflow #158 file scopes', () => {
+  assert.deepEqual(REVIEWED_DELTAS[155], [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+  ]);
+  for (const number of [156, 157]) {
+    assert.deepEqual(REVIEWED_DELTAS[number], [
+      { filename: 'scripts/ci-trigger-policy.mjs', status: 'modified' },
+      { filename: 'tests/ci-trigger-policy.node.mjs', status: 'modified' },
+    ]);
+  }
+  assert.deepEqual(REVIEWED_DELTAS[158], [
+    { filename: '.github/workflows/validation.yml', status: 'modified' },
+    { filename: 'scripts/ci-trigger-policy.mjs', status: 'modified' },
+    { filename: 'tests/ci-trigger-policy.node.mjs', status: 'modified' },
+  ]);
+});
+
+test('rejects unexpected files and incomplete compare evidence in CI provenance PRs', () => {
+  for (const number of [155, 156, 157, 158]) {
+    for (const mutate of [
+      (files) => files.push({ filename: 'src/server/verification.ts', status: 'modified' }),
+      (files) => files.pop(),
+      (files) => {
+        files[0].filename = 'src/server/qa-runner.ts';
+      },
+      (files) => {
+        files[0].status = 'added';
+      },
+      (files) => {
+        files[1] = { ...files[0] };
+      },
+    ]) {
+      const snapshot = fixture();
+      mutate(snapshot.comparisons.edges[number].files);
+      assert.ok(codes(snapshot).includes('unreviewed-qa-delta'), `PR #${number} scope`);
+    }
+    const snapshot = fixture();
+    delete snapshot.comparisons.edges[number].files;
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'), `PR #${number} evidence`);
+  }
+});
+
+test('rejects lost CI provenance parents and ancestors despite green CI', () => {
+  for (const number of [155, 156, 157, 158]) {
+    const snapshot = fixture();
+    snapshot.comparisons.edges[number].behind_by = 1;
+    snapshot.comparisons.edges[number].merge_base_commit.sha = 'old-parent';
+    assert.ok(codes(snapshot).includes('lost-stack-parent'), `PR #${number} parent`);
+    if (number !== CANDIDATE_PR) {
+      snapshot.comparisons[number].behind_by = 1;
+      assert.ok(codes(snapshot).includes('lost-ancestor'), `PR #${number} ancestor`);
+    }
+  }
+});
+
+test('requires exact Linux and macOS jobs for all CI provenance PRs', () => {
+  for (const number of [155, 156, 157, 158]) {
+    for (const index of [0, 1]) {
+      const snapshot = fixture();
+      const jobs = number === CANDIDATE_PR ? snapshot.jobs : snapshot.jobsByPr[number];
+      jobs[index].conclusion = 'skipped';
+      const expected = number === CANDIDATE_PR ? 'missing-candidate-job' : 'missing-upstream-job';
+      assert.ok(codes(snapshot).includes(expected), `PR #${number} job ${index}`);
+    }
+  }
+});
+
+test('preinstall security step must succeed before npm ci on both runners from #158', () => {
+  const gate = 'Pre-install checkout and CI policy (dependency-free)';
+  for (const number of [155, 156, 157]) {
+    for (const job of REQUIRED_JOBS) {
+      assert.equal(requiredStepsForPr(number, job).includes(gate), false);
+    }
+  }
+  for (const job of REQUIRED_JOBS) {
+    const required = requiredStepsForPr(158, job);
+    assert.equal(required.filter((name) => name === gate).length, 1);
+    assert.ok(required.indexOf(gate) < required.indexOf('Install dependencies'));
+    const index = REQUIRED_JOBS.indexOf(job);
+    for (const mutate of [
+      (steps) => {
+        steps.find((step) => step.name === gate).conclusion = 'skipped';
+      },
+      (steps) => {
+        steps.find((step) => step.name === gate).number =
+          steps.find((step) => step.name === 'Install dependencies').number + 1;
+      },
+      (steps) => {
+        steps.splice(
+          steps.findIndex((step) => step.name === gate),
+          1,
+        );
+      },
+    ]) {
+      const snapshot = fixture();
+      mutate(snapshot.jobs[index].steps);
+      assert.ok(codes(snapshot).includes('missing-ci-step'), `${job} preinstall bypass`);
+    }
+  }
+});
+
+test('detects a new failure during CI provenance run and job rechecks', () => {
+  for (const number of [155, 156, 157, 158]) {
+    const snapshot = fixture();
+    const refreshed = structuredClone(snapshot.runs);
+    refreshed[number][0].conclusion = 'failure';
+    assert.throws(
+      () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+      new RegExp(`PR #${number} CI changed during stack audit`),
+    );
+  }
+  const snapshot = fixture();
+  const refreshedJobs = structuredClone(snapshot.jobsByPr);
+  refreshedJobs[157][1].steps[0].conclusion = 'failure';
+  assert.throws(
+    () =>
+      assertStableCIEvidence(
+        snapshot.runs,
+        snapshot.runs,
+        snapshot.jobs,
+        snapshot.jobs,
+        snapshot.jobsByPr,
+        refreshedJobs,
+      ),
+    /PR #157 CI jobs changed during stack audit/,
+  );
+});
+
+test('divergent PR #124 regression corpus still survives the CI provenance tip', () => {
+  const snapshot = fixture();
+  snapshot.policyRegressions.candidate = 'test("replacement", () => {});';
+  assert.ok(codes(snapshot).includes('divergent-policy-regressions-drift'));
+});
+
+test('preserves exact divergent test bodies across new imports and interleaved regressions', () => {
+  const source = [
+    "import { readFile } from 'node:fs/promises';",
+    "test('first', () => {",
+    '  assert.ok(true);',
+    '});',
+    "test('second', () => {",
+    '  assert.equal(1 + 1, 2);',
+    '});',
+    '',
+  ].join('\n');
+  const candidate = [
+    "import { lstat, readFile } from 'node:fs/promises';",
+    "test('first', () => {",
+    '  assert.ok(true);',
+    '});',
+    "test('new regression', () => {",
+    '  assert.ok(true);',
+    '});',
+    "test('second', () => {",
+    '  assert.equal(1 + 1, 2);',
+    '});',
+    '',
+  ].join('\n');
+  assert.equal(retainsPolicyRegressionCorpus(source, candidate), true);
+  for (const altered of [
+    candidate.replace('assert.ok(true);', 'assert.ok(false);'),
+    candidate.replace('assert.equal(1 + 1, 2);', 'assert.equal(2, 3);'),
+    candidate.replace("test('second'", "test('renamed'"),
+    candidate.replace("test('second', () => {\n  assert.equal(1 + 1, 2);\n});", ''),
+    candidate + "test('first', () => {\n  assert.ok(true);\n});\n",
+  ]) {
+    assert.equal(retainsPolicyRegressionCorpus(source, altered), false);
+  }
+});
+
+test('divergent corpus verification rejects missing, reordered and invalid declarations', () => {
+  const one = "test('first', () => {\n  assert.ok(true);\n});\n";
+  const two = "test('second', () => {\n  assert.ok(true);\n});\n";
+  assert.equal(retainsPolicyRegressionCorpus(one + two, two + one), false);
+  assert.equal(retainsPolicyRegressionCorpus(one, ''), false);
+  assert.equal(retainsPolicyRegressionCorpus('', one), false);
+  assert.equal(retainsPolicyRegressionCorpus(null, one), false);
+  assert.equal(retainsPolicyRegressionCorpus(one, null), false);
+  assert.equal(retainsPolicyRegressionCorpus(one + one, one), false);
 });
