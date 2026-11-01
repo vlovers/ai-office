@@ -381,7 +381,9 @@ test('rejects implicit npm lifecycle execution around required validation gates'
     const candidate = JSON.parse(packageManifest);
     candidate.scripts[name] = 'node scripts/real-codex-smoke.ts';
     assert.ok(
-      packageIssues(JSON.stringify(candidate)).some((issue) => issue.includes(`lifecycle hook ${name}`)),
+      packageIssues(JSON.stringify(candidate)).some((issue) =>
+        issue.includes(`lifecycle hook ${name}`),
+      ),
       `must reject implicit hook ${name}`,
     );
   }
