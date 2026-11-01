@@ -8,6 +8,9 @@ const controls = vi.hoisted(() => ({
   createdHome: '',
   canonicalHome: '',
   failCanonicalization: false,
+  failInitialIdentity: false,
+  swapBeforeInitialIdentity: false,
+  transientCanonicalRedirect: false,
   failRemoval: false,
   replaceHome: '' as '' | 'symlink' | 'directory',
   protectedHome: '',
@@ -27,7 +30,28 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (prefix.includes('ai-office-qa-')) controls.createdHome = home;
       return home;
     },
+    lstat: async (path: string) => {
+      if (path === controls.createdHome && controls.failInitialIdentity) {
+        controls.failInitialIdentity = false;
+        if (controls.swapBeforeInitialIdentity) {
+          await actual.rm(path, { recursive: true, force: true });
+          await actual.symlink(controls.protectedHome, path, 'dir');
+        }
+        throw new Error('injected initial QA HOME identity failure');
+      }
+      return actual.lstat(path);
+    },
     realpath: async (path: string) => {
+      if (path === controls.createdHome && controls.transientCanonicalRedirect) {
+        controls.transientCanonicalRedirect = false;
+        const backup = path + '-canonical-original';
+        await actual.rename(path, backup);
+        await actual.symlink(controls.protectedHome, path, 'dir');
+        const redirected = await actual.realpath(path);
+        await actual.rm(path, { force: true });
+        await actual.rename(backup, path);
+        return redirected;
+      }
       if (path === controls.createdHome && controls.replaceHome) {
         const replacement = controls.replaceHome;
         controls.replaceHome = '';
@@ -76,6 +100,9 @@ beforeEach(() => {
   controls.createdHome = '';
   controls.canonicalHome = '';
   controls.failCanonicalization = false;
+  controls.failInitialIdentity = false;
+  controls.swapBeforeInitialIdentity = false;
+  controls.transientCanonicalRedirect = false;
   controls.failRemoval = false;
   controls.replaceHome = '';
   controls.protectedHome = '';
@@ -97,6 +124,57 @@ async function withApprovedPlan(run: (plan: Awaited<ReturnType<typeof qaPlan>>) 
     }
   }
 }
+
+it('quarantines a HOME whose initial identity could not be established', async () => {
+  await withApprovedPlan(async (plan) => {
+    controls.failInitialIdentity = true;
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
+    expect(native.verification).not.toHaveBeenCalled();
+    // No trusted inode was recorded, so even the original path is not deleted.
+    await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
+  });
+});
+
+it('never removes a swapped symlink when initial HOME lstat fails', async () => {
+  const protectedHome = await actualFs.mkdtemp(join(tmpdir(), 'ai-office-protected-'));
+  try {
+    await actualFs.writeFile(join(protectedHome, 'keep'), 'untouched');
+    await withApprovedPlan(async (plan) => {
+      controls.protectedHome = protectedHome;
+      controls.failInitialIdentity = true;
+      controls.swapBeforeInitialIdentity = true;
+      await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+        UncertainCleanupError,
+      );
+      expect(native.verification).not.toHaveBeenCalled();
+      expect((await actualFs.lstat(controls.createdHome)).isSymbolicLink()).toBe(true);
+      expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
+    });
+  } finally {
+    await actualFs.rm(protectedHome, { recursive: true, force: true });
+  }
+});
+
+it('rejects a transient realpath redirect even if the original HOME inode is restored', async () => {
+  const protectedHome = await actualFs.mkdtemp(join(tmpdir(), 'ai-office-protected-'));
+  try {
+    await withApprovedPlan(async (plan) => {
+      controls.protectedHome = protectedHome;
+      controls.transientCanonicalRedirect = true;
+      await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+        UncertainCleanupError,
+      );
+      expect(native.verification).not.toHaveBeenCalled();
+      // The original directory was restored, so its identity was verified and
+      // the ordinary safe cleanup path can still remove it.
+      await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+  } finally {
+    await actualFs.rm(protectedHome, { recursive: true, force: true });
+  }
+});
 
 it('removes the created QA HOME if realpath fails before supervisor launch', async () => {
   await withApprovedPlan(async (plan) => {
