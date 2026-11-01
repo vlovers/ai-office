@@ -185,12 +185,22 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
       // never recursively deleted.
       const quarantine = await mkdtemp(join(tmpdir(), 'ai-office-qa-cleanup-'));
       const movedHome = join(quarantine, 'home');
+      const quarantineIdentity = await lstat(quarantine);
+      if (!quarantineIdentity.isDirectory()) {
+        throw new UncertainCleanupError(new Error('Temporary QA cleanup root is not a directory.'));
+      }
       await rename(createdHome, movedHome);
-      const movedIdentity = await lstat(movedHome);
+      const [movedIdentity, currentQuarantineIdentity] = await Promise.all([
+        lstat(movedHome),
+        lstat(quarantine),
+      ]);
       if (
         !movedIdentity.isDirectory() ||
         movedIdentity.dev !== initialIdentity.dev ||
-        movedIdentity.ino !== initialIdentity.ino
+        movedIdentity.ino !== initialIdentity.ino ||
+        !currentQuarantineIdentity.isDirectory() ||
+        currentQuarantineIdentity.dev !== quarantineIdentity.dev ||
+        currentQuarantineIdentity.ino !== quarantineIdentity.ino
       ) {
         throw new UncertainCleanupError(
           new Error('Temporary QA HOME identity changed during cleanup rename.'),
