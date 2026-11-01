@@ -83,8 +83,8 @@ function fixture() {
   }
   // The #139 -> #140 compare is fetched both as an edge and an ancestor.
   comparisons[QA_PIN_BASE_PR].files = comparisons.edges[140].files;
-  // The #147 -> #148 compare is both the candidate edge and an ancestor comparison.
-  comparisons[147].files = comparisons.edges[148].files;
+  // The #153 -> #154 compare is both the candidate edge and an ancestor comparison.
+  comparisons[153].files = comparisons.edges[154].files;
   const blobs = Object.fromEntries(
     PINNED_PATHS.map((path) => [path, { source: 'same-blob', baseline: 'same-blob' }]),
   );
@@ -660,7 +660,7 @@ test('CI recheck ignores API ordering changes without losing run or job evidence
 });
 
 test('audits post-integration Draft PRs including the divergent CI-policy sibling', () => {
-  assert.deepEqual(STACK.slice(-26), [
+  assert.deepEqual(STACK.slice(-32), [
     { number: 123, base: 122 },
     { number: 124, base: 122 },
     { number: 125, base: 123 },
@@ -687,8 +687,14 @@ test('audits post-integration Draft PRs including the divergent CI-policy siblin
     { number: 146, base: 145 },
     { number: 147, base: 146 },
     { number: 148, base: 147 },
+    { number: 149, base: 148 },
+    { number: 150, base: 149 },
+    { number: 151, base: 150 },
+    { number: 152, base: 151 },
+    { number: 153, base: 152 },
+    { number: 154, base: 153 },
   ]);
-  assert.equal(CANDIDATE_PR, 148);
+  assert.equal(CANDIDATE_PR, 154);
   assert.equal(REQUIRED_ANCESTORS.includes(124), false);
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -1150,9 +1156,9 @@ test('detects a new failed supervisor run during the final CI recheck', () => {
   );
 });
 
-test('integration candidate pins the supervisor exit-to-close deadline stack tip', () => {
-  assert.equal(CANDIDATE_PR, 148);
-  assert.deepEqual(STACK.slice(-3), [
+test('integration candidate retains the supervisor exit-to-close deadline chain', () => {
+  assert.equal(CANDIDATE_PR, 154);
+  assert.deepEqual(STACK.slice(-9, -6), [
     { number: 146, base: 145 },
     { number: 147, base: 146 },
     { number: 148, base: 147 },
@@ -1228,4 +1234,108 @@ test('recheck detects an updated failed #148 CI run after a green snapshot', () 
     () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
     /PR #148 CI changed during stack audit/,
   );
+});
+
+test('attests QA HOME and CI validation-script integration through #154', () => {
+  assert.equal(CANDIDATE_PR, 154);
+  assert.deepEqual(STACK.slice(-6), [
+    { number: 149, base: 148 },
+    { number: 150, base: 149 },
+    { number: 151, base: 150 },
+    { number: 152, base: 151 },
+    { number: 153, base: 152 },
+    { number: 154, base: 153 },
+  ]);
+  for (const number of [149, 150, 151, 152, 153]) {
+    assert.ok(REQUIRED_ANCESTORS.includes(number));
+  }
+  assert.deepEqual(auditStack(fixture()), []);
+});
+
+test('rejects extra, missing, renamed, misclassified and duplicate files on new edges', () => {
+  for (const number of [149, 150, 151, 152, 153, 154]) {
+    for (const mutate of [
+      (files) => files.push({ filename: 'src/server/process-group.ts', status: 'modified' }),
+      (files) => files.pop(),
+      (files) => {
+        files[0].filename = 'src/server/verification-worker.ts';
+      },
+      (files) => {
+        files[0].status = 'added';
+      },
+      (files) => {
+        files[1] = { ...files[0] };
+      },
+    ]) {
+      const snapshot = fixture();
+      mutate(snapshot.comparisons.edges[number].files);
+      assert.ok(codes(snapshot).includes('unreviewed-qa-delta'), `PR #${number} scope bypass`);
+    }
+  }
+});
+
+test('rejects missing compare file evidence for QA HOME and CI changes', () => {
+  for (const number of [149, 150, 151, 152, 153, 154]) {
+    const snapshot = fixture();
+    delete snapshot.comparisons.edges[number].files;
+    assert.ok(codes(snapshot).includes('unreviewed-qa-delta'), `PR #${number} evidence`);
+  }
+});
+
+test('rejects lost parent and ancestor of each QA HOME security change', () => {
+  for (const number of [149, 150, 151, 152, 153, 154]) {
+    const snapshot = fixture();
+    snapshot.comparisons.edges[number].behind_by = 1;
+    snapshot.comparisons.edges[number].merge_base_commit.sha = 'stale-parent';
+    assert.ok(codes(snapshot).includes('lost-stack-parent'), `PR #${number} parent`);
+    if (number !== CANDIDATE_PR) {
+      snapshot.comparisons[number].behind_by = 1;
+      assert.ok(codes(snapshot).includes('lost-ancestor'), `PR #${number} ancestor`);
+    }
+  }
+});
+
+test('requires exact Linux and macOS validation for every QA HOME PR', () => {
+  for (const number of [149, 150, 151, 152, 153, 154]) {
+    for (const index of [0, 1]) {
+      const snapshot = fixture();
+      const jobs = number === CANDIDATE_PR ? snapshot.jobs : snapshot.jobsByPr[number];
+      jobs[index].conclusion = 'skipped';
+      const expected = number === CANDIDATE_PR ? 'missing-candidate-job' : 'missing-upstream-job';
+      assert.ok(codes(snapshot).includes(expected), `PR #${number} job ${index}`);
+    }
+  }
+});
+
+test('detects CI changes during the final recheck for every new PR', () => {
+  for (const number of [149, 150, 151, 152, 153, 154]) {
+    const snapshot = fixture();
+    const refreshed = structuredClone(snapshot.runs);
+    refreshed[number][0].conclusion = 'failure';
+    assert.throws(
+      () => assertStableCIEvidence(snapshot.runs, refreshed, snapshot.jobs, snapshot.jobs),
+      new RegExp(`PR #${number} CI changed during stack audit`),
+    );
+  }
+});
+
+test('does not accept a green tip if the CI script contract PR is stale', () => {
+  const snapshot = fixture();
+  snapshot.runs[151][0].head_sha = 'stale-ci-script-contract';
+  assert.ok(codes(snapshot).includes('stale-ci'));
+  assert.equal(snapshot.runs[CANDIDATE_PR][0].conclusion, 'success');
+});
+
+test('attests the three-file QA HOME introduction and subsequent two-file changes', () => {
+  assert.deepEqual(REVIEWED_DELTAS[150], [
+    { filename: 'package.json', status: 'modified' },
+    { filename: 'src/server/qa-runner.ts', status: 'modified' },
+    { filename: 'tests/qa-home-cleanup-failclosed.test.ts', status: 'added' },
+  ]);
+  for (const number of [152, 153, 154]) {
+    assert.deepEqual(REVIEWED_DELTAS[number], [
+      { filename: 'src/server/qa-runner.ts', status: 'modified' },
+      { filename: 'tests/qa-home-cleanup-failclosed.test.ts', status: 'modified' },
+    ]);
+  }
 });
