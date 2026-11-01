@@ -175,7 +175,9 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
       // An initial lstat failure means we never attested what mkdtemp created.
       // Do not blindly delete a path that may already have been substituted.
       if (!initialIdentity) {
-        throw new UncertainCleanupError(new Error('Temporary QA HOME identity was not established.'));
+        throw new UncertainCleanupError(
+          new Error('Temporary QA HOME identity was not established.'),
+        );
       }
       await assertHomeIdentity();
       await rm(createdHome, { recursive: true, force: true });
