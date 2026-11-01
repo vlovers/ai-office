@@ -158,7 +158,7 @@ it('rejects a symlink swap and never removes the external resolved HOME', async 
         runSandboxedQA('/tmp', plan, new AbortController().signal),
       ).rejects.toBeInstanceOf(UncertainCleanupError);
       expect(native.verification).not.toHaveBeenCalled();
-      await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect((await actualFs.lstat(controls.createdHome)).isSymbolicLink()).toBe(true);
       expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
     });
   } finally {
@@ -173,6 +173,64 @@ it('rejects a replaced directory inode before launching the supervisor', async (
       UncertainCleanupError,
     );
     expect(native.verification).not.toHaveBeenCalled();
+    await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
+    await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+  });
+});
+
+it('does not delete a redirected HOME when the supervisor swaps in a symlink', async () => {
+  const protectedHome = await actualFs.mkdtemp(join(tmpdir(), 'ai-office-protected-'));
+  try {
+    await actualFs.writeFile(join(protectedHome, 'keep'), 'untouched');
+    await withApprovedPlan(async (plan) => {
+      native.verification.mockImplementationOnce(async () => {
+        controls.replacedHomeBackup = controls.createdHome + '-original';
+        await actualFs.rename(controls.createdHome, controls.replacedHomeBackup);
+        await actualFs.symlink(protectedHome, controls.createdHome, 'dir');
+        return { passed: true, output: 'stale success' };
+      });
+      await expect(
+        runSandboxedQA('/tmp', plan, new AbortController().signal),
+      ).rejects.toBeInstanceOf(UncertainCleanupError);
+      expect(native.verification).toHaveBeenCalledOnce();
+      expect((await actualFs.lstat(controls.createdHome)).isSymbolicLink()).toBe(true);
+      expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
+      await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+    });
+  } finally {
+    await actualFs.rm(protectedHome, { recursive: true, force: true });
+  }
+});
+
+it('does not recursively delete a replacement directory after supervisor completion', async () => {
+  await withApprovedPlan(async (plan) => {
+    native.verification.mockImplementationOnce(async () => {
+      controls.replacedHomeBackup = controls.createdHome + '-original';
+      await actualFs.rename(controls.createdHome, controls.replacedHomeBackup);
+      await actualFs.mkdir(controls.createdHome);
+      await actualFs.writeFile(join(controls.createdHome, 'keep'), 'replacement');
+      return { passed: true, output: 'stale success' };
+    });
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
+    expect(native.verification).toHaveBeenCalledOnce();
+    expect(await actualFs.readFile(join(controls.createdHome, 'keep'), 'utf8')).toBe('replacement');
+    await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
+  });
+});
+
+it('quarantines a missing HOME after supervisor completion instead of reporting success', async () => {
+  await withApprovedPlan(async (plan) => {
+    native.verification.mockImplementationOnce(async () => {
+      controls.replacedHomeBackup = controls.createdHome + '-original';
+      await actualFs.rename(controls.createdHome, controls.replacedHomeBackup);
+      return { passed: true, output: 'stale success' };
+    });
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
+    expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
   });

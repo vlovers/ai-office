@@ -115,29 +115,30 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
   const createdHome = await mkdtemp(join(tmpdir(), 'ai-office-qa-'));
   let home = createdHome;
   let outcome: Awaited<ReturnType<typeof runVerification>>;
+  let initialIdentity: Awaited<ReturnType<typeof lstat>> | undefined;
+  const assertHomeIdentity = async () => {
+    let current: Awaited<ReturnType<typeof lstat>>;
+    try {
+      current = await lstat(createdHome);
+    } catch (error) {
+      throw new UncertainCleanupError(error);
+    }
+    if (
+      !initialIdentity?.isDirectory() ||
+      !current.isDirectory() ||
+      initialIdentity.dev !== current.dev ||
+      initialIdentity.ino !== current.ino
+    ) {
+      throw new UncertainCleanupError(new Error('Temporary QA HOME identity changed.'));
+    }
+  };
   try {
     // Keep the directory identity pinned while asynchronous canonicalization
     // and approval revalidation run. A substituted symlink or directory must
     // never become the HOME passed to the verification supervisor.
-    const initialIdentity = await lstat(createdHome).catch((error: unknown) => {
+    initialIdentity = await lstat(createdHome).catch((error: unknown) => {
       throw new UncertainCleanupError(error);
     });
-    const assertHomeIdentity = async () => {
-      let current: Awaited<ReturnType<typeof lstat>>;
-      try {
-        current = await lstat(createdHome);
-      } catch (error) {
-        throw new UncertainCleanupError(error);
-      }
-      if (
-        !initialIdentity.isDirectory() ||
-        !current.isDirectory() ||
-        initialIdentity.dev !== current.dev ||
-        initialIdentity.ino !== current.ino
-      ) {
-        throw new UncertainCleanupError(new Error('Temporary QA HOME was replaced during setup.'));
-      }
-    };
     home = await realpath(createdHome);
     await assertHomeIdentity();
     // Narrow the replacement window: re-check after all asynchronous setup
@@ -161,10 +162,13 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
     );
   } finally {
     try {
-      // Remove the original owned path, never a resolved path that could have
-      // been redirected outside the temporary directory by a symlink swap.
+      // A supervisor can run for minutes. Do not recursively delete a new
+      // directory placed at this path during execution, or follow a symlink
+      // swapped in after the pre-launch identity check. Quarantine instead.
+      if (initialIdentity) await assertHomeIdentity();
       await rm(createdHome, { recursive: true, force: true });
     } catch (error) {
+      if (error instanceof UncertainCleanupError) throw error;
       throw new UncertainCleanupError(error);
     }
   }
