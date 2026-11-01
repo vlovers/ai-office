@@ -256,9 +256,7 @@ export function validateValidationWorkflow(source) {
     for (const command of requiredCommands) {
       const matches = steps.filter((step) => step.scalarRun === command);
       const expectedCount =
-        jobName === 'checks' && command === 'node --test tests/ci-trigger-policy.node.mjs'
-          ? 2
-          : 1;
+        jobName === 'checks' && command === 'node --test tests/ci-trigger-policy.node.mjs' ? 2 : 1;
       if (matches.length !== expectedCount) {
         fail(jobName + ' missing validation step or duplicate: ' + command);
       } else if (matches.some((step) => step.conditional || step.allowFailure)) {
