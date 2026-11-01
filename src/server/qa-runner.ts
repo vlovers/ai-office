@@ -199,7 +199,9 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
         currentCleanupIdentity.dev !== cleanupIdentity.dev ||
         currentCleanupIdentity.ino !== cleanupIdentity.ino
       ) {
-        throw new UncertainCleanupError(new Error('Staged QA HOME or cleanup root identity changed.'));
+        throw new UncertainCleanupError(
+          new Error('Staged QA HOME or cleanup root identity changed.'),
+        );
       }
       await rm(stagedHome, { recursive: true, force: true });
       // Never recursively delete the cleanup root: rmdir() fails closed if
