@@ -1174,11 +1174,14 @@ test('detects a new failed supervisor run during the final CI recheck', () => {
 
 test('integration candidate retains the supervisor exit-to-close deadline chain', () => {
   assert.equal(CANDIDATE_PR, 160);
-  assert.deepEqual(STACK.filter(({ number }) => [146, 147, 148].includes(number)), [
-    { number: 146, base: 145 },
-    { number: 147, base: 146 },
-    { number: 148, base: 147 },
-  ]);
+  assert.deepEqual(
+    STACK.filter(({ number }) => [146, 147, 148].includes(number)),
+    [
+      { number: 146, base: 145 },
+      { number: 147, base: 146 },
+      { number: 148, base: 147 },
+    ],
+  );
   assert.ok(REQUIRED_ANCESTORS.includes(147));
   assert.deepEqual(auditStack(fixture()), []);
 });
@@ -1254,14 +1257,17 @@ test('recheck detects an updated failed #148 CI run after a green snapshot', () 
 
 test('preserves the reviewed QA HOME and CI script chain through #154', () => {
   assert.equal(CANDIDATE_PR, 160);
-  assert.deepEqual(STACK.filter(({ number }) => number >= 149 && number <= 154), [
-    { number: 149, base: 148 },
-    { number: 150, base: 149 },
-    { number: 151, base: 150 },
-    { number: 152, base: 151 },
-    { number: 153, base: 152 },
-    { number: 154, base: 153 },
-  ]);
+  assert.deepEqual(
+    STACK.filter(({ number }) => number >= 149 && number <= 154),
+    [
+      { number: 149, base: 148 },
+      { number: 150, base: 149 },
+      { number: 151, base: 150 },
+      { number: 152, base: 151 },
+      { number: 153, base: 152 },
+      { number: 154, base: 153 },
+    ],
+  );
   for (const number of [149, 150, 151, 152, 153]) {
     assert.ok(REQUIRED_ANCESTORS.includes(number));
   }
@@ -1358,12 +1364,15 @@ test('attests the three-file QA HOME introduction and subsequent two-file change
 
 test('attests the CI provenance and preinstall stack through PR #158', () => {
   assert.equal(CANDIDATE_PR, 160);
-  assert.deepEqual(STACK.filter(({ number }) => number >= 155 && number <= 158), [
-    { number: 155, base: 154 },
-    { number: 156, base: 155 },
-    { number: 157, base: 156 },
-    { number: 158, base: 157 },
-  ]);
+  assert.deepEqual(
+    STACK.filter(({ number }) => number >= 155 && number <= 158),
+    [
+      { number: 155, base: 154 },
+      { number: 156, base: 155 },
+      { number: 157, base: 156 },
+      { number: 158, base: 157 },
+    ],
+  );
   for (const number of [154, 155, 156, 157]) {
     assert.ok(REQUIRED_ANCESTORS.includes(number), `PR #${number} ancestor`);
   }
