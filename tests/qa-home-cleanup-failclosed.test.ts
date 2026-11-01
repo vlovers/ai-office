@@ -154,9 +154,9 @@ it('rejects a symlink swap and never removes the external resolved HOME', async 
     await withApprovedPlan(async (plan) => {
       controls.protectedHome = protectedHome;
       controls.replaceHome = 'symlink';
-      await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
-        UncertainCleanupError,
-      );
+      await expect(
+        runSandboxedQA('/tmp', plan, new AbortController().signal),
+      ).rejects.toBeInstanceOf(UncertainCleanupError);
       expect(native.verification).not.toHaveBeenCalled();
       await expect(actualFs.lstat(controls.createdHome)).rejects.toMatchObject({ code: 'ENOENT' });
       expect(await actualFs.readFile(join(protectedHome, 'keep'), 'utf8')).toBe('untouched');
