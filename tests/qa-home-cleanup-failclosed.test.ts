@@ -147,7 +147,6 @@ it('does not turn failed HOME removal into a harmless cancellation', async () =>
   });
 });
 
-
 it('rejects a symlink swap and never removes the external resolved HOME', async () => {
   const protectedHome = await actualFs.mkdtemp(join(tmpdir(), 'ai-office-protected-'));
   try {
