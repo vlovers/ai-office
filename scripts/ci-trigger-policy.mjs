@@ -301,8 +301,10 @@ export const REQUIRED_VALIDATION_SCRIPTS = Object.freeze({
   'test:browser:write': 'node --import tsx tests/browser-write-smoke.ts',
   'test:browser:studio': 'node --import tsx tests/browser-studio-smoke.ts',
   'test:sandbox': 'node --import tsx tests/native-sandbox.ts',
-  'test:workflow:native': 'vitest run tests/workflow-execution.test.ts tests/qa-runner.test.ts tests/qa-home-cleanup-failclosed.test.ts tests/workflow-sigkill-recovery.test.ts',
-  'test:browser:workflow': 'node --import tsx tests/browser-workflow-smoke.ts && node --import tsx tests/browser-workflow-restart.ts',
+  'test:workflow:native':
+    'vitest run tests/workflow-execution.test.ts tests/qa-runner.test.ts tests/qa-home-cleanup-failclosed.test.ts tests/workflow-sigkill-recovery.test.ts',
+  'test:browser:workflow':
+    'node --import tsx tests/browser-workflow-smoke.ts && node --import tsx tests/browser-workflow-restart.ts',
 });
 
 export function validateValidationPackage(source) {
