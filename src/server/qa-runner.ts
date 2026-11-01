@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, realpath, rm, stat } from 'node:fs/promises';
+import { lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AppError } from './errors.js';
@@ -116,7 +116,30 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
   let home = createdHome;
   let outcome: Awaited<ReturnType<typeof runVerification>>;
   try {
+    // Keep the directory identity pinned while asynchronous canonicalization
+    // and approval revalidation run. A substituted symlink or directory must
+    // never become the HOME passed to the verification supervisor.
+    const initialIdentity = await lstat(createdHome).catch((error: unknown) => {
+      throw new UncertainCleanupError(error);
+    });
+    const assertHomeIdentity = async () => {
+      let current: Awaited<ReturnType<typeof lstat>>;
+      try {
+        current = await lstat(createdHome);
+      } catch (error) {
+        throw new UncertainCleanupError(error);
+      }
+      if (
+        !initialIdentity.isDirectory() ||
+        !current.isDirectory() ||
+        initialIdentity.dev !== current.dev ||
+        initialIdentity.ino !== current.ino
+      ) {
+        throw new UncertainCleanupError(new Error('Temporary QA HOME was replaced during setup.'));
+      }
+    };
     home = await realpath(createdHome);
+    await assertHomeIdentity();
     // Narrow the replacement window: re-check after all asynchronous setup
     // and immediately before handing the approved argv to the supervisor.
     if (signal.aborted) return stopped();
@@ -127,6 +150,8 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
       throw error;
     }
     if (signal.aborted) return stopped();
+    await assertHomeIdentity();
+    if (signal.aborted) return stopped();
     outcome = await runVerification(
       [process.execPath, nativeCodex, ...sandboxArguments(directory, plan.argv)],
       directory,
@@ -136,7 +161,9 @@ export async function runSandboxedQA(directory: string, plan: QAPlan, signal: Ab
     );
   } finally {
     try {
-      await rm(home, { recursive: true, force: true });
+      // Remove the original owned path, never a resolved path that could have
+      // been redirected outside the temporary directory by a symlink swap.
+      await rm(createdHome, { recursive: true, force: true });
     } catch (error) {
       throw new UncertainCleanupError(error);
     }
