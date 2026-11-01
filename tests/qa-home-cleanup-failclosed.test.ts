@@ -348,9 +348,11 @@ it('quarantines a missing HOME after supervisor completion instead of reporting 
 
 it('stages an attested HOME under a private root and removes both on success', async () => {
   await withApprovedPlan(async (plan) => {
-    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).resolves.toMatchObject({
-      passed: true,
-    });
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).resolves.toMatchObject(
+      {
+        passed: true,
+      },
+    );
     expect(native.verification).toHaveBeenCalledOnce();
     expect(controls.stagedRoot).not.toBe('');
     expect(controls.stagedHome).toBe(join(controls.stagedRoot, 'home'));
@@ -362,9 +364,9 @@ it('stages an attested HOME under a private root and removes both on success', a
 it('quarantines a directory swapped between the final lstat and staging rename', async () => {
   await withApprovedPlan(async (plan) => {
     controls.swapBeforeStageRename = 'directory';
-    await expect(
-      runSandboxedQA('/tmp', plan, new AbortController().signal),
-    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
     expect(native.verification).toHaveBeenCalledOnce();
     expect(await actualFs.readFile(join(controls.stagedHome, 'keep'), 'utf8')).toBe('replacement');
     await expect(actualFs.lstat(controls.replacedHomeBackup)).resolves.toBeDefined();
@@ -395,9 +397,9 @@ it('quarantines a symlink swapped at staging without touching its external targe
 it('quarantines a failed staging rename instead of deleting the original HOME', async () => {
   await withApprovedPlan(async (plan) => {
     controls.failStageRename = true;
-    await expect(
-      runSandboxedQA('/tmp', plan, new AbortController().signal),
-    ).rejects.toBeInstanceOf(UncertainCleanupError);
+    await expect(runSandboxedQA('/tmp', plan, new AbortController().signal)).rejects.toBeInstanceOf(
+      UncertainCleanupError,
+    );
     expect(native.verification).toHaveBeenCalledOnce();
     await expect(actualFs.lstat(controls.createdHome)).resolves.toBeDefined();
     await expect(actualFs.lstat(controls.stagedRoot)).resolves.toBeDefined();
