@@ -59,15 +59,17 @@ export const STACK = [
   { number: 156, base: 155 },
   { number: 157, base: 156 },
   { number: 158, base: 157 },
+  { number: 159, base: 158 },
+  { number: 160, base: 159 },
 ];
 
 // The latest reviewed integration tip, not the older browser/server join PR.
-export const CANDIDATE_PR = 158;
+export const CANDIDATE_PR = 160;
 
 export const REQUIRED_ANCESTORS = [
   108, 110, 112, 116, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136,
   137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155,
-  156, 157,
+  156, 157, 158, 159,
 ];
 export const PINNED_PATHS = ['src/server/qa-runner.ts', 'tests/qa-plan-preflight-race.test.ts'];
 export const POLICY_REGRESSION_PATH = 'tests/ci-trigger-policy.node.mjs';
@@ -80,7 +82,7 @@ export const QA_CHANGE_PATHS = [
   'tests/qa-runner.test.ts',
 ];
 // Pin the exact file scope of each post-#139 integration step. Audit-only
-// PRs #141, #143, #147, #149 and #155 must not introduce runtime changes.
+// PRs #141, #143, #147, #149, #155, #159 and #160 must not introduce runtime changes.
 // #144-#146 and #148 may change only verification supervision; #150-#154
 // cover QA HOME cleanup and CI scripts; #156-#158 harden CI provenance.
 export const REVIEWED_DELTAS = {
@@ -160,6 +162,14 @@ export const REVIEWED_DELTAS = {
     { filename: '.github/workflows/validation.yml', status: 'modified' },
     { filename: 'scripts/ci-trigger-policy.mjs', status: 'modified' },
     { filename: 'tests/ci-trigger-policy.node.mjs', status: 'modified' },
+  ],
+  159: [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
+  ],
+  160: [
+    { filename: 'scripts/pr-stack-audit.mjs', status: 'modified' },
+    { filename: 'tests/pr-stack-audit.node.mjs', status: 'modified' },
   ],
 };
 
