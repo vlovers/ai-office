@@ -37,6 +37,9 @@ export function createRequestDeadline(timeoutMs: number) {
       return timedOut;
     },
     cancel(): void {
+      // Selection changes can abort a read before fetch settles. Do not let
+      // its old deadline fire later and misclassify cancellation as a timeout.
+      clearTimeout(timer);
       controller.abort();
     },
     dispose(): void {
