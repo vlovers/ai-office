@@ -104,6 +104,19 @@ describe('workflow polling deadline', () => {
     }
   });
 
+  it('disposes a completed read without aborting it later', async () => {
+    vi.useFakeTimers();
+    try {
+      const deadline = createRequestDeadline(15000);
+      deadline.dispose();
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(deadline.signal.aborted).toBe(false);
+      expect(deadline.timedOut).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancels superseded reads without reporting a timeout', async () => {
     vi.useFakeTimers();
     try {
