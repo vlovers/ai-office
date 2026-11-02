@@ -31,14 +31,22 @@ try {
     .getByRole('button', { name: 'Settings' })
     .click();
   await page.getByTestId('codex-connection-status').filter({ hasText: 'Available' }).waitFor();
+  // The keyboard skip link must not navigate away from Settings.
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+  await skipLink.focus();
+  await expect(skipLink).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await expect(page).toHaveURL(/#settings$/);
+  await expect(
+    page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', {
+      name: 'Settings',
+    }),
+  ).toHaveAttribute('aria-current', 'page');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Office' })
     .click();
-  await page.getByRole('link', { name: 'Skip to mission control' }).focus();
-  await expect(page.getByRole('link', { name: 'Skip to mission control' })).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page.locator('main')).toBeFocused();
   const crt = page.getByRole('button', { name: /CRT effects:/ });
   await expect(crt).toHaveAttribute('aria-pressed', 'false');
   await crt.focus();
@@ -285,6 +293,21 @@ try {
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toBeFocused();
+  // Leaving Focus Mode through the overview control must update the URL.
+  // Back restores the same task-scoped session instead of a stale mission view.
+  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
+  await expect(page).toHaveURL(/#overview$/);
+  await expect(page.locator('.shell')).toHaveAttribute('data-page', 'office');
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  await page.goBack();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-workspace')).toBeFocused();
+  // Skipping to main content from a task link must preserve its deep link.
+  await skipLink.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.office-scene').first()).toBeHidden();
   await expect(page.locator('#compose')).toBeHidden();
   await expect(page.getByRole('button', { name: /Stop agent/ })).toBeVisible();
