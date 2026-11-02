@@ -236,6 +236,17 @@ try {
   await expect(board.getByLabel('Workflow operations overview')).toContainText(
     'Live updates paused',
   );
+  // Pausing background polls must not leave a newly selected checkpoint blank.
+  await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
+  await expect(board.getByText(/^State: active/)).toBeVisible({ timeout: 10000 });
+  await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
+  await expect(board.getByText(/^State: completed/)).toBeVisible({ timeout: 10000 });
+  // Clicking the already selected queue entry must preserve the loaded timeline.
+  await operationsQueue
+    .getByRole('button', { name: new RegExp(reviewed.id.slice(0, 8)) })
+    .click();
+  await expect(board.getByText(/^State: completed/)).toBeVisible();
+  await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
   await board.getByRole('button', { name: 'Refresh workflow' }).click();
   await board.getByRole('button', { name: 'Resume live updates' }).click();
   await expect(board.getByRole('button', { name: 'Pause live updates' })).toHaveAttribute(
