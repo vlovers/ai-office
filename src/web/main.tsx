@@ -24,7 +24,12 @@ import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { createLatestResultGate } from './latest-result-gate.js';
 import { connectionLabel, type StreamConnection } from './connection-status.js';
-import { appendTaskEvent, parseTaskEvent } from './event-stream.js';
+import { parseTaskEvent } from './event-stream.js';
+import {
+  appendCachedTaskEvent,
+  retainTaskEventHistory,
+  taskEventStreamUrl,
+} from './task-event-cache.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
@@ -203,9 +208,9 @@ function App() {
     const ids = streamIds ? streamIds.split(',') : [];
     let active = true;
     setStreamConnections(Object.fromEntries(ids.map((id) => [id, 'connecting' as const])));
-    setEventHistory((previous) => Object.fromEntries(ids.map((id) => [id, previous[id] ?? []])));
+    setEventHistory((previous) => retainTaskEventHistory(previous, ids));
     const streams = ids.map((id) => {
-      const stream = new EventSource(`/api/tasks/${id}/stream`);
+      const stream = new EventSource(taskEventStreamUrl(id, eventHistory));
       stream.onopen = () => {
         if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'connected' }));
       };
@@ -218,9 +223,7 @@ function App() {
         const event = parseTaskEvent(message.data, id);
         if (!event) return;
         setEventHistory((previous) => {
-          const events = previous[id] ?? [];
-          const next = appendTaskEvent(events, event);
-          return next === events ? previous : { ...previous, [id]: next };
+          return appendCachedTaskEvent(previous, id, event);
         });
         if (event.kind === 'state') void refresh().catch(() => {});
       };
