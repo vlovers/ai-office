@@ -45,10 +45,11 @@ const reviewServerErrors: string[] = [];
 app.addHook(
   'onError',
   async (request: FastifyRequest, _reply: FastifyReply, error: FastifyError) => {
-  if (request.url.includes('/review')) {
-    reviewServerErrors.push(
-      `${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`,
-    );
+    if (request.url.includes('/review')) {
+      reviewServerErrors.push(
+        `${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`,
+      );
+    }
   },
 );
 
