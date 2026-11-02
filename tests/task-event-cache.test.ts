@@ -50,10 +50,8 @@ describe('bounded task event history and SSE resume', () => {
 
   it('does not evict active streams even when there are more than six', () => {
     const active = Array.from({ length: 8 }, (_, index) => `task-${index}`);
-    const history = retainTaskEventHistory(
-      { old: [event(1, 'old')], 'task-0': [event(2, 'task-0')] },
-      active,
-    );
+    const previous = { old: [event(1, 'old')], 'task-0': [event(2, 'task-0')] };
+    const history = retainTaskEventHistory(previous, active);
     expect(Object.keys(history)).toHaveLength(8);
     expect(history.old).toBeUndefined();
     expect(history['task-0']?.[0]?.id).toBe(2);
@@ -68,7 +66,8 @@ describe('bounded task event history and SSE resume', () => {
     history = retainTaskEventHistory(history, ['new-task']);
     expect(history['task-2']).toBeUndefined();
     expect(history['task-1']?.at(-1)?.id).toBe(7);
-    expect(taskEventStreamUrl('task/with space', {})).toBe('/api/tasks/task%2Fwith%20space/stream');
+    const encodedUrl = '/api/tasks/task%2Fwith%20space/stream';
+    expect(taskEventStreamUrl('task/with space', {})).toBe(encodedUrl);
   });
 
   it('does not open a reconnecting SSE stream for a removed selected task', () => {
@@ -77,9 +76,9 @@ describe('bounded task event history and SSE resume', () => {
   });
 
   it('keeps running agent streams and deduplicates sorted task IDs', () => {
-    expect(
-      activeTaskStreamIds('task-b', ['task-b'], ['task-c', 'task-b', null, 'task-a']),
-    ).toEqual(['task-a', 'task-b', 'task-c']);
+    const agentIds = ['task-c', 'task-b', null, 'task-a'];
+    const streamIds = activeTaskStreamIds('task-b', ['task-b'], agentIds);
+    expect(streamIds).toEqual(['task-a', 'task-b', 'task-c']);
     // An active agent may have a task missing from a temporarily stale task list.
     expect(activeTaskStreamIds('missing', [], ['agent-task'])).toEqual(['agent-task']);
   });
