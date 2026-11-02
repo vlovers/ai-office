@@ -204,6 +204,11 @@ try {
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // A deep link wins over a previously selected task, including after reload.
+  await page.evaluate(() => sessionStorage.setItem('ai-office-selected-task', 'deleted-task'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   // Deep links, direct hash changes and browser history must restore the correct workspace mode.
