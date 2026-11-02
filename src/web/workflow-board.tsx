@@ -199,7 +199,9 @@ export function WorkflowBoard({
       deadline.dispose();
       pendingReads.current.delete(deadline);
     }
-  }, [selected, taskId]);
+  // The selected workflow is read from selectedRef after asynchronous GETs.
+  // Do not recreate the polling callback for an obsolete selected closure.
+  }, [taskId]);
   const lastPolledSelection = useRef(selected);
   useEffect(() => {
     const selectionChanged = lastPolledSelection.current !== selected;
