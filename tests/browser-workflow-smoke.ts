@@ -246,11 +246,23 @@ try {
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let finishRoute!: () => void;
+  const routeSettled = new Promise<void>((resolve) => {
+    finishRoute = resolve;
+  });
   const routePattern = `**/api/workflows/${otherId}/timeline`;
   await page.route(routePattern, async (route) => {
-    const response = await route.fetch();
-    await held;
-    await route.fulfill({ response });
+    try {
+      const response = await route.fetch();
+      await held;
+      await route.fulfill({ response });
+    } catch (cause) {
+      // Changing workflows aborts the old GET. A cancelled request cannot
+      // deliver a response event, so waiting for waitForResponse would hang.
+      if (!route.request().failure()) throw cause;
+    } finally {
+      finishRoute();
+    }
   });
   try {
     const requested = page.waitForRequest((request) =>
@@ -260,12 +272,8 @@ try {
     await requested;
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
-    const delayed = page.waitForResponse((response) =>
-      response.url().endsWith(`/workflows/${otherId}/timeline`),
-    );
     release();
-    await (await delayed).finished();
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
+    await routeSettled;
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
   } finally {
