@@ -23,6 +23,7 @@ import { WorkflowsPage } from './workflows-page.js';
 import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { createLatestResultGate } from './latest-result-gate.js';
+import { connectionLabel, type StreamConnection } from './connection-status.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
@@ -124,7 +125,11 @@ function App() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingStops, setPendingStops] = useState<string[]>([]);
-  const [connection, setConnection] = useState('Connecting');
+  const [httpConnection, setHttpConnection] = useState<'connecting' | 'connected' | 'disconnected'>(
+    'connecting',
+  );
+  const [streamConnections, setStreamConnections] = useState<Record<string, StreamConnection>>({});
+  const connection = connectionLabel(httpConnection, streamConnections);
   const [repositoryId, setRepositoryId] = useState('');
   const [resumeSessionId, setResumeSessionId] = useState('');
   const [executionMode, setExecutionMode] = useState('read-only');
@@ -135,11 +140,11 @@ function App() {
       const data = await api<Dashboard>('/dashboard');
       if (dashboardResults.current.accept(ticket)) {
         setDashboard(data);
-        setConnection('Local server connected');
+        setHttpConnection('connected');
       }
     } catch (e) {
       // An older failed poll must not replace a newer successful connection.
-      if (dashboardResults.current.accept(ticket)) setConnection('Server disconnected');
+      if (dashboardResults.current.accept(ticket)) setHttpConnection('disconnected');
       throw e;
     }
   };
@@ -190,11 +195,17 @@ function App() {
     .join(',');
   useEffect(() => {
     const ids = streamIds ? streamIds.split(',') : [];
+    let active = true;
+    setStreamConnections({});
     setEventHistory((previous) => Object.fromEntries(ids.map((id) => [id, previous[id] ?? []])));
     const streams = ids.map((id) => {
       const stream = new EventSource(`/api/tasks/${id}/stream`);
-      stream.onopen = () => setConnection('Live events connected');
-      stream.onerror = () => setConnection('Reconnecting to live events…');
+      stream.onopen = () => {
+        if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'connected' }));
+      };
+      stream.onerror = () => {
+        if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'reconnecting' }));
+      };
       stream.onmessage = (message) => {
         const event = JSON.parse(message.data) as AgentEvent;
         setEventHistory((previous) => {
@@ -210,7 +221,10 @@ function App() {
       };
       return stream;
     });
-    return () => streams.forEach((stream) => stream.close());
+    return () => {
+      active = false;
+      streams.forEach((stream) => stream.close());
+    };
   }, [streamIds]);
   const events = selected ? (eventHistory[selected] ?? []) : [];
   const act = async (operation: () => Promise<void>) => {
