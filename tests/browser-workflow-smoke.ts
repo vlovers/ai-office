@@ -113,7 +113,9 @@ try {
     await expect(board.getByRole('alert').first()).toContainText(
       'Workflow request failed: HTTP 502',
     );
-    await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
   } finally {
     await page.unroute(outagePattern);
   }
