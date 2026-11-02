@@ -178,6 +178,16 @@ try {
   // Deep links, direct hash changes and browser history must restore the correct workspace mode.
   const queuedTask = env.store.tasks().find((item) => item.state === 'queued');
   assert.ok(queuedTask);
+  // A valid task may have a stale review deep link before it has a workspace.
+  // Offer its session instead of sending the user to unrelated task history.
+  await page.evaluate((id) => {
+    window.location.hash = `#task/${encodeURIComponent(id)}/review`;
+  }, queuedTask.id);
+  await expect(page.getByRole('alert')).toContainText('Code review is not available');
+  await page.getByRole('button', { name: 'Open task session' }).click();
+  await expect(page).toHaveURL(/#task\\/[^/]+\\/session$/);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   await page.evaluate((id) => {
     window.location.hash = `#task/${encodeURIComponent(id)}/session`;
   }, queuedTask.id);
