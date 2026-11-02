@@ -219,6 +219,10 @@ on later ticks; selecting another workflow cancels obsolete reads. Explicit
 refresh remains available, and workflow mutations are **not** automatically
 retried or timed out by this read-only polling mechanism. Checkpoint actions
 remain disabled after a failed refresh until matching workflow versions reload.
+Pausing live updates stops background polling, but selecting a different workflow
+still loads its checkpoint once. Reselecting the current workflow keeps its
+loaded timeline intact. Cancelled reads clear their deadline timer so a
+superseded request cannot later be misreported as a timeout.
 
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
