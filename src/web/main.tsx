@@ -467,11 +467,7 @@ function App() {
         {linkError && (
           <div className="task-link-warning" role="alert">
             <p>{linkError}</p>
-            <button
-              className="secondary"
-              type="button"
-              onClick={() => showSection('task-history')}
-            >
+            <button className="secondary" type="button" onClick={() => showSection('task-history')}>
               Back to task history
             </button>
           </div>
