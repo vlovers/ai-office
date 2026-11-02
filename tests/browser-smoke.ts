@@ -35,16 +35,26 @@ try {
   // navigation strip, including after resizing an already open deep link.
   await page.setViewportSize({ width: 320, height: 700 });
   const mobileNavigation = page.getByRole('navigation', { name: 'Main navigation' });
+  const activeMobileDestinationVisible = () =>
+    mobileNavigation.evaluate((element) => {
+      const active = element.querySelector('[aria-current="page"]');
+      if (!active) return false;
+      const navBounds = element.getBoundingClientRect();
+      const activeBounds = active.getBoundingClientRect();
+      return activeBounds.left >= navBounds.left - 1 && activeBounds.right <= navBounds.right + 1;
+    });
+  await expect.poll(activeMobileDestinationVisible).toBe(true);
+  // A direct deep link loaded at 320px must reveal Settings without scrolling
+  // the document or requiring a click on the navigation strip.
+  await page.reload();
+  await expect(page).toHaveURL(/#settings$/);
+  await expect(mobileNavigation.getByRole('button', { name: 'Settings' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect.poll(activeMobileDestinationVisible).toBe(true);
   await expect
-    .poll(() =>
-      mobileNavigation.evaluate((element) => {
-        const active = element.querySelector('[aria-current="page"]');
-        if (!active) return false;
-        const navBounds = element.getBoundingClientRect();
-        const activeBounds = active.getBoundingClientRect();
-        return activeBounds.left >= navBounds.left - 1 && activeBounds.right <= navBounds.right + 1;
-      }),
-    )
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
   await page.setViewportSize({ width: 1440, height: 1100 });
   // The keyboard skip link must not navigate away from Settings.
