@@ -1,8 +1,14 @@
 name: AI Office validation
 
 on:
+  # Validate stacked Draft PRs against their actual parent branch, without
+  # temporarily retargeting them to main and inflating the review diff.
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
+      - 'ci/**'
   push:
     branches: [main]
   workflow_dispatch:
