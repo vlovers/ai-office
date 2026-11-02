@@ -212,6 +212,14 @@ Workflows shows checkpoint details, Agents manages saved profiles, and Settings
 holds local connection and repository registration. These changes are still in
 [Draft PR #106](https://github.com/vlovers/ai-office/pull/106), not in a release.
 
+An unreleased workflow-reliability follow-up limits automatic three-second polling to
+one outstanding read per selection, so slow responses can complete without piling
+up overlapping requests. Read-only refreshes time out after 15 seconds and retry
+on later ticks; selecting another workflow cancels obsolete reads. Explicit
+refresh remains available, and workflow mutations are **not** automatically
+retried or timed out by this read-only polling mechanism. Checkpoint actions
+remain disabled after a failed refresh until matching workflow versions reload.
+
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
 restores destinations and task links; a review shortcut retains its selected
