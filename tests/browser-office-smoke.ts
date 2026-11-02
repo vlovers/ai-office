@@ -121,6 +121,19 @@ try {
       .getByRole('button', { name: destination })
       .click();
   };
+  // A stale task URL must offer a usable exit instead of leaving the user in
+  // Focus Mode with an empty session and an unrelated history fragment.
+  await page.evaluate(() => {
+    window.location.hash = '#task/missing-fixture/session';
+  });
+  await expect(page.getByRole('alert')).toContainText('no longer available');
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.getByRole('button', { name: 'Back to task history' }).click();
+  await expect(page).toHaveURL(/#task-history$/);
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-history')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await navigate('Office');
   const newTask = async (agentId: string, title: string, prompt: string) => {
     await navigate('Tasks');
     await page.getByRole('button', { name: '+ New task' }).click();
