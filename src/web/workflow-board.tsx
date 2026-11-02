@@ -96,6 +96,7 @@ export function WorkflowBoard({
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
+  const [loadingCheckpoint, setLoadingCheckpoint] = useState(false);
   // Mutations can select a new workflow before React renders again.
   // Read this ref after async polling instead of a stale selected closure.
   const selectedRef = useRef(selected);
@@ -103,13 +104,13 @@ export function WorkflowBoard({
   useEffect(() => {
     if (inspection) {
       selectedRef.current = inspection.id;
+      setLoadingCheckpoint(true);
       setSelected(inspection.id);
       // Explicit inspection must load the requested checkpoint, including after a pause.
       setPaused(false);
     }
   }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
-  const [loadingCheckpoint, setLoadingCheckpoint] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
