@@ -15,7 +15,6 @@ export function TaskSessionControls({
   showStopControl,
   stopControl,
   onNavigate,
-  onFocus,
   onResumeSessionChange,
   onStartTask,
   onStopTask,
@@ -31,7 +30,6 @@ export function TaskSessionControls({
   showStopControl: boolean;
   stopControl: ReactNode;
   onNavigate: (task: Task, destination: TaskDestination) => void;
-  onFocus: () => void;
   onResumeSessionChange: (id: string) => void;
   onStartTask: () => void;
   onStopTask: () => void;
@@ -77,7 +75,14 @@ export function TaskSessionControls({
         </nav>
         {showStopControl && stopControl}
         {task.workspaceId && !['queued', 'running', 'stopping'].includes(task.state) && (
-          <a className="review-shortcut" href="#code-review-center" onClick={onFocus}>
+          <a
+            className="review-shortcut"
+            href={encodeTaskNavigation({ taskId: task.id, destination: 'review' })}
+            onClick={(event) => {
+              event.preventDefault();
+              onNavigate(task, 'review');
+            }}
+          >
             Code Review Center ↗
           </a>
         )}
