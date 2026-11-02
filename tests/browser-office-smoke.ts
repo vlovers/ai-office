@@ -163,6 +163,8 @@ try {
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await page.goForward();
   await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  // Internal section navigation must create a browser history entry: the
+  // previous destination should be recoverable without reloading the app.
   await navigate('Office');
   await capture('queued');
   await navigate('Tasks');
