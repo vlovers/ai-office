@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRequestDeadline, createSingleFlight } from '../src/web/workflow-polling.js';
+import {
+  createRequestDeadline,
+  createSingleFlight,
+} from '../src/web/workflow-polling.js';
 
 function deferred() {
   let resolve!: () => void;
