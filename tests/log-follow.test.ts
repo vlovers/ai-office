@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countEventsAfter, isNearLogEnd } from '../src/web/log-follow.js';
+import { countEventsAfter, isNearLogEnd, unreadBaseline } from '../src/web/log-follow.js';
 
 describe('task event log follow behavior', () => {
   it('follows when the log is at or near its end', () => {
@@ -32,6 +32,13 @@ describe('task event log follow behavior', () => {
     expect(countEventsAfter(events, 12)).toBe(2);
     expect(countEventsAfter(events, 0)).toBe(3);
     expect(countEventsAfter([], 18)).toBe(0);
+  });
+
+  it('never regresses the unread cursor when SSE replays older events', () => {
+    expect(unreadBaseline(null, undefined)).toBe(0);
+    expect(unreadBaseline(21, 19)).toBe(21);
+    expect(unreadBaseline(21, 21)).toBe(21);
+    expect(unreadBaseline(21, 24)).toBe(24);
   });
 
   it('counts retained unread events even after the 500-event history cap', () => {
