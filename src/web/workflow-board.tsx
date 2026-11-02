@@ -200,8 +200,13 @@ export function WorkflowBoard({
       pendingReads.current.delete(deadline);
     }
   }, [selected, taskId]);
+  const lastPolledSelection = useRef(selected);
   useEffect(() => {
-    if (!paused) void automaticPolling.current.run(refresh);
+    const selectionChanged = lastPolledSelection.current !== selected;
+    lastPolledSelection.current = selected;
+    // Pause stops periodic polling, not a user's explicit workflow selection.
+    // Load the new checkpoint once without resuming the three-second timer.
+    if (!paused || selectionChanged) void automaticPolling.current.run(refresh);
     const timer = paused
       ? undefined
       : setInterval(() => void automaticPolling.current.run(refresh), 3000);
@@ -211,7 +216,7 @@ export function WorkflowBoard({
       automaticPolling.current.reset();
       abortPendingReads();
     };
-  }, [refresh, paused]);
+  }, [refresh, paused, selected]);
   async function mutate(operation?: () => Promise<unknown>) {
     setLoading(true);
     setError('');
@@ -227,6 +232,8 @@ export function WorkflowBoard({
   // Invalidate in-flight snapshots synchronously with a user's choice. React
   // state may render later, so async poll continuations must read this ref.
   const chooseWorkflow = (id: string) => {
+    // Reselecting the same item must not blank its checkpoint while paused.
+    if (id === selectedRef.current) return;
     refreshEpoch.current++;
     automaticPolling.current.reset();
     abortPendingReads();
