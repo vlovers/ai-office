@@ -20,12 +20,26 @@ function nullableText(value: unknown): boolean {
   return value === null || text(value);
 }
 
+function optionalText(value: unknown): boolean {
+  return value === undefined || text(value);
+}
+
+function optionalNullableText(value: unknown): boolean {
+  return value === undefined || nullableText(value);
+}
+
 function arrayOf(value: unknown, guard: (item: unknown) => boolean): boolean {
   return Array.isArray(value) && value.every(guard);
 }
 
 function summaryStage(value: unknown): boolean {
-  return record(value) && nullableText(value.taskId) && text(value.agentId);
+  return (
+    record(value) &&
+    nullableText(value.taskId) &&
+    text(value.agentId) &&
+    optionalText(value.kind) &&
+    optionalText(value.state)
+  );
 }
 
 function summary(value: unknown): boolean {
@@ -35,6 +49,8 @@ function summary(value: unknown): boolean {
     text(value.repositoryId) &&
     text(value.state) &&
     version(value.version) &&
+    optionalText(value.createdAt) &&
+    optionalText(value.updatedAt) &&
     arrayOf(value.stages, summaryStage)
   );
 }
@@ -47,7 +63,12 @@ function timelineStage(value: unknown): boolean {
     text(value.agentId) &&
     text(value.mode) &&
     version(value.agentRevision) &&
-    nullableText(value.nextAction)
+    nullableText(value.nextAction) &&
+    optionalNullableText(value.taskId) &&
+    optionalNullableText(value.evidenceRevision) &&
+    optionalNullableText(value.approvalRevision) &&
+    optionalNullableText(value.reportDigest) &&
+    optionalNullableText(value.sourceDigest)
   );
 }
 
@@ -63,7 +84,13 @@ function timeline(value: unknown): boolean {
 }
 
 function report(value: unknown): boolean {
-  return record(value) && text(value.kind) && text(value.result) && nullableText(value.error);
+  return (
+    record(value) &&
+    text(value.kind) &&
+    text(value.result) &&
+    nullableText(value.error) &&
+    optionalNullableText(value.taskId)
+  );
 }
 
 function finding(value: unknown): boolean {
@@ -95,7 +122,8 @@ function dashboardTask(value: unknown): boolean {
     text(value.title) &&
     text(value.repositoryId) &&
     text(value.agentId) &&
-    text(value.state)
+    text(value.state) &&
+    optionalText(value.executionMode)
   );
 }
 
