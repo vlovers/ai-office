@@ -64,6 +64,43 @@ describe('workflow polling backpressure', () => {
     await expect(gate.run(async () => {})).resolves.toBeUndefined();
   });
 
+  it('coalesces slow ticks and retries after the read deadline expires', async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createSingleFlight();
+      let calls = 0;
+      const poll = () =>
+        gate.run(async () => {
+          calls++;
+          if (calls > 1) return;
+          const deadline = createRequestDeadline(15000);
+          try {
+            await new Promise<void>((_resolve, reject) => {
+              deadline.signal.addEventListener(
+                'abort',
+                () => reject(new Error('read deadline exceeded')),
+                { once: true },
+              );
+            });
+          } finally {
+            deadline.dispose();
+          }
+        });
+      const first = poll();
+      const rejected = expect(first).rejects.toThrow('read deadline exceeded');
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(poll()).toBe(first);
+      expect(calls).toBe(1);
+      await vi.advanceTimersByTimeAsync(12000);
+      await rejected;
+      await expect(poll()).resolves.toBeUndefined();
+      expect(calls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('an old rejected request cannot unlock the new selection', async () => {
     const gate = createSingleFlight();
     const old = deferred();
