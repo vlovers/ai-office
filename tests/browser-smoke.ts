@@ -31,6 +31,22 @@ try {
     .getByRole('button', { name: 'Settings' })
     .click();
   await page.getByTestId('codex-connection-status').filter({ hasText: 'Available' }).waitFor();
+  // On narrow screens the active destination stays visible in the scrollable
+  // navigation strip, including after resizing an already open deep link.
+  await page.setViewportSize({ width: 320, height: 700 });
+  const mobileNavigation = page.getByRole('navigation', { name: 'Main navigation' });
+  await expect
+    .poll(() =>
+      mobileNavigation.evaluate((element) => {
+        const active = element.querySelector('[aria-current="page"]');
+        if (!active) return false;
+        const navBounds = element.getBoundingClientRect();
+        const activeBounds = active.getBoundingClientRect();
+        return activeBounds.left >= navBounds.left - 1 && activeBounds.right <= navBounds.right + 1;
+      }),
+    )
+    .toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1100 });
   // The keyboard skip link must not navigate away from Settings.
   const skipLink = page.getByRole('link', { name: 'Skip to main content' });
   await skipLink.focus();
