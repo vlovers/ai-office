@@ -45,6 +45,20 @@ describe('workflow polling backpressure', () => {
     await expect(gate.run(async () => {})).resolves.toBeUndefined();
   });
 
+  it('an old rejected request cannot unlock the new selection', async () => {
+    const gate = createSingleFlight();
+    const old = deferred();
+    const current = deferred();
+    const previous = gate.run(() => old.promise);
+    gate.reset();
+    const next = gate.run(() => current.promise);
+    old.reject(new Error('superseded'));
+    await expect(previous).rejects.toThrow('superseded');
+    expect(gate.run(async () => {})).toBe(next);
+    current.resolve();
+    await next;
+  });
+
   it('reset allows a new selection to refresh while the old request is pending', async () => {
     const gate = createSingleFlight();
     const old = deferred();
@@ -71,6 +85,20 @@ describe('workflow polling deadline', () => {
       await vi.advanceTimersByTimeAsync(15000);
       expect(deadline.signal.aborted).toBe(true);
       expect(deadline.timedOut).toBe(true);
+      deadline.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not turn cancellation into a timeout while cleanup is delayed', async () => {
+    vi.useFakeTimers();
+    try {
+      const deadline = createRequestDeadline(15000);
+      deadline.cancel();
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(deadline.signal.aborted).toBe(true);
+      expect(deadline.timedOut).toBe(false);
       deadline.dispose();
     } finally {
       vi.useRealTimers();
