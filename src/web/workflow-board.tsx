@@ -213,8 +213,9 @@ export function WorkflowBoard({
     // Load the new checkpoint once without resuming the three-second timer.
     // Pausing while that one-off read is pending cancels it in cleanup; restart
     // the read once rather than leaving the selected checkpoint loading forever.
-    if (!paused || selectionChanged || loadingCheckpoint)
+    if (!paused || selectionChanged || loadingCheckpoint) {
       void automaticPolling.current.run(refresh);
+    }
     const timer = paused
       ? undefined
       : setInterval(() => void automaticPolling.current.run(refresh), 3000);
