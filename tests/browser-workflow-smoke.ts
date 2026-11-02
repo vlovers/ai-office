@@ -125,18 +125,16 @@ try {
   // Do not accept it as a verified checkpoint or crash during rendering.
   const invalidCatalog = '**/api/workflows/qa-commands';
   await page.route(invalidCatalog, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: '{"commands":"broken"}',
-    }),
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"commands":"broken"}' }),
   );
   try {
     await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
     await expect(board.getByRole('alert').first()).toContainText(
       'Invalid workflow response: malformed QA command catalog',
     );
-    await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
   } finally {
     await page.unroute(invalidCatalog);
   }
