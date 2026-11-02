@@ -67,6 +67,28 @@ try {
   assert.equal((await env.get()).stages[0]!.state, 'awaiting_approval');
   assert.equal(env.store.queue().length, 0);
   await gate('Approve Coder baseline');
+  // A failed timeline refresh must not leave an old approval checkpoint
+  // actionable. Keep the last snapshot visible, but fail closed until recovery.
+  const outagePattern = '**/api/workflows/*/timeline';
+  await page.route(outagePattern, (route) => route.abort());
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
+    await expect(board.getByText('Checkpoint actions are unavailable', { exact: false })).toBeVisible();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Refresh workflow before trying another action.',
+    );
+  } finally {
+    await page.unroute(outagePattern);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  // Pausing live updates is useful for reading, not for approving a potentially
+  // stale checkpoint. Resuming and verifying the snapshot restores actions.
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
+  await board.getByRole('button', { name: 'Resume live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   await gate('Bind Coder task', async () => {
     await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
   });

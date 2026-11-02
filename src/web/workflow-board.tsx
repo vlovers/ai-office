@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
 import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
+import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
 import {
   selectWorkflowOperations,
   summarizeWorkflowOperations,
@@ -109,6 +110,7 @@ export function WorkflowBoard({
   const [reviewer, setReviewer] = useState('');
   const [qa, setQA] = useState('');
   const [error, setError] = useState('');
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<{
     name: string;
@@ -147,6 +149,7 @@ export function WorkflowBoard({
       setTimeline(view);
       setReports(output);
       setDiagnostics(diagnosis);
+      setHasLoaded(true);
       setError('');
     } catch (cause) {
       if (epoch === refreshEpoch.current)
@@ -174,6 +177,10 @@ export function WorkflowBoard({
     }
   }
   const chosen = items.find((item) => item.id === selected);
+  // The server enforces optimistic versions; the UI must also fail closed
+  // when polling fails, a different workflow is selected, or updates are paused.
+  const checkpointCurrent =
+    !paused && isCurrentWorkflowCheckpoint(selected, chosen, timeline, error);
   const counts = {
     active: items.filter((item) => item.state === 'active').length,
     blocked: items.filter((item) => item.state === 'blocked').length,
@@ -193,7 +200,7 @@ export function WorkflowBoard({
     : filteredWorkflows;
   const workflowChoices = filteredWorkflows;
   const staleAction = Boolean(
-    action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
+    action && (!checkpointCurrent || action.id !== selected || action.version !== timeline?.version),
   );
   const unsubmitted =
     dashboard?.tasks.filter(
@@ -456,7 +463,9 @@ export function WorkflowBoard({
           )}
         </div>
       )}
-      {!items.length && <p>No workflows created yet.</p>}
+      {!items.length && !error && (
+        <p>{hasLoaded ? 'No workflows created yet.' : 'Loading workflows…'}</p>
+      )}
       {items.length > 0 && (
         <>
           <label>
@@ -489,6 +498,12 @@ export function WorkflowBoard({
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
               </p>
+              {!checkpointCurrent && (
+                <p role="status">
+                  Checkpoint actions are unavailable until the current workflow version is verified.
+                  Resume live updates or refresh after the connection recovers.
+                </p>
+              )}
               {diagnostics &&
                 diagnostics.id === timeline.id &&
                 diagnostics.version === timeline.version && (
@@ -548,7 +563,7 @@ export function WorkflowBoard({
                       ))}
                     {stage.nextAction && (
                       <button
-                        disabled={loading}
+                        disabled={loading || !checkpointCurrent}
                         onClick={() => {
                           setAction({
                             name: stage.nextAction!,
@@ -583,7 +598,7 @@ export function WorkflowBoard({
                 !timeline.stages.some((stage) => stage.status === 'running') && (
                   <button
                     className="secondary"
-                    disabled={loading}
+                    disabled={loading || !checkpointCurrent}
                     onClick={() => {
                       setAction({
                         name: 'cancel',
