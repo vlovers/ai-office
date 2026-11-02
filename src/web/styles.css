@@ -1956,6 +1956,12 @@ select {
 .shell[data-page='tasks'].focus-mode .agent-panel {
   display: block;
 }
+@media (max-width: 960px) {
+  /* Session controls already expose Stop; avoid a duplicate empty inspector on mobile. */
+  .shell[data-page='tasks'].focus-mode .inspector:not(:has(.stop-button)) {
+    display: none;
+  }
+}
 .shell[data-page='tasks'] .mission-board,
 .shell[data-page='workflows'] .mission-board,
 .shell[data-page='agents'] .mission-board {
