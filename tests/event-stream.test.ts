@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  appendTaskEvent,
-  nextTaskEventCursor,
-  parseTaskEvent,
-} from '../src/web/event-stream.js';
+import { appendTaskEvent, nextTaskEventCursor, parseTaskEvent } from '../src/web/event-stream.js';
 import type { AgentEvent } from '../src/shared/types.js';
 
 const event = (id: number, taskId = 'task-1'): AgentEvent => ({
