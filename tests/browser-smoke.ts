@@ -247,13 +247,16 @@ try {
   // A persisted SSE event must update the unread count without resuming follow.
   const taskForLog = env.store.tasks().find((item) => item.title === 'Review the example project');
   assert.ok(taskForLog);
+  await expect(log).toHaveAttribute('aria-live', 'polite');
   await page.getByRole('button', { name: 'Pause auto-scroll' }).click();
+  await expect(log).toHaveAttribute('aria-live', 'off');
   const firstUnread = env.store.addEvent(taskForLog.id, 'progress', 'Fixture unread event one');
   env.manager.events.emit('event', firstUnread);
   await expect(log).toContainText('Fixture unread event one');
   await expect(page.locator('.event-console-toolbar')).toContainText('1 new');
   await expect(page.getByRole('button', { name: 'Jump to latest event' })).toBeVisible();
   await page.getByRole('button', { name: 'Jump to latest event' }).click();
+  await expect(log).toHaveAttribute('aria-live', 'polite');
   await expect(page.getByRole('button', { name: 'Pause auto-scroll' })).toBeVisible();
   await expect(page.locator('.event-console-toolbar')).not.toContainText('new');
 
