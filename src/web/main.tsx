@@ -467,8 +467,15 @@ function App() {
         {linkError && (
           <div className="task-link-warning" role="alert">
             <p>{linkError}</p>
-            <button className="secondary" type="button" onClick={() => showSection('task-history')}>
-              Back to task history
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => {
+                if (linkedTask) navigateTask(linkedTask, 'session');
+                else showSection('task-history');
+              }}
+            >
+              {linkedTask ? 'Open task session' : 'Back to task history'}
             </button>
           </div>
         )}
