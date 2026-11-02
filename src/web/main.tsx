@@ -363,8 +363,8 @@ function App() {
     setSelected(stationTask?.id);
     setResumeSessionId('');
     clearTaskNavigation();
-    // Inspect in place; Focus Mode remains an explicit choice.
-    if (!stationTask) showSection('agent');
+    // Selecting a workstation must not unexpectedly navigate away from Office.
+    // Agent profiles and their inspector remain available through the Agents tab.
   };
   const stopControl = selectedBusy && agent?.taskId && (
     <button
