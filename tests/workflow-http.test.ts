@@ -51,6 +51,16 @@ describe('workflow API response handling', () => {
     );
   });
 
+  it.each(['null', 'true', '42', '"ok"'])(
+    'rejects valid JSON scalar %s as an invalid workflow checkpoint',
+    async (body) => {
+      const response = new Response(body, { status: 200 });
+      await expect(readWorkflowResponse(response)).rejects.toThrow(
+        'Invalid workflow response: HTTP 200',
+      );
+    },
+  );
+
   it('reports an empty error body with its HTTP status', async () => {
     const response = new Response(null, { status: 504 });
     await expect(readWorkflowResponse(response)).rejects.toThrow(
