@@ -171,11 +171,11 @@ export function WorkflowBoard({
       refreshEpoch.current++;
     };
   }, [refresh, paused]);
-  async function mutate(operation: () => Promise<unknown>) {
+  async function mutate(operation?: () => Promise<unknown>) {
     setLoading(true);
     setError('');
     try {
-      await operation();
+      if (operation) await operation();
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -258,7 +258,7 @@ export function WorkflowBoard({
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
         )}
-        <button className="secondary" disabled={loading} onClick={() => void mutate(async () => {})}>
+        <button className="secondary" disabled={loading} onClick={() => void mutate()}>
           Refresh workflow
         </button>
       </div>
