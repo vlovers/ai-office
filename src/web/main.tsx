@@ -635,12 +635,7 @@ function App() {
                   }}
                   onInspectTask={(taskId) => {
                     const target = dashboard?.tasks.find((item) => item.id === taskId);
-                    if (target) {
-                      setSelectedAgent(target.agentId);
-                      setSelected(target.id);
-                      setResumeSessionId('');
-                      showSection('task-workspace');
-                    }
+                    if (target) navigateTask(target, 'session');
                   }}
                   onCheckpoint={() => {
                     const checkpoint = officeCheckpoint(workflows, selectedAgent);
