@@ -282,6 +282,7 @@ try {
     .getByRole('button', { name: 'Office' })
     .click();
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toBeFocused();
   await expect(page.locator('.office-scene').first()).toBeHidden();
