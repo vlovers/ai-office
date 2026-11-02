@@ -125,13 +125,12 @@ function App() {
     }
   });
   useEffect(() => {
-    if (!dashboard) return;
+    if (!dashboard || navigation) return;
     const current = selected && dashboard.tasks.find((task) => task.id === selected);
-    // Do not persist a stale selection or override an explicit deep link.
-    if (selected && !current && !navigation) setSelected(undefined);
+    if (selected && !current) setSelected(undefined);
     try {
       if (current) sessionStorage.setItem('ai-office-selected-task', current.id);
-      else if (!navigation) sessionStorage.removeItem('ai-office-selected-task');
+      else sessionStorage.removeItem('ai-office-selected-task');
     } catch {
       /* Storage may be unavailable in private browsing. */
     }
