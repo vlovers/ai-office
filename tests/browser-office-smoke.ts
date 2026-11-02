@@ -178,6 +178,32 @@ try {
   // Deep links, direct hash changes and browser history must restore the correct workspace mode.
   const queuedTask = env.store.tasks().find((item) => item.state === 'queued');
   assert.ok(queuedTask);
+  // Queue and history selections must open the exact task in a durable session
+  // route, not only mutate an ephemeral selection (especially on mobile).
+  await page
+    .getByRole('region', { name: 'Submitted queue' })
+    .getByRole('button', { name: /FIXTURE · submitted queue/ })
+    .click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await navigate('Tasks');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .locator('#task-history .task-row')
+    .filter({ hasText: 'FIXTURE · submitted queue' })
+    .click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('#task-workspace')).toBeFocused();
+  await expect(page.locator('#task-workspace')).toBeInViewport();
+  await page.reload();
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.goBack();
+  await expect(page).toHaveURL(/#tasks$/);
+  await expect(page.locator('#task-history')).toBeVisible();
+  await page.goForward();
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await page.setViewportSize({ width: 1440, height: 1100 });
   // A valid task may have a stale review deep link before it has a workspace.
   // Offer its session instead of sending the user to unrelated task history.
   await page.evaluate((id) => {
