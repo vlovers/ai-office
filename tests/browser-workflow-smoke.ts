@@ -357,7 +357,10 @@ try {
       else await new Promise((resolve) => setTimeout(resolve, 3500));
       await route.continue();
     } catch (cause) {
-      // Selection changes may abort an intercepted GET while the route sleeps.
+      // A selection change can cancel the intercepted GET while this route
+      // is held. Playwright may already have handled the cancelled route
+      // before request.failure() becomes observable.
+      if (cause instanceof Error && cause.message.includes('Route is already handled!')) return;
       if (!route.request().failure()) throw cause;
     }
   });
