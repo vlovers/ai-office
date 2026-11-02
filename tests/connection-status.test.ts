@@ -11,7 +11,9 @@ describe('workspace connection status', () => {
     expect(connectionLabel('connected', { taskA: 'connecting' })).toBe(
       'Connecting to live events…',
     );
-    expect(connectionLabel('connected', { taskA: 'connected', taskB: 'connecting' })).toBe(
+    expect(
+      connectionLabel('connected', { taskA: 'connected', taskB: 'connecting' }),
+    ).toBe(
       'Connecting to live events…',
     );
   });
@@ -23,13 +25,17 @@ describe('workspace connection status', () => {
   });
 
   it('prioritizes reconnecting over newly connecting streams', () => {
-    expect(connectionLabel('connected', { taskA: 'connecting', taskB: 'reconnecting' })).toBe(
+    expect(
+      connectionLabel('connected', { taskA: 'connecting', taskB: 'reconnecting' }),
+    ).toBe(
       'Reconnecting to live events…',
     );
   });
 
   it('warns if one of several task streams is reconnecting', () => {
-    expect(connectionLabel('connected', { taskA: 'connected', taskB: 'reconnecting' })).toBe(
+    expect(
+      connectionLabel('connected', { taskA: 'connected', taskB: 'reconnecting' }),
+    ).toBe(
       'Reconnecting to live events…',
     );
   });
@@ -41,10 +47,14 @@ describe('workspace connection status', () => {
   });
 
   it('never masks a terminal stream failure with another connected stream', () => {
-    expect(connectionLabel('connected', { taskA: 'connected', taskB: 'disconnected' })).toBe(
+    expect(
+      connectionLabel('connected', { taskA: 'connected', taskB: 'disconnected' }),
+    ).toBe(
       'Live event stream disconnected',
     );
-    expect(connectionLabel('connected', { taskA: 'reconnecting', taskB: 'disconnected' })).toBe(
+    expect(
+      connectionLabel('connected', { taskA: 'reconnecting', taskB: 'disconnected' }),
+    ).toBe(
       'Live event stream disconnected',
     );
     expect(connectionLabel('disconnected', { taskA: 'disconnected' })).toBe(
