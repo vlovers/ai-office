@@ -7,8 +7,23 @@ describe('workspace connection status', () => {
     expect(connectionLabel('connected', {})).toBe('Local server connected');
   });
 
+  it('does not claim live connectivity before newly opened streams connect', () => {
+    expect(connectionLabel('connected', { taskA: 'connecting' })).toBe(
+      'Connecting to live events…',
+    );
+    expect(connectionLabel('connected', { taskA: 'connected', taskB: 'connecting' })).toBe(
+      'Connecting to live events…',
+    );
+  });
+
   it('keeps an SSE reconnect warning visible even after HTTP polling succeeds', () => {
     expect(connectionLabel('connected', { taskA: 'reconnecting' })).toBe(
+      'Reconnecting to live events…',
+    );
+  });
+
+  it('prioritizes reconnecting over newly connecting streams', () => {
+    expect(connectionLabel('connected', { taskA: 'connecting', taskB: 'reconnecting' })).toBe(
       'Reconnecting to live events…',
     );
   });

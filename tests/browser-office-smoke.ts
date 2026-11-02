@@ -262,6 +262,18 @@ try {
   await history.getByLabel('Search tasks').fill('');
   await navigate('Office');
 
+  // A temporary workflow API failure must not blank the Office or claim the
+  // last known workflow snapshot is live. Polling recovers without reloading.
+  await page.route('**/api/workflows', (route) => route.abort());
+  await expect(page.getByText('Workflow status unavailable.', { exact: false })).toBeVisible({
+    timeout: 10000,
+  });
+  await expect(page.locator('.studio-agent').first()).toBeVisible();
+  await page.unroute('**/api/workflows');
+  await expect(page.getByText('Workflow status unavailable.', { exact: false })).toHaveCount(0, {
+    timeout: 10000,
+  });
+
   // Simulate transport failure while retaining genuine persisted application snapshots.
   await page.route('**/api/dashboard', (route) => route.abort());
   await expect(page.locator('.studio-notice').first()).toContainText('Connection interrupted', {

@@ -24,6 +24,7 @@ import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { createLatestResultGate } from './latest-result-gate.js';
 import { connectionLabel, type StreamConnection } from './connection-status.js';
+import { appendTaskEvent, parseTaskEvent } from './event-stream.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
@@ -144,8 +145,12 @@ function App() {
       }
     } catch (e) {
       // An older failed poll must not replace a newer successful connection.
-      if (dashboardResults.current.accept(ticket)) setHttpConnection('disconnected');
-      throw e;
+      if (dashboardResults.current.accept(ticket)) {
+        setHttpConnection('disconnected');
+        throw e;
+      }
+      // The failed request is older than a settled refresh: do not surface
+      // its error after a newer successful response has restored the UI.
     }
   };
   useEffect(() => {
@@ -169,7 +174,8 @@ function App() {
       } catch {
         // Ignore failures from polls superseded by a newer settled response.
         if (live && workflowResults.accept(ticket)) {
-          setWorkflows([]);
+          // Keep the last confirmed snapshot visible during a transient outage.
+          // Availability is separate: users must not mistake it for live data.
           setWorkflowAvailable(false);
         }
       }
@@ -196,7 +202,7 @@ function App() {
   useEffect(() => {
     const ids = streamIds ? streamIds.split(',') : [];
     let active = true;
-    setStreamConnections({});
+    setStreamConnections(Object.fromEntries(ids.map((id) => [id, 'connecting' as const])));
     setEventHistory((previous) => Object.fromEntries(ids.map((id) => [id, previous[id] ?? []])));
     const streams = ids.map((id) => {
       const stream = new EventSource(`/api/tasks/${id}/stream`);
@@ -207,15 +213,14 @@ function App() {
         if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'reconnecting' }));
       };
       stream.onmessage = (message) => {
-        const event = JSON.parse(message.data) as AgentEvent;
+        // Closed/replaced EventSources may still have a queued message callback.
+        if (!active) return;
+        const event = parseTaskEvent(message.data, id);
+        if (!event) return;
         setEventHistory((previous) => {
           const events = previous[id] ?? [];
-          return {
-            ...previous,
-            [id]: events.some((item) => item.id === event.id)
-              ? events
-              : [...events, event].slice(-500),
-          };
+          const next = appendTaskEvent(events, event);
+          return next === events ? previous : { ...previous, [id]: next };
         });
         if (event.kind === 'state') void refresh().catch(() => {});
       };
@@ -686,7 +691,7 @@ function App() {
                 />
                 {!workflowAvailable && (
                   <p className="studio-notice" role="status">
-                    Workflow status unavailable. Open workflow details to retry.
+                    Workflow status unavailable. Showing the last saved snapshot. Open workflow details to retry.
                   </p>
                 )}
               </section>
