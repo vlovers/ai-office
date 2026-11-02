@@ -319,6 +319,58 @@ try {
   const newWorkflow = afterCreate.find((item) => !beforeCreate.some((old) => old.id === item.id));
   assert.ok(newWorkflow);
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
+  // A workflow list request that takes longer than the 3s polling interval
+  // must still render. Earlier epoch-per-request logic discarded every response.
+  const slowListPattern = '**/api/workflows';
+  await page.route(slowListPattern, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await new Promise((resolve) => setTimeout(resolve, 3500));
+    await route.continue();
+  });
+  try {
+    const external = await env.send('POST', '/api/workflows', {
+      repositoryId: env.repositoryRecord.id,
+      coderAgentId: 'codex-1',
+      reviewerAgentId: 'codex-2',
+    });
+    assert.equal(external.statusCode, 201);
+    const externalId = external.json().id as string;
+    await expect(operationsQueue).toContainText(externalId.slice(0, 8), { timeout: 15000 });
+    // A slow background refresh must not replace the explicit selection.
+    await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
+    // Select a different workflow while another delayed list poll is pending.
+    // The old response must not restore the previous workflow or its checkpoint.
+    const pendingPoll = page.waitForRequest(
+      (request) => request.url().endsWith('/api/workflows') && request.method() === 'GET',
+    );
+    await pendingPoll;
+    await operationsQueue.getByRole('button', { name: new RegExp(otherId.slice(0, 8)) }).click();
+    await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
+    await expect(board.getByText(/^State: active/)).toBeVisible({ timeout: 15000 });
+    await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
+  } finally {
+    await page.unroute(slowListPattern);
+  }
+  // Mobile operations must remain within the viewport and expose real touch targets.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(operationsQueue).toBeVisible();
+  const queueLayout = await operationsQueue.evaluate((node) => ({
+    scrollWidth: node.scrollWidth,
+    clientWidth: node.clientWidth,
+    buttonHeights: Array.from(node.querySelectorAll('button'), (button) =>
+      button.getBoundingClientRect().height,
+    ),
+  }));
+  assert.ok(queueLayout.buttonHeights.length > 0, 'Mobile workflow queue has no actions');
+  assert.ok(
+    queueLayout.scrollWidth <= queueLayout.clientWidth + 1,
+    'Mobile workflow queue overflows horizontally',
+  );
+  assert.ok(
+    queueLayout.buttonHeights.every((height) => height >= 44),
+    'Mobile workflow actions must have 44px touch targets',
+  );
+  await page.setViewportSize({ width: 1440, height: 1100 });
   assert.equal((await env.get()).state, 'completed');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
 import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
 import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
+import { createLatestResultGate } from './latest-result-gate.js';
 import {
   selectWorkflowOperations,
   summarizeWorkflowOperations,
@@ -125,9 +126,13 @@ export function WorkflowBoard({
   } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  // A slow poll must be allowed to settle while the next poll is pending.
+  // Only a newer *settled* snapshot may supersede an earlier response.
   const refreshEpoch = useRef(0);
+  const refreshResults = useRef(createLatestResultGate());
   const refresh = useCallback(async () => {
-    const epoch = ++refreshEpoch.current;
+    const epoch = refreshEpoch.current;
+    const ticket = refreshResults.current.begin();
     try {
       const [all, current, choices] = await Promise.all([
         request<Summary[]>('/workflows'),
@@ -136,15 +141,10 @@ export function WorkflowBoard({
       ]);
       if (epoch !== refreshEpoch.current) return;
       const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
-      setItems(workflows);
-      setDashboard(current);
-      setCommands(choices.commands);
       const requested = selectedRef.current;
       const next = workflows.some((item) => item.id === requested)
         ? requested
         : (workflows[0]?.id ?? '');
-      selectedRef.current = next;
-      setSelected(next);
       const [view, output, diagnosis] = next
         ? await Promise.all([
             request<Timeline>(`/workflows/${next}/timeline`),
@@ -152,14 +152,26 @@ export function WorkflowBoard({
             request<Diagnostics>(`/workflows/${next}/diagnostics`),
           ])
         : [null, [], null];
-      if (epoch !== refreshEpoch.current) return;
+      // Commit the list and its checkpoint atomically. A selection change or
+      // unmount invalidates this response even if no newer poll has settled.
+      if (
+        epoch !== refreshEpoch.current ||
+        selectedRef.current !== requested ||
+        !refreshResults.current.accept(ticket)
+      )
+        return;
+      setItems(workflows);
+      setDashboard(current);
+      setCommands(choices.commands);
+      selectedRef.current = next;
+      setSelected(next);
       setTimeline(view);
       setReports(output);
       setDiagnostics(diagnosis);
       setHasLoaded(true);
       setError('');
     } catch (cause) {
-      if (epoch === refreshEpoch.current)
+      if (epoch === refreshEpoch.current && refreshResults.current.accept(ticket))
         setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, [selected, taskId]);
@@ -183,6 +195,16 @@ export function WorkflowBoard({
       setLoading(false);
     }
   }
+  // Invalidate in-flight snapshots synchronously with a user's choice. React
+  // state may render later, so async poll continuations must read this ref.
+  const chooseWorkflow = (id: string) => {
+    refreshEpoch.current++;
+    selectedRef.current = id;
+    setTimeline(null);
+    setReports([]);
+    setDiagnostics(null);
+    setSelected(id);
+  };
   const chosen = items.find((item) => item.id === selected);
   // The server enforces optimistic versions; the UI must also fail closed
   // when polling fails, a different workflow is selected, or updates are paused.
@@ -423,20 +445,14 @@ export function WorkflowBoard({
             execution events before stopping or cancelling anything.
           </p>
           {visibleWorkflows.length > 0 && (
-            <ul aria-label="Workflow operations queue">
+            <ul className="workflow-operations-list" aria-label="Workflow operations queue">
               {visibleWorkflows.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     className="secondary"
                     aria-current={item.id === selected ? 'true' : undefined}
-                    onClick={() => {
-                      refreshEpoch.current++;
-                      setTimeline(null);
-                      setReports([]);
-                      setDiagnostics(null);
-                      setSelected(item.id);
-                    }}
+                    onClick={() => chooseWorkflow(item.id)}
                   >
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
                   </button>{' '}
@@ -481,13 +497,7 @@ export function WorkflowBoard({
             <select
               aria-label="Workflow"
               value={selected}
-              onChange={(event) => {
-                refreshEpoch.current++;
-                setTimeline(null);
-                setReports([]);
-                setDiagnostics(null);
-                setSelected(event.target.value);
-              }}
+              onChange={(event) => chooseWorkflow(event.target.value)}
             >
               {selected && !workflowChoices.some((item) => item.id === selected) && (
                 <option value={selected} disabled>
