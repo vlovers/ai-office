@@ -61,8 +61,7 @@ async function acquireReadOnlyReviewLease(paths: string[], detail: string) {
     try {
       return await acquireLocks(paths, detail);
     } catch (error) {
-      if (!(error instanceof ResourceLockedError) || attempt === delays.length - 1)
-        throw error;
+      if (!(error instanceof ResourceLockedError) || attempt === delays.length - 1) throw error;
     }
   }
   throw new ResourceLockedError();
