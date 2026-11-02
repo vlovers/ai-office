@@ -150,6 +150,11 @@ function App() {
   }, []);
   const [eventHistory, setEventHistory] = useState<Record<string, AgentEvent[]>>({});
   const [selectedAgent, setSelectedAgent] = useState<AgentId>('codex-1');
+  useEffect(() => {
+    if (!dashboard || navigation || !selected) return;
+    const restored = dashboard.tasks.find((item) => item.id === selected);
+    if (restored && restored.agentId !== selectedAgent) setSelectedAgent(restored.agentId);
+  }, [dashboard, navigation, selected, selectedAgent]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingStops, setPendingStops] = useState<string[]>([]);
