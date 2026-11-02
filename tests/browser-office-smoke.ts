@@ -157,6 +157,9 @@ try {
   await expect(queue).toContainText('FIXTURE · submitted queue');
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute('data-state', 'queued');
   await queue.getByRole('button', { name: /FIXTURE · submitted queue/ }).click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   // Deep links, direct hash changes and browser history must restore the correct workspace mode.
