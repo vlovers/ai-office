@@ -9,7 +9,8 @@ export function isNearLogEnd(
   threshold = 48,
 ): boolean {
   if (![scrollTop, scrollHeight, clientHeight, threshold].every(Number.isFinite)) return false;
-  return scrollHeight - Math.max(0, scrollTop) - clientHeight <= Math.max(0, threshold);
+  if (scrollHeight < 0 || clientHeight < 0 || threshold < 0) return false;
+  return scrollHeight - Math.max(0, scrollTop) - clientHeight <= threshold;
 }
 
 /** Count only retained events newer than the last event the reader saw. */
