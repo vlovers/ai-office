@@ -73,8 +73,12 @@ try {
   await page.route(outagePattern, (route) => route.abort());
   try {
     await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
-    await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
-    await expect(board.getByText('Checkpoint actions are unavailable', { exact: false })).toBeVisible();
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      board.getByText('Checkpoint actions are unavailable', { exact: false }),
+    ).toBeVisible();
     await expect(board.getByRole('alert').first()).toContainText(
       'Refresh workflow before trying another action.',
     );
@@ -82,13 +86,19 @@ try {
     await page.unroute(outagePattern);
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
-  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  await expect(
+    board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+  ).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
-  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
+  await expect(
+    board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+  ).toBeDisabled();
   await board.getByRole('button', { name: 'Resume live updates' }).click();
-  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  await expect(
+    board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+  ).toBeEnabled();
   await gate('Bind Coder task', async () => {
     await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
   });
@@ -267,6 +277,38 @@ try {
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
   await expect(board.getByText(/^State: active/)).toBeVisible();
   await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
+  // Creating another workflow must select the newly created checkpoint, not
+  // revert to the previously selected workflow from a stale refresh closure.
+  await board.getByRole('button', { name: 'Resume live updates' }).click();
+  const newCoder = env.store.createTask({
+    repositoryId: env.repositoryRecord.id,
+    agentId: 'codex-1',
+    executionMode: 'write',
+    title: 'Second browser workflow fixture',
+    prompt: 'WRITE_FIXTURE',
+  });
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  const beforeCreate = (await (await page.request.get(address + '/api/workflows')).json()) as {
+    id: string;
+  }[];
+  await board.getByText('Create workflow', { exact: true }).click();
+  await board.getByLabel('Coder task').selectOption(newCoder.id);
+  await board.getByLabel('Reviewer profile').selectOption('codex-2');
+  await board.getByRole('button', { name: 'Create gated workflow' }).click();
+  await expect
+    .poll(async () => {
+      const list = (await (await page.request.get(address + '/api/workflows')).json()) as {
+        id: string;
+      }[];
+      return list.length;
+    })
+    .toBe(beforeCreate.length + 1);
+  const afterCreate = (await (await page.request.get(address + '/api/workflows')).json()) as {
+    id: string;
+  }[];
+  const newWorkflow = afterCreate.find((item) => !beforeCreate.some((old) => old.id === item.id));
+  assert.ok(newWorkflow);
+  await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
   assert.equal((await env.get()).state, 'completed');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);
