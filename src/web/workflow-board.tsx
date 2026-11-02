@@ -3,6 +3,7 @@ import type { Dashboard } from '../shared/types.js';
 import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
 import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
 import { createLatestResultGate } from './latest-result-gate.js';
+import { readWorkflowResponse } from './workflow-http.js';
 import { createRequestDeadline, createSingleFlight } from './workflow-polling.js';
 import {
   selectWorkflowOperations,
@@ -75,10 +76,7 @@ async function request<T>(path: string, body?: unknown, signal?: AbortSignal): P
           body: JSON.stringify(body),
         },
   );
-  const value = await response.json();
-  if (!response.ok)
-    throw new Error(value.error ?? `Workflow request failed: HTTP ${response.status}`);
-  return value as T;
+  return readWorkflowResponse<T>(response);
 }
 
 export function WorkflowBoard({
