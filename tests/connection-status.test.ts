@@ -8,14 +8,18 @@ describe('workspace connection status', () => {
   });
 
   it('does not claim live connectivity before newly opened streams connect', () => {
-    expect(connectionLabel('connected', { taskA: 'connecting' })).toBe('Connecting to live events…');
+    expect(connectionLabel('connected', { taskA: 'connecting' })).toBe(
+      'Connecting to live events…',
+    );
     expect(
       connectionLabel('connected', { taskA: 'connected', taskB: 'connecting' }),
     ).toBe('Connecting to live events…');
   });
 
   it('keeps an SSE reconnect warning visible even after HTTP polling succeeds', () => {
-    expect(connectionLabel('connected', { taskA: 'reconnecting' })).toBe('Reconnecting to live events…');
+    expect(connectionLabel('connected', { taskA: 'reconnecting' })).toBe(
+      'Reconnecting to live events…',
+    );
   });
 
   it('prioritizes reconnecting over newly connecting streams', () => {
@@ -43,7 +47,9 @@ describe('workspace connection status', () => {
     expect(
       connectionLabel('connected', { taskA: 'reconnecting', taskB: 'disconnected' }),
     ).toBe('Live event stream disconnected');
-    expect(connectionLabel('disconnected', { taskA: 'disconnected' })).toBe('Server disconnected');
+    expect(connectionLabel('disconnected', { taskA: 'disconnected' })).toBe(
+      'Server disconnected',
+    );
   });
 
   it('restores live connection status when streams recover', () => {
