@@ -48,11 +48,7 @@ export function TaskSessionOutput({
         <div className="event-console-toolbar">
           <span>{events.length} recent events</span>
           {!followLatest && (
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setFollowLatest(true)}
-            >
+            <button type="button" className="secondary" onClick={() => setFollowLatest(true)}>
               Jump to latest event
             </button>
           )}
@@ -66,9 +62,7 @@ export function TaskSessionOutput({
         tabIndex={0}
         onScroll={(event) => {
           const log = event.currentTarget;
-          setFollowLatest(
-            isNearLogEnd(log.scrollTop, log.scrollHeight, log.clientHeight),
-          );
+          setFollowLatest(isNearLogEnd(log.scrollTop, log.scrollHeight, log.clientHeight));
         }}
       >
         {events.length ? (
