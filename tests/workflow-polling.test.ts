@@ -39,9 +39,11 @@ describe('workflow polling backpressure', () => {
 
   it('recovers after a rejected request instead of freezing future polls', async () => {
     const gate = createSingleFlight();
-    await expect(gate.run(async () => {
-      throw new Error('HTTP 503');
-    })).rejects.toThrow('HTTP 503');
+    await expect(
+      gate.run(async () => {
+        throw new Error('HTTP 503');
+      }),
+    ).rejects.toThrow('HTTP 503');
     await expect(gate.run(async () => {})).resolves.toBeUndefined();
   });
 
