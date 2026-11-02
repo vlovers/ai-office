@@ -39,6 +39,13 @@ const service = new Workspaces({
 });
 let manager = new TaskManager(env.store, env.providers, env.auth, undefined, undefined, service);
 let app = await createApp(manager);
+// Fixture-only diagnostics: distinguish review endpoint failures from UI timing.
+const reviewServerErrors: string[] = [];
+app.addHook('onError', async (request, _reply, error) => {
+  if (request.url.includes('/review')) {
+    reviewServerErrors.push(`${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`);
+  }
+});
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
@@ -85,7 +92,12 @@ try {
   await expect(page.locator('#code-review-center')).toBeFocused();
   await page.getByRole('button', { name: 'Refresh Git review' }).click();
   const review = page.getByRole('region', { name: 'Isolated changes review' });
-  await expect(review).toContainText('3 changed files');
+  try {
+    await expect(review).toContainText('3 changed files');
+  } catch (error) {
+    console.error('Review endpoint errors before first diff:', reviewServerErrors);
+    throw error;
+  }
   await expect(page.getByLabel('Git diff')).toContainText('+Modified by fixture');
   await expect(review).toContainText('ai-office/');
   await page.getByLabel('Git diff').focus();
