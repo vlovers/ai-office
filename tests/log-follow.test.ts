@@ -15,6 +15,7 @@ describe('task event log follow behavior', () => {
 
   it('keeps short logs in follow mode and clamps elastic overscroll', () => {
     expect(isNearLogEnd(0, 200, 400)).toBe(true);
+    expect(isNearLogEnd(0, 0, 400)).toBe(true);
     expect(isNearLogEnd(-20, 1000, 400)).toBe(false);
   });
 
@@ -22,6 +23,9 @@ describe('task event log follow behavior', () => {
     expect(isNearLogEnd(Number.NaN, 1000, 400)).toBe(false);
     expect(isNearLogEnd(600, Number.POSITIVE_INFINITY, 400)).toBe(false);
     expect(isNearLogEnd(550, 1000, 400, 0)).toBe(false);
+    expect(isNearLogEnd(0, -1, 400)).toBe(false);
+    expect(isNearLogEnd(0, 1000, -1)).toBe(false);
+    expect(isNearLogEnd(600, 1000, 400, -1)).toBe(false);
   });
 
   it('counts only new persisted IDs while following is paused', () => {
@@ -39,6 +43,16 @@ describe('task event log follow behavior', () => {
     expect(unreadBaseline(21, 19)).toBe(21);
     expect(unreadBaseline(21, 21)).toBe(21);
     expect(unreadBaseline(21, 24)).toBe(24);
+  });
+
+  it('ignores malformed event IDs and invalid unread baselines', () => {
+    const events = [{ id: 11 }, { id: Number.NaN }, { id: Number.POSITIVE_INFINITY }];
+    expect(countEventsAfter(events, 10)).toBe(1);
+    expect(countEventsAfter(events, Number.NaN)).toBe(0);
+    expect(countEventsAfter(events, -1)).toBe(0);
+    expect(unreadBaseline(Number.NaN, 20)).toBe(20);
+    expect(unreadBaseline(20, Number.POSITIVE_INFINITY)).toBe(20);
+    expect(unreadBaseline(-5, -1)).toBe(0);
   });
 
   it('counts retained unread events even after the 500-event history cap', () => {
