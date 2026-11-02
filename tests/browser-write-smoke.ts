@@ -1,4 +1,5 @@
 import { chromium, expect } from '@playwright/test';
+import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import assert from 'node:assert/strict';
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -41,7 +42,7 @@ let manager = new TaskManager(env.store, env.providers, env.auth, undefined, und
 let app = await createApp(manager);
 // Fixture-only diagnostics: distinguish review endpoint failures from UI timing.
 const reviewServerErrors: string[] = [];
-app.addHook('onError', async (request, _reply, error) => {
+app.addHook('onError', async (request: FastifyRequest, _reply: FastifyReply, error: FastifyError) => {
   if (request.url.includes('/review')) {
     reviewServerErrors.push(
       `${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`,
