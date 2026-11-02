@@ -72,6 +72,7 @@ describe('bounded task event history and SSE resume', () => {
       '/api/tasks/task%2Fwith%20space/stream',
     );
   });
+
   it('does not open a reconnecting SSE stream for a removed selected task', () => {
     expect(activeTaskStreamIds('deleted', ['existing'], [null])).toEqual([]);
     expect(activeTaskStreamIds('existing', ['existing'], [null])).toEqual(['existing']);
@@ -84,5 +85,4 @@ describe('bounded task event history and SSE resume', () => {
     // An active agent may have a task missing from a temporarily stale task list.
     expect(activeTaskStreamIds('missing', [], ['agent-task'])).toEqual(['agent-task']);
   });
-
 });
