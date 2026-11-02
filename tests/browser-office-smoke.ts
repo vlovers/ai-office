@@ -231,6 +231,21 @@ try {
     await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')),
     savedTaskId,
   );
+  // A restored selection must not keep forcing its agent after a manual switch.
+  await navigate('Office');
+  const codexOneStation = page.locator('.office-workstation[data-agent-id="codex-1"]');
+  await codexOneStation.click();
+  await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
+  await navigate('Tasks');
+  await navigate('Office');
+  await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
+  await navigate('Tasks');
+  // A deleted task saved in sessionStorage must be discarded on ordinary routes.
+  await page.evaluate(() => sessionStorage.setItem('ai-office-selected-task', 'deleted-task'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')))
+    .toBeNull();
   // Deep links, direct hash changes and browser history must restore the correct workspace mode.
   const queuedTask = env.store.tasks().find((item) => item.state === 'queued');
   assert.ok(queuedTask);
