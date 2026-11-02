@@ -354,6 +354,10 @@ try {
   await refreshButton.click();
   await expect(refreshButton).toBeDisabled();
   await expect(refreshButton).toBeEnabled({ timeout: 15000 });
+  // Freeze browser timers so a slow macOS runner cannot turn a 3-second
+  // coalescing assertion into a 15-second request-deadline assertion.
+  // Advance exactly one polling interval while the first GET is held.
+  await page.clock.pauseAt(new Date());
   const slowListPattern = '**/api/workflows';
   let observedListRequests = 0;
   let releaseFirstList!: () => void;
@@ -389,13 +393,14 @@ try {
     );
     await board.getByRole('button', { name: 'Resume live updates' }).click();
     await firstSlowPoll;
-    await page.waitForTimeout(3200);
+    await page.clock.runFor(3200);
     assert.equal(
       observedListRequests,
       1,
       'The next automatic tick must coalesce while the first slow list GET is pending',
     );
     releaseFirstList();
+    await page.clock.resume();
     await expect(operationsQueue).toContainText(externalId.slice(0, 8), { timeout: 15000 });
     // A slow background refresh must not replace the explicit selection.
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
@@ -408,6 +413,7 @@ try {
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
   } finally {
     releaseFirstList();
+    await page.clock.resume();
     await page.unroute(slowListPattern);
   }
   // Mobile operations must remain within the viewport and expose real touch targets.
