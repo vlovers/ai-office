@@ -109,8 +109,10 @@ try {
   // Queue and execution use the manager/SDK fixture through the normal UI in browser-smoke.
   // These persisted records exercise the saved outcome view with explicit fixture names.
   const navigate = async (destination: 'Office' | 'Tasks' | 'Settings') => {
-    await page.getByRole('navigation', { name: 'Main navigation' })
-      .getByRole('button', { name: destination }).click();
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: destination })
+      .click();
   };
   const newTask = async (agentId: string, title: string, prompt: string) => {
     await navigate('Tasks');
@@ -139,6 +141,21 @@ try {
   await queue.getByRole('button', { name: /FIXTURE · submitted queue/ }).click();
   await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // Deep links, direct hash changes and browser history must restore the correct workspace mode.
+  const queuedTask = env.store.tasks().find((item) => item.state === 'queued');
+  assert.ok(queuedTask);
+  await page.evaluate((id) => {
+    window.location.hash = `#task/${encodeURIComponent(id)}/session`;
+  }, queuedTask.id);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.evaluate(() => {
+    window.location.hash = '#settings';
+  });
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  await page.goBack();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.goForward();
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
   await navigate('Office');
   await capture('queued');
   await navigate('Tasks');

@@ -15,7 +15,7 @@ import { TaskSessionControls } from './task-session-controls.js';
 import { SubmittedQueue } from './submitted-queue.js';
 import {
   destinationForSection,
-  destinationFromHash,
+  routeFromHash,
   destinationHash,
   type Destination,
 } from './destinations.js';
@@ -87,10 +87,12 @@ function App() {
       /* Optional preference. */
     }
   }, [motion]);
-  const [view, setView] = useState<'mission' | 'focus'>('mission');
-  const [page, setPage] = useState<Destination>(() => destinationFromHash(window.location.hash));
-  const [taskPanel, setTaskPanel] = useState<TaskPanel>(() =>
-    window.location.hash === '#compose' ? 'new' : 'details',
+  const [view, setView] = useState<'mission' | 'focus'>(
+    () => routeFromHash(window.location.hash).view,
+  );
+  const [page, setPage] = useState<Destination>(() => routeFromHash(window.location.hash).page);
+  const [taskPanel, setTaskPanel] = useState<TaskPanel>(
+    () => routeFromHash(window.location.hash).taskPanel,
   );
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState<TaskHistoryStatus>('all');
@@ -106,9 +108,12 @@ function App() {
   const lastNavigation = useRef('');
   useEffect(() => {
     const onHashChange = () => {
+      const route = routeFromHash(window.location.hash);
       setNavigation(decodeTaskNavigation(window.location.hash));
-      setPage(destinationFromHash(window.location.hash));
-      setTaskPanel(window.location.hash === '#compose' ? 'new' : 'details');
+      setPage(route.page);
+      setTaskPanel(route.taskPanel);
+      setView(route.view);
+      if (route.view !== 'focus') lastNavigation.current = '';
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -334,10 +339,14 @@ function App() {
     const targetPage = destinationForSection(id);
     setPage(targetPage);
     if (targetPage === 'tasks') setTaskPanel(id === 'compose' ? 'new' : 'details');
+    if (targetPage !== 'tasks' || id === 'compose' || id === 'task-history') {
+      setView('mission');
+    }
     const targetHash = `#${id}`;
     if (window.location.hash !== targetHash) {
       window.history.replaceState(null, '', targetHash);
       setNavigation(decodeTaskNavigation(targetHash));
+      lastNavigation.current = '';
     }
     const origin = document.activeElement;
     requestAnimationFrame(() => {
