@@ -69,6 +69,8 @@ describe('workflow polling backpressure', () => {
     const old = deferred();
     const current = deferred();
     const previous = gate.run(() => old.promise);
+    // This case exercises an already-running request, not a queued microtask.
+    await Promise.resolve();
     gate.reset();
     const next = gate.run(() => current.promise);
     old.reject(new Error('superseded'));
@@ -83,6 +85,8 @@ describe('workflow polling backpressure', () => {
     const old = deferred();
     const current = deferred();
     const previous = gate.run(() => old.promise);
+    // This case exercises an already-running request, not a queued microtask.
+    await Promise.resolve();
     gate.reset();
     const next = gate.run(() => current.promise);
     expect(next).not.toBe(previous);
