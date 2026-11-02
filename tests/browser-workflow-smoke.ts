@@ -336,22 +336,21 @@ try {
   const newWorkflow = afterCreate.find((item) => !beforeCreate.some((old) => old.id === item.id));
   assert.ok(newWorkflow);
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
-  // A workflow list request that takes longer than the 3s polling interval
-  // must still render. Earlier epoch-per-request logic discarded every response.
+  // Isolate automatic polling from earlier manual refreshes. A slow GET
+  // must remain the only list request until it settles, even after the 3s tick.
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
   const slowListPattern = '**/api/workflows';
-  let pendingListRequests = 0;
-  let peakListRequests = 0;
   let observedListRequests = 0;
   await page.route(slowListPattern, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     observedListRequests++;
-    pendingListRequests++;
-    peakListRequests = Math.max(peakListRequests, pendingListRequests);
     try {
       await new Promise((resolve) => setTimeout(resolve, 3500));
       await route.continue();
-    } finally {
-      pendingListRequests--;
+    } catch (cause) {
+      // Selection changes may abort an intercepted GET while the route sleeps.
+      if (!route.request().failure()) throw cause;
     }
   });
   try {
@@ -362,21 +361,23 @@ try {
     });
     assert.equal(external.statusCode, 201);
     const externalId = external.json().id as string;
+    const firstSlowPoll = page.waitForRequest(
+      (request) => request.url().endsWith('/api/workflows') && request.method() === 'GET',
+    );
+    await board.getByRole('button', { name: 'Resume live updates' }).click();
+    await firstSlowPoll;
+    await page.waitForTimeout(3200);
+    assert.equal(
+      observedListRequests,
+      1,
+      'The next automatic tick must coalesce while the first slow list GET is pending',
+    );
     await expect(operationsQueue).toContainText(externalId.slice(0, 8), { timeout: 15000 });
     // A slow background refresh must not replace the explicit selection.
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
-    // Select a different workflow while another delayed list poll is pending.
-    // The old response must not restore the previous workflow or its checkpoint.
-    const pendingPoll = page.waitForRequest(
-      (request) => request.url().endsWith('/api/workflows') && request.method() === 'GET',
-    );
-    await pendingPoll;
+    // Selecting another workflow while a later slow poll is pending must
+    // invalidate the previous checkpoint and preserve the new selection.
     await expect.poll(() => observedListRequests).toBeGreaterThanOrEqual(2);
-    assert.equal(
-      peakListRequests,
-      1,
-      'Slow automatic workflow polls must not accumulate overlapping list requests',
-    );
     await operationsQueue.getByRole('button', { name: new RegExp(otherId.slice(0, 8)) }).click();
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
     await expect(board.getByText(/^State: active/)).toBeVisible({ timeout: 15000 });
