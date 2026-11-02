@@ -10,6 +10,7 @@ export function isNearLogEnd(
 ): boolean {
   if (![scrollTop, scrollHeight, clientHeight, threshold].every(Number.isFinite)) return false;
   if (scrollHeight < 0 || clientHeight < 0 || threshold < 0) return false;
+  if (scrollHeight < clientHeight) return true;
   return scrollHeight - Math.max(0, scrollTop) - clientHeight <= threshold;
 }
 
