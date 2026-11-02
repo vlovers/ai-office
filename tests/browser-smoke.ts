@@ -243,6 +243,23 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   const log = page.getByRole('log', { name: 'Agent event log' });
   await expect(log.locator('.event-line').first()).toBeVisible();
+  // Explicit pause is available to keyboard users without first scrolling.
+  // A persisted SSE event must update the unread count without resuming follow.
+  const taskForLog = env.store.tasks().find((item) => item.title === 'Review the example project');
+  assert.ok(taskForLog);
+  await expect(log).toHaveAttribute('aria-live', 'polite');
+  await page.getByRole('button', { name: 'Pause auto-scroll' }).click();
+  await expect(log).toHaveAttribute('aria-live', 'off');
+  const firstUnread = env.store.addEvent(taskForLog.id, 'progress', 'Fixture unread event one');
+  env.manager.events.emit('event', firstUnread);
+  await expect(log).toContainText('Fixture unread event one');
+  await expect(page.locator('.event-console-toolbar')).toContainText('1 new');
+  await expect(page.getByRole('button', { name: 'Jump to latest event' })).toBeVisible();
+  await page.getByRole('button', { name: 'Jump to latest event' }).click();
+  await expect(log).toHaveAttribute('aria-live', 'polite');
+  await expect(page.getByRole('button', { name: 'Pause auto-scroll' })).toBeVisible();
+  await expect(page.locator('.event-console-toolbar')).not.toContainText('new');
+
   await log.evaluate((element) => {
     const first = element.querySelector<HTMLElement>('.event-line')!;
     first.style.minHeight = '1200px';
@@ -250,6 +267,12 @@ try {
     element.dispatchEvent(new Event('scroll'));
   });
   await expect(page.getByRole('button', { name: 'Jump to latest event' })).toBeVisible();
+  const scrolledBack = await log.evaluate((element) => element.scrollTop);
+  const secondUnread = env.store.addEvent(taskForLog.id, 'progress', 'Fixture unread event two');
+  env.manager.events.emit('event', secondUnread);
+  await expect(log).toContainText('Fixture unread event two');
+  await expect(page.locator('.event-console-toolbar')).toContainText('1 new');
+  assert.equal(await log.evaluate((element) => element.scrollTop), scrolledBack);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.getByRole('button', { name: 'Jump to latest event' }).click();
   await expect

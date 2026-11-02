@@ -11,3 +11,12 @@ export function isNearLogEnd(
   if (![scrollTop, scrollHeight, clientHeight, threshold].every(Number.isFinite)) return false;
   return scrollHeight - Math.max(0, scrollTop) - clientHeight <= Math.max(0, threshold);
 }
+
+/** Count only retained events newer than the last event the reader saw. */
+export function countEventsAfter(
+  events: readonly { id: number }[],
+  afterId: number | null,
+): number {
+  if (afterId === null) return 0;
+  return events.reduce((count, event) => count + (event.id > afterId ? 1 : 0), 0);
+}
