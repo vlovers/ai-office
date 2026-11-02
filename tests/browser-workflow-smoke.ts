@@ -345,11 +345,16 @@ try {
   await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
   const slowListPattern = '**/api/workflows';
   let observedListRequests = 0;
+  let releaseFirstList!: () => void;
+  const firstListHeld = new Promise<void>((resolve) => {
+    releaseFirstList = resolve;
+  });
   await page.route(slowListPattern, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     observedListRequests++;
     try {
-      await new Promise((resolve) => setTimeout(resolve, 3500));
+      if (observedListRequests === 1) await firstListHeld;
+      else await new Promise((resolve) => setTimeout(resolve, 3500));
       await route.continue();
     } catch (cause) {
       // Selection changes may abort an intercepted GET while the route sleeps.
@@ -375,6 +380,7 @@ try {
       1,
       'The next automatic tick must coalesce while the first slow list GET is pending',
     );
+    releaseFirstList();
     await expect(operationsQueue).toContainText(externalId.slice(0, 8), { timeout: 15000 });
     // A slow background refresh must not replace the explicit selection.
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
@@ -386,6 +392,7 @@ try {
     await expect(board.getByText(/^State: active/)).toBeVisible({ timeout: 15000 });
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
   } finally {
+    releaseFirstList();
     await page.unroute(slowListPattern);
   }
   // Mobile operations must remain within the viewport and expose real touch targets.
