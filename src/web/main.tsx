@@ -117,7 +117,7 @@ function App() {
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
-  const [selected, setSelected] = useState<string>(() => {
+  const [selected, setSelected] = useState<string | undefined>(() => {
     try {
       return sessionStorage.getItem('ai-office-selected-task') || undefined;
     } catch {
