@@ -42,13 +42,15 @@ let manager = new TaskManager(env.store, env.providers, env.auth, undefined, und
 let app = await createApp(manager);
 // Fixture-only diagnostics: distinguish review endpoint failures from UI timing.
 const reviewServerErrors: string[] = [];
-app.addHook('onError', async (request: FastifyRequest, _reply: FastifyReply, error: FastifyError) => {
+app.addHook(
+  'onError',
+  async (request: FastifyRequest, _reply: FastifyReply, error: FastifyError) => {
   if (request.url.includes('/review')) {
     reviewServerErrors.push(
       `${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`,
     );
-  }
-});
+  },
+);
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
