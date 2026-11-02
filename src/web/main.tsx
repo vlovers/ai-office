@@ -26,6 +26,7 @@ import { createLatestResultGate } from './latest-result-gate.js';
 import { connectionLabel, type StreamConnection } from './connection-status.js';
 import { parseTaskEvent } from './event-stream.js';
 import {
+  activeTaskStreamIds,
   appendCachedTaskEvent,
   retainTaskEventHistory,
   taskEventStreamUrl,
@@ -195,15 +196,11 @@ function App() {
   useEffect(() => {
     if (!repositoryId && dashboard?.repositories[0]) setRepositoryId(dashboard.repositories[0].id);
   }, [dashboard, repositoryId]);
-  const streamIds = [
-    ...new Set(
-      [selected, ...(dashboard?.agents.map((agent) => agent.taskId) ?? [])].filter(
-        (id): id is string => Boolean(id),
-      ),
-    ),
-  ]
-    .sort()
-    .join(',');
+  const streamIds = activeTaskStreamIds(
+    selected,
+    dashboard?.tasks.map((item) => item.id) ?? [],
+    dashboard?.agents.map((agent) => agent.taskId) ?? [],
+  ).join(',');
   useEffect(() => {
     const ids = streamIds ? streamIds.split(',') : [];
     let active = true;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent } from '../src/shared/types.js';
 import {
+  activeTaskStreamIds,
   appendCachedTaskEvent,
   retainTaskEventHistory,
   taskEventStreamUrl,
@@ -71,4 +72,17 @@ describe('bounded task event history and SSE resume', () => {
       '/api/tasks/task%2Fwith%20space/stream',
     );
   });
+  it('does not open a reconnecting SSE stream for a removed selected task', () => {
+    expect(activeTaskStreamIds('deleted', ['existing'], [null])).toEqual([]);
+    expect(activeTaskStreamIds('existing', ['existing'], [null])).toEqual(['existing']);
+  });
+
+  it('keeps running agent streams and deduplicates sorted task IDs', () => {
+    expect(
+      activeTaskStreamIds('task-b', ['task-b'], ['task-c', 'task-b', null, 'task-a']),
+    ).toEqual(['task-a', 'task-b', 'task-c']);
+    // An active agent may have a task missing from a temporarily stale task list.
+    expect(activeTaskStreamIds('missing', [], ['agent-task'])).toEqual(['agent-task']);
+  });
+
 });

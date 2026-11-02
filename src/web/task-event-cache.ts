@@ -44,3 +44,17 @@ export function taskEventStreamUrl(taskId: string, history: TaskEventHistory): s
   const path = `/api/tasks/${encodeURIComponent(taskId)}/stream`;
   return after > 0 ? `${path}?after=${after}` : path;
 }
+
+/** Do not reconnect forever to a selected task removed from the dashboard. */
+export function activeTaskStreamIds(
+  selected: string | undefined,
+  knownTaskIds: readonly string[],
+  agentTaskIds: readonly (string | null)[],
+): string[] {
+  const known = new Set(knownTaskIds);
+  const ids = [
+    ...(selected && known.has(selected) ? [selected] : []),
+    ...agentTaskIds.filter((id): id is string => Boolean(id)),
+  ];
+  return [...new Set(ids)].sort();
+}
