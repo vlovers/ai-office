@@ -4,10 +4,17 @@
  */
 export function createSingleFlight() {
   let pending: Promise<void> | null = null;
+  let generation = 0;
   return {
     run(work: () => Promise<void>): Promise<void> {
       if (pending) return pending;
-      const current = Promise.resolve().then(work);
+      const scheduledGeneration = generation;
+      const current = Promise.resolve().then(() => {
+        // A selection can change before the queued microtask starts. Never
+        // launch an obsolete poll after reset() has invalidated its schedule.
+        if (scheduledGeneration !== generation) return;
+        return work();
+      });
       pending = current;
       const clear = () => {
         if (pending === current) pending = null;
@@ -18,6 +25,7 @@ export function createSingleFlight() {
     },
     reset(): void {
       // A previous selection's completion must not unlock the new selection.
+      generation++;
       pending = null;
     },
   };
