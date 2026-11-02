@@ -44,6 +44,16 @@ describe('task event log follow behavior', () => {
     expect(unreadBaseline(21, 24)).toBe(24);
   });
 
+  it('ignores malformed event IDs and invalid unread baselines', () => {
+    const events = [{ id: 11 }, { id: Number.NaN }, { id: Number.POSITIVE_INFINITY }];
+    expect(countEventsAfter(events, 10)).toBe(1);
+    expect(countEventsAfter(events, Number.NaN)).toBe(0);
+    expect(countEventsAfter(events, -1)).toBe(0);
+    expect(unreadBaseline(Number.NaN, 20)).toBe(20);
+    expect(unreadBaseline(20, Number.POSITIVE_INFINITY)).toBe(20);
+    expect(unreadBaseline(-5, -1)).toBe(0);
+  });
+
   it('counts retained unread events even after the 500-event history cap', () => {
     const retained = Array.from({ length: 500 }, (_, index) => ({ id: index + 101 }));
     expect(countEventsAfter(retained, 550)).toBe(50);
