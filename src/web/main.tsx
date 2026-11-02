@@ -24,6 +24,7 @@ import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { createLatestResultGate } from './latest-result-gate.js';
 import {
+  canRetryStreams,
   connectionLabel,
   streamConnectionOnError,
   type StreamConnection,
@@ -165,6 +166,7 @@ function App() {
     'connecting',
   );
   const [streamConnections, setStreamConnections] = useState<Record<string, StreamConnection>>({});
+  const [streamRetryKey, setStreamRetryKey] = useState(0);
   const connection = connectionLabel(httpConnection, streamConnections);
   const [repositoryId, setRepositoryId] = useState('');
   const [resumeSessionId, setResumeSessionId] = useState('');
@@ -265,7 +267,7 @@ function App() {
       active = false;
       streams.forEach((stream) => stream.close());
     };
-  }, [streamIds]);
+  }, [streamIds, streamRetryKey]);
   const events = selected ? (eventHistory[selected] ?? []) : [];
   const act = async (operation: () => Promise<void>) => {
     setBusy(true);
@@ -558,6 +560,15 @@ function App() {
             />
             {connection}
           </span>
+          {canRetryStreams(httpConnection, streamConnections) && (
+            <button
+              type="button"
+              className="stream-retry secondary"
+              onClick={() => setStreamRetryKey((key) => key + 1)}
+            >
+              Retry live events
+            </button>
+          )}
           <button
             className="motion-toggle secondary"
             aria-pressed={motion}
