@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { AgentEvent, Session, Task } from '../shared/types.js';
-import { countEventsAfter, isNearLogEnd } from './log-follow.js';
+import { countEventsAfter, isNearLogEnd, unreadBaseline } from './log-follow.js';
 
 type FollowMode = 'following' | 'reading' | 'paused';
 
@@ -36,7 +36,7 @@ function TaskEventLog({ events }: { events: AgentEvent[] }) {
               type="button"
               className="secondary"
               onClick={() => {
-                setPausedAtId(latestEventId ?? 0);
+                setPausedAtId((previous) => unreadBaseline(previous, latestEventId));
                 setMode('paused');
               }}
             >
@@ -72,7 +72,7 @@ function TaskEventLog({ events }: { events: AgentEvent[] }) {
             setMode('following');
             setPausedAtId(null);
           } else {
-            if (mode === 'following') setPausedAtId(latestEventId ?? 0);
+            if (mode === 'following') setPausedAtId((previous) => unreadBaseline(previous, latestEventId));
             setMode('reading');
           }
         }}
