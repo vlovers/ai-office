@@ -11,6 +11,7 @@ export function parseTaskEvent(raw: string, taskId: string): AgentEvent | null {
       (event.id ?? 0) <= 0 ||
       event.taskId !== taskId ||
       typeof event.at !== 'string' ||
+      !Number.isFinite(Date.parse(event.at)) ||
       typeof event.kind !== 'string' ||
       !event.kind ||
       typeof event.message !== 'string'

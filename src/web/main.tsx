@@ -23,7 +23,11 @@ import { WorkflowsPage } from './workflows-page.js';
 import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { createLatestResultGate } from './latest-result-gate.js';
-import { connectionLabel, type StreamConnection } from './connection-status.js';
+import {
+  connectionLabel,
+  streamConnectionOnError,
+  type StreamConnection,
+} from './connection-status.js';
 import { nextTaskEventCursor, parseTaskEvent } from './event-stream.js';
 import {
   activeTaskStreamIds,
@@ -112,8 +116,25 @@ function App() {
   const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
-  const [selected, setSelected] = useState<string>();
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
+  const [selected, setSelected] = useState<string | undefined>(() => {
+    try {
+      return sessionStorage.getItem('ai-office-selected-task') || undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  useEffect(() => {
+    if (!dashboard || navigation) return;
+    const current = selected && dashboard.tasks.find((task) => task.id === selected);
+    if (selected && !current) setSelected(undefined);
+    try {
+      if (current) sessionStorage.setItem('ai-office-selected-task', current.id);
+      else sessionStorage.removeItem('ai-office-selected-task');
+    } catch {
+      /* Storage may be unavailable in private browsing. */
+    }
+  }, [dashboard, selected, navigation]);
   const lastNavigation = useRef('');
   useEffect(() => {
     const onHashChange = () => {
@@ -129,6 +150,14 @@ function App() {
   }, []);
   const [eventHistory, setEventHistory] = useState<Record<string, AgentEvent[]>>({});
   const [selectedAgent, setSelectedAgent] = useState<AgentId>('codex-1');
+  const restoredSelection = useRef(false);
+  useEffect(() => {
+    if (!dashboard || restoredSelection.current) return;
+    restoredSelection.current = true;
+    if (navigation || !selected) return;
+    const restored = dashboard.tasks.find((item) => item.id === selected);
+    if (restored) setSelectedAgent(restored.agentId);
+  }, [dashboard, navigation, selected]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingStops, setPendingStops] = useState<string[]>([]);
@@ -213,7 +242,11 @@ function App() {
         if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'connected' }));
       };
       stream.onerror = () => {
-        if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'reconnecting' }));
+        if (active)
+          setStreamConnections((previous) => ({
+            ...previous,
+            [id]: streamConnectionOnError(stream.readyState),
+          }));
       };
       stream.onmessage = (message) => {
         // Closed/replaced EventSources may still have a queued message callback.
@@ -409,6 +442,7 @@ function App() {
     <div
       data-page={page}
       data-task-panel={taskPanel}
+      data-selected-agent={selectedAgent}
       className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
     >
       <a

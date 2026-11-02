@@ -1,44 +1,61 @@
 import { describe, expect, it } from 'vitest';
-import { connectionLabel } from '../src/web/connection-status.js';
+import { connectionLabel, streamConnectionOnError } from '../src/web/connection-status.js';
 
 describe('workspace connection status', () => {
+  const label = connectionLabel;
+  const connected = 'connected';
+  const disconnected = 'disconnected';
+  const reconnecting = 'reconnecting';
+  const connectingLabel = 'Connecting to live events…';
+  const reconnectingLabel = 'Reconnecting to live events…';
+  const disconnectedLabel = 'Live event stream disconnected';
+  const opening = { taskA: 'connecting' } as const;
+  const mixedOpening = { taskA: connected, taskB: 'connecting' } as const;
+  const mixedRetry = { taskA: 'connecting', taskB: reconnecting } as const;
+  const retry = { taskA: reconnecting } as const;
+  const mixedConnectedRetry = { taskA: connected, taskB: reconnecting } as const;
+  const mixedDisconnected = { taskA: connected, taskB: disconnected } as const;
+  const mixedFailedRetry = { taskA: reconnecting, taskB: disconnected } as const;
+
   it('shows the HTTP connection before any live streams exist', () => {
-    expect(connectionLabel('connecting', {})).toBe('Connecting');
-    expect(connectionLabel('connected', {})).toBe('Local server connected');
+    expect(label('connecting', {})).toBe('Connecting');
+    expect(label(connected, {})).toBe('Local server connected');
   });
 
   it('does not claim live connectivity before newly opened streams connect', () => {
-    expect(connectionLabel('connected', { taskA: 'connecting' })).toBe(
-      'Connecting to live events…',
-    );
-    expect(connectionLabel('connected', { taskA: 'connected', taskB: 'connecting' })).toBe(
-      'Connecting to live events…',
-    );
+    expect(label(connected, opening)).toBe(connectingLabel);
+    expect(label(connected, mixedOpening)).toBe(connectingLabel);
   });
 
   it('keeps an SSE reconnect warning visible even after HTTP polling succeeds', () => {
-    expect(connectionLabel('connected', { taskA: 'reconnecting' })).toBe(
-      'Reconnecting to live events…',
-    );
+    expect(label(connected, retry)).toBe(reconnectingLabel);
   });
 
   it('prioritizes reconnecting over newly connecting streams', () => {
-    expect(connectionLabel('connected', { taskA: 'connecting', taskB: 'reconnecting' })).toBe(
-      'Reconnecting to live events…',
-    );
+    expect(label(connected, mixedRetry)).toBe(reconnectingLabel);
   });
 
   it('warns if one of several task streams is reconnecting', () => {
-    expect(connectionLabel('connected', { taskA: 'connected', taskB: 'reconnecting' })).toBe(
-      'Reconnecting to live events…',
-    );
+    expect(label(connected, mixedConnectedRetry)).toBe(reconnectingLabel);
+  });
+
+  it('distinguishes a terminal CLOSED EventSource from automatic reconnect', () => {
+    expect(streamConnectionOnError(0)).toBe(reconnecting);
+    expect(streamConnectionOnError(1)).toBe(reconnecting);
+    expect(streamConnectionOnError(2)).toBe(disconnected);
+  });
+
+  it('never masks a terminal stream failure with another connected stream', () => {
+    expect(label(connected, mixedDisconnected)).toBe(disconnectedLabel);
+    expect(label(connected, mixedFailedRetry)).toBe(disconnectedLabel);
+    expect(label(disconnected, { taskA: disconnected })).toBe('Server disconnected');
   });
 
   it('restores live connection status when streams recover', () => {
-    expect(connectionLabel('connected', { taskA: 'connected' })).toBe('Live events connected');
+    expect(label(connected, { taskA: connected })).toBe('Live events connected');
   });
 
   it('prioritizes a failed HTTP connection over healthy stream status', () => {
-    expect(connectionLabel('disconnected', { taskA: 'connected' })).toBe('Server disconnected');
+    expect(label(disconnected, { taskA: connected })).toBe('Server disconnected');
   });
 });
