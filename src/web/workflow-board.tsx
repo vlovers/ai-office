@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
 import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
+import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
 import {
   selectWorkflowOperations,
   summarizeWorkflowOperations,
@@ -92,8 +93,13 @@ export function WorkflowBoard({
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
+  // Mutations can select a new workflow before React renders again.
+  // Read this ref after async polling instead of a stale selected closure.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   useEffect(() => {
     if (inspection) {
+      selectedRef.current = inspection.id;
       setSelected(inspection.id);
       // Explicit inspection must load the requested checkpoint, including after a pause.
       setPaused(false);
@@ -109,6 +115,7 @@ export function WorkflowBoard({
   const [reviewer, setReviewer] = useState('');
   const [qa, setQA] = useState('');
   const [error, setError] = useState('');
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<{
     name: string;
@@ -132,9 +139,11 @@ export function WorkflowBoard({
       setItems(workflows);
       setDashboard(current);
       setCommands(choices.commands);
-      const next = workflows.some((item) => item.id === selected)
-        ? selected
+      const requested = selectedRef.current;
+      const next = workflows.some((item) => item.id === requested)
+        ? requested
         : (workflows[0]?.id ?? '');
+      selectedRef.current = next;
       setSelected(next);
       const [view, output, diagnosis] = next
         ? await Promise.all([
@@ -147,6 +156,7 @@ export function WorkflowBoard({
       setTimeline(view);
       setReports(output);
       setDiagnostics(diagnosis);
+      setHasLoaded(true);
       setError('');
     } catch (cause) {
       if (epoch === refreshEpoch.current)
@@ -161,11 +171,11 @@ export function WorkflowBoard({
       refreshEpoch.current++;
     };
   }, [refresh, paused]);
-  async function mutate(operation: () => Promise<unknown>) {
+  async function mutate(operation?: () => Promise<unknown>) {
     setLoading(true);
     setError('');
     try {
-      await operation();
+      if (operation) await operation();
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -174,6 +184,10 @@ export function WorkflowBoard({
     }
   }
   const chosen = items.find((item) => item.id === selected);
+  // The server enforces optimistic versions; the UI must also fail closed
+  // when polling fails, a different workflow is selected, or updates are paused.
+  const checkpointCurrent =
+    !paused && isCurrentWorkflowCheckpoint(selected, chosen, timeline, error);
   const counts = {
     active: items.filter((item) => item.state === 'active').length,
     blocked: items.filter((item) => item.state === 'blocked').length,
@@ -192,9 +206,9 @@ export function WorkflowBoard({
     ? filteredWorkflows.filter((item) => item.id === selected)
     : filteredWorkflows;
   const workflowChoices = filteredWorkflows;
-  const staleAction = Boolean(
-    action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
-  );
+  const staleAction =
+    action !== null &&
+    (!checkpointCurrent || action.id !== selected || action.version !== timeline?.version);
   const unsubmitted =
     dashboard?.tasks.filter(
       (task) =>
@@ -244,7 +258,7 @@ export function WorkflowBoard({
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
         )}
-        <button className="secondary" disabled={loading} onClick={() => void mutate(refresh)}>
+        <button className="secondary" disabled={loading} onClick={() => void mutate()}>
           Refresh workflow
         </button>
       </div>
@@ -299,6 +313,7 @@ export function WorkflowBoard({
                   reviewerAgentId: reviewer,
                   ...(qa ? { qaAgentId: qa } : {}),
                 });
+                selectedRef.current = created.id;
                 setSelected(created.id);
               })
             }
@@ -456,7 +471,9 @@ export function WorkflowBoard({
           )}
         </div>
       )}
-      {!items.length && <p>No workflows created yet.</p>}
+      {!items.length && !error && (
+        <p>{hasLoaded ? 'No workflows created yet.' : 'Loading workflows…'}</p>
+      )}
       {items.length > 0 && (
         <>
           <label>
@@ -489,6 +506,12 @@ export function WorkflowBoard({
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
               </p>
+              {!checkpointCurrent && (
+                <p role="status">
+                  Checkpoint actions are unavailable until the current workflow version is verified.
+                  Resume live updates or refresh after the connection recovers.
+                </p>
+              )}
               {diagnostics &&
                 diagnostics.id === timeline.id &&
                 diagnostics.version === timeline.version && (
@@ -548,7 +571,7 @@ export function WorkflowBoard({
                       ))}
                     {stage.nextAction && (
                       <button
-                        disabled={loading}
+                        disabled={loading || !checkpointCurrent}
                         onClick={() => {
                           setAction({
                             name: stage.nextAction!,
@@ -583,7 +606,7 @@ export function WorkflowBoard({
                 !timeline.stages.some((stage) => stage.status === 'running') && (
                   <button
                     className="secondary"
-                    disabled={loading}
+                    disabled={loading || !checkpointCurrent}
                     onClick={() => {
                       setAction({
                         name: 'cancel',
