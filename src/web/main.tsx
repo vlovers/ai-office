@@ -381,8 +381,17 @@ function App() {
       data-task-panel={taskPanel}
       className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
     >
-      <a className="skip-link" href="#overview">
-        Skip to mission control
+      <a
+        className="skip-link"
+        href="#overview"
+        onClick={(event) => {
+          // A skip link moves keyboard focus; it must not change the active
+          // destination or replace a task-scoped URL with #overview.
+          event.preventDefault();
+          document.getElementById('overview')?.focus();
+        }}
+      >
+        Skip to main content
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
         <a
@@ -508,7 +517,7 @@ function App() {
             <button
               className="secondary"
               aria-pressed={view === 'mission'}
-              onClick={() => setView('mission')}
+              onClick={() => showSection('overview')}
             >
               Office overview
             </button>
