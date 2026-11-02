@@ -442,6 +442,7 @@ function App() {
     <div
       data-page={page}
       data-task-panel={taskPanel}
+      data-selected-agent={selectedAgent}
       className={`shell ${crt ? 'crt-enabled' : ''} ${motion ? 'scene-motion' : ''} ${view === 'focus' ? 'focus-mode' : ''}`}
     >
       <a
