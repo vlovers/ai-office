@@ -72,7 +72,8 @@ function TaskEventLog({ events }: { events: AgentEvent[] }) {
             setMode('following');
             setPausedAtId(null);
           } else {
-            if (mode === 'following') setPausedAtId((previous) => unreadBaseline(previous, latestEventId));
+            if (mode === 'following')
+              setPausedAtId((previous) => unreadBaseline(previous, latestEventId));
             setMode('reading');
           }
         }}
