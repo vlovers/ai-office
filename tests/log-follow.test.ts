@@ -22,6 +22,9 @@ describe('task event log follow behavior', () => {
     expect(isNearLogEnd(Number.NaN, 1000, 400)).toBe(false);
     expect(isNearLogEnd(600, Number.POSITIVE_INFINITY, 400)).toBe(false);
     expect(isNearLogEnd(550, 1000, 400, 0)).toBe(false);
+    expect(isNearLogEnd(0, -1, 400)).toBe(false);
+    expect(isNearLogEnd(0, 1000, -1)).toBe(false);
+    expect(isNearLogEnd(600, 1000, 400, -1)).toBe(false);
   });
 
   it('counts only new persisted IDs while following is paused', () => {
