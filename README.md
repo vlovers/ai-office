@@ -228,6 +228,10 @@ reads clear their deadline timer so a superseded request cannot later be
 misreported as a timeout. Workflow API errors preserve the HTTP status when a
 proxy returns HTML or an empty body; invalid successful responses fail closed
 rather than being treated as verified checkpoints.
+A further unreleased guard checks the fields consumed by the workflow board in
+successful GET responses (list, dashboard, QA commands, timeline, reports and
+diagnostics). Structurally malformed JSON cannot replace a verified checkpoint;
+the UI reports an error and requires a successful refresh before approvals.
 
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward

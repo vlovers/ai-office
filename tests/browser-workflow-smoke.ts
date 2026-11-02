@@ -121,6 +121,23 @@ try {
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  // A 200 response can contain syntactically valid JSON with the wrong shape.
+  // Do not accept it as a verified checkpoint or crash during rendering.
+  const invalidCatalog = '**/api/workflows/qa-commands';
+  await page.route(invalidCatalog, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"commands":"broken"}' }),
+  );
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Invalid workflow response: malformed QA command catalog',
+    );
+    await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
+  } finally {
+    await page.unroute(invalidCatalog);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();

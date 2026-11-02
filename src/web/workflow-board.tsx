@@ -4,6 +4,7 @@ import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
 import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
 import { createLatestResultGate } from './latest-result-gate.js';
 import { readWorkflowResponse } from './workflow-http.js';
+import { assertWorkflowReadShape } from './workflow-response-shapes.js';
 import { createRequestDeadline, createSingleFlight } from './workflow-polling.js';
 import {
   selectWorkflowOperations,
@@ -76,7 +77,11 @@ async function request<T>(path: string, body?: unknown, signal?: AbortSignal): P
           body: JSON.stringify(body),
         },
   );
-  return readWorkflowResponse<T>(response);
+  const value = await readWorkflowResponse<T>(response);
+  // TypeScript generics do not validate untrusted JSON at runtime. Keep
+  // malformed successful GETs from becoming an actionable checkpoint.
+  if (body === undefined) assertWorkflowReadShape(path, value);
+  return value;
 }
 
 export function WorkflowBoard({
