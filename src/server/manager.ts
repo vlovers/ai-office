@@ -50,6 +50,24 @@ import {
 import type { AuthMode } from '../shared/types.js';
 import type { CodexAuth } from './providers/codex-auth.js';
 
+// Concurrent read-only review requests (including reloads) may briefly
+// overlap a Git review holding the same repository lease. Wait for release,
+// never steal the lock. A stale/unknown lease still fails closed after 750ms.
+// Mutating review operations always use the immediate lease contract.
+async function acquireReadOnlyReviewLease(paths: string[], detail: string) {
+  const delays = [0, 50, 100, 200, 400];
+  for (const [attempt, delay] of delays.entries()) {
+    if (delay) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    try {
+      return await acquireLocks(paths, detail);
+    } catch (error) {
+      if (!(error instanceof ResourceLockedError) || attempt === delays.length - 1)
+        throw error;
+    }
+  }
+  throw new ResourceLockedError();
+}
+
 export interface FeedbackInput {
   revision: string;
   version: number;
@@ -1737,7 +1755,10 @@ export class TaskManager {
       const paths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
         (directory) => join(locks, createHash('sha256').update(directory).digest('hex')),
       );
-      release = await acquireLocks(paths, repository.path);
+      release =
+        action === 'review'
+          ? await acquireReadOnlyReviewLease(paths, repository.path)
+          : await acquireLocks(paths, repository.path);
     } catch {
       throw new AppError(409, 'Repository is busy or has an unresolved lease.');
     }

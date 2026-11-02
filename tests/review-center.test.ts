@@ -1,13 +1,14 @@
 import { afterEach, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { realpath, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, realpath, writeFile, readFile } from 'node:fs/promises';
 import { sandbox, until } from './helpers.js';
 import { TaskManager } from '../src/server/manager.js';
 import { Store } from '../src/server/store.js';
 import { Workspaces } from '../src/server/workspaces.js';
-import { validateRepository } from '../src/server/repositories.js';
+import { repositoryLeaseDirectories, validateRepository } from '../src/server/repositories.js';
+import { acquireLocks } from '../src/server/lock.js';
 import { createApp } from '../src/server/app.js';
 import { diffLines } from '../src/shared/diff.js';
 import type { WorkspaceReview, ReviewRecord, ReviewComment } from '../src/shared/types.js';
@@ -86,6 +87,29 @@ async function fixture() {
   }
   return { ...env, manager, service, repo, task, review, workspace, save, request, comments };
 }
+it('waits briefly for a concurrent read-only Git review without bypassing write leases', async () => {
+  const env = await fixture();
+  const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const directories = await repositoryLeaseDirectories(env.repo, env.workspace.gitDir);
+  const paths = directories.map((directory) =>
+    join(root, createHash('sha256').update(directory).digest('hex')),
+  );
+  const release = await acquireLocks(paths, env.repo.path);
+  let held = true;
+  try {
+    // A write/feedback operation must not wait or bypass a competing lease.
+    await expect(env.save()).rejects.toThrow('Repository is busy or has an unresolved lease.');
+    const read = env.manager.reviewOperation(env.task.id, 'review');
+    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+    await release();
+    held = false;
+    await expect(read).resolves.toMatchObject({ workspace: { id: env.workspace.id } });
+  } finally {
+    if (held) await release();
+  }
+});
+
 it('parses added/deleted/context lines without anchoring headers and treats HTML as text', () => {
   expect(
     diffLines('--- a/x\n+++ b/x\n@@ -2,2 +3,2 @@\n-<script>\n+const x\n end\n+not a hunk'),
