@@ -15,6 +15,7 @@ describe('task event log follow behavior', () => {
 
   it('keeps short logs in follow mode and clamps elastic overscroll', () => {
     expect(isNearLogEnd(0, 200, 400)).toBe(true);
+    expect(isNearLogEnd(0, 0, 400)).toBe(true);
     expect(isNearLogEnd(-20, 1000, 400)).toBe(false);
   });
 
