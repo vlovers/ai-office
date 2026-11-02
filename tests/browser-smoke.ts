@@ -224,6 +224,15 @@ try {
   await page.getByLabel('Task title').fill('Review the example project');
   await page.getByLabel('What should the agent work on?').fill('Review the README.');
   await page.getByRole('button', { name: 'Create task' }).click();
+  // Creating a task must leave the composer route and give the new session a
+  // durable address, including after a full reload on a narrow screen.
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-workspace')).toContainText('Review the example project');
+  await expect(page.getByRole('button', { name: 'Start task' })).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1100 });
   await page.getByRole('button', { name: 'Start task' }).click();
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
