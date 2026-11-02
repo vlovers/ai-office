@@ -58,6 +58,7 @@ try {
     await route.continue();
   });
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Refresh workflow', exact: true })).toBeDisabled();
   await expect(board.getByRole('button', { name: 'Refresh workflow', exact: true })).toBeEnabled();
   assert.equal(manualRefreshes, 1, 'Manual refresh issued duplicate workflow list requests');
   await page.unroute('**/api/workflows');
