@@ -68,9 +68,7 @@ describe('bounded task event history and SSE resume', () => {
     history = retainTaskEventHistory(history, ['new-task']);
     expect(history['task-2']).toBeUndefined();
     expect(history['task-1']?.at(-1)?.id).toBe(7);
-    expect(taskEventStreamUrl('task/with space', {})).toBe(
-      '/api/tasks/task%2Fwith%20space/stream',
-    );
+    expect(taskEventStreamUrl('task/with space', {})).toBe('/api/tasks/task%2Fwith%20space/stream');
   });
 
   it('does not open a reconnecting SSE stream for a removed selected task', () => {
