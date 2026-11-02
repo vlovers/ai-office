@@ -125,7 +125,11 @@ try {
   // Do not accept it as a verified checkpoint or crash during rendering.
   const invalidCatalog = '**/api/workflows/qa-commands';
   await page.route(invalidCatalog, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: '{"commands":"broken"}' }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '{"commands":"broken"}',
+    }),
   );
   try {
     await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();

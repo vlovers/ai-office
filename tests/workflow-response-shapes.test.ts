@@ -26,50 +26,127 @@ const timeline = {
   ],
 };
 const dashboard = {
-  tasks: [{ id: 'task-1', title: 'Task', repositoryId: 'repo-1', agentId: 'coder', state: 'queued' }],
+  tasks: [
+    {
+      id: 'task-1',
+      title: 'Task',
+      repositoryId: 'repo-1',
+      agentId: 'coder',
+      state: 'queued',
+    },
+  ],
   queue: [{ taskId: 'task-1' }],
-  profiles: [{ id: 'reviewer', name: 'Reviewer', archived: false, maximumMode: 'read-only' }],
+  profiles: [
+    {
+      id: 'reviewer',
+      name: 'Reviewer',
+      archived: false,
+      maximumMode: 'read-only',
+    },
+  ],
 };
 const diagnostics = {
   id: 'workflow-1',
   version: 3,
   state: 'active',
   warning: '',
-  findings: [{ code: 'none', severity: 'info', stage: null, message: 'OK', suggestedAction: null }],
+  findings: [
+    {
+      code: 'none',
+      severity: 'info',
+      stage: null,
+      message: 'OK',
+      suggestedAction: null,
+    },
+  ],
 };
 
 describe('workflow read response shape boundary', () => {
-  it.each([
-    ['/workflows', [summary]],
-    ['/dashboard', dashboard],
-    ['/workflows/qa-commands', { commands: [{ commandId: 'source', argv: ['npm', 'test'] }] }],
-    ['/workflows/workflow-1/timeline', timeline],
-    ['/workflows/workflow-1/results', [{ kind: 'coder', result: '', error: null }]],
-    ['/workflows/workflow-1/diagnostics', diagnostics],
-  ])('accepts the expected fields for %s', (path, value) => {
-    expect(() => assertWorkflowReadShape(path as string, value)).not.toThrow();
+  it('accepts all expected GET payloads', () => {
+    expect(() => assertWorkflowReadShape('/workflows', [summary])).not.toThrow();
+    expect(() => assertWorkflowReadShape('/dashboard', dashboard)).not.toThrow();
+    expect(() =>
+      assertWorkflowReadShape('/workflows/qa-commands', {
+        commands: [{ commandId: 'source', argv: ['npm', 'test'] }],
+      }),
+    ).not.toThrow();
+    expect(() => assertWorkflowReadShape('/workflows/workflow-1/timeline', timeline)).not.toThrow();
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/results', [
+        { kind: 'coder', result: '', error: null },
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/diagnostics', diagnostics),
+    ).not.toThrow();
   });
 
-  it.each([
-    ['/workflows', { items: [summary] }, 'workflow list'],
-    ['/workflows', [{ ...summary, stages: null }], 'workflow list'],
-    ['/workflows', [{ ...summary, version: '3' }], 'workflow list'],
-    ['/dashboard', { ...dashboard, queue: null }, 'dashboard'],
-    ['/dashboard', { ...dashboard, tasks: [null] }, 'dashboard'],
-    ['/workflows/qa-commands', [], 'QA command catalog'],
-    ['/workflows/qa-commands', { commands: [{ commandId: 'source', argv: 'npm test' }] }, 'QA command catalog'],
-    ['/workflows/workflow-1/timeline', { ...timeline, stages: 'broken' }, 'workflow timeline'],
-    ['/workflows/workflow-1/timeline', { ...timeline, stages: [{ kind: null }] }, 'workflow timeline'],
-    ['/workflows/workflow-1/results', [{ kind: 'coder', result: null, error: null }], 'workflow reports'],
-    ['/workflows/workflow-1/diagnostics', { ...diagnostics, findings: null }, 'workflow diagnostics'],
-    ['/workflows/workflow-1/diagnostics', { ...diagnostics, findings: [null] }, 'workflow diagnostics'],
-  ])('rejects malformed %s without trusting the checkpoint', (path, value, label) => {
-    expect(() => assertWorkflowReadShape(path as string, value)).toThrow(
-      `Invalid workflow response: malformed ${label}`,
+  it('rejects a non-array workflow list', () => {
+    expect(() => assertWorkflowReadShape('/workflows', { items: [summary] })).toThrow(
+      'Invalid workflow response: malformed workflow list',
     );
   });
 
-  it('rejects unknown GET endpoints rather than silently trusting unvalidated data', () => {
+  it('rejects invalid nested workflow stages and versions', () => {
+    expect(() => assertWorkflowReadShape('/workflows', [{ ...summary, stages: null }])).toThrow();
+    expect(() => assertWorkflowReadShape('/workflows', [{ ...summary, version: '3' }])).toThrow();
+  });
+
+  it('rejects malformed dashboard collections', () => {
+    expect(() => assertWorkflowReadShape('/dashboard', { ...dashboard, queue: null })).toThrow();
+    expect(() => assertWorkflowReadShape('/dashboard', { ...dashboard, tasks: [null] })).toThrow();
+  });
+
+  it('rejects malformed QA command catalogs', () => {
+    expect(() => assertWorkflowReadShape('/workflows/qa-commands', [])).toThrow(
+      'Invalid workflow response: malformed QA command catalog',
+    );
+    expect(() =>
+      assertWorkflowReadShape('/workflows/qa-commands', {
+        commands: [{ commandId: 'source', argv: 'npm test' }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects malformed timeline stages', () => {
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/timeline', {
+        ...timeline,
+        stages: 'broken',
+      }),
+    ).toThrow('Invalid workflow response: malformed workflow timeline');
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/timeline', {
+        ...timeline,
+        stages: [{ kind: null }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects malformed report entries', () => {
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/results', [
+        { kind: 'coder', result: null, error: null },
+      ]),
+    ).toThrow('Invalid workflow response: malformed workflow reports');
+  });
+
+  it('rejects malformed diagnostics', () => {
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/diagnostics', {
+        ...diagnostics,
+        findings: null,
+      }),
+    ).toThrow('Invalid workflow response: malformed workflow diagnostics');
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/diagnostics', {
+        ...diagnostics,
+        findings: [null],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects unknown GET endpoints instead of silently trusting data', () => {
     expect(() => assertWorkflowReadShape('/workflows/unrecognized', {})).toThrow(
       'Unrecognized workflow read endpoint',
     );
