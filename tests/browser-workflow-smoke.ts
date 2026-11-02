@@ -279,8 +279,12 @@ try {
     );
     await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
     await requested;
+    // A slow checkpoint must show progress rather than an unexplained blank panel.
+    await expect(board.getByText('Loading selected workflow checkpoint…')).toBeVisible();
+    await expect(board.getByText(/^State: completed/)).toHaveCount(0);
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+    await expect(board.getByText('Loading selected workflow checkpoint…')).toHaveCount(0);
     release();
     await routeSettled;
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
