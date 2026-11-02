@@ -343,11 +343,11 @@ function App() {
       setView('mission');
     }
     const targetHash = `#${id}`;
-    if (window.location.hash !== targetHash) {
-      window.history.replaceState(null, '', targetHash);
-      setNavigation(decodeTaskNavigation(targetHash));
-      lastNavigation.current = '';
-    }
+    // Section changes are navigations, not silent URL rewrites: Back/Forward
+    // must restore the previous screen and the Tasks creation/details tab.
+    setNavigation(null);
+    lastNavigation.current = '';
+    if (window.location.hash !== targetHash) window.location.hash = targetHash;
     const origin = document.activeElement;
     requestAnimationFrame(() => {
       // A later keyboard/pointer action takes precedence over this deferred navigation.
@@ -403,6 +403,8 @@ function App() {
           page={page}
           taskCount={dashboard?.tasks.length ?? 0}
           onNavigate={(destination) => {
+            setNavigation(null);
+            lastNavigation.current = '';
             setPage(destination);
             setView('mission');
             window.location.hash = destinationHash(destination);
@@ -516,10 +518,7 @@ function App() {
               disabled={!stationTask}
               onClick={() => {
                 if (stationTask) {
-                  setSelected(stationTask.id);
-                  setResumeSessionId('');
-                  setView('focus');
-                  showSection('task-workspace');
+                  navigateTask(stationTask, 'session');
                 }
               }}
             >
@@ -632,11 +631,7 @@ function App() {
                   }
                   onAssign={() => showSection('compose')}
                   onInspectSession={() => {
-                    if (stationTask) {
-                      setSelected(stationTask.id);
-                      setView('focus');
-                      showSection('task-workspace');
-                    }
+                    if (stationTask) navigateTask(stationTask, 'session');
                   }}
                   onInspectTask={(taskId) => {
                     const target = dashboard?.tasks.find((item) => item.id === taskId);
@@ -786,7 +781,6 @@ function App() {
                             showStopControl={view === 'focus' && task.id === agent?.taskId}
                             stopControl={stopControl}
                             onNavigate={navigateTask}
-                            onFocus={() => setView('focus')}
                             onResumeSessionChange={setResumeSessionId}
                             onStartTask={() => {
                               void act(async () => {
