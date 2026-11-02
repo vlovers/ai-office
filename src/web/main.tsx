@@ -116,6 +116,7 @@ function App() {
   const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
+  const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const [selected, setSelected] = useState<string>(() => {
     try {
       return sessionStorage.getItem('ai-office-selected-task') || undefined;
@@ -135,7 +136,6 @@ function App() {
       /* Storage may be unavailable in private browsing. */
     }
   }, [dashboard, selected, navigation]);
-  const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const lastNavigation = useRef('');
   useEffect(() => {
     const onHashChange = () => {
