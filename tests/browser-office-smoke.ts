@@ -131,6 +131,17 @@ try {
     await page.getByRole('button', { name: 'Start task' }).click();
     await navigate('Office');
   };
+  // Switching to the task composer must be a real history entry. Back and
+  // Forward restore both the destination and the active task panel.
+  await navigate('Tasks');
+  await page.getByRole('button', { name: '+ New task' }).click();
+  await expect(page).toHaveURL(/#compose$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/#tasks$/);
+  await expect(page.locator('.shell')).toHaveAttribute('data-task-panel', 'details');
+  await page.goForward();
+  await expect(page).toHaveURL(/#compose$/);
+  await expect(page.locator('.shell')).toHaveAttribute('data-task-panel', 'new');
   await navigate('Settings');
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
