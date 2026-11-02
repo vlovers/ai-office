@@ -343,6 +343,13 @@ try {
   // must remain the only list request until it settles, even after the 3s tick.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
   await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
+  // Drain the create workflow's explicit refresh before measuring automatic
+  // polling. On slower CI runners it can otherwise overlap the resumed poll
+  // and be miscounted as a second automatic request.
+  const refreshButton = board.getByRole('button', { name: 'Refresh workflow', exact: true });
+  await refreshButton.click();
+  await expect(refreshButton).toBeDisabled();
+  await expect(refreshButton).toBeEnabled({ timeout: 15000 });
   const slowListPattern = '**/api/workflows';
   let observedListRequests = 0;
   let releaseFirstList!: () => void;
