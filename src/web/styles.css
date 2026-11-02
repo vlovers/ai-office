@@ -1896,7 +1896,7 @@ select {
   display: none;
 }
 .shell:not([data-page='office']) .office-scene,
-.shell:not([data-page='office']) .view-switch {
+.shell:not([data-page='office']):not(.focus-mode) .view-switch {
   display: none;
 }
 .shell[data-page='tasks'] .stats,
