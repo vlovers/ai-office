@@ -200,7 +200,7 @@ describe('workflow read response shape boundary', () => {
     ).toThrow();
   });
 
-  it.each([
+  it.each<[string, unknown]>([
     ['taskId', { id: 'task' }],
     ['evidenceRevision', { revision: 'unsafe' }],
     ['approvalRevision', ['unsafe']],
