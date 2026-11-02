@@ -23,7 +23,11 @@ import { WorkflowsPage } from './workflows-page.js';
 import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { createLatestResultGate } from './latest-result-gate.js';
-import { connectionLabel, type StreamConnection } from './connection-status.js';
+import {
+  connectionLabel,
+  streamConnectionOnError,
+  type StreamConnection,
+} from './connection-status.js';
 import { nextTaskEventCursor, parseTaskEvent } from './event-stream.js';
 import {
   activeTaskStreamIds,
@@ -213,7 +217,11 @@ function App() {
         if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'connected' }));
       };
       stream.onerror = () => {
-        if (active) setStreamConnections((previous) => ({ ...previous, [id]: 'reconnecting' }));
+        if (active)
+          setStreamConnections((previous) => ({
+            ...previous,
+            [id]: streamConnectionOnError(stream.readyState),
+          }));
       };
       stream.onmessage = (message) => {
         // Closed/replaced EventSources may still have a queued message callback.
