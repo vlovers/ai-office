@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { appendTaskEvent, parseTaskEvent } from '../src/web/event-stream.js';
+import {
+  appendTaskEvent,
+  nextTaskEventCursor,
+  parseTaskEvent,
+} from '../src/web/event-stream.js';
 import type { AgentEvent } from '../src/shared/types.js';
 
 const event = (id: number, taskId = 'task-1'): AgentEvent => ({
@@ -35,6 +39,20 @@ describe('task event stream ingestion', () => {
     expect(appendTaskEvent(events, event(11))).toBe(events);
     expect(appendTaskEvent(events, event(9))).toBe(events);
     expect(events).toHaveLength(2);
+  });
+
+  it('ignores replayed state events before scheduling duplicate dashboard refreshes', () => {
+    let cursor = 10;
+    const refreshed: number[] = [];
+    for (const item of [event(10), event(9), event(11), event(11), event(12)]) {
+      const next = nextTaskEventCursor(cursor, item.id);
+      if (next === null) continue;
+      cursor = next;
+      refreshed.push(item.id);
+    }
+    expect(refreshed).toEqual([11, 12]);
+    expect(cursor).toBe(12);
+    expect(nextTaskEventCursor(cursor, Number.NaN)).toBeNull();
   });
 
   it('retains only the newest 500 persisted events without mutating input', () => {

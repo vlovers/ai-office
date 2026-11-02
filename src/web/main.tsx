@@ -24,7 +24,7 @@ import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
 import { createLatestResultGate } from './latest-result-gate.js';
 import { connectionLabel, type StreamConnection } from './connection-status.js';
-import { parseTaskEvent } from './event-stream.js';
+import { nextTaskEventCursor, parseTaskEvent } from './event-stream.js';
 import {
   activeTaskStreamIds,
   appendCachedTaskEvent,
@@ -206,6 +206,7 @@ function App() {
     let active = true;
     setStreamConnections(Object.fromEntries(ids.map((id) => [id, 'connecting' as const])));
     setEventHistory((previous) => retainTaskEventHistory(previous, ids));
+    const cursors = new Map(ids.map((id) => [id, eventHistory[id]?.at(-1)?.id ?? 0]));
     const streams = ids.map((id) => {
       const stream = new EventSource(taskEventStreamUrl(id, eventHistory));
       stream.onopen = () => {
@@ -219,9 +220,10 @@ function App() {
         if (!active) return;
         const event = parseTaskEvent(message.data, id);
         if (!event) return;
-        setEventHistory((previous) => {
-          return appendCachedTaskEvent(previous, id, event);
-        });
+        const cursor = nextTaskEventCursor(cursors.get(id) ?? 0, event.id);
+        if (cursor === null) return;
+        cursors.set(id, cursor);
+        setEventHistory((previous) => appendCachedTaskEvent(previous, id, event));
         if (event.kind === 'state') void refresh().catch(() => {});
       };
       return stream;

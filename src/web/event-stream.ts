@@ -22,6 +22,15 @@ export function parseTaskEvent(raw: string, taskId: string): AgentEvent | null {
   }
 }
 
+/**
+ * EventSource may replay the last persisted state event on reconnect. The
+ * cursor must advance before scheduling React updates or dashboard refreshes,
+ * otherwise a duplicate state event can trigger unnecessary HTTP polling.
+ */
+export function nextTaskEventCursor(lastSeen: number, incoming: number): number | null {
+  return Number.isSafeInteger(incoming) && incoming > lastSeen ? incoming : null;
+}
+
 /** Keep a bounded, monotonic event timeline across SSE reconnect/replay. */
 export function appendTaskEvent(events: AgentEvent[], event: AgentEvent): AgentEvent[] {
   // The server emits monotonically increasing persisted IDs per task.
