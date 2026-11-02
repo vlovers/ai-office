@@ -23,6 +23,7 @@ describe('task event log follow behavior', () => {
     expect(isNearLogEnd(600, Number.POSITIVE_INFINITY, 400)).toBe(false);
     expect(isNearLogEnd(550, 1000, 400, 0)).toBe(false);
   });
+
   it('counts only new persisted IDs while following is paused', () => {
     const events = [{ id: 11 }, { id: 13 }, { id: 18 }];
     expect(countEventsAfter(events, null)).toBe(0);
@@ -38,5 +39,4 @@ describe('task event log follow behavior', () => {
     expect(countEventsAfter(retained, 550)).toBe(50);
     expect(countEventsAfter(retained, 1)).toBe(500);
   });
-
 });
