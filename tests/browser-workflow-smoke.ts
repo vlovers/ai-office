@@ -355,6 +355,7 @@ try {
     try {
       if (observedListRequests === 1) await firstListHeld;
       else await new Promise((resolve) => setTimeout(resolve, 3500));
+      if (route.request().failure()) return;
       await route.continue();
     } catch (cause) {
       // A selection change can cancel the intercepted GET while this route
