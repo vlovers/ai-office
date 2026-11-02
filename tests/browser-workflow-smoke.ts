@@ -55,6 +55,8 @@ try {
   let manualRefreshes = 0;
   await page.route('**/api/workflows', async (route) => {
     manualRefreshes++;
+    // Hold the response long enough to observe the in-progress button state.
+    await new Promise((resolve) => setTimeout(resolve, 150));
     await route.continue();
   });
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
