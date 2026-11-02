@@ -3,6 +3,7 @@ import type { Dashboard } from '../shared/types.js';
 import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
 import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
 import { createLatestResultGate } from './latest-result-gate.js';
+import { createRequestDeadline, createSingleFlight } from './workflow-polling.js';
 import {
   selectWorkflowOperations,
   summarizeWorkflowOperations,
@@ -62,12 +63,13 @@ const labels: Record<string, string> = {
   'approve-qa-result': 'Approve QA result',
   cancel: 'Cancel workflow',
 };
-async function request<T>(path: string, body?: unknown): Promise<T> {
+async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(
     '/api' + path,
     body === undefined
-      ? undefined
+      ? { signal }
       : {
+          signal,
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
@@ -130,14 +132,26 @@ export function WorkflowBoard({
   // Only a newer *settled* snapshot may supersede an earlier response.
   const refreshEpoch = useRef(0);
   const refreshResults = useRef(createLatestResultGate());
+  const automaticPolling = useRef(createSingleFlight());
+  const pendingReads = useRef(new Set<ReturnType<typeof createRequestDeadline>>());
+  const abortPendingReads = () => {
+    for (const deadline of pendingReads.current) deadline.cancel();
+    pendingReads.current.clear();
+  };
   const refresh = useCallback(async () => {
     const epoch = refreshEpoch.current;
     const ticket = refreshResults.current.begin();
+    const deadline = createRequestDeadline(15000);
+    pendingReads.current.add(deadline);
     try {
       const [all, current, choices] = await Promise.all([
-        request<Summary[]>('/workflows'),
-        request<Dashboard>('/dashboard'),
-        request<{ commands: { commandId: string; argv: string[] }[] }>('/workflows/qa-commands'),
+        request<Summary[]>('/workflows', undefined, deadline.signal),
+        request<Dashboard>('/dashboard', undefined, deadline.signal),
+        request<{ commands: { commandId: string; argv: string[] }[] }>(
+          '/workflows/qa-commands',
+          undefined,
+          deadline.signal,
+        ),
       ]);
       if (epoch !== refreshEpoch.current) return;
       const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
@@ -147,9 +161,9 @@ export function WorkflowBoard({
         : (workflows[0]?.id ?? '');
       const [view, output, diagnosis] = next
         ? await Promise.all([
-            request<Timeline>(`/workflows/${next}/timeline`),
-            request<Report[]>(`/workflows/${next}/results`),
-            request<Diagnostics>(`/workflows/${next}/diagnostics`),
+            request<Timeline>(`/workflows/${next}/timeline`, undefined, deadline.signal),
+            request<Report[]>(`/workflows/${next}/results`, undefined, deadline.signal),
+            request<Diagnostics>(`/workflows/${next}/diagnostics`, undefined, deadline.signal),
           ])
         : [null, [], null];
       // Commit the list and its checkpoint atomically. A selection change or
@@ -171,16 +185,31 @@ export function WorkflowBoard({
       setHasLoaded(true);
       setError('');
     } catch (cause) {
+      // Abort sibling GETs after a failure; never abort POST mutations here.
+      deadline.cancel();
       if (epoch === refreshEpoch.current && refreshResults.current.accept(ticket))
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setError(
+          deadline.timedOut
+            ? 'Workflow refresh timed out after 15 seconds'
+            : cause instanceof Error
+              ? cause.message
+              : String(cause),
+        );
+    } finally {
+      deadline.dispose();
+      pendingReads.current.delete(deadline);
     }
   }, [selected, taskId]);
   useEffect(() => {
-    if (!paused) void refresh();
-    const timer = paused ? undefined : setInterval(() => void refresh(), 3000);
+    if (!paused) void automaticPolling.current.run(refresh);
+    const timer = paused
+      ? undefined
+      : setInterval(() => void automaticPolling.current.run(refresh), 3000);
     return () => {
       if (timer) clearInterval(timer);
       refreshEpoch.current++;
+      automaticPolling.current.reset();
+      abortPendingReads();
     };
   }, [refresh, paused]);
   async function mutate(operation?: () => Promise<unknown>) {
@@ -199,6 +228,8 @@ export function WorkflowBoard({
   // state may render later, so async poll continuations must read this ref.
   const chooseWorkflow = (id: string) => {
     refreshEpoch.current++;
+    automaticPolling.current.reset();
+    abortPendingReads();
     selectedRef.current = id;
     setTimeline(null);
     setReports([]);
