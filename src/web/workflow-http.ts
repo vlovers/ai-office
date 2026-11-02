@@ -23,5 +23,11 @@ export async function readWorkflowResponse<T>(response: Response): Promise<T> {
   if (value === undefined) {
     throw new Error(`Empty workflow response: HTTP ${response.status}`);
   }
+  // Workflow endpoints return JSON objects or arrays. A valid JSON scalar
+  // (including null) is not a valid checkpoint and must fail closed rather
+  // than reaching UI code as a trusted typed response.
+  if (value === null || typeof value !== 'object') {
+    throw new Error(`Invalid workflow response: HTTP ${response.status}`);
+  }
   return value as T;
 }
