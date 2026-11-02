@@ -106,7 +106,11 @@ try {
   // A reverse proxy may send HTML rather than JSON on HTTP 502. Surface the
   // status, fail closed, and recover without reloading or retrying mutations.
   await page.route(outagePattern, (route) =>
-    route.fulfill({ status: 502, contentType: 'text/html', body: '<html>Bad gateway</html>' }),
+    route.fulfill({
+      status: 502,
+      contentType: 'text/html',
+      body: '<html>Bad gateway</html>',
+    }),
   );
   try {
     await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
