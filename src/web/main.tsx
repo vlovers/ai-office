@@ -688,11 +688,9 @@ function App() {
                   {page === 'tasks' && (
                     <SubmittedQueue
                       dashboard={dashboard}
-                      onSelect={(taskId, agentId) => {
-                        setSelected(taskId);
-                        setTaskPanel('details');
-                        setSelectedAgent(agentId);
-                        setResumeSessionId('');
+                      onSelect={(taskId) => {
+                        const queuedTask = dashboard?.tasks.find((item) => item.id === taskId);
+                        if (queuedTask) navigateTask(queuedTask, 'session');
                       }}
                     />
                   )}
@@ -751,13 +749,7 @@ function App() {
                       onOrderChange={setHistoryOrder}
                       onAgentChange={setHistoryAgent}
                       onRepositoryChange={setHistoryRepository}
-                      onSelectTask={(item) => {
-                        setSelectedAgent(item.agentId);
-                        setSelected(item.id);
-                        setTaskPanel('details');
-                        setResumeSessionId('');
-                        clearTaskNavigation();
-                      }}
+                      onSelectTask={(item) => navigateTask(item, 'session')}
                     />
                   )}
                   {page === 'tasks' && (
@@ -854,9 +846,9 @@ function App() {
                             agentId: selectedAgent,
                             ...input,
                           });
-                          setSelected(created.id);
-                          setTaskPanel('details');
-                          clearTaskNavigation();
+                          // Creation is a navigation: keep the new task addressable after
+                          // refresh, and reveal its Start control on narrow screens.
+                          navigateTask(created, 'session');
                           form.reset();
                           setExecutionMode('read-only');
                         });
