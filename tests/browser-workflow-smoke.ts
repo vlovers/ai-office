@@ -103,6 +103,24 @@ try {
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  // A reverse proxy may send HTML rather than JSON on HTTP 502. Surface the
+  // status, fail closed, and recover without reloading or retrying mutations.
+  await page.route(outagePattern, (route) =>
+    route.fulfill({ status: 502, contentType: 'text/html', body: '<html>Bad gateway</html>' }),
+  );
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Workflow request failed: HTTP 502',
+    );
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
+  } finally {
+    await page.unroute(outagePattern);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
@@ -236,6 +254,15 @@ try {
   await expect(board.getByLabel('Workflow operations overview')).toContainText(
     'Live updates paused',
   );
+  // Pausing background polls must not leave a newly selected checkpoint blank.
+  await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
+  await expect(board.getByText(/^State: active/)).toBeVisible({ timeout: 10000 });
+  await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
+  await expect(board.getByText(/^State: completed/)).toBeVisible({ timeout: 10000 });
+  // Clicking the already selected queue entry must preserve the loaded timeline.
+  await operationsQueue.getByRole('button', { name: new RegExp(reviewed.id.slice(0, 8)) }).click();
+  await expect(board.getByText(/^State: completed/)).toBeVisible();
+  await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
   await board.getByRole('button', { name: 'Refresh workflow' }).click();
   await board.getByRole('button', { name: 'Resume live updates' }).click();
   await expect(board.getByRole('button', { name: 'Pause live updates' })).toHaveAttribute(
@@ -246,11 +273,23 @@ try {
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let finishRoute!: () => void;
+  const routeSettled = new Promise<void>((resolve) => {
+    finishRoute = resolve;
+  });
   const routePattern = `**/api/workflows/${otherId}/timeline`;
   await page.route(routePattern, async (route) => {
-    const response = await route.fetch();
-    await held;
-    await route.fulfill({ response });
+    try {
+      const response = await route.fetch();
+      await held;
+      await route.fulfill({ response });
+    } catch (cause) {
+      // Changing workflows aborts the old GET. A cancelled request cannot
+      // deliver a response event, so waiting for waitForResponse would hang.
+      if (!route.request().failure()) throw cause;
+    } finally {
+      finishRoute();
+    }
   });
   try {
     const requested = page.waitForRequest((request) =>
@@ -258,14 +297,14 @@ try {
     );
     await board.getByLabel('Workflow', { exact: true }).selectOption(otherId);
     await requested;
+    // A slow checkpoint must show progress rather than an unexplained blank panel.
+    await expect(board.getByText('Loading selected workflow checkpoint…')).toBeVisible();
+    await expect(board.getByText(/^State: completed/)).toHaveCount(0);
     await board.getByLabel('Workflow', { exact: true }).selectOption(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
-    const delayed = page.waitForResponse((response) =>
-      response.url().endsWith(`/workflows/${otherId}/timeline`),
-    );
+    await expect(board.getByText('Loading selected workflow checkpoint…')).toHaveCount(0);
     release();
-    await (await delayed).finished();
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
+    await routeSettled;
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(reviewed.id);
     await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
   } finally {
@@ -319,6 +358,128 @@ try {
   const newWorkflow = afterCreate.find((item) => !beforeCreate.some((old) => old.id === item.id));
   assert.ok(newWorkflow);
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
+  // The create mutation may select its workflow before its explicit refresh
+  // settles. Do not count that legitimate manual GET as automatic polling.
+  await expect(board.getByRole('button', { name: 'Refresh workflow', exact: true })).toBeEnabled();
+  // Isolate automatic polling from earlier manual refreshes. A slow GET
+  // must remain the only list request until it settles, even after the 3s tick.
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
+  await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
+  // Drain the create workflow's explicit refresh before measuring automatic
+  // polling. Hold its list GET so even a fast macOS runner observes the
+  // disabled state; checking it after an unblocked click races the response.
+  const refreshButton = board.getByRole('button', { name: 'Refresh workflow', exact: true });
+  const manualListPattern = '**/api/workflows';
+  let releaseManualRefresh!: () => void;
+  const manualRefreshHeld = new Promise<void>((resolve) => {
+    releaseManualRefresh = resolve;
+  });
+  await page.route(manualListPattern, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await manualRefreshHeld;
+    await route.continue();
+  });
+  try {
+    const manualRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/workflows') && request.method() === 'GET',
+    );
+    const manualResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/workflows') && response.request().method() === 'GET',
+    );
+    await refreshButton.click();
+    await manualRequest;
+    await expect(refreshButton).toBeDisabled();
+    releaseManualRefresh();
+    await manualResponse;
+    await expect(refreshButton).toBeEnabled({ timeout: 15000 });
+  } finally {
+    releaseManualRefresh();
+    await page.unroute(manualListPattern);
+  }
+  // Freeze browser timers so a slow macOS runner cannot turn a 3-second
+  // coalescing assertion into a 15-second request-deadline assertion.
+  // Advance exactly one polling interval while the first GET is held.
+  await page.clock.pauseAt(new Date());
+  const slowListPattern = '**/api/workflows';
+  let observedListRequests = 0;
+  let releaseFirstList!: () => void;
+  const firstListHeld = new Promise<void>((resolve) => {
+    releaseFirstList = resolve;
+  });
+  await page.route(slowListPattern, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    observedListRequests++;
+    try {
+      if (observedListRequests === 1) await firstListHeld;
+      else await new Promise((resolve) => setTimeout(resolve, 3500));
+      if (route.request().failure()) return;
+      await route.continue();
+    } catch (cause) {
+      // A selection change can cancel the intercepted GET while this route
+      // is held. Playwright may already have handled the cancelled route
+      // before request.failure() becomes observable.
+      if (cause instanceof Error && cause.message.includes('Route is already handled!')) return;
+      if (!route.request().failure()) throw cause;
+    }
+  });
+  try {
+    const external = await env.send('POST', '/api/workflows', {
+      repositoryId: env.repositoryRecord.id,
+      coderAgentId: 'codex-1',
+      reviewerAgentId: 'codex-2',
+    });
+    assert.equal(external.statusCode, 201);
+    const externalId = external.json().id as string;
+    const firstSlowPoll = page.waitForRequest(
+      (request) => request.url().endsWith('/api/workflows') && request.method() === 'GET',
+    );
+    await board.getByRole('button', { name: 'Resume live updates' }).click();
+    await firstSlowPoll;
+    await page.clock.runFor(3200);
+    assert.equal(
+      observedListRequests,
+      1,
+      'The next automatic tick must coalesce while the first slow list GET is pending',
+    );
+    releaseFirstList();
+    await page.clock.resume();
+    await expect(operationsQueue).toContainText(externalId.slice(0, 8), { timeout: 15000 });
+    // A slow background refresh must not replace the explicit selection.
+    await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
+    // Selecting another workflow while a later slow poll is pending must
+    // invalidate the previous checkpoint and preserve the new selection.
+    await expect.poll(() => observedListRequests).toBeGreaterThanOrEqual(2);
+    await operationsQueue.getByRole('button', { name: new RegExp(otherId.slice(0, 8)) }).click();
+    await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
+    await expect(board.getByText(/^State: active/)).toBeVisible({ timeout: 15000 });
+    await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
+  } finally {
+    releaseFirstList();
+    await page.clock.resume();
+    await page.unroute(slowListPattern);
+  }
+  // Mobile operations must remain within the viewport and expose real touch targets.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(operationsQueue).toBeVisible();
+  const queueLayout = await operationsQueue.evaluate((node) => ({
+    scrollWidth: node.scrollWidth,
+    clientWidth: node.clientWidth,
+    buttonHeights: Array.from(
+      node.querySelectorAll('button'),
+      (button) => button.getBoundingClientRect().height,
+    ),
+  }));
+  assert.ok(queueLayout.buttonHeights.length > 0, 'Mobile workflow queue has no actions');
+  assert.ok(
+    queueLayout.scrollWidth <= queueLayout.clientWidth + 1,
+    'Mobile workflow queue overflows horizontally',
+  );
+  assert.ok(
+    queueLayout.buttonHeights.every((height) => height >= 44),
+    'Mobile workflow actions must have 44px touch targets',
+  );
+  await page.setViewportSize({ width: 1440, height: 1100 });
   assert.equal((await env.get()).state, 'completed');
   assert.equal(await readFile(join(env.repository, 'README.md'), 'utf8'), '# Disposable example\n');
   assert.deepEqual(errors, []);
