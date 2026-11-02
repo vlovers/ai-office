@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isNearLogEnd } from '../src/web/log-follow.js';
+import { countEventsAfter, isNearLogEnd } from '../src/web/log-follow.js';
 
 describe('task event log follow behavior', () => {
   it('follows when the log is at or near its end', () => {
@@ -23,4 +23,20 @@ describe('task event log follow behavior', () => {
     expect(isNearLogEnd(600, Number.POSITIVE_INFINITY, 400)).toBe(false);
     expect(isNearLogEnd(550, 1000, 400, 0)).toBe(false);
   });
+  it('counts only new persisted IDs while following is paused', () => {
+    const events = [{ id: 11 }, { id: 13 }, { id: 18 }];
+    expect(countEventsAfter(events, null)).toBe(0);
+    expect(countEventsAfter(events, 18)).toBe(0);
+    expect(countEventsAfter(events, 11)).toBe(2);
+    expect(countEventsAfter(events, 12)).toBe(2);
+    expect(countEventsAfter(events, 0)).toBe(3);
+    expect(countEventsAfter([], 18)).toBe(0);
+  });
+
+  it('counts retained unread events even after the 500-event history cap', () => {
+    const retained = Array.from({ length: 500 }, (_, index) => ({ id: index + 101 }));
+    expect(countEventsAfter(retained, 550)).toBe(50);
+    expect(countEventsAfter(retained, 1)).toBe(500);
+  });
+
 });
