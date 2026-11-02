@@ -211,7 +211,10 @@ export function WorkflowBoard({
     lastPolledSelection.current = selected;
     // Pause stops periodic polling, not a user's explicit workflow selection.
     // Load the new checkpoint once without resuming the three-second timer.
-    if (!paused || selectionChanged) void automaticPolling.current.run(refresh);
+    // Pausing while that one-off read is pending cancels it in cleanup; restart
+    // the read once rather than leaving the selected checkpoint loading forever.
+    if (!paused || selectionChanged || loadingCheckpoint)
+      void automaticPolling.current.run(refresh);
     const timer = paused
       ? undefined
       : setInterval(() => void automaticPolling.current.run(refresh), 3000);
