@@ -238,6 +238,31 @@ try {
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
   assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
+  // A reader scrolling back through a long log must not be dragged to the
+  // latest event. The explicit recovery control must also work on mobile.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const log = page.getByRole('log', { name: 'Agent event log' });
+  await expect(log.locator('.event-line').first()).toBeVisible();
+  await log.evaluate((element) => {
+    const first = element.querySelector<HTMLElement>('.event-line')!;
+    first.style.minHeight = '1200px';
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await expect(page.getByRole('button', { name: 'Jump to latest event' })).toBeVisible();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.getByRole('button', { name: 'Jump to latest event' }).click();
+  await expect
+    .poll(() =>
+      log.evaluate(
+        (element) => element.scrollHeight - element.scrollTop - element.clientHeight <= 48,
+      ),
+    )
+    .toBe(true);
+  await log.evaluate((element) => {
+    element.querySelector<HTMLElement>('.event-line')!.style.minHeight = '';
+  });
+  await page.setViewportSize({ width: 1440, height: 1100 });
   await page
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Office' })

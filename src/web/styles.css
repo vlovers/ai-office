@@ -718,6 +718,22 @@ main {
   display: block;
   margin-top: 4px;
 }
+.event-console-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.event-console-toolbar button {
+  min-height: 44px;
+}
+.event-console-toolbar + .event-console {
+  margin-top: 8px;
+}
 .event-console {
   margin-top: 16px;
   border: 1px solid var(--line);
@@ -726,6 +742,7 @@ main {
   min-height: 130px;
   max-height: 340px;
   overflow: auto;
+  overflow-anchor: none;
   font-size: 11px;
 }
 .event-line {
