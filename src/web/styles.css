@@ -311,6 +311,12 @@ main {
   font-size: 10px;
   color: var(--muted);
 }
+.stream-retry {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 10px;
+  white-space: nowrap;
+}
 .secondary {
   background: #0b1d14;
   border-color: var(--line);

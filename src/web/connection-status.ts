@@ -10,6 +10,14 @@ export function streamConnectionOnError(readyState: number): StreamConnection {
   return readyState === 2 ? 'disconnected' : 'reconnecting';
 }
 
+/** A terminal CLOSED EventSource requires an explicit new connection. */
+export function canRetryStreams(
+  http: HttpConnection,
+  streams: Readonly<Record<string, StreamConnection>>,
+): boolean {
+  return http === 'connected' && Object.values(streams).includes('disconnected');
+}
+
 /** HTTP polling must not mask a broken live-event stream (or vice versa). */
 export function connectionLabel(
   http: HttpConnection,

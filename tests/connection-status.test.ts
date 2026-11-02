@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { connectionLabel, streamConnectionOnError } from '../src/web/connection-status.js';
+import {
+  canRetryStreams,
+  connectionLabel,
+  streamConnectionOnError,
+} from '../src/web/connection-status.js';
 
 describe('workspace connection status', () => {
   const label = connectionLabel;
@@ -42,6 +46,15 @@ describe('workspace connection status', () => {
     expect(label(connected, { taskA: connected, taskB: disconnected })).toBe(disconnectedLabel);
     expect(label(connected, { taskA: reconnecting, taskB: disconnected })).toBe(disconnectedLabel);
     expect(label(disconnected, { taskA: disconnected })).toBe('Server disconnected');
+  });
+
+  it('offers manual recovery only for terminal streams while HTTP is healthy', () => {
+    expect(canRetryStreams(connected, { taskA: disconnected })).toBe(true);
+    expect(canRetryStreams(connected, { taskA: connected, taskB: disconnected })).toBe(true);
+    expect(canRetryStreams(connected, { taskA: reconnecting })).toBe(false);
+    expect(canRetryStreams('connecting', { taskA: disconnected })).toBe(false);
+    expect(canRetryStreams(disconnected, { taskA: disconnected })).toBe(false);
+    expect(canRetryStreams(connected, {})).toBe(false);
   });
 
   it('restores live connection status when streams recover', () => {

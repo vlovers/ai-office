@@ -212,6 +212,12 @@ Workflows shows checkpoint details, Agents manages saved profiles, and Settings
 holds local connection and repository registration. These changes are still in
 [Draft PR #106](https://github.com/vlovers/ai-office/pull/106), not in a release.
 
+A Draft follow-up adds an explicit **Retry live events** control when a task's
+EventSource enters terminal CLOSED state while HTTP is healthy. The action
+reopens task streams from the last retained event ID without reloading the
+page or authorizing task execution. Recoverable EventSource reconnects remain
+automatic; a permanently closed stream is not falsely shown as reconnecting.
+
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
 restores destinations and task links; a review shortcut retains its selected
