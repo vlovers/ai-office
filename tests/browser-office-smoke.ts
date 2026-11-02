@@ -121,6 +121,37 @@ try {
       .getByRole('button', { name: destination })
       .click();
   };
+  // On a 320px screen the five destinations must remain keyboard-accessible
+  // even when the horizontal strip clips the first or last item.
+  await page.setViewportSize({ width: 320, height: 720 });
+  await navigate('Settings');
+  const mobileNav = page.getByRole('navigation', { name: 'Main navigation' });
+  const officeNavButton = mobileNav.getByRole('button', { name: 'Office' });
+  const settingsNavButton = mobileNav.getByRole('button', { name: 'Settings' });
+  await expect(settingsNavButton).toBeInViewport();
+  await settingsNavButton.focus();
+  const beforeKeyboardScroll = await page.evaluate(() => window.scrollY);
+  await page.keyboard.press('Home');
+  await expect(officeNavButton).toBeFocused();
+  await expect(officeNavButton).toBeInViewport();
+  await expect(page).toHaveURL(/#settings$/);
+  await page.keyboard.press('End');
+  await expect(settingsNavButton).toBeFocused();
+  await expect(settingsNavButton).toBeInViewport();
+  await expect(page.evaluate(() => window.scrollY)).resolves.toBe(beforeKeyboardScroll);
+  await page.keyboard.press('ArrowRight');
+  await expect(officeNavButton).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#office$/);
+  await page.keyboard.press('ArrowLeft');
+  await expect(settingsNavButton).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#settings$/);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await navigate('Office');
   // A stale task URL must offer a usable exit instead of leaving the user in
   // Focus Mode with an empty session and an unrelated history fragment.
   await page.evaluate(() => {

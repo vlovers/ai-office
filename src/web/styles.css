@@ -928,11 +928,15 @@ footer {
     margin-top: 12px;
     gap: 6px;
     padding: 4px;
+    scrollbar-width: thin;
+    scroll-padding-inline: 4px;
+    overscroll-behavior-inline: contain;
   }
   .nav-item {
+    flex: 0 0 auto;
     padding: 7px 9px;
     white-space: nowrap;
-    min-height: 40px;
+    min-height: 44px;
     font-size: 10px;
   }
   .nav-item > span:first-child,
