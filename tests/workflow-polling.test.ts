@@ -34,6 +34,26 @@ describe('workflow polling backpressure', () => {
     expect(calls).toBe(2);
   });
 
+  it('does not start a queued poll after selection reset', async () => {
+    const gate = createSingleFlight();
+    let obsoleteCalls = 0;
+    let currentCalls = 0;
+    const obsolete = gate.run(async () => {
+      obsoleteCalls++;
+    });
+    gate.reset();
+    const current = gate.run(async () => {
+      currentCalls++;
+    });
+    await Promise.all([obsolete, current]);
+    expect(obsoleteCalls).toBe(0);
+    expect(currentCalls).toBe(1);
+    await gate.run(async () => {
+      currentCalls++;
+    });
+    expect(currentCalls).toBe(2);
+  });
+
   it('recovers after a rejected request instead of freezing future polls', async () => {
     const gate = createSingleFlight();
     await expect(
