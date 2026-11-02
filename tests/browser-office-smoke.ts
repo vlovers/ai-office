@@ -204,8 +204,42 @@ try {
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // A deep link wins over a previously selected task, including after reload.
+  await page.evaluate(() => sessionStorage.setItem('ai-office-selected-task', 'deleted-task'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  // Restoring the task must also restore its agent, not the default workstation.
+  await expect(page.locator('.shell')).toHaveAttribute('data-selected-agent', 'codex-2');
   await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // A normal Tasks route must restore the selection without a task deep link.
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')))
+    .not.toBe('deleted-task');
+  const savedTaskId = await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task'));
+  assert.ok(savedTaskId);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  assert.equal(
+    await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')),
+    savedTaskId,
+  );
+  // A restored selection must not keep forcing its agent after a manual switch.
+  await navigate('Office');
+  const codexOneStation = page.locator('.office-workstation[data-agent-id="codex-1"]');
+  await codexOneStation.click();
+  await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
+  await navigate('Tasks');
+  await navigate('Office');
+  await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
+  await navigate('Tasks');
+  // A deleted task saved in sessionStorage must be discarded on ordinary routes.
+  await page.evaluate(() => sessionStorage.setItem('ai-office-selected-task', 'deleted-task'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')))
+    .toBeNull();
   // Deep links, direct hash changes and browser history must restore the correct workspace mode.
   const queuedTask = env.store.tasks().find((item) => item.state === 'queued');
   assert.ok(queuedTask);
