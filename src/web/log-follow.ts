@@ -22,10 +22,7 @@ export function countEventsAfter(
 }
 
 /** A paused reader must never move their unread baseline backwards on replay. */
-export function unreadBaseline(
-  current: number | null,
-  latestId: number | undefined,
-): number {
+export function unreadBaseline(current: number | null, latestId: number | undefined): number {
   const latest = latestId ?? 0;
   return Math.max(current ?? 0, latest);
 }
