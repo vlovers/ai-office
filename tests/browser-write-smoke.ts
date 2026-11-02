@@ -75,6 +75,14 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('completed');
   await page.getByRole('link', { name: 'Code Review Center ↗' }).click();
+  // Review shortcut is a task-scoped deep link, not a bare section anchor.
+  // Reload must restore the selected task and focused review, not a blank workspace.
+  await expect(page).toHaveURL(/#task\/[^/]+\/review$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#code-review-center')).toBeFocused();
+  await page.reload();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#code-review-center')).toBeFocused();
   await page.getByRole('button', { name: 'Refresh Git review' }).click();
   const review = page.getByRole('region', { name: 'Isolated changes review' });
   await expect(review).toContainText('3 changed files');
