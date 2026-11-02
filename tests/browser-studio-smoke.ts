@@ -149,6 +149,8 @@ try {
   await expect(page.locator('.studio-agent[aria-pressed="true"]')).toContainText('archived');
   await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();
   await navigate('Agents');
+  // The profile list remounts on destination changes; restore its archived filter.
+  await studio.getByLabel('Show archived profiles').check();
   await card.getByRole('button', { name: 'Restore Review bot', exact: true }).click();
   await expect(card).not.toContainText('archived');
   const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
