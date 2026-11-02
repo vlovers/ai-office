@@ -924,7 +924,9 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
 ));
   await expect(page.locator('#task-workspace')).toContainText('Agent B queue');
-  await expect(page.getByRole('status')).toContainText('Waiting for assigned agent.');
+  await expect(page.locator('#task-workspace').getByRole('status')).toContainText(
+    'Waiting for assigned agent.',
+  );
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
   await page
