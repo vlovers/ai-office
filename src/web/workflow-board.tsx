@@ -103,8 +103,8 @@ export function WorkflowBoard({
   selectedRef.current = selected;
   useEffect(() => {
     if (inspection) {
+      if (inspection.id !== selectedRef.current) setLoadingCheckpoint(true);
       selectedRef.current = inspection.id;
-      setLoadingCheckpoint(true);
       setSelected(inspection.id);
       // Explicit inspection must load the requested checkpoint, including after a pause.
       setPaused(false);
