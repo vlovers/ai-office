@@ -116,7 +116,25 @@ function App() {
   const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard>();
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('ai-office-selected-task') || undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  useEffect(() => {
+    if (!dashboard) return;
+    const current = selected && dashboard.tasks.find((task) => task.id === selected);
+    // Do not persist a stale selection or override an explicit deep link.
+    if (selected && !current && !navigation) setSelected(undefined);
+    try {
+      if (current) sessionStorage.setItem('ai-office-selected-task', current.id);
+      else if (!navigation) sessionStorage.removeItem('ai-office-selected-task');
+    } catch {
+      /* Storage may be unavailable in private browsing. */
+    }
+  }, [dashboard, selected, navigation]);
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const lastNavigation = useRef('');
   useEffect(() => {
