@@ -221,7 +221,9 @@ retried or timed out by this read-only polling mechanism. Checkpoint actions
 remain disabled after a failed refresh until matching workflow versions reload.
 Pausing live updates stops background polling, but selecting a different workflow
 still loads its checkpoint once. Reselecting the current workflow keeps its
-loaded timeline intact. Cancelled reads clear their deadline timer so a
+loaded timeline intact. A selected checkpoint shows a live loading status until
+its timeline is verified or a refresh error is reported; pausing during that
+one-off load does not leave the checkpoint stuck in a loading state. Cancelled reads clear their deadline timer so a
 superseded request cannot later be misreported as a timeout.
 
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
