@@ -13,7 +13,10 @@ export function isNearLogEnd(
 }
 
 /** Count only retained events newer than the last event the reader saw. */
-export function countEventsAfter(events: readonly { id: number }[], afterId: number | null): number {
+export function countEventsAfter(
+  events: readonly { id: number }[],
+  afterId: number | null,
+): number {
   if (afterId === null) return 0;
   return events.reduce((count, event) => count + (event.id > afterId ? 1 : 0), 0);
 }
