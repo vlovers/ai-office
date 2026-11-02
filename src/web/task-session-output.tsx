@@ -61,6 +61,7 @@ function TaskEventLog({ events }: { events: AgentEvent[] }) {
         className="event-console"
         aria-label="Agent event log"
         role="log"
+        aria-live={following ? 'polite' : 'off'}
         tabIndex={0}
         onScroll={(event) => {
           // An explicit pause stays paused until the reader resumes it.
