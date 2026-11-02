@@ -34,7 +34,9 @@ export function PageHeading({
 }) {
   const { title, description } = copy[page];
   const heading = focus ? 'Task session' : title;
-  const summary = focus ? 'Follow live output, progress, and review for the selected task.' : description;
+  const summary = focus
+    ? 'Follow live output, progress, and review for the selected task.'
+    : description;
   return (
     <div className="page-heading">
       <div>
