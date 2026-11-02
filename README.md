@@ -223,8 +223,11 @@ Pausing live updates stops background polling, but selecting a different workflo
 still loads its checkpoint once. Reselecting the current workflow keeps its
 loaded timeline intact. A selected checkpoint shows a live loading status until
 its timeline is verified or a refresh error is reported; pausing during that
-one-off load does not leave the checkpoint stuck in a loading state. Cancelled reads clear their deadline timer so a
-superseded request cannot later be misreported as a timeout.
+one-off load does not leave the checkpoint stuck in a loading state. Cancelled
+reads clear their deadline timer so a superseded request cannot later be
+misreported as a timeout. Workflow API errors preserve the HTTP status when a
+proxy returns HTML or an empty body; invalid successful responses fail closed
+rather than being treated as verified checkpoints.
 
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
