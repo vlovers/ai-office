@@ -220,8 +220,11 @@ try {
   await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   // A normal Tasks route must restore the selection without a task deep link.
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')))
+    .not.toBe('deleted-task');
   const savedTaskId = await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task'));
-  assert.ok(savedTaskId && savedTaskId !== 'deleted-task');
+  assert.ok(savedTaskId);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   assert.equal(
