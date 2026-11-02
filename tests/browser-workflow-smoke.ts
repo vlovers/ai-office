@@ -103,6 +103,22 @@ try {
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  // A reverse proxy may send HTML rather than JSON on HTTP 502. Surface the
+  // status, fail closed, and recover without reloading or retrying mutations.
+  await page.route(outagePattern, (route) =>
+    route.fulfill({ status: 502, contentType: 'text/html', body: '<html>Bad gateway</html>' }),
+  );
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Workflow request failed: HTTP 502',
+    );
+    await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
+  } finally {
+    await page.unroute(outagePattern);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
