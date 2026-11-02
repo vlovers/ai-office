@@ -691,7 +691,7 @@ function App() {
                 />
                 {!workflowAvailable && (
                   <p className="studio-notice" role="status">
-                    Workflow status unavailable. Showing the last saved snapshot. Open workflow details to retry.
+                    Workflow status unavailable. Cached data may be stale.
                   </p>
                 )}
               </section>
