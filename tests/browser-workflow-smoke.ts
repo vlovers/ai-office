@@ -322,10 +322,20 @@ try {
   // A workflow list request that takes longer than the 3s polling interval
   // must still render. Earlier epoch-per-request logic discarded every response.
   const slowListPattern = '**/api/workflows';
+  let pendingListRequests = 0;
+  let peakListRequests = 0;
+  let observedListRequests = 0;
   await page.route(slowListPattern, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
-    await new Promise((resolve) => setTimeout(resolve, 3500));
-    await route.continue();
+    observedListRequests++;
+    pendingListRequests++;
+    peakListRequests = Math.max(peakListRequests, pendingListRequests);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 3500));
+      await route.continue();
+    } finally {
+      pendingListRequests--;
+    }
   });
   try {
     const external = await env.send('POST', '/api/workflows', {
@@ -344,6 +354,12 @@ try {
       (request) => request.url().endsWith('/api/workflows') && request.method() === 'GET',
     );
     await pendingPoll;
+    await expect.poll(() => observedListRequests).toBeGreaterThanOrEqual(2);
+    assert.equal(
+      peakListRequests,
+      1,
+      'Slow automatic workflow polls must not accumulate overlapping list requests',
+    );
     await operationsQueue.getByRole('button', { name: new RegExp(otherId.slice(0, 8)) }).click();
     await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(otherId);
     await expect(board.getByText(/^State: active/)).toBeVisible({ timeout: 15000 });
