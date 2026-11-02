@@ -152,6 +152,86 @@ describe('workflow read response shape boundary', () => {
     );
   });
 
+  it('accepts optional checkpoint metadata when absent, null, or well-typed', () => {
+    expect(() =>
+      assertWorkflowReadShape('/workflows', [
+        {
+          ...summary,
+          createdAt: '2026-11-03T00:00:00Z',
+          updatedAt: '2026-11-03T00:00:00Z',
+          stages: [{ ...stage, kind: 'coder', state: 'running' }],
+        },
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/timeline', {
+        ...timeline,
+        stages: [
+          {
+            ...timeline.stages[0],
+            taskId: null,
+            evidenceRevision: 'revision-1',
+            approvalRevision: null,
+            reportDigest: 'digest-1',
+            sourceDigest: null,
+          },
+        ],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertWorkflowReadShape('/dashboard', {
+        ...dashboard,
+        tasks: [{ ...dashboard.tasks[0], executionMode: 'write' }],
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects malformed optional workflow metadata and stage labels', () => {
+    expect(() => assertWorkflowReadShape('/workflows', [{ ...summary, updatedAt: {} }])).toThrow();
+    expect(() =>
+      assertWorkflowReadShape('/workflows', [
+        { ...summary, stages: [{ ...stage, kind: { label: 'coder' } }] },
+      ]),
+    ).toThrow();
+    expect(() =>
+      assertWorkflowReadShape('/workflows', [
+        { ...summary, stages: [{ ...stage, state: ['running'] }] },
+      ]),
+    ).toThrow();
+  });
+
+  it.each([
+    ['taskId', { id: 'task' }],
+    ['evidenceRevision', { revision: 'unsafe' }],
+    ['approvalRevision', ['unsafe']],
+    ['reportDigest', 42],
+    ['sourceDigest', { digest: 'unsafe' }],
+  ])('rejects malformed timeline stage %s before rendering', (field, invalid) => {
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/timeline', {
+        ...timeline,
+        stages: [{ ...timeline.stages[0], [field]: invalid }],
+      }),
+    ).toThrow('Invalid workflow response: malformed workflow timeline');
+  });
+
+  it('rejects malformed optional report task IDs', () => {
+    expect(() =>
+      assertWorkflowReadShape('/workflows/workflow-1/results', [
+        { kind: 'coder', result: '', error: null, taskId: { id: 'task' } },
+      ]),
+    ).toThrow('Invalid workflow response: malformed workflow reports');
+  });
+
+  it('rejects malformed optional dashboard execution modes', () => {
+    expect(() =>
+      assertWorkflowReadShape('/dashboard', {
+        ...dashboard,
+        tasks: [{ ...dashboard.tasks[0], executionMode: { mode: 'write' } }],
+      }),
+    ).toThrow('Invalid workflow response: malformed dashboard');
+  });
+
   it('does not mutate valid server payloads', () => {
     const input = Object.freeze([Object.freeze({ ...summary, stages: Object.freeze([stage]) })]);
     assertWorkflowReadShape('/workflows', input);
