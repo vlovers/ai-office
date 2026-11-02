@@ -1,54 +1,56 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { AgentEvent, Session, Task } from '../shared/types.js';
-import { isNearLogEnd } from './log-follow.js';
+import { countEventsAfter, isNearLogEnd } from './log-follow.js';
 
-export function TaskSessionOutput({
-  task,
-  session,
-  events,
-}: {
-  task: Task;
-  session?: Session;
-  events: AgentEvent[];
-}) {
+type FollowMode = 'following' | 'reading' | 'paused';
+
+/**
+ * Key this component by task ID. A task switch must never inherit another
+ * task's paused cursor or scroll position, even before effects have run.
+ */
+function TaskEventLog({ events }: { events: AgentEvent[] }) {
   const logRef = useRef<HTMLDivElement>(null);
-  const [followLatest, setFollowLatest] = useState(true);
+  const [mode, setMode] = useState<FollowMode>('following');
+  const [pausedAtId, setPausedAtId] = useState<number | null>(null);
   const latestEventId = events.at(-1)?.id;
+  const unread = countEventsAfter(events, pausedAtId);
+  const following = mode === 'following';
 
-  // Switching tasks starts a new reading context. Do not carry a previous
-  // task's paused scroll position into this task's live event log.
-  useEffect(() => {
-    setFollowLatest(true);
+  // Scroll before paint so a new SSE event cannot briefly displace the reader
+  // or produce an intermediate scroll event that disables follow mode.
+  useLayoutEffect(() => {
     const log = logRef.current;
-    if (log) log.scrollTop = log.scrollHeight;
-  }, [task.id]);
-
-  useEffect(() => {
-    const log = logRef.current;
-    if (log && followLatest) log.scrollTop = log.scrollHeight;
-  }, [followLatest, latestEventId, task.id]);
+    if (log && following) log.scrollTop = log.scrollHeight;
+  }, [following, latestEventId]);
 
   return (
     <>
-      <p className="task-prompt">{task.prompt}</p>
-      {session?.threadId && (
-        <p className="thread-id">
-          Thread <code>{session.threadId}</code>
-          <span className="session-mode">
-            {session.authMode === 'local-cli-chatgpt'
-              ? 'ChatGPT login'
-              : session.authMode === 'api-key'
-                ? 'API key'
-                : 'Legacy session'}
-            {session.model ? ` · ${session.model}` : ''}
-          </span>
-        </p>
-      )}
       {events.length > 0 && (
         <div className="event-console-toolbar">
-          <span>{events.length} recent events</span>
-          {!followLatest && (
-            <button type="button" className="secondary" onClick={() => setFollowLatest(true)}>
+          <span>
+            {events.length} recent events
+            {!following && unread > 0 ? ` · ${unread} new` : ''}
+          </span>
+          {following ? (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setPausedAtId(latestEventId ?? 0);
+                setMode('paused');
+              }}
+            >
+              Pause auto-scroll
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setPausedAtId(null);
+                setMode('following');
+              }}
+            >
               Jump to latest event
             </button>
           )}
@@ -61,8 +63,17 @@ export function TaskSessionOutput({
         role="log"
         tabIndex={0}
         onScroll={(event) => {
+          // An explicit pause stays paused until the reader resumes it.
+          // Reading mode, by contrast, resumes when the reader scrolls down.
+          if (mode === 'paused') return;
           const log = event.currentTarget;
-          setFollowLatest(isNearLogEnd(log.scrollTop, log.scrollHeight, log.clientHeight));
+          if (isNearLogEnd(log.scrollTop, log.scrollHeight, log.clientHeight)) {
+            setMode('following');
+            setPausedAtId(null);
+          } else {
+            if (mode === 'following') setPausedAtId(latestEventId ?? 0);
+            setMode('reading');
+          }
         }}
       >
         {events.length ? (
@@ -79,6 +90,36 @@ export function TaskSessionOutput({
           </span>
         )}
       </div>
+    </>
+  );
+}
+
+export function TaskSessionOutput({
+  task,
+  session,
+  events,
+}: {
+  task: Task;
+  session?: Session;
+  events: AgentEvent[];
+}) {
+  return (
+    <>
+      <p className="task-prompt">{task.prompt}</p>
+      {session?.threadId && (
+        <p className="thread-id">
+          Thread <code>{session.threadId}</code>
+          <span className="session-mode">
+            {session.authMode === 'local-cli-chatgpt'
+              ? 'ChatGPT login'
+              : session.authMode === 'api-key'
+                ? 'API key'
+                : 'Legacy session'}
+            {session.model ? ` · ${session.model}` : ''}
+          </span>
+        </p>
+      )}
+      <TaskEventLog key={task.id} events={events} />
       {task.error && (
         <p className="task-error" role="alert">
           {task.error}
