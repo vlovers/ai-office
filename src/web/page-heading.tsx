@@ -33,15 +33,17 @@ export function PageHeading({
   onNewTask: () => void;
 }) {
   const { title, description } = copy[page];
+  const heading = focus ? 'Task session' : title;
+  const summary = focus ? 'Follow live output, progress, and review for the selected task.' : description;
   return (
     <div className="page-heading">
       <div>
         <div className="eyebrow">AI OFFICE / {page.toUpperCase()}</div>
         <h1>
-          {page === 'office' && focus ? 'Focus mode' : title}
+          {heading}
           <span>_</span>
         </h1>
-        <p>{description}</p>
+        <p>{summary}</p>
       </div>
       <button className="button-link" type="button" onClick={onNewTask}>
         ＋ New task
