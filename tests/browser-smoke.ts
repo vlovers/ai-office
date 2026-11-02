@@ -230,6 +230,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.getByRole('heading', { name: 'Task session_' })).toBeVisible();
   await expect(page.locator('#task-workspace')).toContainText('Review the example project');
   await expect(page.getByRole('button', { name: 'Start task' })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1100 });
