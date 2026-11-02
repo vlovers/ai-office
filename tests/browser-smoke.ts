@@ -285,6 +285,19 @@ try {
   await log.evaluate((element) => {
     element.querySelector<HTMLElement>('.event-line')!.style.minHeight = '';
   });
+  // The narrowest supported phone must keep both live-log actions reachable
+  // and large enough for touch, including while the reader has paused output.
+  await page.setViewportSize({ width: 320, height: 720 });
+  const pauseButton = page.getByRole('button', { name: 'Pause auto-scroll' });
+  await expect(pauseButton).toBeVisible();
+  assert.ok((await pauseButton.boundingBox())!.height >= 44);
+  await pauseButton.click();
+  const resumeButton = page.getByRole('button', { name: 'Jump to latest event' });
+  await expect(resumeButton).toBeVisible();
+  assert.ok((await resumeButton.boundingBox())!.height >= 44);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await resumeButton.click();
+  await expect(log).toHaveAttribute('aria-live', 'polite');
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page
     .getByRole('navigation', { name: 'Main navigation' })
