@@ -22,6 +22,7 @@ import {
 import { WorkflowsPage } from './workflows-page.js';
 import { SettingsPage } from './settings-page.js';
 import { WorkflowBoard } from './workflow-board.js';
+import { createLatestResultGate } from './latest-result-gate.js';
 import { ReviewCenter } from './review-center.js';
 import { PixelBot, PixelOffice } from './pixel-art.js';
 import { officeCheckpoint, type OfficeWorkflow } from './office-workflows.js';
@@ -127,13 +128,18 @@ function App() {
   const [repositoryId, setRepositoryId] = useState('');
   const [resumeSessionId, setResumeSessionId] = useState('');
   const [executionMode, setExecutionMode] = useState('read-only');
+  const dashboardResults = useRef(createLatestResultGate());
   const refresh = async () => {
+    const ticket = dashboardResults.current.begin();
     try {
       const data = await api<Dashboard>('/dashboard');
-      setDashboard(data);
-      setConnection('Local server connected');
+      if (dashboardResults.current.accept(ticket)) {
+        setDashboard(data);
+        setConnection('Local server connected');
+      }
     } catch (e) {
-      setConnection('Server disconnected');
+      // An older failed poll must not replace a newer successful connection.
+      if (dashboardResults.current.accept(ticket)) setConnection('Server disconnected');
       throw e;
     }
   };
@@ -146,15 +152,18 @@ function App() {
   }, []);
   useEffect(() => {
     let live = true;
+    const workflowResults = createLatestResultGate();
     const load = async () => {
+      const ticket = workflowResults.begin();
       try {
         const items = await api<OfficeWorkflow[]>('/workflows');
-        if (live) {
+        if (live && workflowResults.accept(ticket)) {
           setWorkflows(items);
           setWorkflowAvailable(true);
         }
       } catch {
-        if (live) {
+        // Ignore failures from polls superseded by a newer settled response.
+        if (live && workflowResults.accept(ticket)) {
           setWorkflows([]);
           setWorkflowAvailable(false);
         }
