@@ -29,8 +29,6 @@ export function countEventsAfter(
 /** A paused reader must never move their unread baseline backwards on replay. */
 export function unreadBaseline(current: number | null, latestId: number | undefined): number {
   const validCursor = (value: number | null | undefined): number =>
-    value !== null && value !== undefined && Number.isSafeInteger(value) && value >= 0
-      ? value
-      : 0;
+    value !== null && value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : 0;
   return Math.max(validCursor(current), validCursor(latestId));
 }
