@@ -211,6 +211,15 @@ try {
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // A normal Tasks route must restore the selection without a task deep link.
+  const savedTaskId = await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task'));
+  assert.ok(savedTaskId && savedTaskId !== 'deleted-task');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  assert.equal(
+    await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')),
+    savedTaskId,
+  );
   // Deep links, direct hash changes and browser history must restore the correct workspace mode.
   const queuedTask = env.store.tasks().find((item) => item.state === 'queued');
   assert.ok(queuedTask);
