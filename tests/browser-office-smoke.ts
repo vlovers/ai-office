@@ -210,13 +210,7 @@ try {
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   // Restoring the task must also restore its agent, not the default workstation.
-  const queuedAgentName = env.store.agents().find((agent) => agent.id === 'codex-2')?.name;
-  assert.ok(queuedAgentName);
-  await expect(
-    page.getByRole('group', { name: 'Select agent' }).getByRole('button', {
-      name: new RegExp(queuedAgentName),
-    }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.shell')).toHaveAttribute('data-selected-agent', 'codex-2');
   await navigate('Tasks');
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   // A normal Tasks route must restore the selection without a task deep link.
