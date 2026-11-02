@@ -43,7 +43,9 @@ let app = await createApp(manager);
 const reviewServerErrors: string[] = [];
 app.addHook('onError', async (request, _reply, error) => {
   if (request.url.includes('/review')) {
-    reviewServerErrors.push(`${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`);
+    reviewServerErrors.push(
+      `${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`,
+    );
   }
 });
 
