@@ -185,7 +185,7 @@ try {
   }, queuedTask.id);
   await expect(page.getByRole('alert')).toContainText('Code review is not available');
   await page.getByRole('button', { name: 'Open task session' }).click();
-  await expect(page).toHaveURL(/#task\\/[^/]+\\/session$/);
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   await page.evaluate((id) => {
