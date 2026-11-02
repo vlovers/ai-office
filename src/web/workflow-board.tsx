@@ -560,7 +560,7 @@ export function WorkflowBoard({
               ))}
             </select>
           </label>
-          {selected && loadingCheckpoint && !timeline && (
+          {selected && loadingCheckpoint && timeline?.id !== selected && (
             <p role="status" aria-live="polite">Loading selected workflow checkpoint…</p>
           )}
           {timeline && timeline.id === selected && (
