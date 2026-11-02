@@ -26,6 +26,8 @@ describe('task event stream ingestion', () => {
     JSON.stringify({ ...event(1), id: Number.MAX_SAFE_INTEGER + 1 }),
     JSON.stringify({ ...event(1), message: null }),
     JSON.stringify({ ...event(1), kind: '' }),
+    JSON.stringify({ ...event(1), at: 'not-a-date' }),
+    JSON.stringify({ ...event(1), at: '' }),
   ])('rejects malformed, foreign-task and invalid event payloads: %s', (raw) => {
     expect(parseTaskEvent(raw, 'task-1')).toBeNull();
   });
