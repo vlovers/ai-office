@@ -109,6 +109,7 @@ export function WorkflowBoard({
     }
   }, [inspection]);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
+  const [loadingCheckpoint, setLoadingCheckpoint] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -182,12 +183,14 @@ export function WorkflowBoard({
       setTimeline(view);
       setReports(output);
       setDiagnostics(diagnosis);
+      setLoadingCheckpoint(false);
       setHasLoaded(true);
       setError('');
     } catch (cause) {
       // Abort sibling GETs after a failure; never abort POST mutations here.
       deadline.cancel();
-      if (epoch === refreshEpoch.current && refreshResults.current.accept(ticket))
+      if (epoch === refreshEpoch.current && refreshResults.current.accept(ticket)) {
+        setLoadingCheckpoint(false);
         setError(
           deadline.timedOut
             ? 'Workflow refresh timed out after 15 seconds'
@@ -195,6 +198,7 @@ export function WorkflowBoard({
               ? cause.message
               : String(cause),
         );
+      }
     } finally {
       deadline.dispose();
       pendingReads.current.delete(deadline);
@@ -238,6 +242,8 @@ export function WorkflowBoard({
     automaticPolling.current.reset();
     abortPendingReads();
     selectedRef.current = id;
+    setError('');
+    setLoadingCheckpoint(true);
     setTimeline(null);
     setReports([]);
     setDiagnostics(null);
@@ -374,6 +380,7 @@ export function WorkflowBoard({
                   ...(qa ? { qaAgentId: qa } : {}),
                 });
                 selectedRef.current = created.id;
+                setLoadingCheckpoint(true);
                 setSelected(created.id);
               })
             }
@@ -549,6 +556,9 @@ export function WorkflowBoard({
               ))}
             </select>
           </label>
+          {selected && loadingCheckpoint && !timeline && (
+            <p role="status" aria-live="polite">Loading selected workflow checkpoint…</p>
+          )}
           {timeline && timeline.id === selected && (
             <>
               <p role="status">
