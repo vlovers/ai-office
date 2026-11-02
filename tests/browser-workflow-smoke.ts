@@ -286,7 +286,7 @@ try {
     id: string;
   }[];
   await board.getByText('Create workflow', { exact: true }).click();
-  await board.getByLabel('Coder task', { exact: true }).selectOption(newCoder.id);
+  await board.getByLabel('Coder task').selectOption(newCoder.id);
   await board.getByLabel('Reviewer profile').selectOption('codex-2');
   await board.getByRole('button', { name: 'Create gated workflow' }).click();
   await expect
