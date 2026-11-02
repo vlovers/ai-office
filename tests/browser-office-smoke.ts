@@ -106,7 +106,11 @@ try {
   await page.locator('.studio-agent').last().click();
   await expect(page.locator('.studio-agent').last()).toHaveAttribute('aria-pressed', 'true');
   // Workstation selection is local to Office, not an implicit route to Agents.
-  await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Office' })).toHaveAttribute('aria-current', 'page');
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: 'Office' }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(scene).toBeVisible();
   await capture('multiple-agents');
   // Queue and execution use the manager/SDK fixture through the normal UI in browser-smoke.
