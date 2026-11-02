@@ -203,6 +203,21 @@ See [implementation, truthful state mapping and limitations](docs/OFFICE_V4.md) 
 V4 is integrated in `main` via [PR #36](https://github.com/vlovers/ai-office/pull/36), but is not a separately tagged release. Workflow triage, searchable task history and task-scoped navigation are included. Integration CI passed; real-model acceptance and release review remain pending. The existing revision-bound
 confirmation dialogs, isolated worktrees and Codex SDK execution remain in use.
 
+### Unreleased five-destination navigation (Draft PR #106)
+
+The proposed interface separates **Office**, **Tasks**, **Workflows**, **Agents** and
+**Settings**. Office shows the shared studio; Tasks keeps task history, session
+output and the creation form together without putting them on the landing page.
+Workflows shows checkpoint details, Agents manages saved profiles, and Settings
+holds local connection and repository registration. These changes are still in
+[Draft PR #106](https://github.com/vlovers/ai-office/pull/106), not in a release.
+
+Navigation uses local URL fragments: `#tasks`, `#compose`, and
+`#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
+restores destinations and task links; a review shortcut retains its selected
+task after reload. These fragments select a view only: they do **not** authorize
+execution, verification, writes, or review decisions.
+
 ## Queue, restart and allowance
 
 Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.
