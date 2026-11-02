@@ -366,12 +366,37 @@ try {
   await board.getByRole('button', { name: 'Pause live updates' }).click();
   await expect(board.getByRole('button', { name: 'Resume live updates' })).toBeVisible();
   // Drain the create workflow's explicit refresh before measuring automatic
-  // polling. On slower CI runners it can otherwise overlap the resumed poll
-  // and be miscounted as a second automatic request.
+  // polling. Hold its list GET so even a fast macOS runner observes the
+  // disabled state; checking it after an unblocked click races the response.
   const refreshButton = board.getByRole('button', { name: 'Refresh workflow', exact: true });
-  await refreshButton.click();
-  await expect(refreshButton).toBeDisabled();
-  await expect(refreshButton).toBeEnabled({ timeout: 15000 });
+  const manualListPattern = '**/api/workflows';
+  let releaseManualRefresh!: () => void;
+  const manualRefreshHeld = new Promise<void>((resolve) => {
+    releaseManualRefresh = resolve;
+  });
+  await page.route(manualListPattern, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await manualRefreshHeld;
+    await route.continue();
+  });
+  try {
+    const manualRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/workflows') && request.method() === 'GET',
+    );
+    const manualResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/workflows') && response.request().method() === 'GET',
+    );
+    await refreshButton.click();
+    await manualRequest;
+    await expect(refreshButton).toBeDisabled();
+    releaseManualRefresh();
+    await manualResponse;
+    await expect(refreshButton).toBeEnabled({ timeout: 15000 });
+  } finally {
+    releaseManualRefresh();
+    await page.unroute(manualListPattern);
+  }
   // Freeze browser timers so a slow macOS runner cannot turn a 3-second
   // coalescing assertion into a 15-second request-deadline assertion.
   // Advance exactly one polling interval while the first GET is held.
