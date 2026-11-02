@@ -251,11 +251,16 @@ try {
   await page.setViewportSize({ width: 320, height: 720 });
   assert.ok((await retryStream.boundingBox())!.height >= 44);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  const retryTask = env.store.tasks().find((item) => item.title === 'Review the example project');
+  assert.ok(retryTask);
+  const stateBeforeRetry = retryTask.state;
+  const queuedBeforeRetry = env.store.queue().length;
   await page.unroute(closedStreamPattern);
   await retryStream.click();
   await expect(page.locator('.connection')).toContainText('Live events connected');
   await expect(retryStream).toHaveCount(0);
-  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(env.store.tasks().find((item) => item.id === retryTask.id)?.state, stateBeforeRetry);
+  assert.equal(env.store.queue().length, queuedBeforeRetry);
   // A reader scrolling back through a long log must not be dragged to the
   // latest event. The explicit recovery control must also work on mobile.
   await page.setViewportSize({ width: 390, height: 844 });
