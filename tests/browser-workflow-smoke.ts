@@ -357,8 +357,9 @@ try {
   const queueLayout = await operationsQueue.evaluate((node) => ({
     scrollWidth: node.scrollWidth,
     clientWidth: node.clientWidth,
-    buttonHeights: Array.from(node.querySelectorAll('button'), (button) =>
-      button.getBoundingClientRect().height,
+    buttonHeights: Array.from(
+      node.querySelectorAll('button'),
+      (button) => button.getBoundingClientRect().height,
     ),
   }));
   assert.ok(queueLayout.buttonHeights.length > 0, 'Mobile workflow queue has no actions');
