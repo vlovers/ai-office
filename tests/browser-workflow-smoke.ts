@@ -49,6 +49,19 @@ try {
   await expect(page.locator('#workflows')).toBeFocused();
   const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
+  // Manual refresh is a single read, not a mutation followed by a second read.
+  // Pause polling to isolate the explicit request from the three-second timer.
+  await board.getByRole('button', { name: 'Pause live updates' }).click();
+  let manualRefreshes = 0;
+  await page.route('**/api/workflows', async (route) => {
+    manualRefreshes++;
+    await route.continue();
+  });
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Refresh workflow', exact: true })).toBeEnabled();
+  assert.equal(manualRefreshes, 1, 'Manual refresh issued duplicate workflow list requests');
+  await page.unroute('**/api/workflows');
+  await board.getByRole('button', { name: 'Resume live updates' }).click();
   const gate = async (label: string, configure?: () => Promise<void>) => {
     await expect(board.getByRole('button', { name: label, exact: true })).toBeVisible({
       timeout: 45000,
