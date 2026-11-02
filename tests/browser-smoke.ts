@@ -159,7 +159,9 @@ try {
   await firstDesk.focus();
   await expect(firstDesk).toBeFocused();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
-  await expect(page.locator('#agent')).toBeFocused();
+  await expect(firstDesk).toBeFocused();
+  await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.shell')).toHaveAttribute('data-page', 'office');
   assert.equal(env.store.tasks().length, 0, 'Workstation invented a task');
   await page.getByRole('link', { name: 'Register local worktree' }).click();
   await page
