@@ -206,9 +206,9 @@ export function WorkflowBoard({
     ? filteredWorkflows.filter((item) => item.id === selected)
     : filteredWorkflows;
   const workflowChoices = filteredWorkflows;
-  const staleAction = Boolean(
-    action && (!checkpointCurrent || action.id !== selected || action.version !== timeline?.version),
-  );
+  const staleAction =
+    action !== null &&
+    (!checkpointCurrent || action.id !== selected || action.version !== timeline?.version);
   const unsubmitted =
     dashboard?.tasks.filter(
       (task) =>

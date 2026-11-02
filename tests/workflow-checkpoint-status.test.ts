@@ -17,12 +17,7 @@ describe('workflow checkpoint action safety', () => {
   it('rejects a timeline from a previously selected workflow', () => {
     expect(isCurrentWorkflowCheckpoint('workflow-b', summary, timeline, '')).toBe(false);
     expect(
-      isCurrentWorkflowCheckpoint(
-        'workflow-a',
-        { id: 'workflow-b', version: 7 },
-        timeline,
-        '',
-      ),
+      isCurrentWorkflowCheckpoint('workflow-a', { id: 'workflow-b', version: 7 }, timeline, ''),
     ).toBe(false);
   });
 

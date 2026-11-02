@@ -1,4 +1,5 @@
-/** Only a fully verified, current checkpoint may offer workflow actions.
+/**
+ * Only a fully verified, current checkpoint may offer workflow actions.
  * The server independently checks the submitted optimistic version.
  */
 export function isCurrentWorkflowCheckpoint(
@@ -7,11 +8,10 @@ export function isCurrentWorkflowCheckpoint(
   timeline: { id: string; version: number } | null,
   error: string,
 ): boolean {
-  return Boolean(
-    !error &&
-      selected &&
-      summary?.id === selected &&
-      timeline?.id === selected &&
-      summary.version === timeline.version,
+  if (error || !selected || !summary || !timeline) return false;
+  return (
+    summary.id === selected &&
+    timeline.id === selected &&
+    summary.version === timeline.version
   );
 }

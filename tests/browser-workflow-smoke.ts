@@ -86,19 +86,13 @@ try {
     await page.unroute(outagePattern);
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
-  await expect(
-    board.getByRole('button', { name: 'Bind Coder task', exact: true }),
-  ).toBeEnabled();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
-  await expect(
-    board.getByRole('button', { name: 'Bind Coder task', exact: true }),
-  ).toBeDisabled();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeDisabled();
   await board.getByRole('button', { name: 'Resume live updates' }).click();
-  await expect(
-    board.getByRole('button', { name: 'Bind Coder task', exact: true }),
-  ).toBeEnabled();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   await gate('Bind Coder task', async () => {
     await dialog.getByLabel('Bind Coder task').selectOption(coder.id);
   });
@@ -292,7 +286,7 @@ try {
     id: string;
   }[];
   await board.getByText('Create workflow', { exact: true }).click();
-  await board.getByLabel('Coder task').selectOption(newCoder.id);
+  await board.getByLabel('Coder task', { exact: true }).selectOption(newCoder.id);
   await board.getByLabel('Reviewer profile').selectOption('codex-2');
   await board.getByRole('button', { name: 'Create gated workflow' }).click();
   await expect
