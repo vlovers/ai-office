@@ -18,12 +18,18 @@ export function countEventsAfter(
   events: readonly { id: number }[],
   afterId: number | null,
 ): number {
-  if (afterId === null) return 0;
-  return events.reduce((count, event) => count + (event.id > afterId ? 1 : 0), 0);
+  if (afterId === null || !Number.isSafeInteger(afterId) || afterId < 0) return 0;
+  return events.reduce(
+    (count, event) => count + (Number.isSafeInteger(event.id) && event.id > afterId ? 1 : 0),
+    0,
+  );
 }
 
 /** A paused reader must never move their unread baseline backwards on replay. */
 export function unreadBaseline(current: number | null, latestId: number | undefined): number {
-  const latest = latestId ?? 0;
-  return Math.max(current ?? 0, latest);
+  const validCursor = (value: number | null | undefined): number =>
+    value !== null && value !== undefined && Number.isSafeInteger(value) && value >= 0
+      ? value
+      : 0;
+  return Math.max(validCursor(current), validCursor(latestId));
 }
