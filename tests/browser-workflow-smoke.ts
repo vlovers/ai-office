@@ -336,6 +336,9 @@ try {
   const newWorkflow = afterCreate.find((item) => !beforeCreate.some((old) => old.id === item.id));
   assert.ok(newWorkflow);
   await expect(board.getByLabel('Workflow', { exact: true })).toHaveValue(newWorkflow.id);
+  // The create mutation may select its workflow before its explicit refresh
+  // settles. Do not count that legitimate manual GET as automatic polling.
+  await expect(board.getByRole('button', { name: 'Refresh workflow', exact: true })).toBeEnabled();
   // Isolate automatic polling from earlier manual refreshes. A slow GET
   // must remain the only list request until it settles, even after the 3s tick.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
