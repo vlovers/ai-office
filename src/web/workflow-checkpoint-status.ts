@@ -9,9 +9,6 @@ export function isCurrentWorkflowCheckpoint(
   error: string,
 ): boolean {
   if (error || !selected || !summary || !timeline) return false;
-  return (
-    summary.id === selected &&
-    timeline.id === selected &&
-    summary.version === timeline.version
-  );
+  const sameWorkflow = summary.id === selected && timeline.id === selected;
+  return sameWorkflow && summary.version === timeline.version;
 }
