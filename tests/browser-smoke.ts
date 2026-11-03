@@ -232,6 +232,13 @@ try {
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.getByRole('heading', { name: 'Task session_' })).toBeVisible();
   await expect(page.locator('#task-workspace')).toContainText('Review the example project');
+  // Focus mode intentionally hides task history. Return to the Tasks list
+  // to exercise its mobile filters, then restore the task-scoped deep link.
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
   // On a phone the task history filters start collapsed so the selected task
   // remains reachable. Expanding, collapsing and resizing must preserve inputs.
   const historyFilters = page.locator('#task-history-filters');
@@ -254,10 +261,12 @@ try {
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
-  await expect(page.getByRole('button', { name: 'Start task' })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1100 });
   await expect(historyFilters).toBeVisible();
   await expect(filterToggle).toBeHidden();
+  await page.goBack();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.getByRole('button', { name: 'Start task' })).toBeVisible();
   await page.getByRole('button', { name: 'Start task' }).click();
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
