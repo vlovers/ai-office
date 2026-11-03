@@ -87,7 +87,8 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
         record(task) &&
         stringField(task, 'id') &&
         stringField(task, 'title') &&
-        stringField(task, 'state') && TASK_STATES.has(task.state as string) &&
+        stringField(task, 'state') &&
+        TASK_STATES.has(task.state as string) &&
         stringField(task, 'agentId') &&
         optionalChangedFiles(task, 'changedFiles') &&
         optionalChangedFiles(task, 'baselineFiles') &&
