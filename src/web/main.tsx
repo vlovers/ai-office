@@ -53,6 +53,11 @@ import {
   type TaskHistoryStatus,
 } from './task-history-operations.js';
 import { exportTaskHistoryCsv } from './task-history-export.js';
+import {
+  isDashboardSnapshot,
+  isOfficeWorkflowList,
+  parseOfficeApiResponse,
+} from './office-api-response.js';
 import './styles.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -66,9 +71,7 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
           body: JSON.stringify(body),
         },
   );
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? 'Request failed.');
-  return data as T;
+  return parseOfficeApiResponse<T>(response);
 }
 const activeStates = ['running', 'stopping'];
 function App() {
@@ -173,7 +176,8 @@ function App() {
   const refresh = async () => {
     const ticket = dashboardResults.current.begin();
     try {
-      const data = await api<Dashboard>('/dashboard');
+      const data = await api<unknown>('/dashboard');
+      if (!isDashboardSnapshot(data)) throw new Error('Invalid dashboard snapshot.');
       if (dashboardResults.current.accept(ticket)) {
         setDashboard(data);
         setHttpConnection('connected');
@@ -201,7 +205,8 @@ function App() {
     const load = async () => {
       const ticket = workflowResults.begin();
       try {
-        const items = await api<OfficeWorkflow[]>('/workflows');
+        const items = await api<unknown>('/workflows');
+        if (!isOfficeWorkflowList(items)) throw new Error('Invalid workflow list.');
         if (live && workflowResults.accept(ticket)) {
           setWorkflows(items);
           setWorkflowAvailable(true);
