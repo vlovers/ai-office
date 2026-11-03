@@ -313,6 +313,12 @@ try {
   // CSV export uses the current history filters and contains no prompt or transcript content.
   await navigate('Tasks');
   const history = page.locator('#task-history');
+  // The Office fixture captures a 390px viewport before this export journey.
+  // Expand the accessible mobile disclosure before editing filtered history.
+  const historyFiltersToggle = history.getByRole('button', { name: /^Filters/ });
+  await expect(historyFiltersToggle).toBeVisible();
+  await historyFiltersToggle.click();
+  await expect(historyFiltersToggle).toHaveAttribute('aria-expanded', 'true');
   await history.getByLabel('Search tasks').fill('FIXTURE · provider failure');
   await expect(history.getByRole('button', { name: /Export filtered CSV/ })).toBeEnabled();
   const [download] = await Promise.all([
