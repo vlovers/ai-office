@@ -232,8 +232,32 @@ try {
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.getByRole('heading', { name: 'Task session_' })).toBeVisible();
   await expect(page.locator('#task-workspace')).toContainText('Review the example project');
+  // On a phone the task history filters start collapsed so the selected task
+  // remains reachable. Expanding, collapsing and resizing must preserve inputs.
+  const historyFilters = page.locator('#task-history-filters');
+  const filterToggle = page.getByRole('button', { name: /^Filters/ });
+  await expect(filterToggle).toBeVisible();
+  await expect(filterToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(historyFilters).toBeHidden();
+  await filterToggle.click();
+  await expect(historyFilters).toBeVisible();
+  await page.getByLabel('Search tasks').fill('Review the example');
+  await expect(filterToggle).toContainText('1 active');
+  await filterToggle.click();
+  await expect(historyFilters).toBeHidden();
+  await filterToggle.click();
+  await expect(page.getByLabel('Search tasks')).toHaveValue('Review the example');
+  await page.getByRole('button', { name: 'Reset task filters' }).click();
+  await expect(filterToggle).toHaveText('Filters');
+  await filterToggle.click();
+  await expect(historyFilters).toBeHidden();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
   await expect(page.getByRole('button', { name: 'Start task' })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1100 });
+  await expect(historyFilters).toBeVisible();
+  await expect(filterToggle).toBeHidden();
   await page.getByRole('button', { name: 'Start task' }).click();
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
