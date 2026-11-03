@@ -70,7 +70,7 @@ describe('office API response handling', () => {
     expect(isOfficeWorkflowList([{ ...valid[0], stages: [null] }])).toBe(false);
     expect(
       isOfficeWorkflowList([
-        { ...valid[0], stages: [{ ...valid[0].stages[0], taskId: {} }] },
+        { ...valid[0], stages: [{ ...valid[0]!.stages[0]!, taskId: {} }] },
       ]),
     ).toBe(false);
   });
