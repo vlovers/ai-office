@@ -83,13 +83,19 @@ describe('office API response handling', () => {
 
   it.each([
     ['connection mode entry', { connection: { ...dashboard.connection, modes: [null] } }],
-    ['connection mode label', { connection: { ...dashboard.connection, modes: [{ mode: 'api-key', label: {} }] } }],
+    [
+      'connection mode label',
+      { connection: { ...dashboard.connection, modes: [{ mode: 'api-key', label: {} }] } },
+    ],
     ['connection timestamp', { connection: { ...dashboard.connection, checkedAt: {} } }],
     ['profile entry', { profiles: [null] }],
     ['profile name', { profiles: [{ id: 'p', name: {} }] }],
     ['profile archive flag', { profiles: [{ id: 'p', name: 'Profile', archived: 'yes' }] }],
     ['task changed file entry', { tasks: [{ ...dashboard.tasks[0], changedFiles: [null] }] }],
-    ['task changed file path', { tasks: [{ ...dashboard.tasks[0], changedFiles: [{ path: {}, status: 'added' }] }] }],
+    [
+      'task changed file path',
+      { tasks: [{ ...dashboard.tasks[0], changedFiles: [{ path: {}, status: 'added' }] }] },
+    ],
     ['task baseline files', { tasks: [{ ...dashboard.tasks[0], baselineFiles: {} }] }],
     ['task error', { tasks: [{ ...dashboard.tasks[0], error: {} }] }],
     ['task result', { tasks: [{ ...dashboard.tasks[0], result: {} }] }],
