@@ -7,7 +7,5 @@ export function workflowsForTask<T extends { stages: readonly { taskId?: string 
   taskId?: string,
 ): T[] {
   if (!taskId) return workflows.slice();
-  return workflows.filter((workflow) =>
-    workflow.stages.some((stage) => stage.taskId === taskId),
-  );
+  return workflows.filter((workflow) => workflow.stages.some((stage) => stage.taskId === taskId));
 }
