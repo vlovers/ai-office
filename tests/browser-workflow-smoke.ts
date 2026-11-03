@@ -318,12 +318,17 @@ try {
   const reviewerTaskId = (await env.get()).stages[1]?.taskId;
   assert.ok(reviewerTaskId, 'Completed Reviewer stage must link its task');
   await page.goto(`${address}/#task/${encodeURIComponent(reviewerTaskId)}/workflow`);
-  const linkedWorkflow = page
-    .locator('#task-workflow')
-    .getByRole('region', { name: 'Workflow review results', exact: true });
-  await expect(linkedWorkflow).toContainText('QA assertions passed');
+  const reviewerAnchor = page.locator(`#task-workflow-${encodeURIComponent(reviewerTaskId)}`);
+  await expect(reviewerAnchor).toBeFocused();
+  await expect(
+    reviewerAnchor.getByRole('region', { name: 'Workflow review results', exact: true }),
+  ).toContainText('QA assertions passed');
   await page.goto(`${address}/#task/${encodeURIComponent(coder.id)}/workflow`);
-  await expect(linkedWorkflow).toContainText('QA assertions passed');
+  const coderAnchor = page.locator(`#task-workflow-${encodeURIComponent(coder.id)}`);
+  await expect(coderAnchor).toBeFocused();
+  await expect(
+    coderAnchor.getByRole('region', { name: 'Workflow review results', exact: true }),
+  ).toContainText('QA assertions passed');
   const artifacts =
     process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(tmpdir(), 'ai-office-v07-browser');
   await mkdir(artifacts, { recursive: true });
