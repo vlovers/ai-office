@@ -2196,3 +2196,25 @@ select {
     width: 100%;
   }
 }
+
+/* Keep task details within reach on phones without removing desktop filters.
+   Collapsed controls are removed from keyboard navigation until expanded. */
+.mobile-history-filters-toggle {
+  display: none;
+}
+@media (max-width: 680px) {
+  .shell[data-page='tasks'] .mobile-history-filters-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    margin: 0 0 12px;
+  }
+  .shell[data-page='tasks'] .history-controls[data-mobile-open='false'] {
+    display: none;
+  }
+  .shell[data-page='tasks'] .mission-board > .history {
+    max-height: min(36vh, 300px);
+    overflow-y: auto;
+  }
+}
