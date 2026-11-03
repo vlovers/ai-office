@@ -87,6 +87,11 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
         record(task) &&
         stringField(task, 'id') &&
         stringField(task, 'title') &&
+        // History sorting and rendering use these fields immediately. An
+        // invalid HTTP 200 must not replace the last usable dashboard.
+        stringField(task, 'repositoryId') &&
+        stringField(task, 'createdAt') &&
+        stringField(task, 'updatedAt') &&
         stringField(task, 'state') &&
         TASK_STATES.has(task.state as string) &&
         stringField(task, 'agentId') &&
