@@ -5,6 +5,7 @@ import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
 import { createLatestResultGate } from './latest-result-gate.js';
 import { readWorkflowResponse } from './workflow-http.js';
 import { assertWorkflowReadShape } from './workflow-response-shapes.js';
+import { assertWorkflowSnapshotCoherent } from './workflow-snapshot-coherence.js';
 import { createRequestDeadline, createSingleFlight } from './workflow-polling.js';
 import {
   selectWorkflowOperations,
@@ -171,14 +172,21 @@ export function WorkflowBoard({
             request<Diagnostics>(`/workflows/${next}/diagnostics`, undefined, deadline.signal),
           ])
         : [null, [], null];
-      // Commit the list and its checkpoint atomically. A selection change or
-      // unmount invalidates this response even if no newer poll has settled.
-      if (
-        epoch !== refreshEpoch.current ||
-        selectedRef.current !== requested ||
-        !refreshResults.current.accept(ticket)
-      )
-        return;
+      // Reject cross-request skew: a valid JSON timeline or diagnostics response
+      // from a different workflow/version is not a coherent checkpoint.
+      // A legitimate concurrent server update will be retried on the next poll.
+      if (epoch !== refreshEpoch.current || selectedRef.current !== requested) return;
+      if (next) {
+        assertWorkflowSnapshotCoherent(
+          next,
+          workflows.find((item) => item.id === next),
+          view,
+          diagnosis,
+        );
+      }
+      // Commit the list and its checkpoint atomically. A newer settled read
+      // or selection change must never restore an obsolete snapshot.
+      if (!refreshResults.current.accept(ticket)) return;
       setItems(workflows);
       setDashboard(current);
       setCommands(choices.commands);
