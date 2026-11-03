@@ -255,6 +255,13 @@ filters are expanded on a phone, Escape closes them and returns keyboard focus
 to the Filters button; desktop controls remain visible. These are local display
 operations, not task execution or workflow approval.
 
+In the unreleased progressive history view, the Tasks page initially renders
+40 matching rows and provides **Show next 40 tasks** for larger histories. The
+current selection stays visible as a pinned row even when it falls outside the
+loaded batch; filters and sorting reset the loaded window. CSV export still
+covers **all matching tasks**, not just the mounted rows. This is display-only:
+it does not change task state, scheduling, or review permissions.
+
 ## Queue, restart and allowance
 
 Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.
