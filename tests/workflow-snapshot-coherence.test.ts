@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { assertWorkflowSnapshotCoherent } from '../src/web/workflow-snapshot-coherence.js';
 
 const id = 'workflow-a';
-const summary = { id, version: 7 };
-const timeline = { id, version: 7 };
-const diagnostics = { id, version: 7 };
+const summary = { id, version: 7, state: 'active' };
+const timeline = { id, version: 7, state: 'active' };
+const diagnostics = { id, version: 7, state: 'active' };
 
 describe('workflow snapshot coherence across read-only endpoints', () => {
   it('accepts matching workflow identities and persisted versions', () => {
@@ -28,6 +28,16 @@ describe('workflow snapshot coherence across read-only endpoints', () => {
   ])('rejects mixed persisted versions when %s', (_source, listed, viewed, diagnosed) => {
     expect(() => assertWorkflowSnapshotCoherent(id, listed, viewed, diagnosed)).toThrow(
       'Workflow checkpoint changed during refresh; retry to verify current version',
+    );
+  });
+
+  it.each<[string, typeof summary, typeof timeline, typeof diagnostics]>([
+    ['summary', { ...summary, state: 'completed' }, timeline, diagnostics],
+    ['timeline', summary, { ...timeline, state: 'blocked' }, diagnostics],
+    ['diagnostics', summary, timeline, { ...diagnostics, state: 'cancelled' }],
+  ])('rejects a conflicting %s state even when versions match', (_source, listed, viewed, diagnosed) => {
+    expect(() => assertWorkflowSnapshotCoherent(id, listed, viewed, diagnosed)).toThrow(
+      'Workflow checkpoint state mismatch; refresh to retry',
     );
   });
 

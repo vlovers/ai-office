@@ -6,6 +6,7 @@ import { createLatestResultGate } from './latest-result-gate.js';
 import { readWorkflowResponse } from './workflow-http.js';
 import { assertWorkflowReadShape } from './workflow-response-shapes.js';
 import { assertWorkflowSnapshotCoherent } from './workflow-snapshot-coherence.js';
+import { workflowsForTask } from './workflow-task-context.js';
 import { createRequestDeadline, createSingleFlight } from './workflow-polling.js';
 import {
   selectWorkflowOperations,
@@ -160,7 +161,7 @@ export function WorkflowBoard({
         ),
       ]);
       if (epoch !== refreshEpoch.current) return;
-      const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
+      const workflows = workflowsForTask(all, taskId);
       const requested = selectedRef.current;
       const next = workflows.some((item) => item.id === requested)
         ? requested

@@ -209,6 +209,25 @@ try {
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  // Equal versions do not make conflicting workflow states safe to approve.
+  await page.route(diagnosticsPattern, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    await route.fulfill({ response, json: { ...payload, state: 'conflicting-state' } });
+  });
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Workflow checkpoint state mismatch; refresh to retry',
+    );
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
+  } finally {
+    await page.unroute(diagnosticsPattern);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
@@ -293,6 +312,14 @@ try {
   await page.locator('.task-row').filter({ hasText: 'Browser workflow fixture' }).click();
   const integrated = page.getByRole('region', { name: 'Workflow review results', exact: true });
   await expect(integrated).toContainText('Verified approved snapshot');
+  await expect(integrated).toContainText('QA assertions passed');
+  // A reviewer task belongs to the same workflow as its Coder task. The
+  // task-scoped review route must find workflows linked through any stage.
+  const reviewerTaskId = (await env.get()).stages[1]?.taskId;
+  assert.ok(reviewerTaskId, 'Completed Reviewer stage must link its task');
+  await page.goto(`${address}/#task/${encodeURIComponent(reviewerTaskId)}/workflow`);
+  await expect(integrated).toContainText('QA assertions passed');
+  await page.goto(`${address}/#task/${encodeURIComponent(coder.id)}/workflow`);
   await expect(integrated).toContainText('QA assertions passed');
   const artifacts =
     process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(tmpdir(), 'ai-office-v07-browser');

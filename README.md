@@ -235,12 +235,15 @@ the UI reports an error and requires a successful refresh before approvals.
 An additional consistency gate checks that the workflow list, timeline and
 diagnostics all describe the same workflow ID and persisted version before
 committing the read-only snapshot. Concurrent updates can require another
-refresh; mismatched responses never enable approval actions.
+refresh; mismatched responses never enable approval actions. Conflicting persisted
+states also fail closed even if all endpoints report the same version.
 
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
 restores destinations and task links; a review shortcut retains its selected
-task after reload. These fragments select a view only: they do **not** authorize
+task after reload. Task-scoped workflow review resolves linked Coder, Reviewer
+and QA tasks (not just the first stage), without showing unrelated workflows.
+These fragments select a view only: they do **not** authorize
 execution, verification, writes, or review decisions.
 
 ## Queue, restart and allowance
