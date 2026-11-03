@@ -247,8 +247,7 @@ export function TaskHistory({
                 <small>
                   {item.agentId} ·{' '}
                   {dashboard.repositories.find((r) => r.id === item.repositoryId)?.name ??
-                    item.repositoryId}{' '}
-                  ·{' '}
+                    item.repositoryId}{' · '}
                   {new Date(item.createdAt).toLocaleString()}
                 </small>
               </span>
