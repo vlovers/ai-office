@@ -9,6 +9,8 @@ on:
       - 'feat/**'
       - 'fix/**'
       - 'ci/**'
+      - 'security/**'
+      - 'test/**'
   push:
     branches: [main]
   workflow_dispatch:
