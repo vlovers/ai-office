@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Dashboard, Task } from '../shared/types.js';
 import {
   historyFilterOptions,
@@ -6,6 +6,7 @@ import {
   type TaskHistoryStatus,
 } from './task-history-operations.js';
 import { exportTaskHistoryCsv } from './task-history-export.js';
+import { TASK_HISTORY_PAGE_SIZE, taskHistoryPage } from './task-history-page.js';
 
 export function TaskHistory({
   dashboard,
@@ -47,6 +48,12 @@ export function TaskHistory({
   onSelectTask: (task: Task) => void;
 }) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(TASK_HISTORY_PAGE_SIZE);
+  // Changing the history projection returns the reader to its first batch.
+  useEffect(() => {
+    setHistoryLimit(TASK_HISTORY_PAGE_SIZE);
+  }, [historyQuery, historyStatus, historyOrder, historyAgent, historyRepository]);
+  const historyPage = taskHistoryPage(visibleHistory, historyLimit, selected);
   const mobileFiltersToggleRef = useRef<HTMLButtonElement>(null);
   const activeFilters = [
     historyQuery.trim().length > 0,
@@ -234,7 +241,7 @@ export function TaskHistory({
         </div>
       ) : (
         <div className="task-list">
-          {visibleHistory.map((item) => (
+          {historyPage.rows.map((item) => (
             <button
               key={item.id}
               aria-pressed={selected === item.id}
@@ -245,6 +252,11 @@ export function TaskHistory({
             >
               <span className={`task-indicator ${item.state}`} />
               <span>
+                {historyPage.pinnedSelectedId === item.id && (
+                  <small className="history-pinned-label">
+                    Selected task · outside loaded results
+                  </small>
+                )}
                 <strong>{item.title}</strong>
                 <small>
                   {item.agentId} · {repositoryLabel(item.repositoryId)} ·{' '}
@@ -254,6 +266,20 @@ export function TaskHistory({
               <span className={`badge ${item.state}`}>{item.state}</span>
             </button>
           ))}
+          {historyPage.remaining > 0 && (
+            <div className="history-load-more">
+              <p role="status">
+                {historyPage.rows.length} of {visibleHistory.length} matching tasks loaded
+              </p>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setHistoryLimit((count) => count + TASK_HISTORY_PAGE_SIZE)}
+              >
+                Show next {Math.min(TASK_HISTORY_PAGE_SIZE, historyPage.remaining)} tasks
+              </button>
+            </div>
+          )}
           {visibleHistory.length === 0 && (
             <div className="history-empty-results" role="status">
               <p>No tasks match these filters.</p>
