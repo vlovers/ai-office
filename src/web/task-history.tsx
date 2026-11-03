@@ -190,11 +190,7 @@ export function TaskHistory({
               historyAgent ||
               historyRepository ||
               historyOrder !== 'attention') && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={resetFilters}
-              >
+              <button type="button" className="secondary" onClick={resetFilters}>
                 Reset task filters
               </button>
             )}
