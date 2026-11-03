@@ -353,7 +353,7 @@ try {
     .locator('.task-row')
     .filter({ hasText: 'FIXTURE · saved completion' })
     .click();
-  await expect(page).toHaveURL(/#task\\/[^/]+\\/session$/);
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await navigate('Tasks');
   if ((await historyFiltersToggle.getAttribute('aria-expanded')) !== 'true') {
     await historyFiltersToggle.click();
