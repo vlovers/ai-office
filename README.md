@@ -246,6 +246,15 @@ and QA tasks (not just the first stage), without showing unrelated workflows.
 These fragments select a view only: they do **not** authorize
 execution, verification, writes, or review decisions.
 
+In the unreleased mobile task-history UI (Draft PRs #174–#175), filters are
+collapsed on screens up to 680 px wide, but the number of matching tasks remains
+visible. A search with no results offers **Clear task filters** directly in the
+history list. If the currently selected task is hidden by filters, **Show selected
+task** restores the unfiltered list without changing the task selection. While
+filters are expanded on a phone, Escape closes them and returns keyboard focus
+to the Filters button; desktop controls remain visible. These are local display
+operations, not task execution or workflow approval.
+
 ## Queue, restart and allowance
 
 Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.
