@@ -253,7 +253,9 @@ export function TaskHistory({
               <span className={`task-indicator ${item.state}`} />
               <span>
                 {historyPage.pinnedSelectedId === item.id && (
-                  <small className="history-pinned-label">Selected task · outside loaded results</small>
+                  <small className="history-pinned-label">
+                    Selected task · outside loaded results
+                  </small>
                 )}
                 <strong>{item.title}</strong>
                 <small>
