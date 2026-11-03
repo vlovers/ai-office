@@ -867,17 +867,16 @@ function App() {
                             onStopTask={() => void stopTask(task.id)}
                           />
                           <TaskSessionOutput task={task} session={session} events={events} />
-                          {taskHasReview(task) ? (
+                          {taskHasReview(task) && (
                             <ReviewCenter
                               key={task.id}
                               task={{ ...task, configuration: taskConfiguration }}
                               api={api}
                             />
-                          ) : (
-                            <div id="task-workflow" tabIndex={-1}>
-                              <WorkflowBoard taskId={task.id} />
-                            </div>
                           )}
+                          <div id="task-workflow" tabIndex={-1}>
+                            <WorkflowBoard taskId={task.id} />
+                          </div>
                           <TaskChangedFiles task={task} />
                         </>
                       )}
