@@ -3,7 +3,7 @@
  * be well-formed yet belong to a different workflow or persisted version.
  * Never present such a mixed response as a verified, actionable checkpoint.
  */
-type CheckpointIdentity = { id: string; version: number };
+type CheckpointIdentity = { id: string; version: number; state: string };
 
 export function assertWorkflowSnapshotCoherent(
   requestedId: string,
@@ -19,5 +19,8 @@ export function assertWorkflowSnapshotCoherent(
   }
   if (summary.version !== timeline.version || timeline.version !== diagnostics.version) {
     throw new Error('Workflow checkpoint changed during refresh; retry to verify current version');
+  }
+  if (summary.state !== timeline.state || timeline.state !== diagnostics.state) {
+    throw new Error('Workflow checkpoint state mismatch; refresh to retry');
   }
 }

@@ -311,7 +311,7 @@ function App() {
     if (lastNavigation.current === key) return;
     const id =
       navigation.destination === 'workflow'
-        ? 'task-workflow'
+        ? `task-workflow-${encodeURIComponent(navigation.taskId)}`
         : navigation.destination === 'review'
           ? 'code-review-center'
           : 'task-workspace';
@@ -867,14 +867,22 @@ function App() {
                             onStopTask={() => void stopTask(task.id)}
                           />
                           <TaskSessionOutput task={task} session={session} events={events} />
-                          {taskHasReview(task) ? (
+                          {taskHasReview(task) && (
                             <ReviewCenter
                               key={task.id}
                               task={{ ...task, configuration: taskConfiguration }}
                               api={api}
                             />
-                          ) : (
-                            <div id="task-workflow" tabIndex={-1}>
+                          )}
+                          {(!taskHasReview(task) ||
+                            (navigation?.taskId === task.id &&
+                              navigation.destination === 'workflow')) && (
+                            <div
+                              className="task-workflow-anchor"
+                              id={`task-workflow-${encodeURIComponent(task.id)}`}
+                              data-task-id={task.id}
+                              tabIndex={-1}
+                            >
                               <WorkflowBoard taskId={task.id} />
                             </div>
                           )}
