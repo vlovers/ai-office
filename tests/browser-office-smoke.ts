@@ -434,7 +434,10 @@ try {
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-01T00:00:00Z',
     }));
-    await route.fulfill({ response, json: { ...snapshot, tasks: [...snapshot.tasks, ...synthetic] } });
+    await route.fulfill({
+      response,
+      json: { ...snapshot, tasks: [...snapshot.tasks, ...synthetic] },
+    });
   });
   await navigate('Tasks');
   await expect(history.getByRole('button', { name: 'Show next 40 tasks' })).toBeVisible({
