@@ -247,8 +247,7 @@ export function TaskHistory({
               <span>
                 <strong>{item.title}</strong>
                 <small>
-                  {item.agentId} ·{' '}
-                  {repositoryLabel(item.repositoryId)} ·{' '}
+                  {item.agentId} · {repositoryLabel(item.repositoryId)} ·{' '}
                   {new Date(item.createdAt).toLocaleString()}
                 </small>
               </span>
