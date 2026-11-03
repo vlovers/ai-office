@@ -326,20 +326,22 @@ try {
   await page.goto(`${address}/#task/${encodeURIComponent(coder.id)}/workflow`);
   const coderAnchor = page.locator(`#task-workflow-${encodeURIComponent(coder.id)}`);
   await expect(coderAnchor).toBeFocused();
-  await expect(
-    coderAnchor.getByRole('region', { name: 'Workflow review results', exact: true }),
-  ).toContainText('QA assertions passed');
+  const coderWorkflow = coderAnchor.getByRole('region', {
+    name: 'Workflow review results',
+    exact: true,
+  });
+  await expect(coderWorkflow).toContainText('QA assertions passed');
   const artifacts =
     process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(tmpdir(), 'ai-office-v07-browser');
   await mkdir(artifacts, { recursive: true });
-  await integrated.screenshot({ path: join(artifacts, 'workflow-desktop.png') });
+  await coderWorkflow.screenshot({ path: join(artifacts, 'workflow-desktop.png') });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(integrated).toBeVisible();
+  await expect(coderWorkflow).toBeVisible();
   assert.equal(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     true,
   );
-  await integrated.screenshot({ path: join(artifacts, 'workflow-mobile.png') });
+  await coderWorkflow.screenshot({ path: join(artifacts, 'workflow-mobile.png') });
   await page.setViewportSize({ width: 1440, height: 1100 });
   // Resolve a delayed response for another selection after the current one has rendered.
   const alternate = await env.send('POST', '/api/workflows', {
