@@ -53,8 +53,8 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
     value.agents.every(
       (agent: unknown) => stringField(agent, 'id') && stringField(agent, 'name'),
     ) &&
-    record(value.agent) &&
-    stringField(value.agent, 'id') &&
+    // The server omits the legacy agent field when every profile is archived.
+    (value.agents.length === 0 || stringField(value.agent, 'id')) &&
     Array.isArray(value.queue) &&
     value.queue.every((item: unknown) => stringField(item, 'taskId')) &&
     (value.profiles === undefined || Array.isArray(value.profiles)) &&
