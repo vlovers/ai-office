@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Dashboard, Task } from '../shared/types.js';
 import type { TaskHistoryOrder, TaskHistoryStatus } from './task-history-operations.js';
 import { exportTaskHistoryCsv } from './task-history-export.js';
@@ -41,6 +42,15 @@ export function TaskHistory({
   onRepositoryChange: (value: string) => void;
   onSelectTask: (task: Task) => void;
 }) {
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const activeFilters = [
+    historyQuery.trim().length > 0,
+    historyStatus !== 'all',
+    historyOrder !== 'attention',
+    historyAgent !== '',
+    historyRepository !== '',
+  ].filter(Boolean).length;
+
   return (
     <section className="panel history" id="task-history">
       <div className="panel-heading">
@@ -48,7 +58,22 @@ export function TaskHistory({
         <span className="subtle">{dashboard?.tasks.length ?? 0} tasks</span>
       </div>
       {!!dashboard?.tasks.length && (
-        <div className="history-controls" aria-label="Task history filters">
+        <>
+          <button
+            type="button"
+            className="mobile-history-filters-toggle secondary"
+            aria-expanded={mobileFiltersOpen}
+            aria-controls="task-history-filters"
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+          >
+            Filters{activeFilters > 0 ? ` (${activeFilters} active)` : ''}
+          </button>
+          <div
+            id="task-history-filters"
+            className="history-controls"
+            aria-label="Task history filters"
+            data-mobile-open={mobileFiltersOpen}
+          >
           <button
             type="button"
             className="secondary"
@@ -152,7 +177,8 @@ export function TaskHistory({
               Reset task filters
             </button>
           )}
-        </div>
+          </div>
+        </>
       )}
       {!dashboard?.tasks.length ? (
         <div className="empty-state">
