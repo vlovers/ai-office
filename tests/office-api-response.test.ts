@@ -55,6 +55,52 @@ describe('office API response handling', () => {
     expect(isDashboardSnapshot({ ...dashboard, concurrency: Infinity })).toBe(false);
   });
 
+  it('accepts valid nested dashboard details, including archived profiles', () => {
+    expect(
+      isDashboardSnapshot({
+        ...dashboard,
+        connection: {
+          ...dashboard.connection,
+          checkedAt: null,
+          modes: [{ mode: 'api-key', label: 'API key', status: 'available' }],
+        },
+        profiles: [{ id: 'archived', name: 'Archived', archived: true }],
+        tasks: [
+          {
+            ...dashboard.tasks[0],
+            changedFiles: [{ path: 'README.md', status: 'modified' }],
+            baselineFiles: [],
+            error: null,
+            result: '',
+          },
+        ],
+        sessions: [{ id: 'session', threadId: null }],
+        agents: [{ ...dashboard.agents[0], taskId: null, canStop: false }],
+        queue: [{ taskId: 'task', order: 0 }],
+      }),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['connection mode entry', { connection: { ...dashboard.connection, modes: [null] } }],
+    ['connection mode label', { connection: { ...dashboard.connection, modes: [{ mode: 'api-key', label: {} }] } }],
+    ['connection timestamp', { connection: { ...dashboard.connection, checkedAt: {} } }],
+    ['profile entry', { profiles: [null] }],
+    ['profile name', { profiles: [{ id: 'p', name: {} }] }],
+    ['profile archive flag', { profiles: [{ id: 'p', name: 'Profile', archived: 'yes' }] }],
+    ['task changed file entry', { tasks: [{ ...dashboard.tasks[0], changedFiles: [null] }] }],
+    ['task changed file path', { tasks: [{ ...dashboard.tasks[0], changedFiles: [{ path: {}, status: 'added' }] }] }],
+    ['task baseline files', { tasks: [{ ...dashboard.tasks[0], baselineFiles: {} }] }],
+    ['task error', { tasks: [{ ...dashboard.tasks[0], error: {} }] }],
+    ['task result', { tasks: [{ ...dashboard.tasks[0], result: {} }] }],
+    ['session thread', { sessions: [{ id: 'session', threadId: {} }] }],
+    ['agent task ID', { agents: [{ ...dashboard.agents[0], taskId: {} }] }],
+    ['agent stop flag', { agents: [{ ...dashboard.agents[0], canStop: 'yes' }] }],
+    ['queue order', { queue: [{ taskId: 'task', order: 'first' }] }],
+  ])('rejects malformed nested dashboard %s', (_label, override) => {
+    expect(isDashboardSnapshot({ ...dashboard, ...override })).toBe(false);
+  });
+
   it('rejects malformed workflow lists before the office scene renders', () => {
     const valid = [
       {
