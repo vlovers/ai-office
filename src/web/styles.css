@@ -2246,3 +2246,26 @@ select {
     overflow-y: auto;
   }
 }
+
+/* Bound task history DOM size while keeping batch navigation touch-accessible. */
+.history-load-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.history-load-more button {
+  min-height: 44px;
+}
+.history-pinned-label {
+  color: var(--amber) !important;
+}
+@media (max-width: 680px) {
+  .history-load-more button {
+    width: 100%;
+  }
+}
