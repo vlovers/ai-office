@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentId } from '../src/shared/types.js';
 import {
+  historyFilterOptions,
   selectTaskHistory,
   summarizeTaskHistory,
   taskHistoryGroup,
@@ -111,6 +112,46 @@ describe('task history operations', () => {
     expect(taskNeedsAttention({ state: 'running' })).toBe(false);
     expect(taskHistoryGroup({ state: 'stopping' })).toBe('active');
     expect(taskHistoryGroup({ state: 'stopped' })).toBe('other');
+  });
+
+  it('keeps archived agents and removed repositories available as history filters', () => {
+    const agentOptions = historyFilterOptions(
+      [{ id: 'a', name: 'Active agent' }],
+      tasks.map((task) => task.agentId),
+    );
+    expect(agentOptions).toEqual([
+      { id: 'a', name: 'Active agent' },
+      { id: 'b', name: 'b' },
+    ]);
+    expect(select({ agentId: id('b') }).map((task) => task.id)).toEqual([
+      'broken',
+      'queued',
+    ]);
+
+    const repoOptions = historyFilterOptions(
+      [{ id: 'repo-1', name: 'Current repository' }],
+      tasks.map((task) => task.repositoryId),
+    );
+    expect(repoOptions).toEqual([
+      { id: 'repo-1', name: 'Current repository' },
+      { id: 'repo-2', name: 'repo-2' },
+    ]);
+    expect(select({ repositoryId: 'repo-2' }).map((task) => task.id)).toEqual([
+      'broken',
+      'stopped',
+    ]);
+  });
+
+  it('deduplicates filter IDs and prefers the last known display name', () => {
+    const known = [
+      { id: 'old', name: 'Old profile name' },
+      { id: 'old', name: 'Current profile name' },
+    ];
+    expect(historyFilterOptions(known, ['old', 'missing', 'missing'])).toEqual([
+      { id: 'old', name: 'Current profile name' },
+      { id: 'missing', name: 'missing' },
+    ]);
+    expect(known[0]!.name).toBe('Old profile name');
   });
 
   it('uses stable task ids for timestamp ties', () => {
