@@ -311,7 +311,7 @@ function App() {
     if (lastNavigation.current === key) return;
     const id =
       navigation.destination === 'workflow'
-        ? 'task-workflow'
+        ? `task-workflow-${encodeURIComponent(navigation.taskId)}`
         : navigation.destination === 'review'
           ? 'code-review-center'
           : 'task-workspace';
@@ -877,7 +877,12 @@ function App() {
                           {(!taskHasReview(task) ||
                             (navigation?.taskId === task.id &&
                               navigation.destination === 'workflow')) && (
-                            <div id="task-workflow" tabIndex={-1}>
+                            <div
+                              className="task-workflow-anchor"
+                              id={`task-workflow-${encodeURIComponent(task.id)}`}
+                              data-task-id={task.id}
+                              tabIndex={-1}
+                            >
                               <WorkflowBoard taskId={task.id} />
                             </div>
                           )}
