@@ -22,9 +22,11 @@ export function historyFilterOptions(
   for (const id of referencedIds) {
     if (!labels.has(id)) labels.set(id, id);
   }
-  return [...labels].map(([id, name]) => ({ id, name })).sort(
-    (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
-  );
+  return [...labels]
+    .map(([id, name]) => ({ id, name }))
+    .sort(
+      (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+    );
 }
 
 export function taskNeedsAttention(task: Pick<Task, 'state'>): boolean {
