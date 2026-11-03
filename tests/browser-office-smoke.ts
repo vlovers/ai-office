@@ -349,10 +349,7 @@ try {
 
   // Selecting a task and then filtering it out must never strand the user:
   // the selected-task recovery action remains visible outside the disclosure.
-  await history
-    .locator('.task-row')
-    .filter({ hasText: 'FIXTURE · saved completion' })
-    .click();
+  await history.locator('.task-row').filter({ hasText: 'FIXTURE · saved completion' }).click();
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await navigate('Tasks');
   if ((await historyFiltersToggle.getAttribute('aria-expanded')) !== 'true') {
