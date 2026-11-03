@@ -874,9 +874,13 @@ function App() {
                               api={api}
                             />
                           )}
-                          <div id="task-workflow" tabIndex={-1}>
-                            <WorkflowBoard taskId={task.id} />
-                          </div>
+                          {(!taskHasReview(task) ||
+                            (navigation?.taskId === task.id &&
+                              navigation.destination === 'workflow')) && (
+                            <div id="task-workflow" tabIndex={-1}>
+                              <WorkflowBoard taskId={task.id} />
+                            </div>
+                          )}
                           <TaskChangedFiles task={task} />
                         </>
                       )}
