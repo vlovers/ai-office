@@ -13,6 +13,30 @@ function optionalNullableString(value: Record<string, unknown>, field: string): 
   return value[field] === undefined || value[field] === null || typeof value[field] === 'string';
 }
 
+const TASK_STATES = new Set([
+  'queued',
+  'running',
+  'stopping',
+  'completed',
+  'failed',
+  'stopped',
+  'interrupted',
+]);
+
+function nonNegativeInteger(value: unknown): boolean {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function optionalReviewRequest(task: Record<string, unknown>): boolean {
+  return (
+    task.reviewRequest === undefined ||
+    (record(task.reviewRequest) &&
+      stringField(task.reviewRequest, 'revision') &&
+      stringField(task.reviewRequest, 'sessionId') &&
+      stringField(task.reviewRequest, 'threadId'))
+  );
+}
+
 function optionalChangedFiles(value: Record<string, unknown>, field: string): boolean {
   const files = value[field];
   return (
@@ -60,14 +84,18 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
     Array.isArray(value.tasks) &&
     value.tasks.every(
       (task: unknown) =>
+        record(task) &&
         stringField(task, 'id') &&
         stringField(task, 'title') &&
         stringField(task, 'state') &&
+        TASK_STATES.has(task.state as string) &&
         stringField(task, 'agentId') &&
-        record(task) &&
         optionalChangedFiles(task, 'changedFiles') &&
         optionalChangedFiles(task, 'baselineFiles') &&
         optionalNullableString(task, 'error') &&
+        optionalNullableString(task, 'summaryError') &&
+        optionalNullableString(task, 'sessionId') &&
+        optionalReviewRequest(task) &&
         (task.result === undefined || typeof task.result === 'string'),
     ) &&
     Array.isArray(value.sessions) &&
@@ -87,14 +115,17 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
         (agent.canStop === undefined || typeof agent.canStop === 'boolean'),
     ) &&
     // The server omits the legacy agent field when every profile is archived.
-    (value.agents.length === 0 || stringField(value.agent, 'id')) &&
+    (value.agents.length === 0
+      ? value.agent === undefined || value.agent === null || stringField(value.agent, 'id')
+      : stringField(value.agent, 'id')) &&
     Array.isArray(value.queue) &&
     value.queue.every(
       (item: unknown) =>
         stringField(item, 'taskId') &&
         record(item) &&
-        (item.order === undefined ||
-          (typeof item.order === 'number' && Number.isInteger(item.order))),
+        (item.order === undefined || nonNegativeInteger(item.order)) &&
+        optionalNullableString(item, 'resumeSessionId') &&
+        (item.waitingReason === undefined || typeof item.waitingReason === 'string'),
     ) &&
     (value.profiles === undefined ||
       (Array.isArray(value.profiles) &&
@@ -105,8 +136,7 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
             record(profile) &&
             (profile.archived === undefined || typeof profile.archived === 'boolean'),
         ))) &&
-    typeof value.concurrency === 'number' &&
-    Number.isFinite(value.concurrency) &&
+    nonNegativeInteger(value.concurrency) &&
     typeof value.ready === 'boolean' &&
     typeof value.readinessMessage === 'string'
   );

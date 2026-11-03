@@ -71,12 +71,15 @@ describe('office API response handling', () => {
             changedFiles: [{ path: 'README.md', status: 'modified' }],
             baselineFiles: [],
             error: null,
+            summaryError: null,
+            sessionId: null,
+            reviewRequest: { revision: 'rev', sessionId: 'session', threadId: 'thread' },
             result: '',
           },
         ],
         sessions: [{ id: 'session', threadId: null }],
         agents: [{ ...dashboard.agents[0], taskId: null, canStop: false }],
-        queue: [{ taskId: 'task', order: 0 }],
+        queue: [{ taskId: 'task', order: 0, resumeSessionId: null, waitingReason: 'waiting' }],
       }),
     ).toBe(true);
   });
@@ -105,6 +108,50 @@ describe('office API response handling', () => {
     ['queue order', { queue: [{ taskId: 'task', order: 'first' }] }],
   ])('rejects malformed nested dashboard %s', (_label, override) => {
     expect(isDashboardSnapshot({ ...dashboard, ...override })).toBe(false);
+  });
+
+  it.each([
+    ['unknown task state', { tasks: [{ ...dashboard.tasks[0], state: 'approved' }] }],
+    ['task summary error', { tasks: [{ ...dashboard.tasks[0], summaryError: {} }] }],
+    ['task session ID', { tasks: [{ ...dashboard.tasks[0], sessionId: {} }] }],
+    ['review request object', { tasks: [{ ...dashboard.tasks[0], reviewRequest: [] }] }],
+    [
+      'review request revision',
+      {
+        tasks: [
+          {
+            ...dashboard.tasks[0],
+            reviewRequest: { revision: {}, sessionId: 'session', threadId: 'thread' },
+          },
+        ],
+      },
+    ],
+    [
+      'review request thread',
+      {
+        tasks: [
+          {
+            ...dashboard.tasks[0],
+            reviewRequest: { revision: 'rev', sessionId: 'session', threadId: null },
+          },
+        ],
+      },
+    ],
+    ['negative queue order', { queue: [{ taskId: 'task', order: -1 }] }],
+    ['fractional queue order', { queue: [{ taskId: 'task', order: 1.5 }] }],
+    ['queue resume session', { queue: [{ taskId: 'task', resumeSessionId: {} }] }],
+    ['queue waiting reason', { queue: [{ taskId: 'task', waitingReason: {} }] }],
+    ['negative concurrency', { concurrency: -1 }],
+    ['fractional concurrency', { concurrency: 1.5 }],
+    ['unsafe concurrency', { concurrency: Number.MAX_SAFE_INTEGER + 1 }],
+    ['malformed legacy agent with no active agents', { agents: [], agent: { id: 4 } }],
+  ])('rejects invalid dashboard control data: %s', (_label, override) => {
+    expect(isDashboardSnapshot({ ...dashboard, ...override })).toBe(false);
+  });
+
+  it('accepts zero concurrency and an absent legacy agent with no active agents', () => {
+    expect(isDashboardSnapshot({ ...dashboard, concurrency: 0 })).toBe(true);
+    expect(isDashboardSnapshot({ ...dashboard, agents: [], agent: undefined })).toBe(true);
   });
 
   it('rejects malformed workflow lists before the office scene renders', () => {
