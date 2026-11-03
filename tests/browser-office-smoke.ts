@@ -330,7 +330,38 @@ try {
   assert.match(csv, /FIXTURE · provider failure/);
   assert.doesNotMatch(csv, /FIXTURE · saved completion/);
   assert.doesNotMatch(csv, /FAIL_FIXTURE|WAIT_FIXTURE/);
-  await history.getByLabel('Search tasks').fill('');
+  // A zero-result search must offer a visible escape even when the filter
+  // disclosure is collapsed on a phone.
+  await history.getByLabel('Search tasks').fill('NO_MATCH_FIXTURE');
+  await expect(history.getByText('No tasks match these filters.')).toBeVisible();
+  await expect(history.locator('.mobile-history-results')).toContainText('0 of');
+  await expect(history.getByRole('button', { name: 'Clear task filters' })).toBeVisible();
+  await history.getByRole('button', { name: 'Clear task filters' }).click();
+  await expect(history.getByLabel('Search tasks')).toHaveValue('');
+  await expect(history.locator('.task-row').first()).toBeVisible();
+
+  // Escape closes mobile filters and restores keyboard focus to the disclosure.
+  await history.getByLabel('Search tasks').focus();
+  await page.keyboard.press('Escape');
+  await expect(historyFiltersToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(historyFiltersToggle).toBeFocused();
+  await expect(history.getByLabel('Search tasks')).toBeHidden();
+
+  // Selecting a task and then filtering it out must never strand the user:
+  // the selected-task recovery action remains visible outside the disclosure.
+  await history.locator('.task-row').filter({ hasText: 'FIXTURE · saved completion' }).click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await navigate('Tasks');
+  if ((await historyFiltersToggle.getAttribute('aria-expanded')) !== 'true') {
+    await historyFiltersToggle.click();
+  }
+  await history.getByLabel('Search tasks').fill('FIXTURE · provider failure');
+  await expect(history.getByText('Selected task is hidden by current filters.')).toBeVisible();
+  await history.getByRole('button', { name: 'Show selected task' }).click();
+  await expect(history.getByLabel('Search tasks')).toHaveValue('');
+  await expect(
+    history.locator('.task-row').filter({ hasText: 'FIXTURE · saved completion' }),
+  ).toBeVisible();
   await navigate('Office');
 
   // A temporary workflow API failure must not blank the Office or claim the

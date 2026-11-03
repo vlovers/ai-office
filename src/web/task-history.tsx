@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Dashboard, Task } from '../shared/types.js';
 import type { TaskHistoryOrder, TaskHistoryStatus } from './task-history-operations.js';
 import { exportTaskHistoryCsv } from './task-history-export.js';
@@ -43,6 +43,7 @@ export function TaskHistory({
   onSelectTask: (task: Task) => void;
 }) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const mobileFiltersToggleRef = useRef<HTMLButtonElement>(null);
   const activeFilters = [
     historyQuery.trim().length > 0,
     historyStatus !== 'all',
@@ -50,6 +51,16 @@ export function TaskHistory({
     historyAgent !== '',
     historyRepository !== '',
   ].filter(Boolean).length;
+  const selectedTaskHidden =
+    Boolean(selected && dashboard?.tasks.some((task) => task.id === selected)) &&
+    !visibleHistory.some((task) => task.id === selected);
+  const resetFilters = () => {
+    onQueryChange('');
+    onStatusChange('all');
+    onOrderChange('attention');
+    onAgentChange('');
+    onRepositoryChange('');
+  };
 
   return (
     <section className="panel history" id="task-history">
@@ -61,6 +72,7 @@ export function TaskHistory({
         <>
           <button
             type="button"
+            ref={mobileFiltersToggleRef}
             className="mobile-history-filters-toggle secondary"
             aria-expanded={mobileFiltersOpen}
             aria-controls="task-history-filters"
@@ -68,11 +80,26 @@ export function TaskHistory({
           >
             Filters{activeFilters > 0 ? ` (${activeFilters} active)` : ''}
           </button>
+          <p className="mobile-history-results" role="status">
+            {visibleHistory.length} of {taskSummary.total} tasks shown
+          </p>
           <div
             id="task-history-filters"
             className="history-controls"
             aria-label="Task history filters"
             data-mobile-open={mobileFiltersOpen}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Escape' &&
+                mobileFiltersOpen &&
+                window.matchMedia('(max-width: 680px)').matches
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                setMobileFiltersOpen(false);
+                mobileFiltersToggleRef.current?.focus();
+              }
+            }}
           >
             <button
               type="button"
@@ -163,22 +190,20 @@ export function TaskHistory({
               historyAgent ||
               historyRepository ||
               historyOrder !== 'attention') && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  onQueryChange('');
-                  onStatusChange('all');
-                  onOrderChange('attention');
-                  onAgentChange('');
-                  onRepositoryChange('');
-                }}
-              >
+              <button type="button" className="secondary" onClick={resetFilters}>
                 Reset task filters
               </button>
             )}
           </div>
         </>
+      )}
+      {selectedTaskHidden && (
+        <div className="history-selection-notice" role="status">
+          <span>Selected task is hidden by current filters.</span>
+          <button type="button" className="secondary" onClick={resetFilters}>
+            Show selected task
+          </button>
+        </div>
       )}
       {!dashboard?.tasks.length ? (
         <div className="empty-state">
@@ -217,9 +242,14 @@ export function TaskHistory({
             </button>
           ))}
           {visibleHistory.length === 0 && (
-            <p role="status">
-              No tasks match these filters. Reset filters to see the full history.
-            </p>
+            <div className="history-empty-results" role="status">
+              <p>No tasks match these filters.</p>
+              {activeFilters > 0 && (
+                <button type="button" className="secondary" onClick={resetFilters}>
+                  Clear task filters
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

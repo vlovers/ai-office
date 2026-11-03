@@ -2197,12 +2197,40 @@ select {
   }
 }
 
+/* Keep recovery actions visible even when mobile filter controls are collapsed. */
+.mobile-history-results {
+  display: none;
+}
+.history-selection-notice,
+.history-empty-results {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+  color: var(--muted);
+}
+.history-selection-notice button,
+.history-empty-results button {
+  min-height: 44px;
+}
+.history-selection-notice {
+  border-top: 1px solid var(--line-dim);
+  border-bottom: 1px solid var(--line-dim);
+  margin-bottom: 12px;
+}
+
 /* Keep task details within reach on phones without removing desktop filters.
    Collapsed controls are removed from keyboard navigation until expanded. */
 .mobile-history-filters-toggle {
   display: none;
 }
 @media (max-width: 680px) {
+  .shell[data-page='tasks'] .mobile-history-results {
+    display: block;
+    margin: 0 0 12px;
+    color: var(--muted);
+  }
   .shell[data-page='tasks'] .mobile-history-filters-toggle {
     display: inline-flex;
     align-items: center;
