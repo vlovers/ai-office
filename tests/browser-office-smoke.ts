@@ -419,6 +419,41 @@ try {
   await capture('disconnected');
   await page.unroute('**/api/dashboard');
   await expect(page.locator('.studio-notice')).toHaveCount(0, { timeout: 10000 });
+  // Large persisted histories should not mount every task row on a phone.
+  // The backend fixture stays unchanged: intercept only this read-only snapshot.
+  await page.route('**/api/dashboard', async (route) => {
+    const response = await route.fetch();
+    const snapshot = (await response.json()) as { tasks: Array<Record<string, unknown>> };
+    const template = snapshot.tasks[0];
+    assert.ok(template);
+    const synthetic = Array.from({ length: 125 }, (_, index) => ({
+      ...template,
+      id: `history-batch-${index}`,
+      title: `HISTORY_BATCH_${index}`,
+      state: 'failed',
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    }));
+    await route.fulfill({ response, json: { ...snapshot, tasks: [...snapshot.tasks, ...synthetic] } });
+  });
+  await navigate('Tasks');
+  await expect(history.getByRole('button', { name: 'Show next 40 tasks' })).toBeVisible({
+    timeout: 10000,
+  });
+  const firstBatchCount = await history.locator('.task-row').count();
+  assert.ok(firstBatchCount >= 40 && firstBatchCount <= 41);
+  await history.getByRole('button', { name: 'Show next 40 tasks' }).click();
+  await expect(history.locator('.task-row')).toHaveCount(firstBatchCount + 40);
+  if ((await historyFiltersToggle.getAttribute('aria-expanded')) !== 'true') {
+    await historyFiltersToggle.click();
+  }
+  await history.getByLabel('Search tasks').fill('HISTORY_BATCH_124');
+  await expect(history.locator('.task-row')).toHaveCount(1);
+  await expect(history.getByRole('button', { name: /Show next/ })).toHaveCount(0);
+  await history.getByLabel('Search tasks').fill('');
+  await expect(history.locator('.task-row')).toHaveCount(firstBatchCount);
+  await page.unroute('**/api/dashboard');
+
   assert.deepEqual(errors, []);
   console.log(
     `Office V4 browser passed: zero/two/six profiles, overflow selection, real SDK fixture reasoning, submitted queue exact-task selection, failure, disconnected snapshot, reduced motion and desktop/mobile overflow. Screenshots: ${artifacts}`,
