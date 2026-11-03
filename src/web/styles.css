@@ -1882,7 +1882,7 @@ select {
   outline: 2px solid #b7ffca;
   outline-offset: 3px;
 }
-#task-workflow {
+.task-workflow-anchor {
   scroll-margin-top: 24px;
 }
 
