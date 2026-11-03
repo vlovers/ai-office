@@ -9,6 +9,19 @@ function stringField(value: unknown, field: string): boolean {
   return record(value) && typeof value[field] === 'string';
 }
 
+function optionalNullableString(value: Record<string, unknown>, field: string): boolean {
+  return value[field] === undefined || value[field] === null || typeof value[field] === 'string';
+}
+
+function optionalChangedFiles(value: Record<string, unknown>, field: string): boolean {
+  const files = value[field];
+  return (
+    files === undefined ||
+    (Array.isArray(files) &&
+      files.every((file: unknown) => stringField(file, 'path') && stringField(file, 'status')))
+  );
+}
+
 /** Reject proxy HTML, empty bodies and non-JSON success without losing HTTP status. */
 export async function parseOfficeApiResponse<T>(response: Response): Promise<T> {
   const fallback = response.ok
@@ -34,6 +47,11 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
     record(value) &&
     record(value.connection) &&
     Array.isArray(value.connection.modes) &&
+    value.connection.modes.every(
+      (mode: unknown) =>
+        stringField(mode, 'mode') && stringField(mode, 'label') && stringField(mode, 'status'),
+    ) &&
+    optionalNullableString(value.connection, 'checkedAt') &&
     typeof value.connection.message === 'string' &&
     Array.isArray(value.repositories) &&
     value.repositories.every(
@@ -45,19 +63,48 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
         stringField(task, 'id') &&
         stringField(task, 'title') &&
         stringField(task, 'state') &&
-        stringField(task, 'agentId'),
+        stringField(task, 'agentId') &&
+        record(task) &&
+        optionalChangedFiles(task, 'changedFiles') &&
+        optionalChangedFiles(task, 'baselineFiles') &&
+        optionalNullableString(task, 'error') &&
+        (task.result === undefined || typeof task.result === 'string'),
     ) &&
     Array.isArray(value.sessions) &&
-    value.sessions.every((session: unknown) => stringField(session, 'id')) &&
+    value.sessions.every(
+      (session: unknown) =>
+        stringField(session, 'id') &&
+        record(session) &&
+        optionalNullableString(session, 'threadId'),
+    ) &&
     Array.isArray(value.agents) &&
     value.agents.every(
-      (agent: unknown) => stringField(agent, 'id') && stringField(agent, 'name'),
+      (agent: unknown) =>
+        stringField(agent, 'id') &&
+        stringField(agent, 'name') &&
+        record(agent) &&
+        optionalNullableString(agent, 'taskId') &&
+        (agent.canStop === undefined || typeof agent.canStop === 'boolean'),
     ) &&
     // The server omits the legacy agent field when every profile is archived.
     (value.agents.length === 0 || stringField(value.agent, 'id')) &&
     Array.isArray(value.queue) &&
-    value.queue.every((item: unknown) => stringField(item, 'taskId')) &&
-    (value.profiles === undefined || Array.isArray(value.profiles)) &&
+    value.queue.every(
+      (item: unknown) =>
+        stringField(item, 'taskId') &&
+        record(item) &&
+        (item.order === undefined ||
+          (typeof item.order === 'number' && Number.isInteger(item.order))),
+    ) &&
+    (value.profiles === undefined ||
+      (Array.isArray(value.profiles) &&
+        value.profiles.every(
+          (profile: unknown) =>
+            stringField(profile, 'id') &&
+            stringField(profile, 'name') &&
+            record(profile) &&
+            (profile.archived === undefined || typeof profile.archived === 'boolean'),
+        ))) &&
     typeof value.concurrency === 'number' &&
     Number.isFinite(value.concurrency) &&
     typeof value.ready === 'boolean' &&
