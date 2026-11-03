@@ -14,11 +14,7 @@ export function assertWorkflowSnapshotCoherent(
   if (!summary || !timeline || !diagnostics) {
     throw new Error('Workflow checkpoint incomplete; refresh to retry');
   }
-  if (
-    summary.id !== requestedId ||
-    timeline.id !== requestedId ||
-    diagnostics.id !== requestedId
-  ) {
+  if ([summary, timeline, diagnostics].some((checkpoint) => checkpoint.id !== requestedId)) {
     throw new Error('Workflow checkpoint identity mismatch; refresh to retry');
   }
   if (summary.version !== timeline.version || timeline.version !== diagnostics.version) {
