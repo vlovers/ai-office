@@ -11,14 +11,9 @@ const workflows = [
 ];
 
 describe('task-scoped workflow review', () => {
-  it.each(['coder', 'reviewer', 'qa'])(
-    'finds a workflow linked through its %s task',
-    (taskId) => {
-      expect(workflowsForTask(workflows, taskId).map((item) => item.id)).toEqual([
-        'multi-stage',
-      ]);
-    },
-  );
+  it.each(['coder', 'reviewer', 'qa'])('finds a workflow linked through its %s task', (taskId) => {
+    expect(workflowsForTask(workflows, taskId).map((item) => item.id)).toEqual(['multi-stage']);
+  });
 
   it('does not expose unrelated or unbound workflows', () => {
     expect(workflowsForTask(workflows, 'missing')).toEqual([]);
