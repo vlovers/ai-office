@@ -318,9 +318,12 @@ try {
   const reviewerTaskId = (await env.get()).stages[1]?.taskId;
   assert.ok(reviewerTaskId, 'Completed Reviewer stage must link its task');
   await page.goto(`${address}/#task/${encodeURIComponent(reviewerTaskId)}/workflow`);
-  await expect(integrated).toContainText('QA assertions passed');
+  const linkedWorkflow = page
+    .locator('#task-workflow')
+    .getByRole('region', { name: 'Workflow review results', exact: true });
+  await expect(linkedWorkflow).toContainText('QA assertions passed');
   await page.goto(`${address}/#task/${encodeURIComponent(coder.id)}/workflow`);
-  await expect(integrated).toContainText('QA assertions passed');
+  await expect(linkedWorkflow).toContainText('QA assertions passed');
   const artifacts =
     process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(tmpdir(), 'ai-office-v07-browser');
   await mkdir(artifacts, { recursive: true });
