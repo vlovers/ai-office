@@ -93,7 +93,8 @@ export function isDashboardSnapshot(value: unknown): value is Dashboard {
       (item: unknown) =>
         stringField(item, 'taskId') &&
         record(item) &&
-        (item.order === undefined || (Number.isInteger(item.order) && Number.isFinite(item.order))),
+        (item.order === undefined ||
+          (typeof item.order === 'number' && Number.isInteger(item.order))),
     ) &&
     (value.profiles === undefined ||
       (Array.isArray(value.profiles) &&
