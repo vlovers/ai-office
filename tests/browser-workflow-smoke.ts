@@ -140,6 +140,35 @@ try {
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  // Even a structurally valid timeline may contain malformed nested metadata.
+  // React would otherwise attempt to render an object as a checkpoint revision.
+  await page.route(outagePattern, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    await route.fulfill({
+      response,
+      json: {
+        ...payload,
+        stages: payload.stages.map((stage: Record<string, unknown>, index: number) =>
+          index === 0 ? { ...stage, evidenceRevision: { revision: 'invalid' } } : stage,
+        ),
+      },
+    });
+  });
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Invalid workflow response: malformed workflow timeline',
+    );
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
+    assert.equal(errors.length, 0, 'Malformed timeline must not crash React rendering');
+  } finally {
+    await page.unroute(outagePattern);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
