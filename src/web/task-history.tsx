@@ -63,9 +63,8 @@ export function TaskHistory({
     dashboard?.repositories ?? [],
     dashboard?.tasks.map((task) => task.repositoryId) ?? [],
   );
-  const repositoryNames = new Map(
-    repositoryOptions.map(({ id, name }) => [id, name]),
-  );
+  const repositoryNames = new Map(repositoryOptions.map(({ id, name }) => [id, name]));
+  const repositoryLabel = (id: string) => repositoryNames.get(id) ?? id;
   const selectedTaskHidden =
     Boolean(selected && dashboard?.tasks.some((task) => task.id === selected)) &&
     !visibleHistory.some((task) => task.id === selected);
@@ -249,8 +248,7 @@ export function TaskHistory({
                 <strong>{item.title}</strong>
                 <small>
                   {item.agentId} ·{' '}
-                  {repositoryNames.get(item.repositoryId) ?? item.repositoryId}
-                  {' · '}
+                  {repositoryLabel(item.repositoryId)} ·{' '}
                   {new Date(item.createdAt).toLocaleString()}
                 </small>
               </span>
