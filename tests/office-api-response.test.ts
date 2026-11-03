@@ -44,6 +44,8 @@ describe('office API response handling', () => {
 
   it('rejects malformed dashboard collections and preserves a valid snapshot', () => {
     expect(isDashboardSnapshot(dashboard)).toBe(true);
+    // Archived profiles yield an empty agents list and no legacy agent field.
+    expect(isDashboardSnapshot({ ...dashboard, agents: [], agent: undefined })).toBe(true);
     expect(isDashboardSnapshot({ ...dashboard, tasks: 'invalid' })).toBe(false);
     expect(isDashboardSnapshot({ ...dashboard, agents: null })).toBe(false);
     expect(isDashboardSnapshot({ ...dashboard, tasks: [null] })).toBe(false);
