@@ -83,6 +83,40 @@ try {
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await capture('two-idle');
+  // A malformed HTTP 200 must not replace the last confirmed dashboard or
+  // workflow snapshot. The next successful poll must recover without a reload.
+  let invalidDashboardSeen = false;
+  let invalidWorkflowSeen = false;
+  await page.route('**/api/dashboard', async (route) => {
+    if (!invalidDashboardSeen) {
+      invalidDashboardSeen = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"tasks":"not-an-array"}',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.route('**/api/workflows', async (route) => {
+    if (!invalidWorkflowSeen) {
+      invalidWorkflowSeen = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"stages":"not-an-array"}',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await expect.poll(() => invalidDashboardSeen && invalidWorkflowSeen, { timeout: 12000 }).toBe(
+    true,
+  );
+  await expect(page.locator('.office-workstation')).toHaveCount(2);
+  await page.unrouteAll({ behavior: 'wait' });
+  await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   // Actual archive operation yields the real zero-profile office, no fake runtime objects.
   for (const profile of env.store.agents())
     env.store.editAgent(profile.id, profile.revision, { archived: true });
