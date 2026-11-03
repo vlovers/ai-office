@@ -11,7 +11,17 @@ const reply = (status: number, body: string) =>
 const dashboard = {
   connection: { message: 'Ready', modes: [] },
   repositories: [{ id: 'repo', name: 'Example' }],
-  tasks: [{ id: 'task', title: 'Review', state: 'queued', agentId: 'codex-1' }],
+  tasks: [
+    {
+      id: 'task',
+      title: 'Review',
+      state: 'queued',
+      agentId: 'codex-1',
+      repositoryId: 'repo',
+      createdAt: '2026-11-03T06:00:00Z',
+      updatedAt: '2026-11-03T06:00:00Z',
+    },
+  ],
   sessions: [{ id: 'session' }],
   agents: [{ id: 'codex-1', name: 'Codex' }],
   agent: { id: 'codex-1' },
@@ -111,6 +121,12 @@ describe('office API response handling', () => {
   });
 
   it.each([
+    ['missing task repository', { tasks: [{ ...dashboard.tasks[0], repositoryId: undefined }] }],
+    ['object task repository', { tasks: [{ ...dashboard.tasks[0], repositoryId: {} }] }],
+    ['missing task createdAt', { tasks: [{ ...dashboard.tasks[0], createdAt: undefined }] }],
+    ['object task createdAt', { tasks: [{ ...dashboard.tasks[0], createdAt: {} }] }],
+    ['missing task updatedAt', { tasks: [{ ...dashboard.tasks[0], updatedAt: undefined }] }],
+    ['numeric task updatedAt', { tasks: [{ ...dashboard.tasks[0], updatedAt: 42 }] }],
     ['unknown task state', { tasks: [{ ...dashboard.tasks[0], state: 'approved' }] }],
     ['task summary error', { tasks: [{ ...dashboard.tasks[0], summaryError: {} }] }],
     ['task session ID', { tasks: [{ ...dashboard.tasks[0], sessionId: {} }] }],

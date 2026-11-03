@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react';
 import type { Dashboard, Task } from '../shared/types.js';
-import type { TaskHistoryOrder, TaskHistoryStatus } from './task-history-operations.js';
+import {
+  historyFilterOptions,
+  type TaskHistoryOrder,
+  type TaskHistoryStatus,
+} from './task-history-operations.js';
 import { exportTaskHistoryCsv } from './task-history-export.js';
 
 export function TaskHistory({
@@ -51,6 +55,16 @@ export function TaskHistory({
     historyAgent !== '',
     historyRepository !== '',
   ].filter(Boolean).length;
+  const agentOptions = historyFilterOptions(
+    [...(dashboard?.profiles ?? []), ...(dashboard?.agents ?? [])],
+    dashboard?.tasks.map((task) => task.agentId) ?? [],
+  );
+  const repositoryOptions = historyFilterOptions(
+    dashboard?.repositories ?? [],
+    dashboard?.tasks.map((task) => task.repositoryId) ?? [],
+  );
+  const repositoryNames = new Map(repositoryOptions.map(({ id, name }) => [id, name]));
+  const repositoryLabel = (id: string) => repositoryNames.get(id) ?? id;
   const selectedTaskHidden =
     Boolean(selected && dashboard?.tasks.some((task) => task.id === selected)) &&
     !visibleHistory.some((task) => task.id === selected);
@@ -150,7 +164,7 @@ export function TaskHistory({
               Agent
               <select value={historyAgent} onChange={(event) => onAgentChange(event.target.value)}>
                 <option value="">All agents</option>
-                {dashboard?.agents.map((slot) => (
+                {agentOptions.map((slot) => (
                   <option key={slot.id} value={slot.id}>
                     {slot.name}
                   </option>
@@ -164,7 +178,7 @@ export function TaskHistory({
                 onChange={(event) => onRepositoryChange(event.target.value)}
               >
                 <option value="">All repositories</option>
-                {dashboard?.repositories.map((repo) => (
+                {repositoryOptions.map((repo) => (
                   <option key={repo.id} value={repo.id}>
                     {repo.name}
                   </option>
@@ -233,8 +247,7 @@ export function TaskHistory({
               <span>
                 <strong>{item.title}</strong>
                 <small>
-                  {item.agentId} ·{' '}
-                  {dashboard.repositories.find((r) => r.id === item.repositoryId)?.name} ·{' '}
+                  {item.agentId} · {repositoryLabel(item.repositoryId)} ·{' '}
                   {new Date(item.createdAt).toLocaleString()}
                 </small>
               </span>
