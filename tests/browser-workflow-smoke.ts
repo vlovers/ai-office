@@ -169,6 +169,46 @@ try {
   }
   await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
   await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  // Independent GETs can each return valid JSON but disagree about the
+  // workflow identity or persisted version. Never commit such a mixed read.
+  const diagnosticsPattern = '**/api/workflows/*/diagnostics';
+  await page.route(diagnosticsPattern, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    await route.fulfill({ response, json: { ...payload, version: payload.version + 1 } });
+  });
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Workflow checkpoint changed during refresh; retry to verify current version',
+    );
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
+  } finally {
+    await page.unroute(diagnosticsPattern);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
+  await page.route(diagnosticsPattern, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    await route.fulfill({ response, json: { ...payload, id: 'unrelated-workflow' } });
+  });
+  try {
+    await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+    await expect(board.getByRole('alert').first()).toContainText(
+      'Workflow checkpoint identity mismatch; refresh to retry',
+    );
+    await expect(
+      board.getByRole('button', { name: 'Bind Coder task', exact: true }),
+    ).toBeDisabled();
+    assert.equal(errors.length, 0, 'Mismatched snapshots must not crash React rendering');
+  } finally {
+    await page.unroute(diagnosticsPattern);
+  }
+  await board.getByRole('button', { name: 'Refresh workflow', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Bind Coder task', exact: true })).toBeEnabled();
   // Pausing live updates is useful for reading, not for approving a potentially
   // stale checkpoint. Resuming and verifying the snapshot restores actions.
   await board.getByRole('button', { name: 'Pause live updates' }).click();

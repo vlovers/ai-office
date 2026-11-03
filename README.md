@@ -232,6 +232,10 @@ A further unreleased guard checks the fields consumed by the workflow board in
 successful GET responses (list, dashboard, QA commands, timeline, reports and
 diagnostics). Structurally malformed JSON cannot replace a verified checkpoint;
 the UI reports an error and requires a successful refresh before approvals.
+An additional consistency gate checks that the workflow list, timeline and
+diagnostics all describe the same workflow ID and persisted version before
+committing the read-only snapshot. Concurrent updates can require another
+refresh; mismatched responses never enable approval actions.
 
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
