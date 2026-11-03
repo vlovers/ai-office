@@ -123,10 +123,7 @@ describe('task history operations', () => {
       { id: 'a', name: 'Active agent' },
       { id: 'b', name: 'b' },
     ]);
-    expect(select({ agentId: id('b') }).map((task) => task.id)).toEqual([
-      'broken',
-      'queued',
-    ]);
+    expect(select({ agentId: id('b') }).map((task) => task.id)).toEqual(['broken', 'queued']);
 
     const repoOptions = historyFilterOptions(
       [{ id: 'repo-1', name: 'Current repository' }],
@@ -136,10 +133,7 @@ describe('task history operations', () => {
       { id: 'repo-1', name: 'Current repository' },
       { id: 'repo-2', name: 'repo-2' },
     ]);
-    expect(select({ repositoryId: 'repo-2' }).map((task) => task.id)).toEqual([
-      'broken',
-      'stopped',
-    ]);
+    expect(select({ repositoryId: 'repo-2' }).map((task) => task.id)).toEqual(['broken', 'stopped']);
   });
 
   it('deduplicates filter IDs and prefers the last known display name', () => {
