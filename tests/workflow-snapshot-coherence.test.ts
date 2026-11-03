@@ -11,7 +11,7 @@ describe('workflow snapshot coherence across read-only endpoints', () => {
     expect(() => assertWorkflowSnapshotCoherent(id, summary, timeline, diagnostics)).not.toThrow();
   });
 
-  it.each([
+  it.each<[string, typeof summary, typeof timeline, typeof diagnostics]>([
     ['summary', { id: 'workflow-b', version: 7 }, timeline, diagnostics],
     ['timeline', summary, { id: 'workflow-b', version: 7 }, diagnostics],
     ['diagnostics', summary, timeline, { id: 'workflow-b', version: 7 }],
@@ -21,7 +21,7 @@ describe('workflow snapshot coherence across read-only endpoints', () => {
     );
   });
 
-  it.each([
+  it.each<[string, typeof summary, typeof timeline, typeof diagnostics]>([
     ['summary advanced', { id, version: 8 }, timeline, diagnostics],
     ['timeline advanced', summary, { id, version: 8 }, diagnostics],
     ['diagnostics advanced', summary, timeline, { id, version: 8 }],
