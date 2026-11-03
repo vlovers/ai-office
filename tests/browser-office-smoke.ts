@@ -111,9 +111,9 @@ try {
       await route.continue();
     }
   });
-  await expect.poll(() => invalidDashboardSeen && invalidWorkflowSeen, { timeout: 12000 }).toBe(
-    true,
-  );
+  await expect
+    .poll(() => invalidDashboardSeen && invalidWorkflowSeen, { timeout: 12000 })
+    .toBe(true);
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await page.unrouteAll({ behavior: 'wait' });
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
