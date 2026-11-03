@@ -24,9 +24,7 @@ export function historyFilterOptions(
   }
   return [...labels]
     .map(([id, name]) => ({ id, name }))
-    .sort(
-      (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
-    );
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
 export function taskNeedsAttention(task: Pick<Task, 'state'>): boolean {
