@@ -68,10 +68,7 @@ describe('office API response handling', () => {
     expect(isOfficeWorkflowList({ workflows: valid })).toBe(false);
     expect(isOfficeWorkflowList([{ ...valid[0], stages: null }])).toBe(false);
     expect(isOfficeWorkflowList([{ ...valid[0], stages: [null] }])).toBe(false);
-    expect(
-      isOfficeWorkflowList([
-        { ...valid[0], stages: [{ ...valid[0]!.stages[0]!, taskId: {} }] },
-      ]),
-    ).toBe(false);
+    const malformedStage = { ...valid[0]!.stages[0]!, taskId: {} };
+    expect(isOfficeWorkflowList([{ ...valid[0], stages: [malformedStage] }])).toBe(false);
   });
 });
