@@ -82,4 +82,38 @@ describe('bounded task event history and SSE resume', () => {
     // An active agent may have a task missing from a temporarily stale task list.
     expect(activeTaskStreamIds('missing', [], ['agent-task'])).toEqual(['agent-task']);
   });
+  it('preserves distinct cursors across task switches and reconnects without replay duplicates', () => {
+    let history: Record<string, AgentEvent[]> = {};
+    history = appendCachedTaskEvent(history, 'task-a', event(7, 'task-a'));
+    history = retainTaskEventHistory(history, ['task-b']);
+    history = appendCachedTaskEvent(history, 'task-b', event(19, 'task-b'));
+    history = retainTaskEventHistory(history, ['task-a']);
+    expect(taskEventStreamUrl('task-a', history)).toBe('/api/tasks/task-a/stream?after=7');
+    expect(taskEventStreamUrl('task-b', history)).toBe('/api/tasks/task-b/stream?after=19');
+    const replayed = appendCachedTaskEvent(history, 'task-a', event(7, 'task-a'));
+    expect(replayed).toBe(history);
+    const advanced = appendCachedTaskEvent(replayed, 'task-a', event(8, 'task-a'));
+    expect(advanced['task-a']?.map((item) => item.id)).toEqual([7, 8]);
+    expect(advanced['task-b']?.map((item) => item.id)).toEqual([19]);
+  });
+
+  it('keeps the active task during cache pressure after switching away and back', () => {
+    let history: Record<string, AgentEvent[]> = {};
+    history = appendCachedTaskEvent(history, 'task-a', event(10, 'task-a'));
+    for (let i = 0; i < 8; i++) {
+      const id = `background-${i}`;
+      history = appendCachedTaskEvent(history, id, event(i + 1, id));
+    }
+    history = retainTaskEventHistory(history, ['task-a']);
+    expect(history['task-a']?.map((item) => item.id)).toEqual([10]);
+    expect(Object.keys(history)).toHaveLength(6);
+  });
+
+  it('retains unknown provider event kinds as inert timeline data', () => {
+    const providerEvent = { ...event(12, 'task-a'), kind: 'provider-custom-progress' };
+    const history = appendCachedTaskEvent({}, 'task-a', providerEvent);
+    expect(history['task-a']).toEqual([providerEvent]);
+    expect(taskEventStreamUrl('task-a', history)).toBe('/api/tasks/task-a/stream?after=12');
+  });
+
 });
