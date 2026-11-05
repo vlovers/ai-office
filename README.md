@@ -238,6 +238,12 @@ committing the read-only snapshot. Concurrent updates can require another
 refresh; mismatched responses never enable approval actions. Conflicting persisted
 states also fail closed even if all endpoints report the same version.
 
+The integrated UI candidate includes an explicit **Retry live events** control for a task
+EventSource that enters terminal CLOSED state while HTTP is healthy. The control
+reopens the selected task streams using persisted event cursors and does not
+submit or authorize task execution. Recoverable stream errors remain automatic.
+This behavior is still an unreleased Draft integration candidate.
+
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
 restores destinations and task links; a review shortcut retains its selected
