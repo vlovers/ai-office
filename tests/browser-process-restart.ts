@@ -158,9 +158,32 @@ let child: ChildProcess | undefined;
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 const terminate = async (processToStop: ChildProcess | undefined) => {
   if (!processToStop || processToStop.exitCode !== null || processToStop.signalCode !== null) return;
-  const exit = new Promise<void>((accept) => processToStop.once('exit', () => accept()));
-  processToStop.kill('SIGKILL');
-  await exit;
+  await new Promise<void>((accept, reject) => {
+    const timeout = setTimeout(() => {
+      processToStop.off('exit', onExit);
+      processToStop.off('error', onError);
+      reject(new Error('Backend fixture did not exit within 5 seconds of SIGKILL'));
+    }, 5000);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      processToStop.off('exit', onExit);
+      processToStop.off('error', onError);
+    };
+    const onExit = () => {
+      cleanup();
+      accept();
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    processToStop.once('exit', onExit);
+    processToStop.once('error', onError);
+    if (!processToStop.kill('SIGKILL') && processToStop.exitCode === null) {
+      cleanup();
+      reject(new Error('Could not signal backend fixture for termination'));
+    }
+  });
 };
 const start = async (): Promise<ChildProcess> => {
   const processToStart = fork(fixtureScript, [env.root, String(port)], {
