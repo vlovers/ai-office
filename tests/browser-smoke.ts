@@ -271,6 +271,29 @@ try {
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
   assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
+  // Simulate terminal SSE (HTTP 204). Retry must restore only live reading,
+  // without a task submission, a queue mutation, or a full reload.
+  const closedStreamPattern = /\\/api\\/tasks\\/[^/]+\\/stream(?:\\?.*)?$/;
+  await page.route(closedStreamPattern, async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+  await page.reload();
+  await expect(page.locator('.connection')).toContainText('Live event stream disconnected');
+  const retryStream = page.getByRole('button', { name: 'Retry live events' });
+  await expect(retryStream).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 720 });
+  assert.ok((await retryStream.boundingBox())!.height >= 44);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  const retryTask = env.store.tasks().find((item) => item.title === 'Review the example project');
+  assert.ok(retryTask);
+  const stateBeforeRetry = retryTask.state;
+  const queuedBeforeRetry = env.store.queue().length;
+  await page.unroute(closedStreamPattern);
+  await retryStream.click();
+  await expect(page.locator('.connection')).toContainText('Live events connected');
+  await expect(retryStream).toHaveCount(0);
+  assert.equal(env.store.tasks().find((item) => item.id === retryTask.id)?.state, stateBeforeRetry);
+  assert.equal(env.store.queue().length, queuedBeforeRetry);
   // A reader scrolling back through a long log must not be dragged to the
   // latest event. The explicit recovery control must also work on mobile.
   await page.setViewportSize({ width: 390, height: 844 });
@@ -280,6 +303,9 @@ try {
   // A persisted SSE event must update the unread count without resuming follow.
   const taskForLog = env.store.tasks().find((item) => item.title === 'Review the example project');
   assert.ok(taskForLog);
+  const recoveredEvent = env.store.addEvent(taskForLog.id, 'progress', 'Fixture after SSE retry');
+  env.manager.events.emit('event', recoveredEvent);
+  await expect(log).toContainText('Fixture after SSE retry');
   await expect(log).toHaveAttribute('aria-live', 'polite');
   await page.getByRole('button', { name: 'Pause auto-scroll' }).click();
   await expect(log).toHaveAttribute('aria-live', 'off');
