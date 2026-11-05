@@ -7,8 +7,28 @@ import { DatabaseSync } from 'node:sqlite';
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { sandbox, removeTestTree } from './helpers.js';
+import { WorkflowStore } from '../src/server/workflows.js';
 
 const env = await sandbox();
+// Commit the harmless disposable source so workflow revision attestation has
+// an actual SHA; no AI-authored changes or external repository is involved.
+execFileSync('/usr/bin/git', ['-C', env.repository, 'add', 'README.md']);
+execFileSync('/usr/bin/git', [
+  '-C',
+  env.repository,
+  '-c',
+  'user.name=Fixture',
+  '-c',
+  'user.email=fixture@example.invalid',
+  'commit',
+  '-qm',
+  'fixture baseline',
+]);
+const baselineRevision = execFileSync(
+  '/usr/bin/git',
+  ['-C', env.repository, 'rev-parse', 'HEAD'],
+  { encoding: 'utf8' },
+).trim();
 const repoGitDir = execFileSync('/usr/bin/git', ['-C', env.repository, 'rev-parse', '--absolute-git-dir'], {
   encoding: 'utf8',
 }).trim();
@@ -21,6 +41,66 @@ const pending = env.store.createTask({
   repositoryId: repo.id, agentId: 'codex-2', title: 'Unsubmitted task',
   prompt: 'Fixture only — must stay unsubmitted', executionMode: 'read-only',
 });
+// Persist a valid workflow skeleton through the real WorkflowStore. Simulated
+// crash states are seeded below directly in SQLite, without running Codex.
+const reviewerTask = env.store.createTask({
+  repositoryId: repo.id,
+  agentId: 'codex-2',
+  title: 'Interrupted reviewer fixture',
+  prompt: 'No inference',
+  executionMode: 'read-only',
+});
+const completedQaTask = env.store.createTask({
+  repositoryId: repo.id,
+  agentId: 'codex-2',
+  title: 'Unapproved QA result fixture',
+  prompt: 'No inference',
+  executionMode: 'read-only',
+});
+const workflowStore = new WorkflowStore(env.store.db);
+const coderProfile = env.store.requireAgent('codex-1');
+const reviewerProfile = env.store.requireAgent('codex-2');
+const newWorkflow = () =>
+  workflowStore.create({
+    repositoryId: repo.id,
+    baselineRevision,
+    stages: [
+      { kind: 'coder', agentId: coderProfile.id, agentRevision: coderProfile.revision, mode: 'write' },
+      { kind: 'reviewer', agentId: reviewerProfile.id, agentRevision: reviewerProfile.revision, mode: 'read-only' },
+      { kind: 'qa', agentId: reviewerProfile.id, agentRevision: reviewerProfile.revision, mode: 'read-only' },
+    ],
+  });
+const reviewerWorkflow = newWorkflow();
+const completedQaWorkflow = newWorkflow();
+const pendingQaWorkflow = newWorkflow();
+const qaReportDigest = 'b'.repeat(64);
+const seedWorkflow = (id: string, kind: 'reviewer' | 'completed-qa' | 'pending-qa') => {
+  const current = workflowStore.get(id);
+  assert.ok(current);
+  const next = structuredClone(current);
+  next.stages[0]!.state = 'completed';
+  if (kind === 'reviewer') {
+    next.stages[1]!.state = 'running';
+    next.stages[1]!.taskId = reviewerTask.id;
+  } else {
+    next.stages[1]!.state = 'completed';
+    next.stages[2]!.state = kind === 'completed-qa' ? 'running' : 'awaiting_approval';
+    if (kind === 'completed-qa') {
+      next.stages[2]!.taskId = completedQaTask.id;
+      next.stages[2]!.report = {
+        taskId: completedQaTask.id,
+        revision: baselineRevision,
+        sourceDigest: 'a'.repeat(64),
+        digest: qaReportDigest,
+        completedAt: new Date().toISOString(),
+      };
+    }
+  }
+  env.store.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);
+};
+seedWorkflow(reviewerWorkflow.id, 'reviewer');
+seedWorkflow(completedQaWorkflow.id, 'completed-qa');
+seedWorkflow(pendingQaWorkflow.id, 'pending-qa');
 await env.manager.shutdown();
 env.store.close();
 
@@ -106,7 +186,25 @@ try {
     assert.ok(row);
     const task = JSON.parse(String(row.json));
     task.state = 'running';
-    db.prepare('UPDATE tasks SET state=?, json=? WHERE id=?').run('running', JSON.stringify(task), interrupted.id);
+    db.prepare('UPDATE tasks SET state=?, json=? WHERE id=?').run(
+      'running',
+      JSON.stringify(task),
+      interrupted.id,
+    );
+    for (const [taskId, state] of [
+      [reviewerTask.id, 'running'],
+      [completedQaTask.id, 'completed'],
+    ] as const) {
+      const row = db.prepare('SELECT json FROM tasks WHERE id=?').get(taskId);
+      assert.ok(row);
+      const item = JSON.parse(String(row.json));
+      item.state = state;
+      db.prepare('UPDATE tasks SET state=?, json=? WHERE id=?').run(
+        state,
+        JSON.stringify(item),
+        taskId,
+      );
+    }
   } finally {
     db.close();
   }
@@ -131,6 +229,36 @@ try {
   const snapshot = await response.json();
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === pending.id)?.state, 'queued');
   assert.equal(snapshot.queue.length, 0, 'Never-submitted tasks must not run after restart');
+  const workflowResponse = await page.request.get(address + '/api/workflows');
+  assert.equal(workflowResponse.status(), 200);
+  const workflowItems = await workflowResponse.json();
+  const workflowById = new Map(workflowItems.map((item: { id: string }) => [item.id, item]));
+  for (const workflowId of [reviewerWorkflow.id, completedQaWorkflow.id]) {
+    assert.equal(
+      (workflowById.get(workflowId) as { state?: string } | undefined)?.state,
+      'blocked',
+      'Interrupted or unapproved workflow must remain blocked after restart',
+    );
+  }
+  assert.equal(
+    (workflowById.get(pendingQaWorkflow.id) as { state?: string } | undefined)?.state,
+    'active',
+    'Pending QA approval must not be silently granted',
+  );
+  const readWorkflow = async (id: string) => {
+    const response = await page.request.get(address + '/api/workflows/' + id);
+    assert.equal(response.status(), 200);
+    return response.json();
+  };
+  const reviewerRecovered = await readWorkflow(reviewerWorkflow.id);
+  const qaRecovered = await readWorkflow(completedQaWorkflow.id);
+  const pendingRecovered = await readWorkflow(pendingQaWorkflow.id);
+  assert.equal(reviewerRecovered.stages[1].state, 'interrupted');
+  assert.equal(qaRecovered.stages[2].state, 'blocked');
+  assert.equal(qaRecovered.stages[2].report.digest, qaReportDigest);
+  assert.equal(pendingRecovered.stages[2].state, 'awaiting_approval');
+  assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === reviewerTask.id)?.state, 'interrupted');
+  assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === completedQaTask.id)?.state, 'completed');
   // Assert the mounted UI caught up, not just that a separate API request succeeded.
   await page
     .getByRole('navigation', { name: 'Main navigation' })
