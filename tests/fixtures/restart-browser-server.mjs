@@ -29,6 +29,12 @@ const providers = ['codex-1', 'codex-2'].map(
   (id) => new CodexProvider({ home: join(root, 'workers', id), auth }),
 );
 const manager = new TaskManager(store, providers, auth);
+// Explicit test-only gate: allow persistence/recovery assertions while keeping
+// two unrelated queued jobs inert. Production manager.startQueue is unchanged.
+// The separate process and SQLite recovery path are still real.
+if (process.env.AI_OFFICE_TEST_PAUSE_DISPATCH === '1') {
+  manager.startQueue = () => {};
+}
 const app = await createApp(manager);
 await app.listen({ host: '127.0.0.1', port });
 process.send?.({ type: 'ready' });
