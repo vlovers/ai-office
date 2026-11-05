@@ -347,6 +347,72 @@ try {
   assert.equal(pendingRecovered.stages[2].state, 'awaiting_approval');
   assert.equal(failedQaRecovered.stages[2].state, 'failed');
   assert.equal(failedQaRecovered.state, 'blocked');
+  // Read Timeline and Diagnostics through the same actual HTTP API as the UI,
+  // not through helpers sharing an in-memory WorkflowStore.
+  const checkWorkflowPresentation = async (
+    workflowId: string,
+    stageIndex: number,
+    expectedStage: string,
+    expectedCode: string,
+    expectedAction: string | null,
+  ) => {
+    const timelineResponse = await page.request.get(
+      address + '/api/workflows/' + workflowId + '/timeline',
+    );
+    const diagnosticsResponse = await page.request.get(
+      address + '/api/workflows/' + workflowId + '/diagnostics',
+    );
+    assert.equal(timelineResponse.status(), 200);
+    assert.equal(diagnosticsResponse.status(), 200);
+    const timeline = await timelineResponse.json();
+    const diagnostics = await diagnosticsResponse.json();
+    assert.equal(timeline.stages[stageIndex].status, expectedStage);
+    assert.equal(diagnostics.stageActions[stageIndex].status, expectedStage);
+    assert.equal(timeline.stages[stageIndex].nextAction, expectedAction);
+    assert.equal(diagnostics.stageActions[stageIndex].nextAction, expectedAction);
+    assert.ok(
+      diagnostics.findings.some(
+        (item: { code: string; stage: string }) =>
+          item.code === expectedCode && item.stage === (stageIndex === 1 ? 'reviewer' : 'qa'),
+      ),
+      'Timeline/Diagnostics must explain the persisted checkpoint',
+    );
+  };
+  await checkWorkflowPresentation(
+    reviewerWorkflow.id,
+    1,
+    'interrupted',
+    'execution-interrupted',
+    null,
+  );
+  await checkWorkflowPresentation(
+    queuedReviewerWorkflow.id,
+    1,
+    'interrupted',
+    'execution-interrupted',
+    null,
+  );
+  await checkWorkflowPresentation(
+    failedQaWorkflow.id,
+    2,
+    'failed',
+    'execution-failed',
+    null,
+  );
+  await checkWorkflowPresentation(
+    completedQaWorkflow.id,
+    2,
+    'blocked',
+    'stage-blocked',
+    'approve-qa-result',
+  );
+  await checkWorkflowPresentation(
+    pendingQaWorkflow.id,
+    2,
+    'awaiting_approval',
+    'approval-required',
+    'approve-qa',
+  );
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === reviewerTask.id)?.state, 'interrupted');
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === completedQaTask.id)?.state, 'completed');
   // Assert the mounted UI caught up, not just that a separate API request succeeded.
@@ -385,6 +451,20 @@ try {
     const current = await readWorkflow(id);
     assert.equal(current.version, initialVersions.get(id), 'Restart must not churn workflow versions');
   }
+  await checkWorkflowPresentation(
+    failedQaWorkflow.id,
+    2,
+    'failed',
+    'execution-failed',
+    null,
+  );
+  await checkWorkflowPresentation(
+    pendingQaWorkflow.id,
+    2,
+    'awaiting_approval',
+    'approval-required',
+    'approve-qa',
+  );
   const secondQaResultsResponse = await page.request.get(
     address + '/api/workflows/' + completedQaWorkflow.id + '/results',
   );
