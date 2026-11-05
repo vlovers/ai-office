@@ -266,6 +266,12 @@ try {
   assert.equal(reviewerRecovered.stages[1].state, 'interrupted');
   assert.equal(qaRecovered.stages[2].state, 'blocked');
   assert.equal(qaRecovered.stages[2].report.digest, qaReportDigest);
+  const qaResultsResponse = await page.request.get(
+    address + '/api/workflows/' + completedQaWorkflow.id + '/results',
+  );
+  assert.equal(qaResultsResponse.status(), 200);
+  const qaResults = await qaResultsResponse.json();
+  assert.equal(qaResults[1].report.digest, qaReportDigest, 'QA report must survive crash');
   assert.equal(pendingRecovered.stages[2].state, 'awaiting_approval');
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === reviewerTask.id)?.state, 'interrupted');
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === completedQaTask.id)?.state, 'completed');
@@ -299,6 +305,11 @@ try {
     const current = await readWorkflow(id);
     assert.equal(current.version, initialVersions.get(id), 'Restart must not churn workflow versions');
   }
+  const secondQaResultsResponse = await page.request.get(
+    address + '/api/workflows/' + completedQaWorkflow.id + '/results',
+  );
+  assert.equal(secondQaResultsResponse.status(), 200);
+  assert.deepEqual(await secondQaResultsResponse.json(), qaResults);
   const secondResponse = await page.request.get(address + '/api/dashboard');
   const secondSnapshot = await secondResponse.json();
   assert.equal(secondSnapshot.queue.length, 0, 'No workflow or task may dispatch on a second restart');
