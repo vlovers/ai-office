@@ -32,6 +32,10 @@ This file applies to the whole repository. Follow more-specific instructions in 
 
 The cross-repository governance tracking issue is vlovers/ai-office#87. These rules do not automatically apply to other repositories; propose scoped PRs in each repository after inspecting its own conventions.
 
+## Parallel ownership and handoff
+
+For Issue-first delivery with 2–5 agents when useful, isolated worktrees, explicit single-writer path ownership, dependency ordering, SHA-pinned verification, independent review, artifact handling and interruption recovery, follow [Multi-agent GitHub delivery protocol](docs/engineering/MULTI_AGENT_WORKFLOW.md). Keep one coherent integration PR per logical outcome and reuse existing PRs; never treat an agent handoff or CI status as authorization to merge. This workflow does not change AI Office runtime agent permissions or security approval gates.
+
 ## Project-specific contracts
 
 - The dashboard, Vite, task/workflow routes and SSE remain loopback-only. The separate, unreleased Delivery API requires its own HTTPS ingress, operator session, live grants and Origin/CSRF checks. Neither an approval nor a transfer reservation enables remote Git writes.
