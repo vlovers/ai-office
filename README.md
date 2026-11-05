@@ -203,6 +203,79 @@ See [implementation, truthful state mapping and limitations](docs/OFFICE_V4.md) 
 V4 is integrated in `main` via [PR #36](https://github.com/vlovers/ai-office/pull/36), but is not a separately tagged release. Workflow triage, searchable task history and task-scoped navigation are included. Integration CI passed; real-model acceptance and release review remain pending. The existing revision-bound
 confirmation dialogs, isolated worktrees and Codex SDK execution remain in use.
 
+### Unreleased five-destination navigation (Draft PR #106)
+
+The proposed interface separates **Office**, **Tasks**, **Workflows**, **Agents** and
+**Settings**. Office shows the shared studio; Tasks keeps task history, session
+output and the creation form together without putting them on the landing page.
+Workflows shows checkpoint details, Agents manages saved profiles, and Settings
+holds local connection and repository registration. These changes are still in
+[Draft PR #106](https://github.com/vlovers/ai-office/pull/106), not in a release.
+
+An unreleased workflow-reliability follow-up limits automatic three-second polling to
+one outstanding read per selection, so slow responses can complete without piling
+up overlapping requests. Read-only refreshes time out after 15 seconds and retry
+on later ticks; selecting another workflow cancels obsolete reads. Explicit
+refresh remains available, and workflow mutations are **not** automatically
+retried or timed out by this read-only polling mechanism. Checkpoint actions
+remain disabled after a failed refresh until matching workflow versions reload.
+Pausing live updates stops background polling, but selecting a different workflow
+still loads its checkpoint once. Reselecting the current workflow keeps its
+loaded timeline intact. A selected checkpoint shows a live loading status until
+its timeline is verified or a refresh error is reported; pausing during that
+one-off load does not leave the checkpoint stuck in a loading state. Cancelled
+reads clear their deadline timer so a superseded request cannot later be
+misreported as a timeout. Workflow API errors preserve the HTTP status when a
+proxy returns HTML or an empty body; invalid successful responses fail closed
+rather than being treated as verified checkpoints.
+A further unreleased guard checks the fields consumed by the workflow board in
+successful GET responses (list, dashboard, QA commands, timeline, reports and
+diagnostics). Structurally malformed JSON cannot replace a verified checkpoint;
+the UI reports an error and requires a successful refresh before approvals.
+An additional consistency gate checks that the workflow list, timeline and
+diagnostics all describe the same workflow ID and persisted version before
+committing the read-only snapshot. Concurrent updates can require another
+refresh; mismatched responses never enable approval actions. Conflicting persisted
+states also fail closed even if all endpoints report the same version.
+
+The integrated UI candidate includes an explicit **Retry live events** control for a task
+EventSource that enters terminal CLOSED state while HTTP is healthy. The control
+reopens the selected task streams using persisted event cursors and does not
+submit or authorize task execution. Recoverable stream errors remain automatic.
+This behavior is still an unreleased Draft integration candidate.
+
+A separate fixture browser test exercises a real backend child-process SIGKILL,
+restart on the same port and SQLite file, followed by automatic recovery in the
+**same open dashboard page**. It verifies an interrupted persisted task, an
+unsubmitted task that stays queued, zero dispatches and no browser reload. The
+fixture does not start a live provider, test multi-worker concurrency or cover
+all workflow checkpoint restart cases in issue #78. Run it after building with
+`npm run test:browser:restart`.
+
+Navigation uses local URL fragments: `#tasks`, `#compose`, and
+`#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
+restores destinations and task links; a review shortcut retains its selected
+task after reload. Task-scoped workflow review resolves linked Coder, Reviewer
+and QA tasks (not just the first stage), without showing unrelated workflows.
+These fragments select a view only: they do **not** authorize
+execution, verification, writes, or review decisions.
+
+In the unreleased mobile task-history UI (Draft PRs #174–#175), filters are
+collapsed on screens up to 680 px wide, but the number of matching tasks remains
+visible. A search with no results offers **Clear task filters** directly in the
+history list. If the currently selected task is hidden by filters, **Show selected
+task** restores the unfiltered list without changing the task selection. While
+filters are expanded on a phone, Escape closes them and returns keyboard focus
+to the Filters button; desktop controls remain visible. These are local display
+operations, not task execution or workflow approval.
+
+In the unreleased progressive history view, the Tasks page initially renders
+40 matching rows and provides **Show next 40 tasks** for larger histories. The
+current selection stays visible as a pinned row even when it falls outside the
+loaded batch; filters and sorting reset the loaded window. CSV export still
+covers **all matching tasks**, not just the mounted rows. This is display-only:
+it does not change task state, scheduling, or review permissions.
+
 ## Queue, restart and allowance
 
 Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.

@@ -1,4 +1,5 @@
 import { chromium, expect } from '@playwright/test';
+import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import assert from 'node:assert/strict';
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -39,6 +40,18 @@ const service = new Workspaces({
 });
 let manager = new TaskManager(env.store, env.providers, env.auth, undefined, undefined, service);
 let app = await createApp(manager);
+// Fixture-only diagnostics: distinguish review endpoint failures from UI timing.
+const reviewServerErrors: string[] = [];
+app.addHook(
+  'onError',
+  async (request: FastifyRequest, _reply: FastifyReply, error: FastifyError) => {
+    if (request.url.includes('/review')) {
+      reviewServerErrors.push(
+        `${request.method} ${request.url}: ${error.statusCode ?? 'unknown'} ${error.message}`,
+      );
+    }
+  },
+);
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
@@ -51,8 +64,17 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(address);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Settings' })
+    .click();
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Execution mode').selectOption('write');
   await page.getByLabel('Task title').fill('Implement isolated change');
   await page.getByLabel('What should the agent work on?').fill('WRITE_FIXTURE');
@@ -66,9 +88,22 @@ try {
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('completed');
   await page.getByRole('link', { name: 'Code Review Center ↗' }).click();
+  // Review shortcut is a task-scoped deep link, not a bare section anchor.
+  // Reload must restore the selected task and focused review, not a blank workspace.
+  await expect(page).toHaveURL(/#task\/[^/]+\/review$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#code-review-center')).toBeFocused();
+  await page.reload();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#code-review-center')).toBeFocused();
   await page.getByRole('button', { name: 'Refresh Git review' }).click();
   const review = page.getByRole('region', { name: 'Isolated changes review' });
-  await expect(review).toContainText('3 changed files');
+  try {
+    await expect(review).toContainText('3 changed files');
+  } catch (error) {
+    console.error('Review endpoint errors before first diff:', reviewServerErrors);
+    throw error;
+  }
   await expect(page.getByLabel('Git diff')).toContainText('+Modified by fixture');
   await expect(review).toContainText('ai-office/');
   await page.getByLabel('Git diff').focus();
@@ -77,6 +112,10 @@ try {
   await page.getByRole('button', { name: 'Verify: fixture' }).click();
   await expect(review).toContainText('fixture: Passed');
   await page.reload();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
@@ -137,6 +176,10 @@ try {
   await page.getByRole('button', { name: 'Save draft feedback' }).click();
   await expect(review).toHaveAttribute('aria-busy', 'false');
   await page.reload();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
@@ -202,6 +245,10 @@ try {
   const restartedAddress = await app.listen({ host: '127.0.0.1', port: 0 });
   await page.goto(restartedAddress);
   await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await page
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
     .click();
@@ -247,6 +294,7 @@ try {
   await page.getByLabel('Review history').selectOption(oldRevision);
   await expect(review).toContainText('CORRECT_FIXTURE: clarify README and retain context');
   // Keep after a separate corrected proposal exercises the other terminal decision.
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Execution mode').selectOption('write');
   await page.getByLabel('Task title').fill('Keep corrected proposal');
   await page.getByLabel('What should the agent work on?').fill('WRITE_FIXTURE');
