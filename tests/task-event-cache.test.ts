@@ -82,7 +82,8 @@ describe('bounded task event history and SSE resume', () => {
     // An active agent may have a task missing from a temporarily stale task list.
     expect(activeTaskStreamIds('missing', [], ['agent-task'])).toEqual(['agent-task']);
   });
-  it('preserves distinct cursors across task switches and reconnects without replay duplicates', () => {
+
+  it('preserves task cursors without replay across stream switches', () => {
     let history: Record<string, AgentEvent[]> = {};
     history = appendCachedTaskEvent(history, 'task-a', event(7, 'task-a'));
     history = retainTaskEventHistory(history, ['task-b']);
@@ -115,5 +116,4 @@ describe('bounded task event history and SSE resume', () => {
     expect(history['task-a']).toEqual([providerEvent]);
     expect(taskEventStreamUrl('task-a', history)).toBe('/api/tasks/task-a/stream?after=12');
   });
-
 });
