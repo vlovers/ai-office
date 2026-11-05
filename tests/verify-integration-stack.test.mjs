@@ -46,12 +46,13 @@ function fixture(fn) {
   }
 }
 
-test('valid complete ancestry attests exact local commits', () =>
+test('valid complete ancestry attests exact local commits', () => {
   fixture(({ dir, manifest }) => {
     assert.deepEqual(verifyIntegrationStack(manifest, dir).failures, []);
-  }));
+  });
+});
 
-test('detects moved main and changed branch head', () =>
+test('detects moved main and changed branch head', () => {
   fixture(({ dir, manifest, baseSha }) => {
     git(dir, 'branch', '-f', 'feat/one', baseSha);
     assert.match(verifyIntegrationStack(manifest, dir).failures.join('\n'), /Head changed/);
@@ -59,9 +60,10 @@ test('detects moved main and changed branch head', () =>
     writeFileSync(join(dir, 'a.txt'), 'new main\n');
     git(dir, 'commit', '-qam', 'main move');
     assert.match(verifyIntegrationStack(manifest, dir).failures.join('\n'), /Main moved/);
-  }));
+  });
+});
 
-test('rejects dirty checkout and missing branches', () =>
+test('rejects dirty checkout and missing branches', () => {
   fixture(({ dir, manifest }) => {
     writeFileSync(join(dir, 'untracked'), 'not safe');
     assert.match(verifyIntegrationStack(manifest, dir).failures.join('\n'), /dirty/);
@@ -71,9 +73,10 @@ test('rejects dirty checkout and missing branches', () =>
       verifyIntegrationStack(manifest, dir).failures.join('\n'),
       /Missing local branch/,
     );
-  }));
+  });
+});
 
-test('rejects unsafe names, invalid SHA, duplicate step and empty list', () =>
+test('rejects unsafe names, invalid SHA, duplicate step and empty list', () => {
   fixture(({ manifest }) => {
     for (const bad of ['../bad', '-x', 'foo//bar', 'a b', 'bad.lock', 'trailing/']) {
       assert.throws(() =>
@@ -85,4 +88,5 @@ test('rejects unsafe names, invalid SHA, duplicate step and empty list', () =>
       validateManifest({ ...manifest, steps: [manifest.steps[0], manifest.steps[0]] }),
     );
     assert.throws(() => validateManifest({ ...manifest, baseSha: 'main' }));
-  }));
+  });
+});
