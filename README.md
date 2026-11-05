@@ -244,6 +244,14 @@ reopens the selected task streams using persisted event cursors and does not
 submit or authorize task execution. Recoverable stream errors remain automatic.
 This behavior is still an unreleased Draft integration candidate.
 
+A separate fixture browser test exercises a real backend child-process SIGKILL,
+restart on the same port and SQLite file, followed by automatic recovery in the
+**same open dashboard page**. It verifies an interrupted persisted task, an
+unsubmitted task that stays queued, zero dispatches and no browser reload. The
+fixture does not start a live provider, test multi-worker concurrency or cover
+all workflow checkpoint restart cases in issue #78. Run it after building with
+`npm run test:browser:restart`.
+
 Navigation uses local URL fragments: `#tasks`, `#compose`, and
 `#task/<encoded-id>/session` (or `review` / `workflow`). Browser Back/Forward
 restores destinations and task links; a review shortcut retains its selected
