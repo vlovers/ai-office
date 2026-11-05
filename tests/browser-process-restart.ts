@@ -3,7 +3,6 @@
 import { fork, execFileSync, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
@@ -47,7 +46,11 @@ const terminate = async (processToStop: ChildProcess | undefined) => {
 const start = async (): Promise<ChildProcess> => {
   const processToStart = fork(fixtureScript, [env.root, String(port)], {
     cwd: process.cwd(), execArgv: [], silent: true,
-    env: { ...process.env, CODEX_API_KEY: '', AI_OFFICE_ALLOW_HOST_VERIFICATION: '0' },
+    env: {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HOME: env.root,
+      AI_OFFICE_ALLOW_HOST_VERIFICATION: '0',
+    },
   });
   try {
     await new Promise<void>((accept, reject) => {
