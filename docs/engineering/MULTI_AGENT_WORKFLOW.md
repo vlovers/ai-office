@@ -12,12 +12,12 @@ Prefer **one substantial integration PR per logical outcome**. Do not create PRs
 
 Before launching parallel work, the coordinator records the following matrix in the parent Issue or PR:
 
-| Role | Responsibility | Write permissions |
-| --- | --- | --- |
-| Coordinator / integrator | Owns parent Issue, dependency ordering, integration branch, final SHA and handoff | Integration branch only |
-| Implementer A | Owns a specified non-overlapping file/path set and acceptance subset | Its own worktree/branch |
-| Implementer B–D (optional) | Independent file/path set and test/analysis tasks | Their own worktrees/branches |
-| Independent reviewer | Inspects the actual diff, threat boundaries, tests and acceptance evidence | Review comments only, not self-approval |
+| Role                       | Responsibility                                                                    | Write permissions                       |
+| -------------------------- | --------------------------------------------------------------------------------- | --------------------------------------- |
+| Coordinator / integrator   | Owns parent Issue, dependency ordering, integration branch, final SHA and handoff | Integration branch only                 |
+| Implementer A              | Owns a specified non-overlapping file/path set and acceptance subset              | Its own worktree/branch                 |
+| Implementer B–D (optional) | Independent file/path set and test/analysis tasks                                 | Their own worktrees/branches            |
+| Independent reviewer       | Inspects the actual diff, threat boundaries, tests and acceptance evidence        | Review comments only, not self-approval |
 
 Two agents is not a minimum when the work cannot be safely partitioned; never fabricate parallelism. A person/agent can coordinate without being an independent reviewer of its own changes. Record ownership for shared contracts (API types, auth/tenant policy, SSE events, persistence schema, workflows and CI). A shared path has **one active writer**; dependent agents consume an agreed interface and wait for integration rather than racing edits. Ownership claims are advisory, not filesystem locks or GitHub permissions.
 
