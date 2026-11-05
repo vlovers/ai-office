@@ -74,7 +74,7 @@ const reviewerWorkflow = newWorkflow();
 const completedQaWorkflow = newWorkflow();
 const pendingQaWorkflow = newWorkflow();
 const qaReportDigest = 'b'.repeat(64);
-const seedWorkflow = (id: string, kind: 'reviewer' | 'completed-qa' | 'pending-qa') => {
+const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'completed-qa' | 'pending-qa') => {
   const current = workflowStore.get(id);
   assert.ok(current);
   const next = structuredClone(current);
@@ -96,11 +96,13 @@ const seedWorkflow = (id: string, kind: 'reviewer' | 'completed-qa' | 'pending-q
       };
     }
   }
-  env.store.db.prepare('UPDATE workflows SET json=? WHERE id=?').run(JSON.stringify(next), id);
+  return next;
 };
-seedWorkflow(reviewerWorkflow.id, 'reviewer');
-seedWorkflow(completedQaWorkflow.id, 'completed-qa');
-seedWorkflow(pendingQaWorkflow.id, 'pending-qa');
+const workflowSeeds = [
+  buildWorkflowSeed(reviewerWorkflow.id, 'reviewer'),
+  buildWorkflowSeed(completedQaWorkflow.id, 'completed-qa'),
+  buildWorkflowSeed(pendingQaWorkflow.id, 'pending-qa'),
+];
 await env.manager.shutdown();
 env.store.close();
 
@@ -203,6 +205,14 @@ try {
         state,
         JSON.stringify(item),
         taskId,
+      );
+    }
+    // Seed the simulated in-flight stages only immediately before the crash.
+    // Seeding before backend #1 starts would trigger an earlier recovery pass.
+    for (const workflow of workflowSeeds) {
+      db.prepare('UPDATE workflows SET json=? WHERE id=?').run(
+        JSON.stringify(workflow),
+        workflow.id,
       );
     }
   } finally {
