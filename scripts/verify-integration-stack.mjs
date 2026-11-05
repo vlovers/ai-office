@@ -16,11 +16,19 @@ export function validateManifest(value) {
     throw new Error('Expected 1..64 steps');
   const seen = new Set();
   for (const step of value.steps) {
-    if (!step || typeof step !== 'object' || Array.isArray(step) ||
-        typeof step.name !== 'string' || !REF.test(step.name) ||
-        step.name.includes('..') || step.name.includes('//') ||
-        step.name.endsWith('/') || step.name.endsWith('.lock') ||
-        !SHA.test(step.sha ?? '') || seen.has(step.name))
+    if (
+      !step ||
+      typeof step !== 'object' ||
+      Array.isArray(step) ||
+      typeof step.name !== 'string' ||
+      !REF.test(step.name) ||
+      step.name.includes('..') ||
+      step.name.includes('//') ||
+      step.name.endsWith('/') ||
+      step.name.endsWith('.lock') ||
+      !SHA.test(step.sha ?? '') ||
+      seen.has(step.name)
+    )
       throw new Error('Invalid, unsafe or duplicate step');
     seen.add(step.name);
   }
@@ -29,10 +37,14 @@ export function validateManifest(value) {
 
 function git(repo, args) {
   return execFileSync('git', ['-C', repo, ...args], {
-    encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    timeout: 10_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
     env: {
-      ...process.env, GIT_NO_REPLACE_OBJECTS: '1',
-      GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0',
+      ...process.env,
+      GIT_NO_REPLACE_OBJECTS: '1',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_OPTIONAL_LOCKS: '0',
     },
   }).trim();
 }
@@ -55,7 +67,8 @@ export function verifyIntegrationStack(manifest, repo) {
   if (git(repo, ['status', '--porcelain', '--untracked-files=normal']) !== '')
     failures.push('Checkout is dirty');
   const main = git(repo, ['rev-parse', '--verify', 'refs/heads/main^{commit}']);
-  if (main !== manifest.baseSha) failures.push('Main moved: expected ' + manifest.baseSha + ', found ' + main);
+  if (main !== manifest.baseSha)
+    failures.push('Main moved: expected ' + manifest.baseSha + ', found ' + main);
   let parent = manifest.baseSha;
   const steps = [];
   for (const step of manifest.steps) {
@@ -79,9 +92,12 @@ export function verifyIntegrationStack(manifest, repo) {
 
 function main(args) {
   if (args.length !== 2)
-    throw new Error('Usage: node scripts/verify-integration-stack.mjs <manifest.json> <checkout-root>');
+    throw new Error(
+      'Usage: node scripts/verify-integration-stack.mjs <manifest.json> <checkout-root>',
+    );
   const result = verifyIntegrationStack(
-    JSON.parse(readFileSync(resolve(args[0]), 'utf8')), resolve(args[1]),
+    JSON.parse(readFileSync(resolve(args[0]), 'utf8')),
+    resolve(args[1]),
   );
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   if (!result.ok) process.exitCode = 1;
