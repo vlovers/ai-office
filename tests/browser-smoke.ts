@@ -273,7 +273,7 @@ try {
   assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
   // Simulate terminal SSE (HTTP 204). Retry must restore only live reading,
   // without a task submission, a queue mutation, or a full reload.
-  const closedStreamPattern = /\\/api\\/tasks\\/[^/]+\\/stream(?:\\?.*)?$/;
+  const closedStreamPattern = /\/api\/tasks\/[^/]+\/stream(?:\?.*)?$/;
   await page.route(closedStreamPattern, async (route) => {
     await route.fulfill({ status: 204 });
   });
