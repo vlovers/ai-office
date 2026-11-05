@@ -24,22 +24,34 @@ execFileSync('/usr/bin/git', [
   '-qm',
   'fixture baseline',
 ]);
-const baselineRevision = execFileSync(
-  '/usr/bin/git',
-  ['-C', env.repository, 'rev-parse', 'HEAD'],
-  { encoding: 'utf8' },
-).trim();
-const repoGitDir = execFileSync('/usr/bin/git', ['-C', env.repository, 'rev-parse', '--absolute-git-dir'], {
+const baselineRevision = execFileSync('/usr/bin/git', ['-C', env.repository, 'rev-parse', 'HEAD'], {
   encoding: 'utf8',
 }).trim();
-const repo = env.store.register({ name: 'Restart browser fixture', path: env.repository, gitDir: repoGitDir });
+const repoGitDir = execFileSync(
+  '/usr/bin/git',
+  ['-C', env.repository, 'rev-parse', '--absolute-git-dir'],
+  {
+    encoding: 'utf8',
+  },
+).trim();
+const repo = env.store.register({
+  name: 'Restart browser fixture',
+  path: env.repository,
+  gitDir: repoGitDir,
+});
 const interrupted = env.store.createTask({
-  repositoryId: repo.id, agentId: 'codex-1', title: 'Crash-recovery task',
-  prompt: 'Fixture only — must never be submitted', executionMode: 'read-only',
+  repositoryId: repo.id,
+  agentId: 'codex-1',
+  title: 'Crash-recovery task',
+  prompt: 'Fixture only — must never be submitted',
+  executionMode: 'read-only',
 });
 const pending = env.store.createTask({
-  repositoryId: repo.id, agentId: 'codex-2', title: 'Unsubmitted task',
-  prompt: 'Fixture only — must stay unsubmitted', executionMode: 'read-only',
+  repositoryId: repo.id,
+  agentId: 'codex-2',
+  title: 'Unsubmitted task',
+  prompt: 'Fixture only — must stay unsubmitted',
+  executionMode: 'read-only',
 });
 // Persist a valid workflow skeleton through the real WorkflowStore. Simulated
 // crash states are seeded below directly in SQLite, without running Codex.
@@ -93,9 +105,24 @@ const newWorkflow = () =>
     repositoryId: repo.id,
     baselineRevision,
     stages: [
-      { kind: 'coder', agentId: coderProfile.id, agentRevision: coderProfile.revision, mode: 'write' },
-      { kind: 'reviewer', agentId: reviewerProfile.id, agentRevision: reviewerProfile.revision, mode: 'read-only' },
-      { kind: 'qa', agentId: reviewerProfile.id, agentRevision: reviewerProfile.revision, mode: 'read-only' },
+      {
+        kind: 'coder',
+        agentId: coderProfile.id,
+        agentRevision: coderProfile.revision,
+        mode: 'write',
+      },
+      {
+        kind: 'reviewer',
+        agentId: reviewerProfile.id,
+        agentRevision: reviewerProfile.revision,
+        mode: 'read-only',
+      },
+      {
+        kind: 'qa',
+        agentId: reviewerProfile.id,
+        agentRevision: reviewerProfile.revision,
+        mode: 'read-only',
+      },
     ],
   });
 const reviewerWorkflow = newWorkflow();
@@ -104,7 +131,10 @@ const completedQaWorkflow = newWorkflow();
 const pendingQaWorkflow = newWorkflow();
 const failedQaWorkflow = newWorkflow();
 const qaReportDigest = 'b'.repeat(64);
-const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'queued-reviewer' | 'completed-qa' | 'pending-qa' | 'failed-qa') => {
+const buildWorkflowSeed = (
+  id: string,
+  kind: 'reviewer' | 'queued-reviewer' | 'completed-qa' | 'pending-qa' | 'failed-qa',
+) => {
   const current = workflowStore.get(id);
   assert.ok(current);
   const next = structuredClone(current);
@@ -156,7 +186,8 @@ const fixtureScript = resolve('tests/fixtures/restart-browser-server.mjs');
 let child: ChildProcess | undefined;
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 const terminate = async (processToStop: ChildProcess | undefined) => {
-  if (!processToStop || processToStop.exitCode !== null || processToStop.signalCode !== null) return;
+  if (!processToStop || processToStop.exitCode !== null || processToStop.signalCode !== null)
+    return;
   await new Promise<void>((accept, reject) => {
     const timeout = setTimeout(() => {
       processToStop.off('exit', onExit);
@@ -186,7 +217,9 @@ const terminate = async (processToStop: ChildProcess | undefined) => {
 };
 const start = async (): Promise<ChildProcess> => {
   const processToStart = fork(fixtureScript, [env.root, String(port)], {
-    cwd: process.cwd(), execArgv: [], silent: true,
+    cwd: process.cwd(),
+    execArgv: [],
+    silent: true,
     env: {
       PATH: process.env.PATH ?? '/usr/bin:/bin',
       HOME: env.root,
@@ -196,7 +229,10 @@ const start = async (): Promise<ChildProcess> => {
   });
   try {
     await new Promise<void>((accept, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Backend fixture startup deadline')), 15000);
+      const timeout = setTimeout(
+        () => reject(new Error('Backend fixture startup deadline')),
+        15000,
+      );
       let stderr = '';
       processToStart.stderr?.on('data', (chunk: Buffer) => {
         stderr = (stderr + String(chunk)).slice(-1500);
@@ -298,7 +334,9 @@ try {
     timeout: 12000,
   });
   await expect
-    .poll(async () => page.evaluate(() => (window as Window & { __restartFixture?: string }).__restartFixture))
+    .poll(async () =>
+      page.evaluate(() => (window as Window & { __restartFixture?: string }).__restartFixture),
+    )
     .toBe('preserved');
   await expect
     .poll(async () => {
@@ -414,13 +452,7 @@ try {
     'execution-interrupted',
     null,
   );
-  await checkWorkflowPresentation(
-    failedQaWorkflow.id,
-    2,
-    'failed',
-    'execution-failed',
-    null,
-  );
+  await checkWorkflowPresentation(failedQaWorkflow.id, 2, 'failed', 'execution-failed', null);
   await checkWorkflowPresentation(
     completedQaWorkflow.id,
     2,
@@ -435,8 +467,14 @@ try {
     'approval-required',
     'approve-qa',
   );
-  assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === reviewerTask.id)?.state, 'interrupted');
-  assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === completedQaTask.id)?.state, 'completed');
+  assert.equal(
+    snapshot.tasks.find((t: { id: string }) => t.id === reviewerTask.id)?.state,
+    'interrupted',
+  );
+  assert.equal(
+    snapshot.tasks.find((t: { id: string }) => t.id === completedQaTask.id)?.state,
+    'completed',
+  );
   // Assert the mounted UI caught up, not just that a separate API request succeeded.
   await page
     .getByRole('navigation', { name: 'Main navigation' })
@@ -451,10 +489,13 @@ try {
   // A second restart must not replay workflow recovery or increment versions.
   // The same page stays open throughout both process generations.
   const initialVersions = new Map(
-    [reviewerRecovered, queuedReviewerRecovered, qaRecovered, pendingRecovered, failedQaRecovered].map((item: { id: string; version: number }) => [
-      item.id,
-      item.version,
-    ]),
+    [
+      reviewerRecovered,
+      queuedReviewerRecovered,
+      qaRecovered,
+      pendingRecovered,
+      failedQaRecovered,
+    ].map((item: { id: string; version: number }) => [item.id, item.version]),
   );
   await terminate(child);
   child = undefined;
@@ -471,15 +512,13 @@ try {
     failedQaWorkflow.id,
   ]) {
     const current = await readWorkflow(id);
-    assert.equal(current.version, initialVersions.get(id), 'Restart must not churn workflow versions');
+    assert.equal(
+      current.version,
+      initialVersions.get(id),
+      'Restart must not churn workflow versions',
+    );
   }
-  await checkWorkflowPresentation(
-    failedQaWorkflow.id,
-    2,
-    'failed',
-    'execution-failed',
-    null,
-  );
+  await checkWorkflowPresentation(failedQaWorkflow.id, 2, 'failed', 'execution-failed', null);
   await checkWorkflowPresentation(
     pendingQaWorkflow.id,
     2,

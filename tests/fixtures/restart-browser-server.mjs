@@ -19,7 +19,11 @@ const auth = new CodexAuth({
   inspectLocal: async () => ({
     account: 'chatgpt',
     executable: process.execPath,
-    env: { PATH: '/usr/bin:/bin', HOME: join(root, 'cli-home'), CODEX_HOME: join(root, 'cli-home') },
+    env: {
+      PATH: '/usr/bin:/bin',
+      HOME: join(root, 'cli-home'),
+      CODEX_HOME: join(root, 'cli-home'),
+    },
     version: '0.162.1',
     models: [{ model: 'fixture-model', isDefault: true }],
   }),
@@ -50,5 +54,9 @@ const shutdown = async () => {
     process.exitCode = 1;
   }
 };
-process.on('SIGTERM', () => { void shutdown(); });
-process.on('SIGINT', () => { void shutdown(); });
+process.on('SIGTERM', () => {
+  void shutdown();
+});
+process.on('SIGINT', () => {
+  void shutdown();
+});
