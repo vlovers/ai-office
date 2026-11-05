@@ -35,6 +35,8 @@ jobs:
         run: npm run lint
       - name: Unit and integration tests
         run: npm test
+      - name: Integration ancestry verifier regressions (offline)
+        run: node --test tests/verify-integration-stack.test.mjs
       - name: HTTP/SSE smoke tests
         run: npm run test:smoke
       - name: Production build
