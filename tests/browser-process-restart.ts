@@ -131,6 +131,17 @@ try {
   const snapshot = await response.json();
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === pending.id)?.state, 'queued');
   assert.equal(snapshot.queue.length, 0, 'Never-submitted tasks must not run after restart');
+  // Assert the mounted UI caught up, not just that a separate API request succeeded.
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await expect(
+    page.locator('.task-row').filter({ hasText: 'Crash-recovery task' }).locator('.badge'),
+  ).toHaveText('interrupted', { timeout: 12000 });
+  await expect(
+    page.locator('.task-row').filter({ hasText: 'Unsubmitted task' }).locator('.badge'),
+  ).toHaveText('queued');
   assert.equal(errors.length, 0, 'Unexpected browser errors: ' + errors.join(' | '));
 } finally {
   await terminate(child);
