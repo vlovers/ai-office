@@ -47,6 +47,18 @@ Every handoff includes: parent Issue, PR URL, owner and reserved paths, base/hea
 
 On interruption: fetch current GitHub state first; compare recorded head to actual head, list open PRs and working-tree changes, inspect last successful checks and pending review comments. If a SHA differs, do **not** resume from stale assumptions; reconcile ownership and rerun affected validation. Avoid duplicate Issues/PRs and never treat a queued CI job as a pass. If safe continuation is impossible, record the blocker and stop the affected change only.
 
+## Evidence ledger and retention
+
+The coordinator maintains a sanitized evidence ledger in the parent Issue or integration PR. Every check or artifact entry identifies the **owner**, source Issue/PR, exact full **base/head/tested SHA**, command and environment, UTC execution time, exit status, CI workflow/job/run URL (when applicable), artifact location, visibility, retention or expiry, and reproduction instructions. A link to a queued job is not evidence of a pass. Record results explicitly as **PASS**, **FAIL**, **NOT RUN**, **N/A (with reason)**, **QUEUED**, **STALE**, or **UNAVAILABLE**; do not collapse these into a generic green status.
+
+Artifacts are supporting evidence, not a substitute for independent diff review. Separate static checks, mocked tests, browser smoke, native macOS sandbox runs, real Codex execution, and authorized Delivery security tests. A fixture or mocked GitHub response does not prove live grant/lease/CSRF enforcement or remote-write authorization. For each release-sensitive assertion, identify the actual environment and authorization boundary tested. A successful docs link check does not imply application or deployment validation.
+
+Before attaching logs, traces, screenshots, browser captures or test fixtures, redact credentials, access tokens, cookies, authorization headers, user content, private repository material, tenant data, database exports, GitHub app secrets and live Delivery grants. Prefer minimal structured summaries over raw logs; store sensitive diagnostics only in an approved restricted location, never in public PR comments or downloadable Actions artifacts. Do not run untrusted lifecycle scripts or external hooks solely to manufacture evidence.
+
+Record artifact retention/expiry rather than assuming permanent availability. When a run or artifact expires, is deleted, cannot be accessed by the reviewer, or belongs to a superseded SHA, mark its evidence **UNAVAILABLE** or **STALE** and reproduce the applicable check on the current head in an authorized environment. Do not rerun CI merely to refresh a cosmetic timestamp or clear a queue. After a material rebase, integration, or security-sensitive edit, re-evaluate which claims need new evidence; preserve historical results as historical, not current-head acceptance.
+
+Handoff must include the ledger location, who can access retained artifacts, expiry and recovery instructions, unresolved review findings, current GitHub branch/head, and the next owner. No artifact retention policy grants deployment, merge, release, or remote Git-write permission.
+
 ## 6. Completion
 
 Completion requires acceptance criteria with reproducible evidence, security assessment, documentation, independent review and all required checks at the final head SHA (or explicit approved exceptions). An unmerged PR is **proposed**, not released; a merged change is not proof of deployment or acceptance. Record outstanding risks and rollback/recovery actions in the PR.
