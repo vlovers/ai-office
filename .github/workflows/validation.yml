@@ -60,6 +60,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Backend process restart, same-page Dashboard recovery (no model calls)
+        run: npm run test:browser:restart
+
       - name: Isolated write browser smoke (no model calls)
         run: npm run test:browser:write
 
