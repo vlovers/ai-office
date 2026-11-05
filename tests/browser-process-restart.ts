@@ -89,7 +89,9 @@ try {
   const address = 'http://127.0.0.1:' + port;
   await page.goto(address);
   const connection = page.locator('.connection');
-  await expect(connection).toContainText('connected', { timeout: 10000 });
+  await expect(connection).toContainText(/^(Local server connected|Live events connected)$/, {
+    timeout: 10000,
+  });
   const originalDocument = await page.evaluate(() => {
     (window as Window & { __restartFixture?: string }).__restartFixture = 'preserved';
     return document.documentElement.tagName;
@@ -112,7 +114,9 @@ try {
   child = undefined;
   await expect(connection).toContainText('Server disconnected', { timeout: 12000 });
   child = await start();
-  await expect(connection).not.toContainText('Server disconnected', { timeout: 12000 });
+  await expect(connection).toContainText(/^(Local server connected|Live events connected)$/, {
+    timeout: 12000,
+  });
   await expect
     .poll(async () => page.evaluate(() => (window as Window & { __restartFixture?: string }).__restartFixture))
     .toBe('preserved');
