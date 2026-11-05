@@ -115,9 +115,8 @@ const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'queued-reviewer' | 'c
   } else {
     next.stages[1]!.state = 'completed';
     next.stages[2]!.state =
-      kind === 'completed-qa' ? 'running' : kind === 'failed-qa' ? 'failed' : 'awaiting_approval';
+      kind === 'completed-qa' || kind === 'failed-qa' ? 'running' : 'awaiting_approval';
     if (kind === 'failed-qa') {
-      next.state = 'blocked';
       next.stages[2]!.taskId = failedQaTask.id;
     }
     if (kind === 'completed-qa') {
