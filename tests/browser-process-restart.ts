@@ -50,6 +50,13 @@ const reviewerTask = env.store.createTask({
   prompt: 'No inference',
   executionMode: 'read-only',
 });
+const queuedReviewerTask = env.store.createTask({
+  repositoryId: repo.id,
+  agentId: 'codex-2',
+  title: 'Queued reviewer must not replay',
+  prompt: 'No inference',
+  executionMode: 'read-only',
+});
 const completedQaTask = env.store.createTask({
   repositoryId: repo.id,
   agentId: 'codex-2',
@@ -71,17 +78,18 @@ const newWorkflow = () =>
     ],
   });
 const reviewerWorkflow = newWorkflow();
+const queuedReviewerWorkflow = newWorkflow();
 const completedQaWorkflow = newWorkflow();
 const pendingQaWorkflow = newWorkflow();
 const qaReportDigest = 'b'.repeat(64);
-const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'completed-qa' | 'pending-qa') => {
+const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'queued-reviewer' | 'completed-qa' | 'pending-qa') => {
   const current = workflowStore.get(id);
   assert.ok(current);
   const next = structuredClone(current);
   next.stages[0]!.state = 'completed';
-  if (kind === 'reviewer') {
+  if (kind === 'reviewer' || kind === 'queued-reviewer') {
     next.stages[1]!.state = 'running';
-    next.stages[1]!.taskId = reviewerTask.id;
+    next.stages[1]!.taskId = kind === 'reviewer' ? reviewerTask.id : queuedReviewerTask.id;
   } else {
     next.stages[1]!.state = 'completed';
     next.stages[2]!.state = kind === 'completed-qa' ? 'running' : 'awaiting_approval';
@@ -100,6 +108,7 @@ const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'completed-qa' | 'pend
 };
 const workflowSeeds = [
   buildWorkflowSeed(reviewerWorkflow.id, 'reviewer'),
+  buildWorkflowSeed(queuedReviewerWorkflow.id, 'queued-reviewer'),
   buildWorkflowSeed(completedQaWorkflow.id, 'completed-qa'),
   buildWorkflowSeed(pendingQaWorkflow.id, 'pending-qa'),
 ];
@@ -215,6 +224,12 @@ try {
         workflow.id,
       );
     }
+    // Model a previously approved stage whose runnable queue entry survived
+    // a process crash. Store.recoverInterrupted must remove this *before*
+    // the new manager starts its queue on listen.
+    db.prepare(
+      'INSERT INTO task_queue(task_id,resume_session_id,mode,enqueued_at) VALUES (?,?,?,?)',
+    ).run(queuedReviewerTask.id, null, 'local-cli-chatgpt', new Date().toISOString());
   } finally {
     db.close();
   }
@@ -243,7 +258,7 @@ try {
   assert.equal(workflowResponse.status(), 200);
   const workflowItems = await workflowResponse.json();
   const workflowById = new Map(workflowItems.map((item: { id: string }) => [item.id, item]));
-  for (const workflowId of [reviewerWorkflow.id, completedQaWorkflow.id]) {
+  for (const workflowId of [reviewerWorkflow.id, queuedReviewerWorkflow.id, completedQaWorkflow.id]) {
     assert.equal(
       (workflowById.get(workflowId) as { state?: string } | undefined)?.state,
       'blocked',
@@ -261,9 +276,16 @@ try {
     return response.json();
   };
   const reviewerRecovered = await readWorkflow(reviewerWorkflow.id);
+  const queuedReviewerRecovered = await readWorkflow(queuedReviewerWorkflow.id);
   const qaRecovered = await readWorkflow(completedQaWorkflow.id);
   const pendingRecovered = await readWorkflow(pendingQaWorkflow.id);
   assert.equal(reviewerRecovered.stages[1].state, 'interrupted');
+  assert.equal(queuedReviewerRecovered.stages[1].state, 'interrupted');
+  assert.equal(
+    snapshot.tasks.find((t: { id: string }) => t.id === queuedReviewerTask.id)?.state,
+    'interrupted',
+    'Recovery must quarantine a queued reviewer task',
+  );
   assert.equal(qaRecovered.stages[2].state, 'blocked');
   assert.equal(qaRecovered.stages[2].report.digest, qaReportDigest);
   const qaResultsResponse = await page.request.get(
@@ -289,7 +311,7 @@ try {
   // A second restart must not replay workflow recovery or increment versions.
   // The same page stays open throughout both process generations.
   const initialVersions = new Map(
-    [reviewerRecovered, qaRecovered, pendingRecovered].map((item: { id: string; version: number }) => [
+    [reviewerRecovered, queuedReviewerRecovered, qaRecovered, pendingRecovered].map((item: { id: string; version: number }) => [
       item.id,
       item.version,
     ]),
@@ -301,7 +323,7 @@ try {
   await expect(connection).toContainText(/^(Local server connected|Live events connected)$/, {
     timeout: 12000,
   });
-  for (const id of [reviewerWorkflow.id, completedQaWorkflow.id, pendingQaWorkflow.id]) {
+  for (const id of [reviewerWorkflow.id, queuedReviewerWorkflow.id, completedQaWorkflow.id, pendingQaWorkflow.id]) {
     const current = await readWorkflow(id);
     assert.equal(current.version, initialVersions.get(id), 'Restart must not churn workflow versions');
   }
