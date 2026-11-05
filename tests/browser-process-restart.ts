@@ -64,6 +64,27 @@ const completedQaTask = env.store.createTask({
   prompt: 'No inference',
   executionMode: 'read-only',
 });
+const failedQaTask = env.store.createTask({
+  repositoryId: repo.id,
+  agentId: 'codex-2',
+  title: 'Failed QA fixture',
+  prompt: 'No inference',
+  executionMode: 'read-only',
+});
+const fifoFirst = env.store.createTask({
+  repositoryId: repo.id,
+  agentId: 'codex-1',
+  title: 'Independent FIFO first',
+  prompt: 'Do not execute in this test',
+  executionMode: 'read-only',
+});
+const fifoSecond = env.store.createTask({
+  repositoryId: repo.id,
+  agentId: 'codex-2',
+  title: 'Independent FIFO second',
+  prompt: 'Do not execute in this test',
+  executionMode: 'read-only',
+});
 const workflowStore = new WorkflowStore(env.store.db);
 const coderProfile = env.store.requireAgent('codex-1');
 const reviewerProfile = env.store.requireAgent('codex-2');
@@ -81,8 +102,9 @@ const reviewerWorkflow = newWorkflow();
 const queuedReviewerWorkflow = newWorkflow();
 const completedQaWorkflow = newWorkflow();
 const pendingQaWorkflow = newWorkflow();
+const failedQaWorkflow = newWorkflow();
 const qaReportDigest = 'b'.repeat(64);
-const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'queued-reviewer' | 'completed-qa' | 'pending-qa') => {
+const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'queued-reviewer' | 'completed-qa' | 'pending-qa' | 'failed-qa') => {
   const current = workflowStore.get(id);
   assert.ok(current);
   const next = structuredClone(current);
@@ -92,7 +114,12 @@ const buildWorkflowSeed = (id: string, kind: 'reviewer' | 'queued-reviewer' | 'c
     next.stages[1]!.taskId = kind === 'reviewer' ? reviewerTask.id : queuedReviewerTask.id;
   } else {
     next.stages[1]!.state = 'completed';
-    next.stages[2]!.state = kind === 'completed-qa' ? 'running' : 'awaiting_approval';
+    next.stages[2]!.state =
+      kind === 'completed-qa' ? 'running' : kind === 'failed-qa' ? 'failed' : 'awaiting_approval';
+    if (kind === 'failed-qa') {
+      next.state = 'blocked';
+      next.stages[2]!.taskId = failedQaTask.id;
+    }
     if (kind === 'completed-qa') {
       next.stages[2]!.taskId = completedQaTask.id;
       next.stages[2]!.report = {
@@ -111,6 +138,7 @@ const workflowSeeds = [
   buildWorkflowSeed(queuedReviewerWorkflow.id, 'queued-reviewer'),
   buildWorkflowSeed(completedQaWorkflow.id, 'completed-qa'),
   buildWorkflowSeed(pendingQaWorkflow.id, 'pending-qa'),
+  buildWorkflowSeed(failedQaWorkflow.id, 'failed-qa'),
 ];
 await env.manager.shutdown();
 env.store.close();
@@ -141,6 +169,7 @@ const start = async (): Promise<ChildProcess> => {
       PATH: process.env.PATH ?? '/usr/bin:/bin',
       HOME: env.root,
       AI_OFFICE_ALLOW_HOST_VERIFICATION: '0',
+      AI_OFFICE_TEST_PAUSE_DISPATCH: '1',
     },
   });
   try {
@@ -205,6 +234,7 @@ try {
     for (const [taskId, state] of [
       [reviewerTask.id, 'running'],
       [completedQaTask.id, 'completed'],
+      [failedQaTask.id, 'failed'],
     ] as const) {
       const row = db.prepare('SELECT json FROM tasks WHERE id=?').get(taskId);
       assert.ok(row);
@@ -230,6 +260,11 @@ try {
     db.prepare(
       'INSERT INTO task_queue(task_id,resume_session_id,mode,enqueued_at) VALUES (?,?,?,?)',
     ).run(queuedReviewerTask.id, null, 'local-cli-chatgpt', new Date().toISOString());
+    for (const taskId of [fifoFirst.id, fifoSecond.id]) {
+      db.prepare(
+        'INSERT INTO task_queue(task_id,resume_session_id,mode,enqueued_at) VALUES (?,?,?,?)',
+      ).run(taskId, null, 'local-cli-chatgpt', new Date().toISOString());
+    }
   } finally {
     db.close();
   }
@@ -253,12 +288,26 @@ try {
   const response = await page.request.get(address + '/api/dashboard');
   const snapshot = await response.json();
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === pending.id)?.state, 'queued');
-  assert.equal(snapshot.queue.length, 0, 'Never-submitted tasks must not run after restart');
+  assert.deepEqual(
+    snapshot.queue.map((entry: { taskId: string }) => entry.taskId),
+    [fifoFirst.id, fifoSecond.id],
+    'Unrelated submitted work must retain FIFO order after recovery',
+  );
+  assert.equal(
+    snapshot.queue.some((entry: { taskId: string }) => entry.taskId === queuedReviewerTask.id),
+    false,
+    'A queued privileged Reviewer stage must be quarantined before dispatch',
+  );
   const workflowResponse = await page.request.get(address + '/api/workflows');
   assert.equal(workflowResponse.status(), 200);
   const workflowItems = await workflowResponse.json();
   const workflowById = new Map(workflowItems.map((item: { id: string }) => [item.id, item]));
-  for (const workflowId of [reviewerWorkflow.id, queuedReviewerWorkflow.id, completedQaWorkflow.id]) {
+  for (const workflowId of [
+    reviewerWorkflow.id,
+    queuedReviewerWorkflow.id,
+    completedQaWorkflow.id,
+    failedQaWorkflow.id,
+  ]) {
     assert.equal(
       (workflowById.get(workflowId) as { state?: string } | undefined)?.state,
       'blocked',
@@ -279,6 +328,7 @@ try {
   const queuedReviewerRecovered = await readWorkflow(queuedReviewerWorkflow.id);
   const qaRecovered = await readWorkflow(completedQaWorkflow.id);
   const pendingRecovered = await readWorkflow(pendingQaWorkflow.id);
+  const failedQaRecovered = await readWorkflow(failedQaWorkflow.id);
   assert.equal(reviewerRecovered.stages[1].state, 'interrupted');
   assert.equal(queuedReviewerRecovered.stages[1].state, 'interrupted');
   assert.equal(
@@ -295,6 +345,8 @@ try {
   const qaResults = await qaResultsResponse.json();
   assert.equal(qaResults[1].report.digest, qaReportDigest, 'QA report must survive crash');
   assert.equal(pendingRecovered.stages[2].state, 'awaiting_approval');
+  assert.equal(failedQaRecovered.stages[2].state, 'failed');
+  assert.equal(failedQaRecovered.state, 'blocked');
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === reviewerTask.id)?.state, 'interrupted');
   assert.equal(snapshot.tasks.find((t: { id: string }) => t.id === completedQaTask.id)?.state, 'completed');
   // Assert the mounted UI caught up, not just that a separate API request succeeded.
@@ -311,7 +363,7 @@ try {
   // A second restart must not replay workflow recovery or increment versions.
   // The same page stays open throughout both process generations.
   const initialVersions = new Map(
-    [reviewerRecovered, queuedReviewerRecovered, qaRecovered, pendingRecovered].map((item: { id: string; version: number }) => [
+    [reviewerRecovered, queuedReviewerRecovered, qaRecovered, pendingRecovered, failedQaRecovered].map((item: { id: string; version: number }) => [
       item.id,
       item.version,
     ]),
@@ -323,7 +375,13 @@ try {
   await expect(connection).toContainText(/^(Local server connected|Live events connected)$/, {
     timeout: 12000,
   });
-  for (const id of [reviewerWorkflow.id, queuedReviewerWorkflow.id, completedQaWorkflow.id, pendingQaWorkflow.id]) {
+  for (const id of [
+    reviewerWorkflow.id,
+    queuedReviewerWorkflow.id,
+    completedQaWorkflow.id,
+    pendingQaWorkflow.id,
+    failedQaWorkflow.id,
+  ]) {
     const current = await readWorkflow(id);
     assert.equal(current.version, initialVersions.get(id), 'Restart must not churn workflow versions');
   }
@@ -334,7 +392,11 @@ try {
   assert.deepEqual(await secondQaResultsResponse.json(), qaResults);
   const secondResponse = await page.request.get(address + '/api/dashboard');
   const secondSnapshot = await secondResponse.json();
-  assert.equal(secondSnapshot.queue.length, 0, 'No workflow or task may dispatch on a second restart');
+  assert.deepEqual(
+    secondSnapshot.queue.map((entry: { taskId: string }) => entry.taskId),
+    [fifoFirst.id, fifoSecond.id],
+    'Repeated recovery must not reorder unrelated queued jobs',
+  );
   assert.equal(
     secondSnapshot.tasks.find((task: { id: string }) => task.id === reviewerTask.id)?.state,
     'interrupted',
