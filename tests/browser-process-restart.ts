@@ -280,6 +280,37 @@ try {
   await expect(
     page.locator('.task-row').filter({ hasText: 'Unsubmitted task' }).locator('.badge'),
   ).toHaveText('queued');
+  // A second restart must not replay workflow recovery or increment versions.
+  // The same page stays open throughout both process generations.
+  const initialVersions = new Map(
+    [reviewerRecovered, qaRecovered, pendingRecovered].map((item: { id: string; version: number }) => [
+      item.id,
+      item.version,
+    ]),
+  );
+  await terminate(child);
+  child = undefined;
+  await expect(connection).toContainText('Server disconnected', { timeout: 12000 });
+  child = await start();
+  await expect(connection).toContainText(/^(Local server connected|Live events connected)$/, {
+    timeout: 12000,
+  });
+  for (const id of [reviewerWorkflow.id, completedQaWorkflow.id, pendingQaWorkflow.id]) {
+    const current = await readWorkflow(id);
+    assert.equal(current.version, initialVersions.get(id), 'Restart must not churn workflow versions');
+  }
+  const secondResponse = await page.request.get(address + '/api/dashboard');
+  const secondSnapshot = await secondResponse.json();
+  assert.equal(secondSnapshot.queue.length, 0, 'No workflow or task may dispatch on a second restart');
+  assert.equal(
+    secondSnapshot.tasks.find((task: { id: string }) => task.id === reviewerTask.id)?.state,
+    'interrupted',
+  );
+  assert.equal(
+    await page.evaluate(() => (window as Window & { __restartFixture?: string }).__restartFixture),
+    'preserved',
+    'Dashboard must not reload during repeated recovery',
+  );
   assert.equal(errors.length, 0, 'Unexpected browser errors: ' + errors.join(' | '));
 } finally {
   await terminate(child);
