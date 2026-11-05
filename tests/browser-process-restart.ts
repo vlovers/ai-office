@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { sandbox } from './helpers.js';
+import { sandbox, removeTestTree } from './helpers.js';
 
 const env = await sandbox();
 const repoGitDir = execFileSync('/usr/bin/git', ['-C', env.repository, 'rev-parse', '--absolute-git-dir'], {
@@ -89,7 +89,7 @@ try {
   await expect(connection).toContainText('connected', { timeout: 10000 });
   const originalDocument = await page.evaluate(() => {
     (window as Window & { __restartFixture?: string }).__restartFixture = 'preserved';
-    return document;
+    return document.documentElement.tagName;
   });
   assert.ok(originalDocument);
   // Write synthetic unfinished state into the persistent DB while backend #1
@@ -128,5 +128,5 @@ try {
 } finally {
   await terminate(child);
   await browser?.close();
-  await env.cleanup();
+  await removeTestTree(env.root);
 }
