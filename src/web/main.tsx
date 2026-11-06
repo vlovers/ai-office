@@ -597,11 +597,26 @@ function App() {
         </header>
         <div className="content">
           <section className="workspace-pulse" aria-label="Workspace activity summary">
-            <div><strong>{availableAgentCount}</strong><span>Available agents</span></div>
-            <div><strong>{runningCount}</strong><span>Running tasks</span></div>
-            <div><strong>{queuedCount}</strong><span>Queued tasks</span></div>
-            <div><strong>{failedCount}</strong><span>Failed tasks</span></div>
-            <div className="pulse-workflows"><strong>{workflows.length}</strong><span>Workflows{!workflowAvailable ? " · connection unavailable" : ""}</span></div>
+            <div>
+              <strong>{availableAgentCount}</strong>
+              <span>Available agents</span>
+            </div>
+            <div>
+              <strong>{runningCount}</strong>
+              <span>Running tasks</span>
+            </div>
+            <div>
+              <strong>{queuedCount}</strong>
+              <span>Queued tasks</span>
+            </div>
+            <div>
+              <strong>{failedCount}</strong>
+              <span>Failed tasks</span>
+            </div>
+            <div className="pulse-workflows">
+              <strong>{workflows.length}</strong>
+              <span>Workflows{!workflowAvailable ? ' · connection unavailable' : ''}</span>
+            </div>
           </section>
           <PageHeading
             page={page}
