@@ -311,6 +311,12 @@ main {
   font-size: 10px;
   color: var(--muted);
 }
+.stream-retry {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 10px;
+  white-space: nowrap;
+}
 .secondary {
   background: #0b1d14;
   border-color: var(--line);
@@ -718,6 +724,22 @@ main {
   display: block;
   margin-top: 4px;
 }
+.event-console-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.event-console-toolbar button {
+  min-height: 44px;
+}
+.event-console-toolbar + .event-console {
+  margin-top: 8px;
+}
 .event-console {
   margin-top: 16px;
   border: 1px solid var(--line);
@@ -726,6 +748,7 @@ main {
   min-height: 130px;
   max-height: 340px;
   overflow: auto;
+  overflow-anchor: none;
   font-size: 11px;
 }
 .event-line {
@@ -928,11 +951,15 @@ footer {
     margin-top: 12px;
     gap: 6px;
     padding: 4px;
+    scrollbar-width: thin;
+    scroll-padding-inline: 4px;
+    overscroll-behavior-inline: contain;
   }
   .nav-item {
+    flex: 0 0 auto;
     padding: 7px 9px;
     white-space: nowrap;
-    min-height: 40px;
+    min-height: 44px;
     font-size: 10px;
   }
   .nav-item > span:first-child,
@@ -1861,7 +1888,7 @@ select {
   outline: 2px solid #b7ffca;
   outline-offset: 3px;
 }
-#task-workflow {
+.task-workflow-anchor {
   scroll-margin-top: 24px;
 }
 
@@ -1874,4 +1901,479 @@ select {
 }
 .task-link-warning p {
   margin: 0 0 8px;
+}
+
+/* Destination-based workspace: existing task controls retain their behavior,
+   but no longer compete for attention on the Office landing page. */
+.sidebar nav .nav-item {
+  width: 100%;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+  border-radius: 8px;
+}
+.sidebar nav .nav-item.active {
+  background: var(--surface-raised);
+  border-color: var(--line);
+  color: var(--phosphor);
+}
+.shell[data-page='office'] .mission-grid {
+  display: none;
+}
+.shell:not([data-page='office']) .office-scene,
+.shell:not([data-page='office']):not(.focus-mode) .view-switch {
+  display: none;
+}
+.shell[data-page='tasks'] .stats,
+.shell[data-page='tasks'] .agents-destination,
+.shell[data-page='tasks'] .workflows-destination,
+.shell[data-page='tasks'] .inspector,
+.shell[data-page='tasks'] .sidebar-art {
+  display: none;
+}
+.shell[data-page='workflows'] .stats,
+.shell[data-page='workflows'] .queue-panel,
+.shell[data-page='workflows'] .agents-destination,
+.shell[data-page='workflows'] .history,
+.shell[data-page='workflows'] .output,
+.shell[data-page='workflows'] .compose,
+.shell[data-page='workflows'] .inspector {
+  display: none;
+}
+.shell[data-page='agents'] .stats,
+.shell[data-page='agents'] .queue-panel,
+.shell[data-page='agents'] .workflows-destination,
+.shell[data-page='agents'] .history,
+.shell[data-page='agents'] .output,
+.shell[data-page='agents'] .compose,
+.shell[data-page='agents'] .connection-panel,
+.shell[data-page='agents'] .repository-panel {
+  display: none;
+}
+.shell[data-page='settings'] .agent-panel {
+  display: none;
+}
+.shell[data-page='settings'] .mission-grid,
+.shell[data-page='agents'] .mission-grid,
+.shell[data-page='tasks'] .mission-grid,
+.shell[data-page='workflows'] .mission-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.shell[data-page='settings'] .inspector,
+.shell[data-page='agents'] .inspector {
+  width: 100%;
+  max-width: 900px;
+}
+.shell[data-page='office'] .office-scene {
+  max-height: min(76vh, 850px);
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .shell[data-page='office'] .office-scene {
+    max-height: none;
+  }
+}
+
+/* Keep the existing focus-mode inspector usable on the Tasks destination. */
+.shell[data-page='tasks'].focus-mode .inspector {
+  display: block;
+}
+.shell[data-page='tasks'].focus-mode .agent-panel {
+  display: block;
+}
+@media (max-width: 960px) {
+  /* Session controls already expose Stop; avoid a duplicate empty inspector on mobile. */
+  .shell[data-page='tasks'].focus-mode .inspector:not(:has(.stop-button)) {
+    display: none;
+  }
+}
+.shell[data-page='tasks'] .mission-board,
+.shell[data-page='workflows'] .mission-board,
+.shell[data-page='agents'] .mission-board {
+  min-width: 0;
+}
+.shell[data-page='tasks'] .history,
+.shell[data-page='tasks'] .output,
+.shell[data-page='tasks'] .compose,
+.shell[data-page='workflows'] .workflows-destination,
+.shell[data-page='agents'] .agents-destination {
+  width: 100%;
+}
+
+/* Task workspace: a stable task list, one active detail pane, no long creation form
+   competing with session output. */
+.task-panel-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 5px;
+  width: fit-content;
+  border: 1px solid var(--border, #426354);
+  border-radius: 10px;
+  background: rgba(12, 22, 18, 0.6);
+}
+.task-panel-tabs button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+.task-panel-tabs button.active {
+  background: rgba(135, 215, 164, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(135, 215, 164, 0.3);
+}
+.task-panel-tabs button:focus-visible {
+  outline: 2px solid #b7ffca;
+  outline-offset: 2px;
+}
+.shell[data-page='tasks'][data-task-panel='details'] .compose,
+.shell[data-page='tasks'][data-task-panel='new'] .output {
+  display: none;
+}
+.shell[data-page='tasks'] .mission-board {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.85fr) minmax(0, 2fr);
+  align-items: start;
+  gap: 16px;
+}
+.shell[data-page='tasks'] .mission-board > .history {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+}
+.shell[data-page='tasks'] .mission-board > .output,
+.shell[data-page='tasks'] .mission-board > .compose,
+.shell[data-page='tasks'] .mission-board > .queue-panel {
+  grid-column: 2;
+}
+@media (max-width: 1100px) {
+  .shell[data-page='tasks'] .mission-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell[data-page='tasks'] .mission-board > .history,
+  .shell[data-page='tasks'] .mission-board > .output,
+  .shell[data-page='tasks'] .mission-board > .compose,
+  .shell[data-page='tasks'] .mission-board > .queue-panel {
+    grid-column: 1;
+  }
+  .shell[data-page='tasks'] .mission-board > .history {
+    position: static;
+    max-height: 420px;
+  }
+}
+
+/* Dedicated agent and settings surfaces. Agent profile editor stays in its
+   existing modal, while the live agent inspector is available beside it. */
+.shell[data-page='agents'] .mission-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  align-items: start;
+  gap: 20px;
+}
+.shell[data-page='agents'] .inspector {
+  max-width: none;
+  width: auto;
+  position: sticky;
+  top: 18px;
+}
+.shell[data-page='agents'] .settings-destination {
+  display: none;
+}
+.shell[data-page='settings'] .mission-board {
+  width: 100%;
+  max-width: 1200px;
+  min-width: 0;
+}
+.shell[data-page='settings'] .inspector {
+  display: none;
+}
+.shell[data-page='settings'] .settings-destination {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+}
+.shell[data-page='settings'] .settings-destination > .panel {
+  min-width: 0;
+  margin: 0;
+}
+.shell[data-page='workflows'] .workflows-destination {
+  max-width: 1200px;
+}
+.shell[data-page='workflows'] .mission-board {
+  display: block;
+}
+@media (max-width: 1200px) {
+  .shell[data-page='agents'] .mission-grid,
+  .shell[data-page='settings'] .settings-destination {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell[data-page='agents'] .inspector {
+    position: static;
+  }
+}
+
+.destination-intro {
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-dim);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(40, 83, 60, 0.18), transparent);
+}
+.destination-intro h2 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  margin: 0 0 6px;
+}
+.destination-intro p {
+  max-width: 65ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.shell[data-page='settings'] .settings-destination > .destination-intro {
+  grid-column: 1 / -1;
+}
+.shell[data-page='agents'] .agents-destination,
+.shell[data-page='workflows'] .workflows-destination {
+  min-width: 0;
+}
+
+/* Keep page identity clear when only the selected screen is mounted. */
+.shell[data-page='office'] .page-heading {
+  margin-bottom: 20px;
+}
+.shell[data-page='office'] .office-scene {
+  margin-top: 0;
+}
+.shell[data-page='tasks'] .task-panel-tabs {
+  position: relative;
+  z-index: 1;
+}
+.shell[data-page='agents'] .agents-destination .agent-studio {
+  margin-top: 0;
+}
+.shell[data-page='workflows'] .workflows-destination > .panel {
+  margin-top: 0;
+}
+
+/* Workflow operations: readable, touch-friendly cards on narrow screens. */
+.workflow-operations-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+#workflows .workflow-operations-list > li,
+.workflow-operations-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line-dim);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.workflow-operations-list button {
+  min-height: 44px;
+  max-width: 100%;
+  text-align: left;
+}
+.workflow-operations-list button[aria-current='true'] {
+  border-color: var(--phosphor);
+  background: var(--surface-raised);
+}
+.workflow-operations-list time {
+  color: var(--muted);
+}
+@media (max-width: 600px) {
+  .workflow-operations-list button {
+    width: 100%;
+  }
+}
+
+/* Keep recovery actions visible even when mobile filter controls are collapsed. */
+.mobile-history-results {
+  display: none;
+}
+.history-selection-notice,
+.history-empty-results {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+  color: var(--muted);
+}
+.history-selection-notice button,
+.history-empty-results button {
+  min-height: 44px;
+}
+.history-selection-notice {
+  border-top: 1px solid var(--line-dim);
+  border-bottom: 1px solid var(--line-dim);
+  margin-bottom: 12px;
+}
+
+/* Keep task details within reach on phones without removing desktop filters.
+   Collapsed controls are removed from keyboard navigation until expanded. */
+.mobile-history-filters-toggle {
+  display: none;
+}
+@media (max-width: 680px) {
+  .shell[data-page='tasks'] .mobile-history-results {
+    display: block;
+    margin: 0 0 12px;
+    color: var(--muted);
+  }
+  .shell[data-page='tasks'] .mobile-history-filters-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    margin: 0 0 12px;
+  }
+  .shell[data-page='tasks'] .history-controls[data-mobile-open='false'] {
+    display: none;
+  }
+  .shell[data-page='tasks'] .mission-board > .history {
+    max-height: min(36vh, 300px);
+    overflow-y: auto;
+  }
+}
+
+/* Bound task history DOM size while keeping batch navigation touch-accessible. */
+.history-load-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.history-load-more button {
+  min-height: 44px;
+}
+.history-pinned-label {
+  color: var(--amber) !important;
+}
+@media (max-width: 680px) {
+  .history-load-more button {
+    width: 100%;
+  }
+}
+
+/* Workspace density: persistent operational context without duplicating page content. */
+.workspace-pulse {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.workspace-pulse > div {
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 5px;
+}
+.workspace-pulse .pulse-status strong {
+  font-size: 14px;
+  line-height: 1.9;
+}
+.workspace-pulse .pulse-status {
+  border-color: var(--line);
+}
+.workspace-pulse[aria-busy='true'] .pulse-status strong {
+  color: var(--muted);
+}
+.workspace-pulse strong {
+  display: block;
+  font-size: 21px;
+  line-height: 1.25;
+  color: var(--phosphor);
+  font-variant-numeric: tabular-nums;
+}
+.workspace-pulse span {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.office-page .office-scene .pixel-office {
+  max-height: 490px;
+  object-fit: contain;
+}
+.office-page .office-scene {
+  overflow: hidden;
+}
+@media (max-width: 1100px) {
+  .workspace-pulse {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 680px) {
+  .workspace-pulse {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-pulse > div {
+    padding: 8px 10px;
+  }
+  .workspace-pulse strong {
+    font-size: 18px;
+  }
+  .workspace-pulse .pulse-workflows {
+    grid-column: 1 / -1;
+  }
+  .office-page .office-scene .pixel-office {
+    max-height: 360px;
+  }
+}
+
+/* Compact workflow stage legend; approvals remain explicit in WorkflowBoard. */
+.workflow-stage-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+.workflow-stage-guide li {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.workflow-stage-guide strong,
+.workflow-stage-guide span {
+  display: block;
+}
+.workflow-stage-guide strong {
+  font-size: 12px;
+  color: var(--phosphor);
+}
+.workflow-stage-guide span {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+@media (max-width: 680px) {
+  .workflow-stage-guide {
+    grid-template-columns: 1fr;
+  }
 }
