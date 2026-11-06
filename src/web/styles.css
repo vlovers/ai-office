@@ -2279,7 +2279,7 @@ select {
 /* Workspace density: persistent operational context without duplicating page content. */
 .workspace-pulse {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 16px;
 }
@@ -2289,6 +2289,16 @@ select {
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: 5px;
+}
+.workspace-pulse .pulse-status strong {
+  font-size: 14px;
+  line-height: 1.9;
+}
+.workspace-pulse .pulse-status {
+  border-color: var(--line);
+}
+.workspace-pulse[aria-busy='true'] .pulse-status strong {
+  color: var(--muted);
 }
 .workspace-pulse strong {
   display: block;

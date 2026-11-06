@@ -119,6 +119,7 @@ function App() {
   const [workflowInspection, setWorkflowInspection] = useState<{ id: string; request: number }>();
   const [workflows, setWorkflows] = useState<OfficeWorkflow[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
+  const [workflowLoaded, setWorkflowLoaded] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [navigation, setNavigation] = useState(() => decodeTaskNavigation(window.location.hash));
   const [selected, setSelected] = useState<string | undefined>(() => {
@@ -212,6 +213,7 @@ function App() {
         if (live && workflowResults.accept(ticket)) {
           setWorkflows(items);
           setWorkflowAvailable(true);
+          setWorkflowLoaded(true);
         }
       } catch {
         // Ignore failures from polls superseded by a newer settled response.
@@ -364,7 +366,8 @@ function App() {
     dashboard?.tasks.filter((item) => activeStates.includes(item.state)).length ?? 0;
   const queuedCount = dashboard?.queue.length ?? 0;
   const failedCount = dashboard?.tasks.filter((item) => item.state === 'failed').length ?? 0;
-  const availableAgentCount = dashboard?.agents.filter((item) => !item.taskId).length ?? 0;
+  const idleAgentCount = dashboard?.agents.filter((item) => !item.taskId).length ?? 0;
+  const dashboardIsStale = httpConnection === 'disconnected';
   const visibleHistory = selectTaskHistory(dashboard?.tasks ?? [], {
     query: historyQuery,
     status: historyStatus,
@@ -597,26 +600,51 @@ function App() {
           </button>
         </header>
         <div className="content">
-          <section className="workspace-pulse" aria-label="Workspace activity summary">
-            <div>
-              <strong>{availableAgentCount}</strong>
-              <span>Available agents</span>
+          <section
+            className="workspace-pulse"
+            aria-label="Workspace activity summary"
+            aria-busy={httpConnection === 'connecting'}
+          >
+            <div className="pulse-status">
+              <strong>{dashboardIsStale ? 'Offline' : !dashboard ? 'Loading' : 'Live'}</strong>
+              <span>
+                {dashboardIsStale
+                  ? dashboard
+                    ? 'Cached snapshot'
+                    : 'No snapshot available'
+                  : !dashboard
+                    ? 'Connecting to local server'
+                    : 'Local dashboard'}
+              </span>
             </div>
             <div>
-              <strong>{runningCount}</strong>
+              <strong>{dashboard ? idleAgentCount : '—'}</strong>
+              <span>Idle agents</span>
+            </div>
+            <div>
+              <strong>{dashboard ? runningCount : '—'}</strong>
               <span>Running tasks</span>
             </div>
             <div>
-              <strong>{queuedCount}</strong>
+              <strong>{dashboard ? queuedCount : '—'}</strong>
               <span>Queued tasks</span>
             </div>
             <div>
-              <strong>{failedCount}</strong>
+              <strong>{dashboard ? failedCount : '—'}</strong>
               <span>Failed tasks</span>
             </div>
             <div className="pulse-workflows">
-              <strong>{workflows.length}</strong>
-              <span>Workflows{!workflowAvailable ? ' · connection unavailable' : ''}</span>
+              <strong>{workflowLoaded ? workflows.length : '—'}</strong>
+              <span>
+                Workflows
+                {!workflowAvailable
+                  ? workflowLoaded
+                    ? ' · cached'
+                    : ' · unavailable'
+                  : !workflowLoaded
+                    ? ' · loading'
+                    : ''}
+              </span>
             </div>
           </section>
           <PageHeading
