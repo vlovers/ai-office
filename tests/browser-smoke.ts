@@ -26,11 +26,53 @@ try {
     path: join(screenshotDir, 'ai-office-phosphor-onboarding.png'),
     fullPage: true,
   });
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Settings' })
+    .click();
   await page.getByTestId('codex-connection-status').filter({ hasText: 'Available' }).waitFor();
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('link', { name: 'Skip to mission control' })).toBeFocused();
+  // On narrow screens the active destination stays visible in the scrollable
+  // navigation strip, including after resizing an already open deep link.
+  await page.setViewportSize({ width: 320, height: 700 });
+  const mobileNavigation = page.getByRole('navigation', { name: 'Main navigation' });
+  const activeMobileDestinationVisible = () =>
+    mobileNavigation.evaluate((element) => {
+      const active = element.querySelector('[aria-current="page"]');
+      if (!active) return false;
+      const navBounds = element.getBoundingClientRect();
+      const activeBounds = active.getBoundingClientRect();
+      return activeBounds.left >= navBounds.left - 1 && activeBounds.right <= navBounds.right + 1;
+    });
+  await expect.poll(activeMobileDestinationVisible).toBe(true);
+  // A direct deep link loaded at 320px must reveal Settings without scrolling
+  // the document or requiring a click on the navigation strip.
+  await page.reload();
+  await expect(page).toHaveURL(/#settings$/);
+  await expect(mobileNavigation.getByRole('button', { name: 'Settings' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect.poll(activeMobileDestinationVisible).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  // The keyboard skip link must not navigate away from Settings.
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+  await skipLink.focus();
+  await expect(skipLink).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('main')).toBeFocused();
+  await expect(page).toHaveURL(/#settings$/);
+  await expect(
+    page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', {
+      name: 'Settings',
+    }),
+  ).toHaveAttribute('aria-current', 'page');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   const crt = page.getByRole('button', { name: /CRT effects:/ });
   await expect(crt).toHaveAttribute('aria-pressed', 'false');
   await crt.focus();
@@ -103,13 +145,33 @@ try {
   await page.keyboard.press('ArrowRight');
   await expect(secondDesk).toBeFocused();
   await page.keyboard.press(' ');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await expect(page.locator('#agent')).toContainText('Codex 02');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.studio-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
   await page.locator('.studio-agent').first().click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
   await secondDesk.focus();
   await page.keyboard.press('Enter');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await firstDesk.focus();
   await page.keyboard.press('Home');
@@ -124,11 +186,23 @@ try {
     first.focus();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   });
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
+  await firstDesk.focus();
   await expect(firstDesk).toBeFocused();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
-  await expect(page.locator('#agent')).toBeFocused();
+  await expect(firstDesk).toBeFocused();
+  await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.shell')).toHaveAttribute('data-page', 'office');
   assert.equal(env.store.tasks().length, 0, 'Workstation invented a task');
   await page.getByRole('link', { name: 'Register local worktree' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Settings' })
+    .click();
+  await page.getByLabel('Absolute repository path').focus();
   await expect(page.getByLabel('Absolute repository path')).toBeFocused();
   await crt.click();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -142,26 +216,171 @@ try {
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
   await expect(page.getByRole('region', { name: 'Get started' })).toHaveCount(0);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Task title').fill('Review the example project');
   await page.getByLabel('What should the agent work on?').fill('Review the README.');
   await page.getByRole('button', { name: 'Create task' }).click();
+  // Creating a task must leave the composer route and give the new session a
+  // durable address, including after a full reload on a narrow screen.
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.getByRole('heading', { name: 'Task session_' })).toBeVisible();
+  await expect(page.locator('#task-workspace')).toContainText('Review the example project');
+  // Focus mode intentionally hides task history. Return to the Tasks list
+  // to exercise its mobile filters, then restore the task-scoped deep link.
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  // On a phone the task history filters start collapsed so the selected task
+  // remains reachable. Expanding, collapsing and resizing must preserve inputs.
+  const historyFilters = page.locator('#task-history-filters');
+  const filterToggle = page.getByRole('button', { name: /^Filters/ });
+  await expect(filterToggle).toBeVisible();
+  await expect(filterToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(historyFilters).toBeHidden();
+  await filterToggle.click();
+  await expect(historyFilters).toBeVisible();
+  await page.getByLabel('Search tasks').fill('Review the example');
+  await expect(filterToggle).toContainText('1 active');
+  await filterToggle.click();
+  await expect(historyFilters).toBeHidden();
+  await filterToggle.click();
+  await expect(page.getByLabel('Search tasks')).toHaveValue('Review the example');
+  await page.getByRole('button', { name: 'Reset task filters' }).click();
+  await expect(filterToggle).toHaveText('Filters');
+  await filterToggle.click();
+  await expect(historyFilters).toBeHidden();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await expect(historyFilters).toBeVisible();
+  await expect(filterToggle).toBeHidden();
+  await page.goBack();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.getByRole('button', { name: 'Start task' })).toBeVisible();
   await page.getByRole('button', { name: 'Start task' }).click();
   await page.locator('.task-toolbar .badge').filter({ hasText: 'completed' }).waitFor();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
+  assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
+  // Simulate terminal SSE (HTTP 204). Retry must restore only live reading,
+  // without a task submission, a queue mutation, or a full reload.
+  const closedStreamPattern = /\/api\/tasks\/[^/]+\/stream(?:\?.*)?$/;
+  await page.route(closedStreamPattern, async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+  await page.reload();
+  await expect(page.locator('.connection')).toContainText('Live event stream disconnected');
+  const retryStream = page.getByRole('button', { name: 'Retry live events' });
+  await expect(retryStream).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 720 });
+  assert.ok((await retryStream.boundingBox())!.height >= 44);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  const retryTask = env.store.tasks().find((item) => item.title === 'Review the example project');
+  assert.ok(retryTask);
+  const stateBeforeRetry = retryTask.state;
+  const queuedBeforeRetry = env.store.queue().length;
+  await page.unroute(closedStreamPattern);
+  await retryStream.click();
+  await expect(page.locator('.connection')).toContainText('Live events connected');
+  await expect(retryStream).toHaveCount(0);
+  assert.equal(env.store.tasks().find((item) => item.id === retryTask.id)?.state, stateBeforeRetry);
+  assert.equal(env.store.queue().length, queuedBeforeRetry);
+  // A reader scrolling back through a long log must not be dragged to the
+  // latest event. The explicit recovery control must also work on mobile.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const log = page.getByRole('log', { name: 'Agent event log' });
+  await expect(log.locator('.event-line').first()).toBeVisible();
+  // Explicit pause is available to keyboard users without first scrolling.
+  // A persisted SSE event must update the unread count without resuming follow.
+  const taskForLog = env.store.tasks().find((item) => item.title === 'Review the example project');
+  assert.ok(taskForLog);
+  const recoveredEvent = env.store.addEvent(taskForLog.id, 'progress', 'Fixture after SSE retry');
+  env.manager.events.emit('event', recoveredEvent);
+  await expect(log).toContainText('Fixture after SSE retry');
+  await expect(log).toHaveAttribute('aria-live', 'polite');
+  await page.getByRole('button', { name: 'Pause auto-scroll' }).click();
+  await expect(log).toHaveAttribute('aria-live', 'off');
+  const firstUnread = env.store.addEvent(taskForLog.id, 'progress', 'Fixture unread event one');
+  env.manager.events.emit('event', firstUnread);
+  await expect(log).toContainText('Fixture unread event one');
+  await expect(page.locator('.event-console-toolbar')).toContainText('1 new');
+  await expect(page.getByRole('button', { name: 'Jump to latest event' })).toBeVisible();
+  await page.getByRole('button', { name: 'Jump to latest event' }).click();
+  await expect(log).toHaveAttribute('aria-live', 'polite');
+  await expect(page.getByRole('button', { name: 'Pause auto-scroll' })).toBeVisible();
+  await expect(page.locator('.event-console-toolbar')).not.toContainText('new');
+
+  await log.evaluate((element) => {
+    const first = element.querySelector<HTMLElement>('.event-line')!;
+    first.style.minHeight = '1200px';
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await expect(page.getByRole('button', { name: 'Jump to latest event' })).toBeVisible();
+  const scrolledBack = await log.evaluate((element) => element.scrollTop);
+  const secondUnread = env.store.addEvent(taskForLog.id, 'progress', 'Fixture unread event two');
+  env.manager.events.emit('event', secondUnread);
+  await expect(log).toContainText('Fixture unread event two');
+  await expect(page.locator('.event-console-toolbar')).toContainText('1 new');
+  assert.equal(await log.evaluate((element) => element.scrollTop), scrolledBack);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.getByRole('button', { name: 'Jump to latest event' }).click();
+  await expect
+    .poll(() =>
+      log.evaluate(
+        (element) => element.scrollHeight - element.scrollTop - element.clientHeight <= 48,
+      ),
+    )
+    .toBe(true);
+  await log.evaluate((element) => {
+    element.querySelector<HTMLElement>('.event-line')!.style.minHeight = '';
+  });
+  // The narrowest supported phone must keep both live-log actions reachable
+  // and large enough for touch, including while the reader has paused output.
+  await page.setViewportSize({ width: 320, height: 720 });
+  const pauseButton = page.getByRole('button', { name: 'Pause auto-scroll' });
+  await expect(pauseButton).toBeVisible();
+  assert.ok((await pauseButton.boundingBox())!.height >= 44);
+  await pauseButton.click();
+  const resumeButton = page.getByRole('button', { name: 'Jump to latest event' });
+  await expect(resumeButton).toBeVisible();
+  assert.ok((await resumeButton.boundingBox())!.height >= 44);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await resumeButton.click();
+  await expect(log).toHaveAttribute('aria-live', 'polite');
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'completed',
   );
-  assert.match(await page.locator('.result').innerText(), /Reviewed the disposable repository/);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
     path: join(screenshotDir, 'ai-office-phosphor-desktop.png'),
     fullPage: true,
   });
-  await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.locator('.result')).toContainText('Reviewed the disposable repository');
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
   await page.reload();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await page.locator('.task-row').filter({ hasText: 'Review the example project' }).click();
   await page.getByRole('heading', { name: 'Final result' }).waitFor();
   for (const width of [320, 390, 768, 1024, 1440]) {
@@ -184,6 +403,11 @@ try {
   );
   // Exercise persisted session selection and cancellation through the redesigned UI.
   const createTask = async (title: string, prompt: string) => {
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: 'Tasks' })
+      .click();
+    await page.getByRole('button', { name: '+ New task' }).click();
     await page.getByLabel('Task title').fill(title);
     await page.getByLabel('What should the agent work on?').fill(prompt);
     await page.getByRole('button', { name: 'Create task' }).click();
@@ -198,6 +422,10 @@ try {
   await createTask('Stop review', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute(
     'data-state',
     'thinking',
@@ -208,13 +436,34 @@ try {
     'aria-pressed',
     'true',
   );
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
   await expect(page.locator('#task-workspace')).toContainText('Stop review');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toBeFocused();
+  // Leaving Focus Mode through the overview control must update the URL.
+  // Back restores the same task-scoped session instead of a stale mission view.
+  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
+  await expect(page).toHaveURL(/#overview$/);
+  await expect(page.locator('.shell')).toHaveAttribute('data-page', 'office');
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  await page.goBack();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-workspace')).toBeFocused();
+  // Skipping to main content from a task link must preserve its deep link.
+  await skipLink.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.office-scene').first()).toBeHidden();
   await expect(page.locator('#compose')).toBeHidden();
   await expect(page.getByRole('button', { name: /Stop agent/ })).toBeVisible();
@@ -235,33 +484,53 @@ try {
 
   await page.getByRole('button', { name: /Stop agent/ }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
-  await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await page.locator('nav a[href="#agent"]').click();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await expect(page.locator('#agent')).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await createTask('Failed review', 'FAIL_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('failed');
   await expect(page.locator('.task-error')).toContainText('Provider diagnostics were withheld');
   await expect(page.locator('.task-error')).not.toContainText('Simulated provider failure');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'error');
   // Launch both real agent slots against two disposable worktrees through the UI.
-  await page.getByLabel('Assign to agent').selectOption('codex-1');
   await createTask('Agent A concurrent', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskA = env.store.tasks().find((task) => task.title === 'Agent A concurrent')!;
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Settings' })
+    .click();
   await page.getByLabel('Absolute repository path').fill(secondEnv.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Assign to agent').selectOption('codex-2');
   await createTask('Agent B concurrent', 'WAIT_FIXTURE');
   await page.getByRole('button', { name: 'Start task' }).click();
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
-  // Reload resets history disclosure. Reopen it before checking persisted activity.
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
+  // Recent agent activity and the selected-agent inspector belong to the Office page.
   const history = page.getByRole('button', { name: /Recent task activity/ });
   if ((await history.getAttribute('aria-expanded')) === 'false') await history.click();
   await expect(page.getByRole('region', { name: 'Recent agent tasks' })).toContainText(
@@ -273,6 +542,10 @@ try {
   await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toContainText(
     'Agent B concurrent',
   );
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await expect(page.locator('.office-workstation').nth(0)).toHaveAttribute(
     'data-state',
     'thinking',
@@ -298,32 +571,53 @@ try {
   assert.equal(env.store.task(taskA.id)?.state, 'running');
   assert.equal(env.store.task(taskB.id)?.state, 'running');
   // A queued task is visible/cancellable without interrupting B's active task.
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Tasks' })
+    .click();
+  await page.getByRole('button', { name: '+ New task' }).click();
+  await page.getByLabel('Assign to agent').selectOption('codex-2');
   await createTask('Agent B queue', 'Review later');
   await page.getByRole('button', { name: 'Start task' }).click();
-  await expect(page.getByRole('region', { name: 'Submitted queue' })).toContainText(
-    'Agent B queue',
+  const queuedTask = env.store.tasks().find((task) => task.title === 'Agent B queue')!;
+  // Submitting a task opens its own session instead of the legacy queue panel.
+  await expect(page).toHaveURL(new RegExp('#task/' + queuedTask.id + '/session$'));
+  await expect(page.locator('#task-workspace')).toContainText('Agent B queue');
+  await expect(page.locator('#task-workspace').getByRole('status')).toContainText(
+    'Waiting for assigned agent.',
   );
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
+  await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.locator('#task-workspace')).toContainText('Agent A concurrent');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   // B's Stop remains usable while A waits for its own process-group cleanup.
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
+  await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page.getByRole('button', { name: /Stop agent/ })).toBeEnabled();
   await expect.poll(() => env.store.task(taskA.id)?.state).toBe('stopped');
   assert.equal(env.store.task(taskB.id)?.state, 'running', 'Stopping A affected B');
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
-  await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
   await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Office' })
+    .click();
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-mobile.png'), fullPage: true });
+  await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
   assert.deepEqual(errors, []);
