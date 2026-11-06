@@ -10,7 +10,7 @@ export function TaskSummary({ dashboard }: { dashboard?: Dashboard }) {
   return (
     <div className="stats" aria-label="Task workspace statistics">
       <div>
-        <span>CODEX AGENTS</span>
+        <span>AGENT PROFILES</span>
         <strong>
           {dashboard?.agents.length ?? '—'}
           <small>saved profiles</small>
@@ -19,14 +19,14 @@ export function TaskSummary({ dashboard }: { dashboard?: Dashboard }) {
       <div>
         <span>IN PROGRESS</span>
         <strong>
-          {inProgress}
+          {dashboard ? inProgress : '—'}
           <small>active tasks</small>
         </strong>
       </div>
       <div>
         <span>COMPLETED</span>
         <strong>
-          {completed}
+          {dashboard ? completed : '—'}
           <small>saved results</small>
         </strong>
       </div>
