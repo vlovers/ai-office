@@ -48,12 +48,12 @@ See [multi-agent delivery protocol](../docs/engineering/MULTI_AGENT_WORKFLOW.md)
 
 ## Evidence and artifact ledger
 
-| Evidence / check | PASS / FAIL / QUEUED / NOT RUN / N/A / STALE / UNAVAILABLE | Exact tested SHA, command, environment, UTC time, run URL | Artifact owner, access, expiry, reproduction |
-| --- | --- | --- | --- |
-| Relevant static / unit / browser checks | | | |
-| Native macOS sandbox or real Codex (if claimed) | | | |
-| Live Delivery security / grant / CSRF (if claimed) | | | |
-| Independent review of final diff | | | |
+For each relevant check below, record its state (**PASS / FAIL / QUEUED / NOT RUN / N/A / STALE / UNAVAILABLE**), exact tested SHA, command, environment, UTC time, CI run URL, artifact owner, access, expiry and reproduction instructions.
+
+- Relevant static, unit and browser checks:
+- Native macOS sandbox or real Codex (if claimed):
+- Live Delivery security, grant and CSRF (if claimed):
+- Independent review of final diff:
 
 - Evidence redaction: no credentials, cookies, authorization headers, private tenant data, live grants or sensitive logs in public PRs/CI artifacts.
 - Missing, expired, inaccessible or superseded-SHA artifacts are marked UNAVAILABLE or STALE, never PASS.
