@@ -360,7 +360,8 @@ function App() {
           : ''
       : '';
   const taskSummary = summarizeTaskHistory(dashboard?.tasks ?? []);
-  const runningCount = dashboard?.tasks.filter((item) => activeStates.includes(item.state)).length ?? 0;
+  const runningCount =
+    dashboard?.tasks.filter((item) => activeStates.includes(item.state)).length ?? 0;
   const queuedCount = dashboard?.queue.length ?? 0;
   const failedCount = dashboard?.tasks.filter((item) => item.state === 'failed').length ?? 0;
   const availableAgentCount = dashboard?.agents.filter((item) => !item.taskId).length ?? 0;

@@ -2311,12 +2311,24 @@ select {
   overflow: hidden;
 }
 @media (max-width: 1100px) {
-  .workspace-pulse { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .workspace-pulse {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 @media (max-width: 680px) {
-  .workspace-pulse { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .workspace-pulse > div { padding: 8px 10px; }
-  .workspace-pulse strong { font-size: 18px; }
-  .workspace-pulse .pulse-workflows { grid-column: 1 / -1; }
-  .office-page .office-scene .pixel-office { max-height: 360px; }
+  .workspace-pulse {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-pulse > div {
+    padding: 8px 10px;
+  }
+  .workspace-pulse strong {
+    font-size: 18px;
+  }
+  .workspace-pulse .pulse-workflows {
+    grid-column: 1 / -1;
+  }
+  .office-page .office-scene .pixel-office {
+    max-height: 360px;
+  }
 }
