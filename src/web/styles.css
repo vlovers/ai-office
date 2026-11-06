@@ -2275,3 +2275,48 @@ select {
     width: 100%;
   }
 }
+
+/* Workspace density: persistent operational context without duplicating page content. */
+.workspace-pulse {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.workspace-pulse > div {
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 5px;
+}
+.workspace-pulse strong {
+  display: block;
+  font-size: 21px;
+  line-height: 1.25;
+  color: var(--phosphor);
+  font-variant-numeric: tabular-nums;
+}
+.workspace-pulse span {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.office-page .office-scene .pixel-office {
+  max-height: 490px;
+  object-fit: contain;
+}
+.office-page .office-scene {
+  overflow: hidden;
+}
+@media (max-width: 1100px) {
+  .workspace-pulse { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .workspace-pulse { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-pulse > div { padding: 8px 10px; }
+  .workspace-pulse strong { font-size: 18px; }
+  .workspace-pulse .pulse-workflows { grid-column: 1 / -1; }
+  .office-page .office-scene .pixel-office { max-height: 360px; }
+}
