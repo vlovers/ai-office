@@ -489,7 +489,9 @@ function App() {
             setView('mission');
           }}
         >
-          <span className="brand-mark" aria-hidden="true">✦</span>
+          <span className="brand-mark" aria-hidden="true">
+            ✦
+          </span>
           <span>
             AI OFFICE<small>Local agent workspace</small>
           </span>
