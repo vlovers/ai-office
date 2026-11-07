@@ -78,8 +78,8 @@ try {
   await page.goto(address, { waitUntil: 'domcontentloaded' });
   const visualDisclosure = page.locator('.office-visual');
   await expect(visualDisclosure).not.toHaveAttribute('open', '');
-  const overview = page.getByRole('region', { name: 'Workspace activity' });
-  await expect(overview).toBeVisible();
+  const workspaceOverview = page.getByRole('region', { name: 'Workspace activity' });
+  await expect(workspaceOverview).toBeVisible();
   // Capture the actual primary product screen, not only the opt-in pixel
   // illustration. Compare the same app with no data and with real fixtures.
   const captureWorkspace = async (name: string) => {
@@ -91,14 +91,14 @@ try {
       await page.setViewportSize({ width, height });
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect(visualDisclosure).not.toHaveAttribute('open', '');
-      await expect(overview).toBeVisible();
+      await expect(workspaceOverview).toBeVisible();
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
         .toBe(true);
       await page.screenshot({
         path: join(artifacts, `workspace-${name}-${size}-viewport.png`),
       });
-      await overview.screenshot({
+      await workspaceOverview.screenshot({
         path: join(artifacts, `workspace-${name}-${size}-overview.png`),
       });
     }
