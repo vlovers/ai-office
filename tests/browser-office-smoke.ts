@@ -76,6 +76,10 @@ try {
     await route.fulfill({ response });
   });
   await page.goto(address, { waitUntil: 'domcontentloaded' });
+  const visualDisclosure = page.locator('.office-visual');
+  await expect(visualDisclosure).not.toHaveAttribute('open', '');
+  await expect(page.getByRole('region', { name: 'Workspace activity' })).toBeVisible();
+  await visualDisclosure.locator('summary').click();
   await expect(page.getByText('Opening your office…')).toBeVisible();
   await capture('loading');
   releaseLoading();
@@ -83,6 +87,12 @@ try {
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await capture('two-idle');
+  // The pixel scene is a secondary visual, not the only operational workspace.
+  await visualDisclosure.locator('summary').click();
+  await expect(scene).toBeHidden();
+  await expect(page.getByRole('region', { name: 'Workspace activity' })).toBeVisible();
+  await visualDisclosure.locator('summary').click();
+  await expect(scene).toBeVisible();
   // A malformed HTTP 200 must not replace the last confirmed dashboard or
   // workflow snapshot. The next successful poll must recover without a reload.
   let invalidDashboardSeen = false;
@@ -230,6 +240,18 @@ try {
     { timeout: 15000 },
   );
   await capture('active');
+  const overview = page.getByRole('region', { name: 'Workspace activity' });
+  const search = overview.getByRole('searchbox', { name: 'Search workspace tasks' });
+  await expect(
+    overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
+  ).toBeVisible();
+  await search.fill('NO_MATCH_FIXTURE');
+  await expect(overview.getByText('No tasks match your search.')).toBeVisible();
+  await search.fill('FIXTURE · held SDK reasoning');
+  await expect(
+    overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
+  ).toBeVisible();
+  await search.fill('');
   await newTask('codex-2', 'FIXTURE · submitted queue', 'Review later');
   const queue = page.getByRole('region', { name: 'Live task queue' });
   await expect(queue).toContainText('FIXTURE · submitted queue');
