@@ -491,10 +491,10 @@ function App() {
         >
           <PixelBot />
           <span>
-            AI OFFICE<small>A space for your agents</small>
+            AI OFFICE<small>Local agent workspace</small>
           </span>
         </a>
-        <div className="nav-label">// MISSION DIRECTORY</div>
+        <div className="nav-label">WORKSPACE</div>
         <MainNavigation
           page={page}
           taskCount={dashboard?.tasks.length ?? 0}
@@ -540,9 +540,9 @@ function App() {
         <div className="sidebar-art" aria-hidden="true">
           <PixelBot />
           <span>
-            GOOD CODE.
+            AI ASSISTED.
             <br />
-            HUMAN CONTROL.
+            HUMAN APPROVED.
           </span>
         </div>
         <div className="sidebar-bottom">
@@ -568,7 +568,7 @@ function App() {
         )}
         <header className="topbar">
           <div className="workspace-chip">
-            <span className="eyebrow">REGISTERED WORKTREE</span>
+            <span className="eyebrow">CURRENT REPOSITORY</span>
             <strong>{selectedRepository?.name ?? 'No repository selected'}</strong>
           </div>
           <span className="connection" role="status">
@@ -590,22 +590,27 @@ function App() {
               Retry live events
             </button>
           )}
-          <button
-            className="motion-toggle secondary"
-            aria-pressed={motion}
-            onClick={() => setMotion(!motion)}
-            title="Animate the office. Reduced motion overrides this preference; CRT glow is controlled separately."
-          >
-            Scene motion: {motion ? 'on' : 'off'}
-          </button>
-          <button
-            className="crt-toggle secondary"
-            aria-pressed={crt}
-            onClick={() => setCrt(!crt)}
-            title="Optional retro display effect. Reduced-motion settings disable the effect."
-          >
-            CRT effects: {crt ? 'on' : 'off'}
-          </button>
+          <details className="display-preferences">
+            <summary>Appearance</summary>
+            <div className="display-preferences-controls">
+              <button
+                className="motion-toggle secondary"
+                aria-pressed={motion}
+                onClick={() => setMotion(!motion)}
+                title="Animate the optional office scene. Reduced-motion settings take priority."
+              >
+                Scene motion: {motion ? 'on' : 'off'}
+              </button>
+              <button
+                className="crt-toggle secondary"
+                aria-pressed={crt}
+                onClick={() => setCrt(!crt)}
+                title="Optional retro effect; system reduced-motion preference takes priority."
+              >
+                CRT effects: {crt ? 'on' : 'off'}
+              </button>
+            </div>
+          </details>
         </header>
         <div className="content">
           <PageHeading
@@ -1060,10 +1065,8 @@ function App() {
             />
           )}
           <footer>
-            <span>
-              ▣ PHOSPHOR OS <span> / </span> HUMAN-DIRECTED AI / AGENT STUDIO · UNRELEASED
-            </span>
-            <span>LOCAL FIRST · HUMAN REVIEW · ISOLATED CODING</span>
+            <span>AI Office · Local workspace</span>
+            <span>Agent actions require your review and approval</span>
           </footer>
         </div>
       </main>
