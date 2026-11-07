@@ -678,86 +678,86 @@ function App() {
                   <small>Optional visual overview of your agents</small>
                 </summary>
                 <section className="office-scene" aria-label="Shared Codex office">
-                <PixelOffice
-                  agents={officeAgents.map((slot) => ({
-                    id: slot.id,
-                    name: slot.name,
-                    role: [
-                      dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
-                      dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived
-                        ? 'archived'
-                        : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' · '),
-                    assignable: !dashboard?.profiles?.find((profile) => profile.id === slot.id)
-                      ?.archived,
-                    taskId: workstationTask(dashboard, selected, slot.id)?.id,
-                    taskTitle: workstationTask(dashboard, selected, slot.id)?.title,
-                    taskState: workstationTask(dashboard, selected, slot.id)?.state,
-                    access:
-                      workstationTask(dashboard, selected, slot.id)?.executionMode === 'write'
-                        ? 'Isolated write'
-                        : 'Read only',
-                    checkpoint: officeCheckpoint(workflows, slot.id)?.workflowId,
-                    active: Boolean(slot.taskId),
-                    status: sceneStatus(
-                      dashboard,
-                      workstationTask(dashboard, selected, slot.id),
-                      Object.values(eventHistory).flat(),
-                      connection.includes('disconnected'),
-                      slot.id,
-                      workflows,
-                    ),
-                  }))}
-                  recentTasks={(dashboard?.tasks ?? []).map((task) => ({
-                    id: task.id,
-                    agentId: task.agentId,
-                    title: task.title,
-                    state: task.state,
-                    updatedAt: task.updatedAt,
-                  }))}
-                  queue={(dashboard?.queue ?? []).map((entry) => ({
-                    taskId: entry.taskId,
-                    agentId: entry.agentId,
-                    title:
-                      dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
-                      'Untitled task',
-                    order: entry.order,
-                    waitingReason: entry.waitingReason,
-                  }))}
-                  selectedAgent={selectedAgent}
-                  onSelect={selectStation}
-                  transport={
-                    !dashboard
-                      ? connection.includes('disconnected')
-                        ? 'unavailable'
-                        : 'loading'
-                      : connection.includes('disconnected')
-                        ? 'disconnected'
-                        : 'connected'
-                  }
-                  onAssign={() => showSection('compose')}
-                  onInspectSession={() => {
-                    if (stationTask) navigateTask(stationTask, 'session');
-                  }}
-                  onInspectTask={(taskId) => {
-                    const target = dashboard?.tasks.find((item) => item.id === taskId);
-                    if (target) navigateTask(target, 'session');
-                  }}
-                  onCheckpoint={() => {
-                    const checkpoint = officeCheckpoint(workflows, selectedAgent);
-                    if (checkpoint) {
-                      setWorkflowInspection({ id: checkpoint.workflowId, request: Date.now() });
-                      showSection('workflows');
+                  <PixelOffice
+                    agents={officeAgents.map((slot) => ({
+                      id: slot.id,
+                      name: slot.name,
+                      role: [
+                        dashboard?.profiles?.find((profile) => profile.id === slot.id)?.role,
+                        dashboard?.profiles?.find((profile) => profile.id === slot.id)?.archived
+                          ? 'archived'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · '),
+                      assignable: !dashboard?.profiles?.find((profile) => profile.id === slot.id)
+                        ?.archived,
+                      taskId: workstationTask(dashboard, selected, slot.id)?.id,
+                      taskTitle: workstationTask(dashboard, selected, slot.id)?.title,
+                      taskState: workstationTask(dashboard, selected, slot.id)?.state,
+                      access:
+                        workstationTask(dashboard, selected, slot.id)?.executionMode === 'write'
+                          ? 'Isolated write'
+                          : 'Read only',
+                      checkpoint: officeCheckpoint(workflows, slot.id)?.workflowId,
+                      active: Boolean(slot.taskId),
+                      status: sceneStatus(
+                        dashboard,
+                        workstationTask(dashboard, selected, slot.id),
+                        Object.values(eventHistory).flat(),
+                        connection.includes('disconnected'),
+                        slot.id,
+                        workflows,
+                      ),
+                    }))}
+                    recentTasks={(dashboard?.tasks ?? []).map((task) => ({
+                      id: task.id,
+                      agentId: task.agentId,
+                      title: task.title,
+                      state: task.state,
+                      updatedAt: task.updatedAt,
+                    }))}
+                    queue={(dashboard?.queue ?? []).map((entry) => ({
+                      taskId: entry.taskId,
+                      agentId: entry.agentId,
+                      title:
+                        dashboard?.tasks.find((task) => task.id === entry.taskId)?.title ??
+                        'Untitled task',
+                      order: entry.order,
+                      waitingReason: entry.waitingReason,
+                    }))}
+                    selectedAgent={selectedAgent}
+                    onSelect={selectStation}
+                    transport={
+                      !dashboard
+                        ? connection.includes('disconnected')
+                          ? 'unavailable'
+                          : 'loading'
+                        : connection.includes('disconnected')
+                          ? 'disconnected'
+                          : 'connected'
                     }
-                  }}
-                />
-                {!workflowAvailable && (
-                  <p className="studio-notice" role="status">
-                    Workflow status unavailable. Cached data may be stale.
-                  </p>
-                )}
+                    onAssign={() => showSection('compose')}
+                    onInspectSession={() => {
+                      if (stationTask) navigateTask(stationTask, 'session');
+                    }}
+                    onInspectTask={(taskId) => {
+                      const target = dashboard?.tasks.find((item) => item.id === taskId);
+                      if (target) navigateTask(target, 'session');
+                    }}
+                    onCheckpoint={() => {
+                      const checkpoint = officeCheckpoint(workflows, selectedAgent);
+                      if (checkpoint) {
+                        setWorkflowInspection({ id: checkpoint.workflowId, request: Date.now() });
+                        showSection('workflows');
+                      }
+                    }}
+                  />
+                  {!workflowAvailable && (
+                    <p className="studio-notice" role="status">
+                      Workflow status unavailable. Cached data may be stale.
+                    </p>
+                  )}
                 </section>
               </details>
             </OfficePage>
