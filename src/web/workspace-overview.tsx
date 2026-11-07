@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Dashboard, Task } from '../shared/types.js';
 
 interface WorkspaceOverviewProps {
@@ -30,15 +31,30 @@ export function WorkspaceOverview({
   onOpenTask,
   onNewTask,
 }: WorkspaceOverviewProps) {
+  const [query, setQuery] = useState('');
   const tasks = dashboard?.tasks ?? [];
   const queueIds = new Set(dashboard?.queue.map((entry) => entry.taskId) ?? []);
   const running = tasks.filter((task) => task.state === 'running' || task.state === 'stopping').length;
   const completed = tasks.filter((task) => task.state === 'completed').length;
   const attention = tasks.filter((task) => task.state === 'failed' || task.state === 'interrupted').length;
+  const normalizedQuery = query.trim().toLocaleLowerCase();
   const recent = [...tasks]
+    .filter(
+      (task) =>
+        !normalizedQuery ||
+        task.title.toLocaleLowerCase().includes(normalizedQuery) ||
+        task.id.toLocaleLowerCase().includes(normalizedQuery),
+    )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 6);
+    .slice(0, normalizedQuery ? 20 : 6);
   const agents = dashboard?.agents ?? [];
+  const agentLabel = (state: string, hasTask: boolean) => {
+    if (state === 'waiting') return 'Waiting';
+    if (state === 'preparing') return 'Preparing';
+    if (state === 'stopping') return 'Stopping';
+    if (hasTask || state === 'running') return 'Running';
+    return 'Idle';
+  };
   const metrics = [
     { label: 'Running', value: running, hint: 'Tasks executing now' },
     { label: 'In queue', value: dashboard?.queue.length ?? 0, hint: 'Submitted and waiting' },
@@ -71,17 +87,35 @@ export function WorkspaceOverview({
         <section className="overview-card overview-tasks" aria-label="Recent tasks">
           <div className="overview-card-heading">
             <div>
-              <h3>Recent tasks</h3>
+              <h3>Tasks</h3>
               <p>Open a task to inspect its session and results.</p>
             </div>
             <span>{dashboard ? tasks.length : '—'} total</span>
           </div>
+          <label className="overview-task-search">
+            <span className="sr-only">Search workspace tasks</span>
+            <input
+              type="search"
+              aria-label="Search workspace tasks"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search task title or ID"
+            />
+          </label>
           {!dashboard ? (
             <p className="overview-empty" role="status">Loading workspace tasks…</p>
           ) : recent.length === 0 ? (
             <div className="overview-empty">
-              <p>No tasks yet. Start with a read-only review of a repository.</p>
-              <button type="button" onClick={onNewTask}>Create a task</button>
+              {tasks.length === 0 ? (
+                <>
+                  <p>No tasks yet. Start with a read-only review of a repository.</p>
+                  <button type="button" onClick={onNewTask}>
+                    Create a task
+                  </button>
+                </>
+              ) : (
+                <p>No tasks match your search.</p>
+              )}
             </div>
           ) : (
             <div className="overview-task-list">
@@ -133,10 +167,18 @@ export function WorkspaceOverview({
                     <span className="overview-agent-mark" aria-hidden="true">◇</span>
                     <span>
                       <strong>{agent.name}</strong>
-                      <small>{agent.taskId ? 'Working on a task' : 'No active task'}</small>
+                      <small>
+                        {agent.taskId
+                          ? 'Working on a task'
+                          : agent.state === 'waiting'
+                            ? 'Task waiting in queue'
+                            : 'No active task'}
+                      </small>
                     </span>
-                    <span className={`overview-agent-state ${agent.taskId ? 'busy' : ''}`}>
-                      {agent.taskId ? 'Busy' : 'Idle'}
+                    <span
+                      className={`overview-agent-state ${agent.taskId ? 'busy' : ''}`}
+                    >
+                      {agentLabel(agent.state, Boolean(agent.taskId))}
                     </span>
                   </li>
                 ))}
@@ -144,13 +186,19 @@ export function WorkspaceOverview({
             )}
           </section>
           <section className="overview-card overview-health">
-            <div className="overview-card-heading"><h3>Connection</h3></div>
+            <div className="overview-card-heading">
+              <h3>Provider readiness</h3>
+            </div>
             <p className="overview-connection">
-              <span className={`overview-connection-dot ${dashboard?.connection.status === 'available' ? 'ready' : ''}`} />
+              <span
+                className={`overview-connection-dot ${
+                  dashboard?.connection.status === 'available' ? 'ready' : ''
+                }`}
+              />
               {dashboard ? dashboard.connection.message : 'Checking connection…'}
             </p>
             <p className="overview-connection-caption">
-              Tasks and agents may be unavailable while the server is disconnected.
+              Provider status from the last snapshot. Live server connection is shown above.
             </p>
           </section>
         </aside>
