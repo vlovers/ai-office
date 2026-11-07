@@ -1351,3 +1351,71 @@ a {
     padding: 18px;
   }
 }
+
+/* Secondary settings are available on demand without cluttering the topbar. */
+.shell .display-preferences {
+  position: relative;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.shell .display-preferences > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.shell .display-preferences > summary::-webkit-details-marker {
+  display: none;
+}
+
+.shell .display-preferences > summary::after {
+  content: '⌄';
+  margin-left: 9px;
+  color: #c2aaff;
+}
+
+.shell .display-preferences[open] > summary {
+  color: var(--text);
+  border-color: #66548d;
+  background: #29223d;
+}
+
+.shell .display-preferences-controls {
+  display: grid;
+  gap: 8px;
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 215px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #1b2030;
+  box-shadow: 0 12px 35px #0006;
+}
+
+.shell .display-preferences-controls button {
+  white-space: nowrap;
+  text-align: left;
+}
+
+@media (max-width: 680px) {
+  .shell .display-preferences {
+    margin-left: 0;
+  }
+
+  .shell .display-preferences-controls {
+    left: 0;
+    right: auto;
+  }
+}
