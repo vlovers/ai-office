@@ -34,9 +34,13 @@ export function WorkspaceOverview({
   const [query, setQuery] = useState('');
   const tasks = dashboard?.tasks ?? [];
   const queueIds = new Set(dashboard?.queue.map((entry) => entry.taskId) ?? []);
-  const running = tasks.filter((task) => task.state === 'running' || task.state === 'stopping').length;
+  const running = tasks.filter(
+    (task) => task.state === 'running' || task.state === 'stopping',
+  ).length;
   const completed = tasks.filter((task) => task.state === 'completed').length;
-  const attention = tasks.filter((task) => task.state === 'failed' || task.state === 'interrupted').length;
+  const attention = tasks.filter(
+    (task) => task.state === 'failed' || task.state === 'interrupted',
+  ).length;
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const recent = [...tasks]
     .filter(
@@ -84,7 +88,7 @@ export function WorkspaceOverview({
         ))}
       </div>
       <div className="overview-columns">
-        <section className="overview-card overview-tasks" aria-label="Recent tasks">
+        <section className="overview-card overview-tasks" aria-label="Workspace tasks">
           <div className="overview-card-heading">
             <div>
               <h3>Tasks</h3>
@@ -103,7 +107,9 @@ export function WorkspaceOverview({
             />
           </label>
           {!dashboard ? (
-            <p className="overview-empty" role="status">Loading workspace tasks…</p>
+            <p className="overview-empty" role="status">
+              Loading workspace tasks…
+            </p>
           ) : recent.length === 0 ? (
             <div className="overview-empty">
               {tasks.length === 0 ? (
@@ -114,7 +120,7 @@ export function WorkspaceOverview({
                   </button>
                 </>
               ) : (
-                <p>No tasks match your search.</p>
+                <p role="status">No tasks match your search.</p>
               )}
             </div>
           ) : (
@@ -130,8 +136,9 @@ export function WorkspaceOverview({
                   <span className="overview-task-title">
                     <strong>{task.title}</strong>
                     <small>
-                      {dashboard.repositories.find((repo) => repo.id === task.repositoryId)?.name ??
-                        'Repository unavailable'}{' · '}
+                      {dashboard.repositories.find((repo) => repo.id === task.repositoryId)
+                        ?.name ?? 'Repository unavailable'}
+                      {' · '}
                       {dashboard.profiles?.find((profile) => profile.id === task.agentId)?.name ??
                         dashboard.agents.find((agent) => agent.id === task.agentId)?.name ??
                         task.agentId}
@@ -164,7 +171,9 @@ export function WorkspaceOverview({
               <ul className="overview-agent-list">
                 {agents.map((agent) => (
                   <li key={agent.id}>
-                    <span className="overview-agent-mark" aria-hidden="true">◇</span>
+                    <span className="overview-agent-mark" aria-hidden="true">
+                      ◇
+                    </span>
                     <span>
                       <strong>{agent.name}</strong>
                       <small>
@@ -175,9 +184,7 @@ export function WorkspaceOverview({
                             : 'No active task'}
                       </small>
                     </span>
-                    <span
-                      className={`overview-agent-state ${agent.taskId ? 'busy' : ''}`}
-                    >
+                    <span className={`overview-agent-state ${agent.taskId ? 'busy' : ''}`}>
                       {agentLabel(agent.state, Boolean(agent.taskId))}
                     </span>
                   </li>
