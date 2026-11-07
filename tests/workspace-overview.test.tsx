@@ -111,3 +111,29 @@ describe('minimal workspace overview', () => {
     expect(html).not.toContain('72%');
   });
 });
+
+/** TEMPORARY CI formatter probe. Must be removed before review-ready CI. */
+it('reports the exact Prettier format for the shell layout', async () => {
+  if (process.env.CI !== 'true') return;
+  const { readFile } = await import('node:fs/promises');
+  const prettier = await import('prettier');
+  const path = 'src/web/main.tsx';
+  const source = await readFile(path, 'utf8');
+  const options = (await prettier.resolveConfig(path)) ?? {};
+  const formatted = await prettier.format(source, { ...options, filepath: path });
+  if (formatted !== source) {
+    const base64 = Buffer.from(formatted, 'utf8').toString('base64');
+    const size = 3000;
+    const count = Math.ceil(base64.length / size);
+    for (let i = 0; i < count; i++) {
+      console.info(
+        'MAIN_PRETTIER_' +
+          i +
+          '_OF_' +
+          count +
+          '=' +
+          base64.slice(i * size, (i + 1) * size),
+      );
+    }
+  }
+});
