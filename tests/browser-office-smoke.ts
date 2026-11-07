@@ -70,12 +70,15 @@ try {
   // Keep the optional illustrated scene closed for the primary screenshots,
   // then restore its previous disclosure state for the existing scene checks.
   const captureOperational = async (name: string) => {
+    const previousViewport = page.viewportSize();
     const wasOpen = await visualDisclosure.evaluate((node) => (node as HTMLDetailsElement).open);
     if (wasOpen) await visualDisclosure.locator('summary').click();
     await captureWorkspace(name);
     if (wasOpen) await visualDisclosure.locator('summary').click();
+    if (previousViewport) await page.setViewportSize(previousViewport);
   };
   const captureTaskInspector = async (name: string, title: string) => {
+    const previousViewport = page.viewportSize();
     for (const [width, height, size] of [
       [1440, 900, 'desktop'],
       [390, 844, 'mobile'],
@@ -94,7 +97,7 @@ try {
         path: join(artifacts, `task-${name}-${size}-inspector.png`),
       });
     }
-    await page.setViewportSize({ width: 1440, height: 1100 });
+    if (previousViewport) await page.setViewportSize(previousViewport);
   };
   let releaseLoading!: () => void;
   const held = new Promise<void>((resolve) => {
