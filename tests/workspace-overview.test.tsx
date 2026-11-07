@@ -111,3 +111,23 @@ describe('minimal workspace overview', () => {
     expect(html).not.toContain('72%');
   });
 });
+
+// Temporary CI formatting probe. This emits the exact Prettier output once,
+// so the implementation can be normalized without repeated speculative pushes.
+// REMOVE this test before review-ready status.
+it('diagnoses the exact workspace overview formatting in CI', async () => {
+  if (process.env.CI !== 'true') return;
+  const { readFile } = await import('node:fs/promises');
+  const { format } = await import('prettier');
+  const file = 'src/web/workspace-overview.tsx';
+  const original = await readFile(file, 'utf8');
+  const formatted = await format(original, {
+    filepath: file,
+    printWidth: 100,
+    singleQuote: true,
+    trailingComma: 'all',
+  });
+  if (formatted !== original) {
+    console.info('WORKSPACE_FORMAT_BASE64=' + Buffer.from(formatted).toString('base64'));
+  }
+});
