@@ -111,3 +111,29 @@ describe('minimal workspace overview', () => {
     expect(html).not.toContain('72%');
   });
 });
+
+/** TEMPORARY: output exact CI Prettier rendering of browser fixture. Remove after capture. */
+it('reports browser visual test formatting', async () => {
+  if (process.env.CI !== 'true') return;
+  const { readFile } = await import('node:fs/promises');
+  const prettier = await import('prettier');
+  const path = 'tests/browser-office-smoke.ts';
+  const source = await readFile(path, 'utf8');
+  const options = (await prettier.resolveConfig(path)) ?? {};
+  const formatted = await prettier.format(source, { ...options, filepath: path });
+  if (formatted !== source) {
+    const encoded = Buffer.from(formatted).toString('base64');
+    const chunkSize = 3000;
+    const count = Math.ceil(encoded.length / chunkSize);
+    for (let i = 0; i < count; i++) {
+      console.info(
+        'BROWSER_FORMAT_' +
+          i +
+          '_OF_' +
+          count +
+          '=' +
+          encoded.slice(i * chunkSize, (i + 1) * chunkSize),
+      );
+    }
+  }
+});
