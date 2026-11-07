@@ -59,7 +59,9 @@ import {
   isOfficeWorkflowList,
   parseOfficeApiResponse,
 } from './office-api-response.js';
+import { WorkspaceOverview } from './workspace-overview.js';
 import './styles.css';
+import './workspace-theme.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(
@@ -665,6 +667,11 @@ function App() {
           )}
           {page === 'office' && (
             <OfficePage>
+              <WorkspaceOverview
+                dashboard={dashboard}
+                onOpenTask={(task) => navigateTask(task, 'session')}
+                onNewTask={() => showSection('compose')}
+              />
               <section className="office-scene" aria-label="Shared Codex office">
                 <PixelOffice
                   agents={officeAgents.map((slot) => ({
