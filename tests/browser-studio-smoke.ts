@@ -143,6 +143,9 @@ try {
   );
   await expect(page.getByLabel('Assign to agent')).toHaveValue(profile.id);
   await navigate('Office');
+  // The operational workspace is primary; legacy workstation inspector lives
+  // in the optional Office scene and must remain accessible on demand.
+  await page.locator('.office-visual > summary').click();
   await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toContainText(
     'Review bot',
   );
