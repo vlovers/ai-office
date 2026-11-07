@@ -25,6 +25,8 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
+  // Review fixtures inspect the optional visual office explicitly.
+  await page.locator('.office-visual > summary').click();
   const officeArtifacts = process.env.AI_OFFICE_BROWSER_ARTIFACTS ?? join(tmpdir(), 'ai-office-v4');
   await mkdir(officeArtifacts, { recursive: true });
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
