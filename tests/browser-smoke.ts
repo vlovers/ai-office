@@ -79,12 +79,16 @@ try {
   await expect(officeVisual).not.toHaveAttribute('open', '');
   await officeVisual.locator('summary').click();
   await expect(officeVisual).toHaveAttribute('open', '');
+  const appearance = page.locator('.display-preferences');
+  await appearance.locator('summary').click();
+  await expect(appearance).toHaveAttribute('open', '');
   const crt = page.getByRole('button', { name: /CRT effects:/ });
   await expect(crt).toHaveAttribute('aria-pressed', 'false');
   await crt.focus();
   await page.keyboard.press('Enter');
   await expect(crt).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
+  await appearance.locator('summary').click();
   await expect(crt).toHaveAttribute('aria-pressed', 'true');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   assert.equal(
@@ -101,6 +105,7 @@ try {
   const motion = page.getByRole('button', { name: /Scene motion:/ });
   await motion.click();
   await page.reload();
+  await appearance.locator('summary').click();
   await expect(motion).toHaveAttribute('aria-pressed', 'false');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   assert.equal(
