@@ -106,6 +106,20 @@ function App() {
       /* Optional preference. */
     }
   }, [motion]);
+  const [officeSceneOpen, setOfficeSceneOpen] = useState(() => {
+    try {
+      return localStorage.getItem('ai-office-scene-open') === 'on';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('ai-office-scene-open', officeSceneOpen ? 'on' : 'off');
+    } catch {
+      /* This visual preference is optional. */
+    }
+  }, [officeSceneOpen]);
   const [view, setView] = useState<'mission' | 'focus'>(
     () => routeFromHash(window.location.hash).view,
   );
@@ -672,7 +686,11 @@ function App() {
                 onOpenTask={(task) => navigateTask(task, 'session')}
                 onNewTask={() => showSection('compose')}
               />
-              <details className="office-visual" open>
+              <details
+                className="office-visual"
+                open={officeSceneOpen}
+                onToggle={(event) => setOfficeSceneOpen(event.currentTarget.open)}
+              >
                 <summary className="office-visual-heading">
                   <span>Office scene</span>
                   <small>Optional visual overview of your agents</small>
