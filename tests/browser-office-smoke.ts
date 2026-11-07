@@ -70,9 +70,7 @@ try {
   // Keep the optional illustrated scene closed for the primary screenshots,
   // then restore its previous disclosure state for the existing scene checks.
   const captureOperational = async (name: string) => {
-    const wasOpen = await visualDisclosure.evaluate((node) =>
-      (node as HTMLDetailsElement).open,
-    );
+    const wasOpen = await visualDisclosure.evaluate((node) => (node as HTMLDetailsElement).open);
     if (wasOpen) await visualDisclosure.locator('summary').click();
     await captureWorkspace(name);
     if (wasOpen) await visualDisclosure.locator('summary').click();
