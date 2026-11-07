@@ -664,6 +664,189 @@ a {
   padding: 20px 10px;
 }
 
+/* Operational task surfaces: readable rows instead of a tiny terminal viewport. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.overview-task-search {
+  display: block;
+  margin: 0 0 12px;
+}
+
+.overview-task-search input {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #121824;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.overview-task-search input::placeholder {
+  color: var(--muted);
+}
+
+.shell[data-page='office'] .page-heading h1 > span {
+  display: none;
+}
+
+.shell .task-list {
+  max-height: min(65vh, 700px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #4a4f66 transparent;
+}
+
+.shell .history .panel-heading,
+.shell .output .panel-heading {
+  padding-bottom: 12px;
+}
+
+.shell .history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  padding: 14px 0 18px;
+}
+
+.shell .history-controls label {
+  display: grid;
+  gap: 6px;
+  min-width: 136px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shell .history-controls input,
+.shell .history-controls select {
+  width: 100%;
+  min-height: 39px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #111723;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.shell .history-controls p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shell .badge {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #343448;
+  color: #d8deec;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.shell .badge::before {
+  content: none;
+}
+
+.shell .badge.running {
+  background: #382c56;
+  color: #d4baff;
+}
+
+.shell .badge.completed {
+  background: #193d31;
+  color: #72e5b2;
+}
+
+.shell .badge.failed,
+.shell .badge.interrupted {
+  background: #482833;
+  color: #ffb2bf;
+}
+
+.shell .badge.queued,
+.shell .badge.stopping,
+.shell .badge.stopped {
+  background: #473523;
+  color: #ffd59b;
+}
+
+.shell .task-panel-tabs {
+  background: #151b27;
+  border: 1px solid var(--line);
+}
+
+.shell .task-panel-tabs button {
+  color: #c4cbd8;
+  font-size: 13px;
+}
+
+.shell .event-console {
+  min-height: 180px;
+  max-height: 50vh;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0e141e;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+}
+
+.shell .event-line {
+  grid-template-columns: 72px 70px minmax(0, 1fr);
+  border-bottom-color: #252c3b;
+}
+
+.shell .event-line pre {
+  color: #d3d9e7;
+  line-height: 1.6;
+}
+
+.shell .event-kind {
+  color: #b3a0f3;
+}
+
+.shell .panel .task-prompt,
+.shell .panel .result {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .shell .history-controls[data-mobile-open='false'] {
+    display: none;
+  }
+
+  .shell .history-controls[data-mobile-open='true'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .shell .task-list {
+    max-height: 60vh;
+  }
+
+  .shell .event-line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
 @media (max-width: 1180px) {
   .shell .sidebar {
     width: 208px;
