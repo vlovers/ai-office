@@ -1146,7 +1146,10 @@ a {
   font-size: 12px;
 }
 
-.shell #workflows [aria-label='Workflow operations overview'] > p[aria-label='Workflow attention summary'] {
+.shell
+  #workflows
+  [aria-label='Workflow operations overview']
+  > p[aria-label='Workflow attention summary'] {
   color: #d5cbf1;
 }
 

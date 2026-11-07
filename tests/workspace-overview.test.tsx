@@ -111,29 +111,3 @@ describe('minimal workspace overview', () => {
     expect(html).not.toContain('72%');
   });
 });
-
-/** TEMPORARY: print exact CI Prettier CSS output to close formatting drift. Remove after capture. */
-it('reports the exact workspace theme formatter output', async () => {
-  if (process.env.CI !== 'true') return;
-  const { readFile } = await import('node:fs/promises');
-  const prettier = await import('prettier');
-  const path = 'src/web/workspace-theme.css';
-  const source = await readFile(path, 'utf8');
-  const options = (await prettier.resolveConfig(path)) ?? {};
-  const normalized = await prettier.format(source, { ...options, filepath: path });
-  if (normalized !== source) {
-    const encoded = Buffer.from(normalized, 'utf8').toString('base64');
-    const chunkSize = 3000;
-    const total = Math.ceil(encoded.length / chunkSize);
-    for (let index = 0; index < total; index++) {
-      console.info(
-        'OFFICE_CSS_FORMAT_' +
-          index +
-          '_OF_' +
-          total +
-          '=' +
-          encoded.slice(index * chunkSize, (index + 1) * chunkSize),
-      );
-    }
-  }
-});

@@ -241,7 +241,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
-  await expect(page.getByRole('heading', { name: 'Task session_' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Task session' })).toBeVisible();
   await expect(page.locator('#task-workspace')).toContainText('Review the example project');
   // Focus mode intentionally hides task history. Return to the Tasks list
   // to exercise its mobile filters, then restore the task-scoped deep link.

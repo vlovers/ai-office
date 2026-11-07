@@ -41,10 +41,7 @@ export function PageHeading({
     <div className="page-heading">
       <div>
         <div className="eyebrow">AI OFFICE / {page.toUpperCase()}</div>
-        <h1>
-          {heading}
-          <span>_</span>
-        </h1>
+        <h1>{heading}</h1>
         <p>{summary}</p>
       </div>
       <button className="button-link" type="button" onClick={onNewTask}>
