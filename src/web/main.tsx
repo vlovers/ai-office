@@ -489,7 +489,7 @@ function App() {
             setView('mission');
           }}
         >
-          <PixelBot />
+          <span className="brand-mark" aria-hidden="true">✦</span>
           <span>
             AI OFFICE<small>Local agent workspace</small>
           </span>
@@ -536,18 +536,6 @@ function App() {
               <a href="#repositories">Register a repository →</a>
             </p>
           )}
-        </div>
-        <div className="sidebar-art" aria-hidden="true">
-          <PixelBot />
-          <span>
-            AI ASSISTED.
-            <br />
-            HUMAN APPROVED.
-          </span>
-        </div>
-        <div className="sidebar-bottom">
-          <span className="status-dot" />
-          Local-only server<small>127.0.0.1 / LOCAL</small>
         </div>
       </aside>
       <main id="overview" tabIndex={-1}>
@@ -621,32 +609,34 @@ function App() {
               showSection('compose');
             }}
           />
-          <div className="view-switch" role="group" aria-label="Workspace view">
-            <button
-              className="secondary"
-              aria-pressed={view === 'mission'}
-              onClick={() => showSection('overview')}
-            >
-              Office overview
-            </button>
-            <button
-              className="secondary"
-              aria-pressed={view === 'focus'}
-              disabled={!stationTask}
-              onClick={() => {
-                if (stationTask) {
-                  navigateTask(stationTask, 'session');
-                }
-              }}
-            >
-              Focus Mode
-            </button>
-            <span>
-              {view === 'focus'
-                ? 'Session output first. Stop and results stay within reach.'
-                : 'Overview / saved profiles · two worker capacity'}
-            </span>
-          </div>
+          {stationTask && (
+            <div className="view-switch" role="group" aria-label="Workspace view">
+              <button
+                className="secondary"
+                aria-pressed={view === 'mission'}
+                onClick={() => showSection('overview')}
+              >
+                Office overview
+              </button>
+              <button
+                className="secondary"
+                aria-pressed={view === 'focus'}
+                disabled={!stationTask}
+                onClick={() => {
+                  if (stationTask) {
+                    navigateTask(stationTask, 'session');
+                  }
+                }}
+              >
+                Focus Mode
+              </button>
+              <span>
+                {view === 'focus'
+                  ? 'Session output first. Stop and results stay within reach.'
+                  : 'Overview / saved profiles · two worker capacity'}
+              </span>
+            </div>
+          )}
           {dashboard && !dashboard.repositories.length && (
             <section className="onboarding" aria-label="Get started">
               <span className="setup-index" aria-hidden="true">

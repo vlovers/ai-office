@@ -64,16 +64,6 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
 
   return (
     <section className="workspace-overview" aria-label="Workspace activity">
-      <div className="overview-intro">
-        <div>
-          <span className="overview-kicker">WORKSPACE</span>
-          <h2>Your workspace</h2>
-          <p>Tasks, agents and recent work in one place.</p>
-        </div>
-        <button type="button" onClick={onNewTask} className="overview-new-task">
-          + New task
-        </button>
-      </div>
       <div className="overview-metrics" aria-label="Task status summary">
         {metrics.map(({ label, value, hint }) => (
           <div className="overview-metric" key={label}>

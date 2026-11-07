@@ -1422,3 +1422,51 @@ a {
     right: auto;
   }
 }
+
+/* Visually align the persistent navigation with the minimal product shell. */
+.sidebar .brand-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #7656d9, #5137a1);
+  color: #ffffff;
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.shell[data-page='office'] .workspace-overview {
+  gap: 16px;
+}
+
+.shell[data-page='office'] .overview-metrics {
+  margin-top: 0;
+}
+
+.shell .onboarding {
+  background: #171c27;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.shell .onboarding .setup-index {
+  color: #a88bf3;
+}
+
+@media (max-width: 680px) {
+  .shell[data-page='office'] .page-heading {
+    margin-bottom: 14px;
+  }
+
+  .shell .onboarding {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .shell .onboarding ol {
+    gap: 4px 14px;
+    margin-top: 8px;
+  }
+}
