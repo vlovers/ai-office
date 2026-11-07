@@ -66,6 +66,38 @@ try {
       });
     }
   };
+  // Real persisted fixture tasks below exercise the actual operational view.
+  // Keep the optional illustrated scene closed for the primary screenshots,
+  // then restore its previous disclosure state for the existing scene checks.
+  const captureOperational = async (name: string) => {
+    const wasOpen = await visualDisclosure.evaluate((node) =>
+      (node as HTMLDetailsElement).open,
+    );
+    if (wasOpen) await visualDisclosure.locator('summary').click();
+    await captureWorkspace(name);
+    if (wasOpen) await visualDisclosure.locator('summary').click();
+  };
+  const captureTaskInspector = async (name: string, title: string) => {
+    for (const [width, height, size] of [
+      [1440, 900, 'desktop'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      const inspector = page.locator('#task-workspace');
+      await expect(inspector).toContainText(title);
+      await inspector.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: join(artifacts, `task-${name}-${size}-viewport.png`),
+      });
+      await inspector.screenshot({
+        path: join(artifacts, `task-${name}-${size}-inspector.png`),
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
+  };
   let releaseLoading!: () => void;
   const held = new Promise<void>((resolve) => {
     releaseLoading = resolve;
@@ -272,6 +304,12 @@ try {
     { timeout: 15000 },
   );
   await capture('active');
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' })
+      .locator('.overview-state'),
+  ).toHaveText('Running');
+  await captureOperational('running');
   const overview = page.getByRole('region', { name: 'Workspace activity' });
   const search = overview.getByRole('searchbox', { name: 'Search workspace tasks' });
   await expect(
@@ -288,10 +326,17 @@ try {
   const queue = page.getByRole('region', { name: 'Live task queue' });
   await expect(queue).toContainText('FIXTURE · submitted queue');
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute('data-state', 'queued');
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · submitted queue' })
+      .locator('.overview-state'),
+  ).toHaveText('In queue');
+  await captureOperational('running-and-queued');
   await queue.getByRole('button', { name: /FIXTURE · submitted queue/ }).click();
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await captureTaskInspector('queued', 'FIXTURE · submitted queue');
   // A deep link wins over a previously selected task, including after reload.
   await page.evaluate(() => sessionStorage.setItem('ai-office-selected-task', 'deleted-task'));
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -393,11 +438,23 @@ try {
     { timeout: 15000 },
   );
   await capture('completed');
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · saved completion' })
+      .locator('.overview-state'),
+  ).toHaveText('Completed');
+  await captureOperational('completed');
   await newTask('codex-1', 'FIXTURE · provider failure', 'FAIL_FIXTURE');
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute('data-state', 'error', {
     timeout: 15000,
   });
   await capture('failure');
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · provider failure' })
+      .locator('.overview-state'),
+  ).toHaveText('Failed');
+  await captureOperational('failed');
   // CSV export uses the current history filters and contains no prompt or transcript content.
   await navigate('Tasks');
   const history = page.locator('#task-history');
