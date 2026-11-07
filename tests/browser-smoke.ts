@@ -19,7 +19,7 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
   const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
-  await page.getByRole('heading', { name: 'Office overview_' }).waitFor();
+  await page.getByRole('heading', { name: /^Office overview/ }).waitFor();
   await expect(page.getByRole('region', { name: 'Get started' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toBeDisabled();
   await page.screenshot({
