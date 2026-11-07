@@ -672,7 +672,12 @@ function App() {
                 onOpenTask={(task) => navigateTask(task, 'session')}
                 onNewTask={() => showSection('compose')}
               />
-              <section className="office-scene" aria-label="Shared Codex office">
+              <details className="office-visual" open>
+                <summary className="office-visual-heading">
+                  <span>Office scene</span>
+                  <small>Optional visual overview of your agents</small>
+                </summary>
+                <section className="office-scene" aria-label="Shared Codex office">
                 <PixelOffice
                   agents={officeAgents.map((slot) => ({
                     id: slot.id,
@@ -753,7 +758,8 @@ function App() {
                     Workflow status unavailable. Cached data may be stale.
                   </p>
                 )}
-              </section>
+                </section>
+              </details>
             </OfficePage>
           )}
           {page === 'tasks' && (
