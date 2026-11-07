@@ -26,11 +26,7 @@ function taskStatus(state: Task['state']): string {
   }
 }
 
-export function WorkspaceOverview({
-  dashboard,
-  onOpenTask,
-  onNewTask,
-}: WorkspaceOverviewProps) {
+export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: WorkspaceOverviewProps) {
   const [query, setQuery] = useState('');
   const tasks = dashboard?.tasks ?? [];
   const queueIds = new Set(dashboard?.queue.map((entry) => entry.taskId) ?? []);
@@ -136,8 +132,8 @@ export function WorkspaceOverview({
                   <span className="overview-task-title">
                     <strong>{task.title}</strong>
                     <small>
-                      {dashboard.repositories.find((repo) => repo.id === task.repositoryId)
-                        ?.name ?? 'Repository unavailable'}
+                      {dashboard.repositories.find((repo) => repo.id === task.repositoryId)?.name ??
+                        'Repository unavailable'}
                       {' · '}
                       {dashboard.profiles?.find((profile) => profile.id === task.agentId)?.name ??
                         dashboard.agents.find((agent) => agent.id === task.agentId)?.name ??
