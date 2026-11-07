@@ -73,6 +73,12 @@ try {
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Office' })
     .click();
+  // The legacy pixel scene is opt-in; expand it to retain the existing
+  // motion, workstation and accessibility regression coverage.
+  const officeVisual = page.locator('.office-visual');
+  await expect(officeVisual).not.toHaveAttribute('open', '');
+  await officeVisual.locator('summary').click();
+  await expect(officeVisual).toHaveAttribute('open', '');
   const crt = page.getByRole('button', { name: /CRT effects:/ });
   await expect(crt).toHaveAttribute('aria-pressed', 'false');
   await crt.focus();
