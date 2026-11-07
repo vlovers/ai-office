@@ -1018,3 +1018,336 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* Phase 2: common information density and clear hierarchy across destinations. */
+.shell .destination-intro {
+  margin: 0 0 18px;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line-dim);
+  border-radius: 0;
+  background: transparent;
+}
+
+.shell .destination-intro h2 {
+  margin: 0 0 5px;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 690;
+  letter-spacing: -0.35px;
+}
+
+.shell .destination-intro p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.shell[data-page='workflows'] .workflows-destination,
+.shell[data-page='agents'] .agents-destination,
+.shell[data-page='settings'] .settings-destination {
+  max-width: 1280px;
+}
+
+.shell[data-page='workflows'] #workflows {
+  padding: 22px;
+}
+
+.shell #workflows .panel-heading {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.shell #workflows > details {
+  margin-bottom: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #161c28;
+}
+
+.shell #workflows > details > summary {
+  min-height: 46px;
+  padding: 13px 16px;
+  color: var(--text);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.shell #workflows > details[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.shell #workflows > details > :not(summary) {
+  margin-inline: 16px;
+}
+
+.shell #workflows label,
+.shell .settings-destination label,
+.shell .agent-studio label {
+  color: #c4ccda;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.shell #workflows input:not([type='checkbox']),
+.shell #workflows select,
+.shell .settings-destination input,
+.shell .settings-destination select,
+.shell .agent-studio input:not([type='checkbox']),
+.shell .agent-studio textarea,
+.shell .agent-studio select {
+  min-height: 42px;
+  max-width: 100%;
+  border: 1px solid #394355;
+  border-radius: 10px;
+  background: #111824;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.shell #workflows input[type='checkbox'],
+.shell .agent-studio input[type='checkbox'] {
+  accent-color: #9875e3;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #141b27;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] > label {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] > label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  max-width: 420px;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] > p {
+  width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] > p[aria-label='Workflow attention summary'] {
+  color: #d5cbf1;
+}
+
+.shell .workflow-operations-list {
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0;
+  gap: 8px;
+}
+
+.shell .workflow-operations-list > li {
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #1a2230;
+  color: var(--text);
+}
+
+.shell .workflow-operations-list button[aria-current='true'] {
+  background: #35294f;
+  border-color: #7961af;
+  color: #f1eaff;
+}
+
+.shell #workflows [role='note'] {
+  border-left: 3px solid #665388;
+  padding: 9px 12px;
+  background: #252236;
+  border-radius: 7px;
+  color: #c9c2df;
+}
+
+.shell .agent-studio {
+  padding: 20px;
+}
+
+.shell .agent-studio > p,
+.shell .agent-studio > .studio-tools,
+.shell .agent-studio > [role] {
+  margin-inline: 0;
+}
+
+.shell .studio-tools {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.shell .studio-tools > button:first-child {
+  background: #7350c4;
+  border-color: #8c6add;
+  color: white;
+}
+
+.shell .studio-tools > label {
+  display: grid;
+  gap: 6px;
+}
+
+.shell .studio-tools input[type='search'] {
+  width: min(310px, 100%);
+}
+
+.shell .profile-list {
+  padding: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 12px;
+}
+
+.shell .profile-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #1a2030;
+}
+
+.shell .profile-card h3 {
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.shell .profile-actions {
+  gap: 8px;
+}
+
+.shell .profile-actions button {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+.shell .agent-studio dialog {
+  background: #1a2030;
+  border: 1px solid #414a5e;
+  border-radius: 16px;
+  box-shadow: 0 24px 90px #0008;
+}
+
+.shell .agent-studio dialog::backdrop {
+  background: #060910bd;
+}
+
+.shell[data-page='settings'] .settings-destination {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.shell[data-page='settings'] .settings-destination > .panel {
+  padding: 24px;
+}
+
+.shell .connection-panel .connection-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.shell .connection-panel .connection-controls > div {
+  flex: 1 1 230px;
+  min-width: 0;
+}
+
+.shell .connection-panel .connection-controls label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.shell .connection-message,
+.shell .field-hint,
+.shell .panel-description {
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 12px;
+}
+
+.shell .repository-panel .input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.shell .repository-panel .input-row input {
+  flex: 1 1 250px;
+  min-width: 0;
+}
+
+.shell .repository-panel .input-row button {
+  white-space: nowrap;
+}
+
+.shell[data-page='settings'] .settings-destination > .destination-intro {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1200px) {
+  .shell[data-page='settings'] .settings-destination {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .shell #workflows {
+    padding: 16px;
+  }
+
+  .shell #workflows [aria-label='Workflow operations overview'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .shell #workflows [aria-label='Workflow operations overview'] > label {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .shell .studio-tools,
+  .shell .connection-panel .connection-controls,
+  .shell .repository-panel .input-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .shell .studio-tools > label,
+  .shell .studio-tools input[type='search'],
+  .shell .repository-panel .input-row button,
+  .shell .connection-panel .connection-controls > div {
+    width: 100%;
+  }
+
+  .shell .profile-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shell[data-page='settings'] .settings-destination > .panel {
+    padding: 18px;
+  }
+}
