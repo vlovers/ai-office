@@ -78,7 +78,33 @@ try {
   await page.goto(address, { waitUntil: 'domcontentloaded' });
   const visualDisclosure = page.locator('.office-visual');
   await expect(visualDisclosure).not.toHaveAttribute('open', '');
-  await expect(page.getByRole('region', { name: 'Workspace activity' })).toBeVisible();
+  const overview = page.getByRole('region', { name: 'Workspace activity' });
+  await expect(overview).toBeVisible();
+  // Capture the actual primary product screen, not only the opt-in pixel
+  // illustration. Compare the same app with no data and with real fixtures.
+  const captureWorkspace = async (name: string) => {
+    for (const [width, height, size] of [
+      [1440, 900, 'desktop'],
+      [900, 800, 'tablet'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect(visualDisclosure).not.toHaveAttribute('open', '');
+      await expect(overview).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: join(artifacts, `workspace-${name}-${size}-viewport.png`),
+      });
+      await overview.screenshot({
+        path: join(artifacts, `workspace-${name}-${size}-overview.png`),
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
+  };
+  await captureWorkspace('loading');
   await visualDisclosure.locator('summary').click();
   await expect(page.getByText('Opening your office…')).toBeVisible();
   await capture('loading');
@@ -86,6 +112,9 @@ try {
   await page.unrouteAll({ behavior: 'wait' });
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
+  await visualDisclosure.locator('summary').click();
+  await captureWorkspace('ready');
+  await visualDisclosure.locator('summary').click();
   await capture('two-idle');
   // The pixel scene is a secondary visual, not the only operational workspace.
   await visualDisclosure.locator('summary').click();
@@ -147,6 +176,9 @@ try {
   );
   await expect(page.locator('.studio-agent')).toHaveCount(6, { timeout: 10000 });
   await expect(page.locator('.office-workstation')).toHaveCount(4);
+  await visualDisclosure.locator('summary').click();
+  await captureWorkspace('six-agents');
+  await visualDisclosure.locator('summary').click();
   await page.locator('.studio-agent').last().click();
   await expect(page.locator('.studio-agent').last()).toHaveAttribute('aria-pressed', 'true');
   // Workstation selection is local to Office, not an implicit route to Agents.
