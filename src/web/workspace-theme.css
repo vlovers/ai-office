@@ -5,19 +5,19 @@
  */
 :root {
   color-scheme: dark;
-  --bg: #0d111a;
-  --surface: #171c27;
-  --surface-raised: #202636;
-  --line: #303748;
-  --line-dim: #272e3c;
-  --text: #f0f2f7;
-  --muted: #a6b0c1;
+  --bg: #0b0d13;
+  --surface: #141821;
+  --surface-raised: #1b2030;
+  --line: #2a3040;
+  --line-dim: #222735;
+  --text: #f2f3f8;
+  --muted: #9da7bb;
   --phosphor: #a78bfa;
   --amber: #f5b969;
   --red: #f38e96;
   --cyan: #76c9dd;
   --border: var(--line);
-  --accent: #8b5cf6;
+  --accent: #9b8cff;
   --success: #57d8a3;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
   font-size: 14px;
@@ -85,7 +85,7 @@ a {
   width: 236px;
   inset: 0 auto 0 0;
   padding: 24px 14px 18px;
-  background: #10141e;
+  background: #10131b;
   border: 0;
   border-right: 1px solid var(--line-dim);
   border-radius: 0;
@@ -154,10 +154,10 @@ a {
 }
 
 .sidebar .nav-item.active {
-  background: #382962;
+  background: #25243a;
   color: #f5f1ff;
-  border-color: #4c387c;
-  border-left: 1px solid #4c387c;
+  border-color: #393653;
+  border-left: 1px solid #6f64ba;
   font-weight: 650;
 }
 
@@ -479,7 +479,7 @@ a {
 .overview-metric,
 .overview-card {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--surface);
 }
 
@@ -566,7 +566,7 @@ a {
 }
 
 .overview-task:hover:not(:disabled) {
-  background: #24293a;
+  background: #1d2230;
   border-color: var(--line-dim);
 }
 
