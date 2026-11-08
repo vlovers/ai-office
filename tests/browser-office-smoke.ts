@@ -423,7 +423,7 @@ try {
   await expect(page.getByText('Server disconnected', { exact: true })).toBeVisible({
     timeout: 12000,
   });
-  await expect(page).toHaveURL(/#task\\/[^/]+\\/session$/);
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   dashboardOffline = false;
@@ -431,7 +431,7 @@ try {
     timeout: 12000,
   });
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
-  await expect(page).toHaveURL(/#task\\/[^/]+\\/session$/);
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await page.unroute('**/api/dashboard');
   await page.setViewportSize({ width: 1440, height: 1100 });
   // A valid task may have a stale review deep link before it has a workspace.
