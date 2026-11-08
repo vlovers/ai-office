@@ -276,6 +276,20 @@ loaded batch; filters and sorting reset the loaded window. CSV export still
 covers **all matching tasks**, not just the mounted rows. This is display-only:
 it does not change task state, scheduling, or review permissions.
 
+## Minimal workspace UI — Draft PR #194 verification
+
+The Linear-inspired dark workspace in [Draft PR #194](https://github.com/vlovers/ai-office/pull/194) is **unreleased**. It includes the application shell, real-data Overview, task discovery controls, contextual inspector and responsive navigation. Overview search, status filters and sorting are display-only; they do not start tasks, authorize workflow stages or change backend state. Empty and disconnected states must never imply fabricated task activity.
+
+The latest validated UI revision is commit `2d565e3485e29f2b7f4073031778534912fc4690`. [GitHub Actions run #42488798219](https://github.com/vlovers/ai-office/actions/runs/42488798219) completed both the TypeScript/tests/smoke/build/formatting job and the native filesystem policy integration job successfully. Its `office-v4-browser` artifact contains desktop, tablet, mobile and task-inspector screenshots; `workflow-browser` contains workflow browser evidence. CI success verifies those automated checks, **not** full manual visual or accessibility acceptance.
+
+Review checklist before marking the PR ready:
+
+- Compare Overview at 1440 px desktop, 900 px tablet and 390 px mobile; check overflow, task row density, search/filter labels and inspector reachability.
+- On mobile, verify task search, filter selectors and buttons retain at least 44 px touch height and 16 px input text; check focus visibility, keyboard use and VoiceOver labels.
+- Exercise empty results, loading, API error and disconnected/reconnected states against actual backend responses, without synthetic success data.
+- Verify reduced-motion preference, browser Back/Forward, task selection persistence and Coder → Reviewer → QA review boundaries.
+- Recheck the final branch SHA and CI before review; do not merge, deploy or enable inference based solely on screenshots.
+
 ## Queue, restart and allowance
 
 Each agent runs one task at a time, with at most two active tasks per backend and 100 waiting submissions. Tasks are FIFO within their assigned agent; separate agents can make progress independently. Creating a task does not execute it. **Start task** authorizes queue execution, including after a restart. **Cancel queued task** removes a waiting submission without a model call. Stop affects only the selected active task.
