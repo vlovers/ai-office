@@ -25,7 +25,7 @@ export function SettingsPage({
         <div className="panel-heading">
           <h2>Codex connection</h2>
           <span
-            className={`badge ${dashboard?.connection.status === 'available' ? 'completed' : 'failed'}`}
+            className={`badge ${!dashboard ? '' : dashboard.connection.status === 'available' ? 'completed' : 'failed'}`}
             role="status"
             data-testid="codex-connection-status"
           >
@@ -44,7 +44,7 @@ export function SettingsPage({
             <select
               id="authentication-mode"
               value={dashboard?.connection.mode ?? 'local-cli-chatgpt'}
-              disabled={busy || agentBusy}
+              disabled={!dashboard || busy || agentBusy}
               onChange={(event) => onChangeMode(event.target.value as AuthMode)}
             >
               <option value="local-cli-chatgpt">Local ChatGPT login (preferred)</option>

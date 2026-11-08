@@ -129,9 +129,9 @@ export function TaskComposer({
         </div>
       </form>
       <p className="read-only-note">
-        Start submits to the assigned FIFO queue and may execute immediately. Isolated coding
-        requires confirmation and server-configured roots. Review changes before keeping or
-        rejecting; integration is manual.
+        Creating a task does not start execution. Select Start task to submit it to the assigned
+        FIFO queue; execution may begin immediately. Isolated coding requires confirmation and
+        server-configured roots. Review changes before keeping or rejecting; integration is manual.
       </p>
     </section>
   );
