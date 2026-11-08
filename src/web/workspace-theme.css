@@ -1672,3 +1672,88 @@ a {
     padding: 14px;
   }
 }
+
+/* Compact task discovery: keep controls readable and task rows in view. */
+.shell[data-page='office'] .overview-card-heading {
+  margin-bottom: 12px;
+}
+
+.shell[data-page='office'] .overview-task-search {
+  margin-bottom: 8px;
+}
+
+.shell[data-page='office'] .overview-task-search input,
+.shell[data-page='office'] .overview-task-filters select {
+  min-height: 36px;
+  border-radius: 7px;
+  background: #10141c;
+  border-color: var(--line-dim);
+}
+
+.shell[data-page='office'] .overview-task-filters {
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.shell[data-page='office'] .overview-task-filters > span[role='status'] {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell[data-page='office'] .overview-task-filters button {
+  min-height: 36px;
+}
+
+.shell[data-page='office'] .overview-task:focus-visible,
+.shell[data-page='office'] .overview-task-filters button:focus-visible,
+.shell[data-page='office'] .overview-task-filters select:focus-visible,
+.shell[data-page='office'] .overview-task-search input:focus-visible {
+  outline: 2px solid #ad9bff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 680px) {
+  .shell[data-page='office'] .workspace-overview {
+    gap: 10px;
+  }
+
+  .shell[data-page='office'] .overview-metric {
+    min-height: 60px;
+    padding: 9px 12px;
+    gap: 2px;
+  }
+
+  .shell[data-page='office'] .overview-metric strong {
+    font-size: 21px;
+  }
+
+  .shell[data-page='office'] .overview-metric small {
+    display: none;
+  }
+
+  .shell[data-page='office'] .overview-card {
+    padding: 12px;
+  }
+
+  .shell[data-page='office'] .overview-task-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .shell[data-page='office'] .overview-task-filters label,
+  .shell[data-page='office'] .overview-task-filters select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .shell[data-page='office'] .overview-task-filters > span[role='status'] {
+    margin-left: 0;
+    align-self: center;
+  }
+
+  .shell[data-page='office'] .overview-task {
+    gap: 8px;
+  }
+}
