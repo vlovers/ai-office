@@ -633,6 +633,7 @@ try {
   await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText('LIVE OUTPUT');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
+  await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText('SAVED OUTPUT');
   assert.deepEqual(errors, []);
   console.log(
     'Browser smoke passed: two agents/worktrees; parallel SSE; queue cancellation; Stop A/B isolation; onboarding; real workstation selection; focus/overview; thinking/error states; motion preference; keyboard navigation; CRT preference/reduced motion; auth modes; register → start → SSE result → persisted resume → stop → failure; responsive 320–1440px; no page errors.',
