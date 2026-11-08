@@ -602,7 +602,9 @@ try {
   const firstBatchCount = await history.locator('.task-row').count();
   assert.ok(firstBatchCount >= 40 && firstBatchCount <= 41);
   const totalMatching = Number(
-    (await history.locator('.history-load-more [role="status"]').innerText()).match(/of (\d+) matching/)?.[1],
+    (await history.locator('.history-load-more [role="status"]').innerText()).match(
+      /of (\d+) matching/,
+    )?.[1],
   );
   assert.ok(totalMatching >= 125);
   // A pinned selection outside the page may add a row, but never advances pagination.
