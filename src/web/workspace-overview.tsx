@@ -205,7 +205,11 @@ export function WorkspaceOverview({
           </div>
           {!dashboard ? (
             <p className="overview-empty" role="status">
-              Loading workspace tasks…
+              {transportStatus === 'disconnected'
+                ? 'Workspace tasks are unavailable while the server is disconnected. Retry the connection.'
+                : transportStatus === 'connecting'
+                  ? 'Connecting to server…'
+                  : 'Loading workspace tasks…'}
             </p>
           ) : recent.length === 0 ? (
             <div className="overview-empty">
