@@ -1770,3 +1770,15 @@ a {
     justify-self: start;
   }
 }
+
+/* Narrow phones need the full native select label, not clipped sort text. */
+@media (max-width: 420px) {
+  .shell[data-page='office'] .overview-task-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shell[data-page='office'] .overview-task-filters label,
+  .shell[data-page='office'] .overview-task-filters select {
+    max-width: 100%;
+  }
+}
