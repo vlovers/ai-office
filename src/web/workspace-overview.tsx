@@ -63,7 +63,9 @@ export function WorkspaceOverview({
   };
   const matchingTasks = [...tasks]
     .filter((task) => {
-      const repository = dashboard?.repositories.find((repo) => repo.id === task.repositoryId);
+      const repository = dashboard?.repositories.find(
+        (repo) => repo.id === task.repositoryId,
+      );
       const agentName =
         dashboard?.profiles?.find((profile) => profile.id === task.agentId)?.name ??
         dashboard?.agents.find((agent) => agent.id === task.agentId)?.name ??
@@ -106,7 +108,9 @@ export function WorkspaceOverview({
   return (
     <section className="workspace-overview" aria-label="Workspace activity">
       {!isLive && (
-        <p className="overview-transport-warning" role="status">{transportMessage}</p>
+        <p className="overview-transport-warning" role="status">
+          {transportMessage}
+        </p>
       )}
       <div className="overview-metrics" aria-label="Task status summary">
         {metrics.map(({ label, value, hint }) => (
