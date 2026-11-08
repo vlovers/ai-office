@@ -1753,7 +1753,20 @@ a {
     align-self: center;
   }
 
+  /* Preserve comfortable touch targets and prevent iOS input zoom. */
+  .shell[data-page='office'] .overview-task-search input,
+  .shell[data-page='office'] .overview-task-filters select,
+  .shell[data-page='office'] .overview-task-filters button {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
   .shell[data-page='office'] .overview-task {
+    min-height: 48px;
     gap: 8px;
+  }
+
+  .shell[data-page='office'] .overview-task-filters > button {
+    justify-self: start;
   }
 }
