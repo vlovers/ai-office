@@ -87,6 +87,17 @@ describe('minimal workspace overview', () => {
     expect(connected).toContain('overview-connection-dot ready');
     expect(connected).not.toContain('overview-transport-warning');
   });
+  it('explains offline and connecting states before the first snapshot', () => {
+    const offline = render(undefined, 'disconnected');
+    expect(offline).toContain('Server disconnected. No workspace snapshot is available');
+    expect(offline).toContain('Loading workspace tasks');
+    expect(offline).not.toContain('overview-connection-dot ready');
+
+    const connecting = render(undefined, 'connecting');
+    expect(connecting).toContain('Connecting to server. Waiting for the first workspace snapshot.');
+    expect(connecting).not.toContain('Last known:');
+  });
+
   it('does not fabricate metrics or agents before a snapshot arrives', () => {
     const html = render();
     expect(html).toContain('Loading workspace tasks');
