@@ -95,11 +95,15 @@ export function WorkspaceOverview({
 
   return (
     <section className="workspace-overview" aria-label="Workspace activity">
-      {dashboard && !isLive && (
+      {!isLive && (
         <p className="overview-transport-warning" role="status">
           {transportStatus === 'disconnected'
-            ? 'Server disconnected. Task counts and provider status are from the last received snapshot.'
-            : 'Reconnecting to server. Task counts and provider status may be outdated.'}
+            ? dashboard
+              ? 'Server disconnected. Task counts and provider status are from the last received snapshot.'
+              : 'Server disconnected. No workspace snapshot is available. Retry the connection to load tasks.'
+            : dashboard
+              ? 'Reconnecting to server. Task counts and provider status may be outdated.'
+              : 'Connecting to server. Waiting for the first workspace snapshot.'}
         </p>
       )}
       <div className="overview-metrics" aria-label="Task status summary">
