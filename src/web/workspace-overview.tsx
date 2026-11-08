@@ -3,6 +3,7 @@ import type { Dashboard, Task } from '../shared/types.js';
 
 interface WorkspaceOverviewProps {
   dashboard?: Dashboard;
+  transportStatus?: 'connecting' | 'connected' | 'disconnected';
   onOpenTask: (task: Task) => void;
   onNewTask: () => void;
 }
@@ -26,10 +27,16 @@ function taskStatus(state: Task['state']): string {
   }
 }
 
-export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: WorkspaceOverviewProps) {
+export function WorkspaceOverview({
+  dashboard,
+  transportStatus = 'connecting',
+  onOpenTask,
+  onNewTask,
+}: WorkspaceOverviewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [visibleCount, setVisibleCount] = useState(12);
+  const isLive = transportStatus === 'connected';
   const tasks = dashboard?.tasks ?? [];
   const queueIds = new Set(dashboard?.queue.map((entry) => entry.taskId) ?? []);
   const running = tasks.filter(
@@ -88,6 +95,13 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
 
   return (
     <section className="workspace-overview" aria-label="Workspace activity">
+      {dashboard && !isLive && (
+        <p className="overview-transport-warning" role="status">
+          {transportStatus === 'disconnected'
+            ? 'Server disconnected. Task counts and provider status are from the last received snapshot.'
+            : 'Reconnecting to server. Task counts and provider status may be outdated.'}
+        </p>
+      )}
       <div className="overview-metrics" aria-label="Task status summary">
         {metrics.map(({ label, value, hint }) => (
           <div className="overview-metric" key={label}>
@@ -241,13 +255,17 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
             <p className="overview-connection">
               <span
                 className={`overview-connection-dot ${
-                  dashboard?.connection.status === 'available' ? 'ready' : ''
+                  isLive && dashboard?.connection.status === 'available' ? 'ready' : ''
                 }`}
               />
-              {dashboard ? dashboard.connection.message : 'Checking connection…'}
+              {!dashboard
+                ? 'Checking connection…'
+                : isLive
+                  ? dashboard.connection.message
+                  : `Last known: ${dashboard.connection.message}`}
             </p>
             <p className="overview-connection-caption">
-              Provider status from the last snapshot. Live server connection is shown above.
+              Provider readiness is based on the last received snapshot; server connectivity is tracked separately.
             </p>
           </section>
         </aside>
