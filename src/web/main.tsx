@@ -873,7 +873,17 @@ function App() {
                           Task workspace{' '}
                           {task && <span className="output-title">/ {task.title}</span>}
                         </h2>
-                        <span className="subtle">LIVE OUTPUT</span>
+                        <span className="subtle" role="status">
+                          {httpConnection === 'disconnected'
+                            ? 'LAST KNOWN OUTPUT · DISCONNECTED'
+                            : !task
+                              ? 'SELECT A TASK'
+                              : ['completed', 'failed', 'interrupted', 'stopped'].includes(task.state)
+                                ? 'SAVED OUTPUT'
+                                : httpConnection === 'connecting'
+                                  ? 'CONNECTING · OUTPUT MAY BE STALE'
+                                  : 'LIVE OUTPUT'}
+                        </span>
                       </div>
                       {!task ? (
                         <div className="output-empty">
