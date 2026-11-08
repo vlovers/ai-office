@@ -741,6 +741,37 @@ a {
   color: var(--muted);
 }
 
+.overview-task-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.overview-task-filters select {
+  max-width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #121824;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.overview-show-more {
+  width: 100%;
+  margin: 10px 0 14px;
+  min-height: 44px;
+  background: transparent;
+  color: #cbb8ff;
+  border-color: var(--line);
+}
+
 .shell[data-page='office'] .page-heading h1 > span {
   display: none;
 }
