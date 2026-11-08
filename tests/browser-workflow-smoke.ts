@@ -366,8 +366,10 @@ try {
   await expect(operationsQueue.getByRole('button')).toHaveCount(1);
   await board.getByLabel('Workflow state').selectOption('completed');
   await expect(board.getByText('No workflows match the current filters.')).toBeVisible();
-  await board.getByLabel('Workflow state').selectOption('all');
-  await board.getByLabel('Find workflow by ID or repository').fill('');
+  await board.getByRole('button', { name: 'Clear workflow filters' }).click();
+  await expect(board.getByLabel('Workflow state')).toHaveValue('all');
+  await expect(board.getByLabel('Find workflow by ID or repository')).toHaveValue('');
+  await expect(operationsQueue.getByRole('button')).toHaveCount(2);
   await board.getByLabel('Sort workflows').selectOption('oldest');
   await board.getByLabel('Sort workflows').selectOption('attention');
   await board.getByRole('checkbox', { name: /Needs attention/ }).check();
