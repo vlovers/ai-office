@@ -873,7 +873,7 @@ function App() {
                           Task workspace{' '}
                           {task && <span className="output-title">/ {task.title}</span>}
                         </h2>
-                        <span className="subtle" role="status">
+                        <span className="subtle">
                           {httpConnection === 'disconnected'
                             ? 'LAST KNOWN OUTPUT · DISCONNECTED'
                             : !task
