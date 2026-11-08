@@ -81,6 +81,33 @@ try {
   };
   // Cancel and Escape must never approve, submit or write.
   await board.getByRole('button', { name: 'Approve Coder baseline' }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dialog).toBeVisible();
+  const mobileApproval = await dialog.evaluate((node) => {
+    const bounds = node.getBoundingClientRect();
+    return {
+      left: bounds.left,
+      right: bounds.right,
+      viewport: window.innerWidth,
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    };
+  });
+  assert.ok(mobileApproval.left >= 0, 'Mobile approval dialog extends past left edge');
+  assert.ok(
+    mobileApproval.right <= mobileApproval.viewport + 1,
+    'Mobile approval dialog extends past right edge',
+  );
+  assert.ok(
+    mobileApproval.scrollWidth <= mobileApproval.clientWidth + 1,
+    'Mobile approval dialog has horizontal overflow',
+  );
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  assert.equal((await env.get()).stages[0]!.state, 'awaiting_approval');
+  assert.equal(env.store.queue().length, 0);
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await board.getByRole('button', { name: 'Approve Coder baseline' }).click();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal((await env.get()).stages[0]!.state, 'awaiting_approval');
   assert.equal(env.store.queue().length, 0);
