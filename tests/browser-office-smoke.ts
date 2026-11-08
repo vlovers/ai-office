@@ -298,7 +298,20 @@ try {
   await navigate('Settings');
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
+  // A terminal SSE HTTP failure must be explicit and recoverable by the user.
+  await page.route('**/api/tasks/*/stream*', async (route) => {
+    await route.fulfill({ status: 503, contentType: 'text/plain', body: 'fixture unavailable' });
+  });
   await newTask('codex-1', 'FIXTURE · held SDK reasoning', 'WAIT_FIXTURE');
+  await expect(page.getByText('Live event stream disconnected', { exact: true })).toBeVisible({
+    timeout: 15000,
+  });
+  await expect(page.getByRole('button', { name: 'Retry live events' })).toBeVisible();
+  await page.unroute('**/api/tasks/*/stream*');
+  await page.getByRole('button', { name: 'Retry live events' }).click();
+  await expect(page.getByText('Live events connected', { exact: true })).toBeVisible({
+    timeout: 15000,
+  });
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'thinking',
