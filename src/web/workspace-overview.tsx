@@ -28,6 +28,8 @@ function taskStatus(state: Task['state']): string {
 
 export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: WorkspaceOverviewProps) {
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [visibleCount, setVisibleCount] = useState(12);
   const tasks = dashboard?.tasks ?? [];
   const queueIds = new Set(dashboard?.queue.map((entry) => entry.taskId) ?? []);
   const running = tasks.filter(
@@ -38,15 +40,36 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
     (task) => task.state === 'failed' || task.state === 'interrupted',
   ).length;
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const recent = [...tasks]
-    .filter(
-      (task) =>
-        !normalizedQuery ||
-        task.title.toLocaleLowerCase().includes(normalizedQuery) ||
-        task.id.toLocaleLowerCase().includes(normalizedQuery),
-    )
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, normalizedQuery ? 20 : 6);
+  const matchesStatus = (task: Task) => {
+    switch (statusFilter) {
+      case 'running':
+        return task.state === 'running' || task.state === 'stopping';
+      case 'queued':
+        return queueIds.has(task.id);
+      case 'completed':
+        return task.state === 'completed';
+      case 'attention':
+        return task.state === 'failed' || task.state === 'interrupted';
+      default:
+        return true;
+    }
+  };
+  const matchingTasks = [...tasks]
+    .filter((task) => {
+      const repository = dashboard?.repositories.find((repo) => repo.id === task.repositoryId);
+      const agentName =
+        dashboard?.profiles?.find((profile) => profile.id === task.agentId)?.name ??
+        dashboard?.agents.find((agent) => agent.id === task.agentId)?.name ??
+        task.agentId;
+      return (
+        matchesStatus(task) &&
+        (!normalizedQuery ||
+          [task.title, task.id, repository?.name ?? '', agentName]
+            .some((value) => value.toLocaleLowerCase().includes(normalizedQuery)))
+      );
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const recent = matchingTasks.slice(0, visibleCount);
   const agents = dashboard?.agents ?? [];
   const agentLabel = (state: string, hasTask: boolean) => {
     if (state === 'waiting') return 'Waiting';
@@ -89,9 +112,29 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
               aria-label="Search workspace tasks"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search task title or ID"
+              placeholder="Search tasks, repositories or agents"
             />
           </label>
+          <div className="overview-task-filters">
+            <label>
+              <span className="sr-only">Filter tasks by status</span>
+              <select
+                aria-label="Filter tasks by status"
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setVisibleCount(12);
+                }}
+              >
+                <option value="all">All statuses</option>
+                <option value="running">Running</option>
+                <option value="queued">In queue</option>
+                <option value="completed">Completed</option>
+                <option value="attention">Needs attention</option>
+              </select>
+            </label>
+            {dashboard && <span role="status">{matchingTasks.length} matching</span>}
+          </div>
           {!dashboard ? (
             <p className="overview-empty" role="status">
               Loading workspace tasks…
@@ -106,7 +149,7 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
                   </button>
                 </>
               ) : (
-                <p role="status">No tasks match your search.</p>
+                <p role="status">No tasks match your search or status filter.</p>
               )}
             </div>
           ) : (
@@ -140,6 +183,15 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
                   </span>
                 </button>
               ))}
+              {matchingTasks.length > recent.length && (
+                <button
+                  type="button"
+                  className="overview-show-more"
+                  onClick={() => setVisibleCount((count) => count + 20)}
+                >
+                  Show more tasks ({matchingTasks.length - recent.length} remaining)
+                </button>
+              )}
             </div>
           )}
         </section>
