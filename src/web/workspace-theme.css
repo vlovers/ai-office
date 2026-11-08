@@ -1501,3 +1501,92 @@ a {
     margin-top: 8px;
   }
 }
+
+/* Linear-inspired density: one quiet workspace rather than a card dashboard. */
+.shell[data-page='office'] .overview-metrics {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-dim);
+  border-radius: 10px;
+  background: #12151d;
+}
+
+.shell[data-page='office'] .overview-metric {
+  min-height: 88px;
+  padding: 14px 17px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.shell[data-page='office'] .overview-metric + .overview-metric {
+  border-left: 1px solid var(--line-dim);
+}
+
+.shell[data-page='office'] .overview-metric strong {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+}
+
+.shell[data-page='office'] .overview-metric > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shell[data-page='office'] .overview-card {
+  border-color: var(--line-dim);
+  border-radius: 10px;
+  background: #12151d;
+}
+
+.shell[data-page='office'] .overview-card-heading h3 {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.1px;
+}
+
+.shell[data-page='office'] .overview-task {
+  min-height: 54px;
+  padding: 9px 10px;
+}
+
+.shell[data-page='office'] .overview-task:hover:not(:disabled) {
+  background: #1b1e29;
+}
+
+.shell[data-page='office'] .overview-state {
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+.shell[data-page='office'] .overview-empty {
+  padding: 12px 10px;
+}
+
+.shell .sidebar .nav-item.active {
+  background: #20212d;
+  border-color: transparent;
+  border-left-color: #8178c9;
+  color: #f0f0f8;
+}
+
+@media (max-width: 680px) {
+  .shell[data-page='office'] .overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shell[data-page='office'] .overview-metric {
+    min-height: 78px;
+    padding: 12px;
+  }
+
+  .shell[data-page='office'] .overview-metric:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .shell[data-page='office'] .overview-metric:nth-child(n + 3) {
+    border-top: 1px solid var(--line-dim);
+  }
+}
