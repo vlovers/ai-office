@@ -64,8 +64,9 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
       return (
         matchesStatus(task) &&
         (!normalizedQuery ||
-          [task.title, task.id, repository?.name ?? '', agentName]
-            .some((value) => value.toLocaleLowerCase().includes(normalizedQuery)))
+          [task.title, task.id, repository?.name ?? '', agentName].some((value) =>
+            value.toLocaleLowerCase().includes(normalizedQuery),
+          ))
       );
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -111,7 +112,10 @@ export function WorkspaceOverview({ dashboard, onOpenTask, onNewTask }: Workspac
               type="search"
               aria-label="Search workspace tasks"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setVisibleCount(12);
+              }}
               placeholder="Search tasks, repositories or agents"
             />
           </label>
