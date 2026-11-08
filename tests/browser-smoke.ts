@@ -291,6 +291,7 @@ try {
   });
   await page.reload();
   await expect(page.locator('.connection')).toContainText('Live event stream disconnected');
+  await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText('SAVED OUTPUT');
   const retryStream = page.getByRole('button', { name: 'Retry live events' });
   await expect(retryStream).toBeVisible();
   await page.setViewportSize({ width: 320, height: 720 });
