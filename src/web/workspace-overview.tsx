@@ -106,9 +106,7 @@ export function WorkspaceOverview({
   return (
     <section className="workspace-overview" aria-label="Workspace activity">
       {!isLive && (
-        <p className="overview-transport-warning" role="status">
-          {transportMessage}
-        </p>
+        <p className="overview-transport-warning" role="status">{transportMessage}</p>
       )}
       <div className="overview-metrics" aria-label="Task status summary">
         {metrics.map(({ label, value, hint }) => (
