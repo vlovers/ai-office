@@ -317,12 +317,20 @@ try {
     overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
   ).toBeVisible();
   await search.fill('NO_MATCH_FIXTURE');
-  await expect(overview.getByText('No tasks match your search.')).toBeVisible();
+  await expect(overview.getByText('No tasks match your search or status filter.')).toBeVisible();
   await search.fill('FIXTURE · held SDK reasoning');
   await expect(
     overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
   ).toBeVisible();
   await search.fill('');
+  const overviewStatus = overview.getByRole('combobox', { name: 'Filter tasks by status' });
+  await overviewStatus.selectOption('completed');
+  await expect(overview.getByText('No tasks match your search or status filter.')).toBeVisible();
+  await overviewStatus.selectOption('running');
+  await expect(
+    overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
+  ).toBeVisible();
+  await overviewStatus.selectOption('all');
   await newTask('codex-2', 'FIXTURE · submitted queue', 'Review later');
   const queue = page.getByRole('region', { name: 'Live task queue' });
   await expect(queue).toContainText('FIXTURE · submitted queue');
