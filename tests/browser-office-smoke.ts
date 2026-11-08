@@ -410,6 +410,29 @@ try {
   await expect(page.locator('#task-history')).toBeVisible();
   await page.goForward();
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // A temporary dashboard outage must preserve the deep-linked task inspector.
+  // The next successful poll restores connectivity without a reload or lost selection.
+  let dashboardOffline = true;
+  await page.route('**/api/dashboard', async (route) => {
+    if (dashboardOffline) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    } else {
+      await route.continue();
+    }
+  });
+  await expect(page.getByText('Server disconnected', { exact: true })).toBeVisible({
+    timeout: 12000,
+  });
+  await expect(page).toHaveURL(/#task\\/[^/]+\\/session$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  dashboardOffline = false;
+  await expect(page.getByText('Server disconnected', { exact: true })).toBeHidden({
+    timeout: 12000,
+  });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(page).toHaveURL(/#task\\/[^/]+\\/session$/);
+  await page.unroute('**/api/dashboard');
   await page.setViewportSize({ width: 1440, height: 1100 });
   // A valid task may have a stale review deep link before it has a workspace.
   // Offer its session instead of sending the user to unrelated task history.
