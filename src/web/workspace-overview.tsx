@@ -86,6 +86,16 @@ export function WorkspaceOverview({
     if (hasTask || state === 'running') return 'Running';
     return 'Idle';
   };
+  let transportMessage = '';
+  if (transportStatus === 'disconnected') {
+    transportMessage = dashboard
+      ? 'Server disconnected. Task counts and provider status are from the last received snapshot.'
+      : 'Server disconnected. No workspace snapshot is available. Retry the connection to load tasks.';
+  } else if (transportStatus === 'connecting') {
+    transportMessage = dashboard
+      ? 'Reconnecting to server. Task counts and provider status may be outdated.'
+      : 'Connecting to server. Waiting for the first workspace snapshot.';
+  }
   const metrics = [
     { label: 'Running', value: running, hint: 'Tasks executing now' },
     { label: 'In queue', value: dashboard?.queue.length ?? 0, hint: 'Submitted and waiting' },
@@ -97,13 +107,7 @@ export function WorkspaceOverview({
     <section className="workspace-overview" aria-label="Workspace activity">
       {!isLive && (
         <p className="overview-transport-warning" role="status">
-          {transportStatus === 'disconnected'
-            ? dashboard
-              ? 'Server disconnected. Task counts and provider status are from the last received snapshot.'
-              : 'Server disconnected. No workspace snapshot is available. Retry the connection to load tasks.'
-            : dashboard
-              ? 'Reconnecting to server. Task counts and provider status may be outdated.'
-              : 'Connecting to server. Waiting for the first workspace snapshot.'}
+          {transportMessage}
         </p>
       )}
       <div className="overview-metrics" aria-label="Task status summary">
