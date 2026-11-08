@@ -545,7 +545,26 @@ export function WorkflowBoard({
             </ul>
           )}
           {visibleWorkflows.length === 0 && (
-            <p role="status">No workflows match the current filters.</p>
+            <div role="status">
+              <p>
+                {selectedOnly && !selected
+                  ? 'No workflow selected. Select a workflow or clear the focused view.'
+                  : 'No workflows match the current filters.'}
+              </p>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => {
+                  setWorkflowQuery('');
+                  setStateFilter('all');
+                  setTriageOnly(false);
+                  setSelectedOnly(false);
+                  setSortBy('attention');
+                }}
+              >
+                Clear workflow filters
+              </button>
+            </div>
           )}
         </div>
       )}
