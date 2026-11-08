@@ -110,4 +110,33 @@ describe('minimal workspace overview', () => {
     expect(html).toContain('Open task: Task submitted');
     expect(html).not.toContain('72%');
   });
+  it('exposes status filters and searches across task, repository and agent fields', () => {
+    const html = render(dashboard([task('review', 'failed')]));
+    expect(html).toContain('aria-label="Filter tasks by status"');
+    expect(html).toContain('<option value="queued">In queue</option>');
+    expect(html).toContain('<option value="attention">Needs attention</option>');
+    expect(html).toContain('Search tasks, repositories or agents');
+    expect(html).toContain('1 matching');
+  });
+
+  it('limits initial rows to twelve with an accessible path to older tasks', () => {
+    const data = dashboard(
+      Array.from({ length: 15 }, (_, index) => task(String(index).padStart(2, '0'), 'completed')),
+    );
+    const html = render(data);
+    expect(html.match(/aria-label="Open task:/g)).toHaveLength(12);
+    expect(html).toContain('Show more tasks (3 remaining)');
+    expect(html).toContain('15 matching');
+    expect(html).toContain('15 total');
+  });
+
+  it('does not confuse unsubmitted drafts with the submitted queue metric', () => {
+    const data = dashboard([task('draft', 'queued')]);
+    const html = render(data);
+    expect(html).toContain('Not started');
+    expect(html).toContain('Submitted and waiting');
+    expect(html).toContain('<strong>0</strong>');
+    expect(html).not.toContain('state-queued">In queue');
+  });
+
 });
