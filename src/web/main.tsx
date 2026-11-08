@@ -878,7 +878,10 @@ function App() {
                             ? 'LAST KNOWN OUTPUT · DISCONNECTED'
                             : !task
                               ? 'SELECT A TASK'
-                              : ['completed', 'failed', 'interrupted', 'stopped'].includes(task.state)
+                              : task.state === 'completed' ||
+                                  task.state === 'failed' ||
+                                  task.state === 'interrupted' ||
+                                  task.state === 'stopped'
                                 ? 'SAVED OUTPUT'
                                 : httpConnection === 'connecting'
                                   ? 'CONNECTING · OUTPUT MAY BE STALE'
