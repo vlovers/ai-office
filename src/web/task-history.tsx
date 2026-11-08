@@ -269,7 +269,7 @@ export function TaskHistory({
           {historyPage.remaining > 0 && (
             <div className="history-load-more">
               <p role="status">
-                {historyPage.rows.length} of {visibleHistory.length} matching tasks loaded
+                {visibleHistory.length - historyPage.remaining} of {visibleHistory.length} matching tasks loaded
               </p>
               <button
                 type="button"
