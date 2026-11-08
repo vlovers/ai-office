@@ -271,8 +271,8 @@ export function WorkspaceOverview({
                   : `Last known: ${dashboard.connection.message}`}
             </p>
             <p className="overview-connection-caption">
-              Provider readiness is based on the last received snapshot; server connectivity is tracked
-              separately.
+              Provider readiness is based on the last received snapshot;
+              {' '}server connectivity is tracked separately.
             </p>
           </section>
         </aside>
