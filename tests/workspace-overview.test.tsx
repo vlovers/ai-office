@@ -110,6 +110,7 @@ describe('minimal workspace overview', () => {
     expect(html).toContain('Open task: Task submitted');
     expect(html).not.toContain('72%');
   });
+
   it('exposes status filters and searches across task, repository and agent fields', () => {
     const html = render(dashboard([task('review', 'failed')]));
     expect(html).toContain('aria-label="Filter tasks by status"');
@@ -138,5 +139,4 @@ describe('minimal workspace overview', () => {
     expect(html).toContain('<strong>0</strong>');
     expect(html).not.toContain('state-queued">In queue');
   });
-
 });
