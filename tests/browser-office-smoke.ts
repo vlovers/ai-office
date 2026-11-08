@@ -601,8 +601,19 @@ try {
   });
   const firstBatchCount = await history.locator('.task-row').count();
   assert.ok(firstBatchCount >= 40 && firstBatchCount <= 41);
+  const totalMatching = Number(
+    (await history.locator('.history-load-more [role="status"]').innerText()).match(/of (\\d+) matching/)?.[1],
+  );
+  assert.ok(totalMatching >= 125);
+  // A pinned selection outside the page may add a row, but never advances pagination.
+  await expect(history.locator('.history-load-more [role="status"]')).toHaveText(
+    `40 of ${totalMatching} matching tasks loaded`,
+  );
   await history.getByRole('button', { name: 'Show next 40 tasks' }).click();
   await expect(history.locator('.task-row')).toHaveCount(firstBatchCount + 40);
+  await expect(history.locator('.history-load-more [role="status"]')).toHaveText(
+    `80 of ${totalMatching} matching tasks loaded`,
+  );
   if ((await historyFiltersToggle.getAttribute('aria-expanded')) !== 'true') {
     await historyFiltersToggle.click();
   }
