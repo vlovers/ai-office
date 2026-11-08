@@ -35,6 +35,7 @@ export function WorkspaceOverview({
 }: WorkspaceOverviewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState('recent');
   const [visibleCount, setVisibleCount] = useState(12);
   const isLive = transportStatus === 'connected';
   const tasks = dashboard?.tasks ?? [];
@@ -57,6 +58,12 @@ export function WorkspaceOverview({
         return task.state === 'completed';
       case 'attention':
         return task.state === 'failed' || task.state === 'interrupted';
+      case 'failed':
+        return task.state === 'failed';
+      case 'interrupted':
+        return task.state === 'interrupted';
+      case 'stopped':
+        return task.state === 'stopped';
       default:
         return true;
     }
@@ -76,7 +83,11 @@ export function WorkspaceOverview({
           ))
       );
     })
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => {
+      if (sortOrder === 'oldest') return a.updatedAt.localeCompare(b.updatedAt);
+      if (sortOrder === 'title') return a.title.localeCompare(b.title);
+      return b.updatedAt.localeCompare(a.updatedAt);
+    });
   const recent = matchingTasks.slice(0, visibleCount);
   const agents = dashboard?.agents ?? [];
   const agentLabel = (state: string, hasTask: boolean) => {
@@ -157,8 +168,39 @@ export function WorkspaceOverview({
                 <option value="queued">In queue</option>
                 <option value="completed">Completed</option>
                 <option value="attention">Needs attention</option>
+                <option value="failed">Failed</option>
+                <option value="interrupted">Interrupted</option>
+                <option value="stopped">Stopped</option>
               </select>
             </label>
+            <label>
+              <span className="sr-only">Sort workspace tasks</span>
+              <select
+                aria-label="Sort workspace tasks"
+                value={sortOrder}
+                onChange={(event) => {
+                  setSortOrder(event.target.value);
+                  setVisibleCount(12);
+                }}
+              >
+                <option value="recent">Recently updated</option>
+                <option value="oldest">Oldest updated</option>
+                <option value="title">Task title</option>
+              </select>
+            </label>
+            {(query || statusFilter !== 'all' || sortOrder !== 'recent') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setStatusFilter('all');
+                  setSortOrder('recent');
+                  setVisibleCount(12);
+                }}
+              >
+                Reset view
+              </button>
+            )}
             {dashboard && <span role="status">{matchingTasks.length} matching</span>}
           </div>
           {!dashboard ? (
@@ -175,7 +217,20 @@ export function WorkspaceOverview({
                   </button>
                 </>
               ) : (
-                <p role="status">No tasks match your search or status filter.</p>
+                <div role="status">
+                  <p>No tasks match your search or status filter.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery('');
+                      setStatusFilter('all');
+                      setSortOrder('recent');
+                      setVisibleCount(12);
+                    }}
+                  >
+                    Clear search and filters
+                  </button>
+                </div>
               )}
             </div>
           ) : (
