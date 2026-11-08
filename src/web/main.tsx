@@ -680,6 +680,7 @@ function App() {
             <OfficePage>
               <WorkspaceOverview
                 dashboard={dashboard}
+                transportStatus={httpConnection}
                 onOpenTask={(task) => navigateTask(task, 'session')}
                 onNewTask={() => showSection('compose')}
               />
