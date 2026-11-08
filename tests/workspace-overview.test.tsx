@@ -58,12 +58,35 @@ const dashboard = (tasks: Task[]): Dashboard => ({
   },
 });
 
-const render = (data?: Dashboard) =>
+const render = (
+  data?: Dashboard,
+  transportStatus: 'connecting' | 'connected' | 'disconnected' = 'connected',
+) =>
   renderToStaticMarkup(
-    <WorkspaceOverview dashboard={data} onOpenTask={() => {}} onNewTask={() => {}} />,
+    <WorkspaceOverview
+      dashboard={data}
+      transportStatus={transportStatus}
+      onOpenTask={() => {}}
+      onNewTask={() => {}}
+    />,
   );
 
 describe('minimal workspace overview', () => {
+  it('does not present a stale provider snapshot as live after disconnect', () => {
+    const html = render(dashboard([]), 'disconnected');
+    expect(html).toContain('Server disconnected');
+    expect(html).toContain('Last known: Local provider available');
+    expect(html).not.toContain('overview-connection-dot ready');
+  });
+
+  it('distinguishes reconnecting from live provider readiness', () => {
+    const reconnecting = render(dashboard([]), 'connecting');
+    expect(reconnecting).toContain('Reconnecting to server');
+    expect(reconnecting).not.toContain('overview-connection-dot ready');
+    const connected = render(dashboard([]), 'connected');
+    expect(connected).toContain('overview-connection-dot ready');
+    expect(connected).not.toContain('overview-transport-warning');
+  });
   it('does not fabricate metrics or agents before a snapshot arrives', () => {
     const html = render();
     expect(html).toContain('Loading workspace tasks');
