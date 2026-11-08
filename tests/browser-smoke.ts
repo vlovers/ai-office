@@ -243,9 +243,7 @@ try {
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.getByRole('heading', { name: 'Task session' })).toBeVisible();
   await expect(page.locator('#task-workspace')).toContainText('Review the example project');
-  await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText(
-    'LIVE OUTPUT',
-  );
+  await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText('LIVE OUTPUT');
   // Focus mode intentionally hides task history. Return to the Tasks list
   // to exercise its mobile filters, then restore the task-scoped deep link.
   await page
@@ -632,9 +630,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-mobile.png'), fullPage: true });
   await expect(page.locator('#task-workspace')).toContainText('Agent B concurrent');
-  await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText(
-    'LIVE OUTPUT',
-  );
+  await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText('LIVE OUTPUT');
   await page.getByRole('button', { name: /Stop agent/ }).click();
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
   assert.deepEqual(errors, []);
