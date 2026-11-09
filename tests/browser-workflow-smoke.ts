@@ -51,6 +51,21 @@ try {
   await expect(page.locator('#workflows')).toBeFocused();
   const board = page.getByRole('region', { name: 'Workflow timeline', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Confirm workflow checkpoint' });
+  const stageProgress = board.getByRole('list', { name: 'Workflow stage progress' });
+  await expect(stageProgress).toBeVisible();
+  await expect(stageProgress.locator('.workflow-stage').first()).toHaveAttribute(
+    'data-stage-state',
+    'attention',
+  );
+  await expect(stageProgress.locator('.workflow-stage').first()).toContainText('Action required');
+  for (const width of [900, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const horizontalOverflow = await stageProgress.evaluate(
+      (element) => element.scrollWidth > element.clientWidth + 1,
+    );
+    assert.equal(horizontalOverflow, false, `Workflow stage overflow at ${width}px`);
+  }
+  await page.setViewportSize({ width: 1440, height: 1100 });
   // Manual refresh is a single read, not a mutation followed by a second read.
   // Pause polling to isolate the explicit request from the three-second timer.
   await board.getByRole('button', { name: 'Pause live updates' }).click();
@@ -127,6 +142,9 @@ try {
     await expect(board.getByRole('alert').first()).toContainText(
       'Refresh workflow before trying another action.',
     );
+    await expect(
+      stageProgress.getByText('Approval and stage actions are locked', { exact: false }),
+    ).toBeVisible();
   } finally {
     await page.unroute(outagePattern);
   }
@@ -329,6 +347,7 @@ try {
   await expect(board).toContainText('QA assertions passed', { timeout: 45000 });
   await gate('Approve QA result');
   await expect(board.getByText(/^State: completed/)).toContainText('State: completed');
+  await expect(stageProgress.locator('[data-stage-state="success"]')).toHaveCount(3);
   const diagnostics = board.getByLabel('Workflow diagnostics');
   await expect(diagnostics).toContainText('Persisted checkpoint diagnostics');
   await expect(diagnostics).toContainText('no automatic restart');
