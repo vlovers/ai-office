@@ -641,7 +641,9 @@ export function WorkflowBoard({
                   <li
                     key={stage.kind}
                     className="workflow-stage"
-                    data-stage-state={workflowStagePresentation(stage.status, stage.nextAction).tone}
+                    data-stage-state={
+                      workflowStagePresentation(stage.status, stage.nextAction).tone
+                    }
                   >
                     <div className="workflow-stage-heading">
                       <strong>{stage.kind.toUpperCase()}</strong>

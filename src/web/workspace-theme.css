@@ -1791,6 +1791,7 @@ a {
   display: grid;
   gap: 12px;
 }
+
 .shell .workflow-stage {
   min-width: 0;
   padding: 18px;
@@ -1800,18 +1801,23 @@ a {
   background: #151b27;
   overflow-wrap: anywhere;
 }
+
 .shell .workflow-stage[data-stage-state='active'] {
   border-left-color: #a78bfa;
 }
+
 .shell .workflow-stage[data-stage-state='attention'] {
   border-left-color: #f5b969;
 }
+
 .shell .workflow-stage[data-stage-state='success'] {
   border-left-color: #57d8a3;
 }
+
 .shell .workflow-stage[data-stage-state='danger'] {
   border-left-color: #f38e96;
 }
+
 .shell .workflow-stage-heading {
   display: flex;
   justify-content: space-between;
@@ -1820,10 +1826,12 @@ a {
   gap: 8px;
   margin-bottom: 8px;
 }
+
 .shell .workflow-stage-heading strong {
   font-size: 13px;
   letter-spacing: 0.4px;
 }
+
 .shell .workflow-stage-status {
   font-size: 11px;
   color: #ced4e2;
@@ -1831,25 +1839,31 @@ a {
   border-radius: 6px;
   background: #293243;
 }
+
 .shell .workflow-stage[data-stage-state='attention'] .workflow-stage-status {
   color: #ffd59b;
 }
+
 .shell .workflow-stage[data-stage-state='danger'] .workflow-stage-status {
   color: #ffb2bf;
 }
+
 .shell .workflow-stage[data-stage-state='success'] .workflow-stage-status {
   color: #72e5b2;
 }
+
 .shell .workflow-stage-hint {
   font-size: 12px;
   color: var(--amber);
 }
+
 @media (max-width: 680px) {
   .shell .workflow-stage {
-  padding: 14px;
-}
+    padding: 14px;
+  }
+
   .shell .workflow-stage button {
-  min-height: 44px;
-  max-width: 100%;
-}
+    min-height: 44px;
+    max-width: 100%;
+  }
 }
