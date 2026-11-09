@@ -33,12 +33,14 @@ export function SettingsPage({
         <div className="panel-heading">
           <h2>Codex connection</h2>
           <span
-            className={`badge ${!dashboard ? '' : dashboard.connection.status === 'available' ? 'completed' : 'failed'}`}
+            className={`badge ${!transportConnected || !dashboard ? 'failed' : dashboard.connection.status === 'available' ? 'completed' : 'failed'}`}
             role="status"
             data-testid="codex-connection-status"
           >
-            {!dashboard
-              ? 'Checking connection…'
+            {!transportConnected
+              ? 'Server disconnected'
+              : !dashboard
+                ? 'Checking connection…'
               : dashboard.connection.status === 'available'
                 ? 'Available'
                 : dashboard.connection.status === 'authentication-required'
@@ -69,7 +71,11 @@ export function SettingsPage({
           </button>
         </div>
         <p className="connection-message">
-          {dashboard?.connection.message ?? 'Checking the local backend connection…'}
+          {!transportConnected
+            ? dashboard
+              ? `Last known provider state: ${dashboard.connection.message}`
+              : 'Provider status unavailable until the server reconnects.'
+            : (dashboard?.connection.message ?? 'Checking the local backend connection…')}
         </p>
         <p className="field-hint">
           No credentials are entered in this dashboard. Local login never falls back to API billing.
