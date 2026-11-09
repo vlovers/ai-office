@@ -12,6 +12,7 @@ export function TaskSessionControls({
   resumeSessionId,
   busy,
   stopPending,
+  transportConnected,
   showStopControl,
   stopControl,
   onNavigate,
@@ -27,6 +28,7 @@ export function TaskSessionControls({
   resumeSessionId: string;
   busy: boolean;
   stopPending: boolean;
+  transportConnected: boolean;
   showStopControl: boolean;
   stopControl: ReactNode;
   onNavigate: (task: Task, destination: TaskDestination) => void;
@@ -117,7 +119,7 @@ export function TaskSessionControls({
                 Resumes the original pinned configuration; current profile edits do not apply.
               </small>
             )}
-            <button disabled={busy || !dashboard?.ready} onClick={onStartTask}>
+            <button disabled={!transportConnected || busy || !dashboard?.ready} onClick={onStartTask}>
               ▶ Start task
             </button>
           </div>
@@ -126,7 +128,11 @@ export function TaskSessionControls({
       {queued && (
         <div className="queue-notice" role="status">
           Submitted / {queued.agentId} / queue #{queued.order}. {queued.waitingReason}
-          <button className="secondary" disabled={stopPending} onClick={onStopTask}>
+          <button
+            className="secondary"
+            disabled={!transportConnected || stopPending}
+            onClick={onStopTask}
+          >
             Cancel queued task
           </button>
         </div>

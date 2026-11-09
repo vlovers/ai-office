@@ -455,7 +455,12 @@ function App() {
   const stopControl = selectedBusy && agent?.taskId && (
     <button
       className="stop-button"
-      disabled={pendingStops.includes(agent.taskId) || agent.state === 'stopping' || !agent.canStop}
+      disabled={
+        httpConnection !== 'connected' ||
+        pendingStops.includes(agent.taskId) ||
+        agent.state === 'stopping' ||
+        !agent.canStop
+      }
       onClick={() => void stopTask(agent.taskId!)}
     >
       ■ Stop agent
@@ -903,6 +908,7 @@ function App() {
                             resumeSessionId={resumeSessionId}
                             busy={busy}
                             stopPending={pendingStops.includes(task.id)}
+                             transportConnected={httpConnection === 'connected'}
                             showStopControl={view === 'focus' && task.id === agent?.taskId}
                             stopControl={stopControl}
                             onNavigate={navigateTask}

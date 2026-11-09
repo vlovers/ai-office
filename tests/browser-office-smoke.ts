@@ -423,6 +423,10 @@ try {
   await expect(page.locator('#task-history')).toBeVisible();
   await page.goForward();
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // Even while the selected task stays visible, stale transport must not allow
+  // a queued task cancellation based solely on the last dashboard snapshot.
+  const cancelQueuedTask = page.getByRole('button', { name: 'Cancel queued task' });
+  await expect(cancelQueuedTask).toBeEnabled();
   // A temporary dashboard outage must preserve the deep-linked task inspector.
   // The next successful poll restores connectivity without a reload or lost selection.
   let dashboardOffline = true;
@@ -439,12 +443,14 @@ try {
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(cancelQueuedTask).toBeDisabled();
   dashboardOffline = false;
   await expect(page.getByText('Server disconnected', { exact: true })).toBeHidden({
     timeout: 12000,
   });
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(cancelQueuedTask).toBeEnabled();
   await page.unroute('**/api/dashboard');
   await page.setViewportSize({ width: 1440, height: 1100 });
   // A valid task may have a stale review deep link before it has a workspace.
