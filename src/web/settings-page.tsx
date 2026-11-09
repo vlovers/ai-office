@@ -30,7 +30,7 @@ export function SettingsPage({
     ? dashboard
       ? `Last known provider state: ${dashboard.connection.message}`
       : 'Provider status unavailable until the server reconnects.'
-    : dashboard?.connection.message ?? 'Checking the local backend connection…';
+    : (dashboard?.connection.message ?? 'Checking the local backend connection…');
   return (
     <div className="settings-destination">
       <div className="destination-intro">
@@ -47,7 +47,13 @@ export function SettingsPage({
         <div className="panel-heading">
           <h2>Codex connection</h2>
           <span
-            className={`badge ${!transportConnected || !dashboard ? 'failed' : dashboard.connection.status === 'available' ? 'completed' : 'failed'}`}
+            className={`badge ${
+              !transportConnected || !dashboard
+                ? 'failed'
+                : dashboard.connection.status === 'available'
+                  ? 'completed'
+                  : 'failed'
+            }`}
             role="status"
             data-testid="codex-connection-status"
           >

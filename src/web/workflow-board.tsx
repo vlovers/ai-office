@@ -638,7 +638,11 @@ export function WorkflowBoard({
                 )}
               <ol className="workflow-stage-list" aria-label="Workflow stage progress">
                 {timeline.stages.map((stage) => (
-                  <li key={stage.kind} className="workflow-stage" data-stage-state={workflowStagePresentation(stage.status, stage.nextAction).tone}>
+                  <li
+                    key={stage.kind}
+                    className="workflow-stage"
+                    data-stage-state={workflowStagePresentation(stage.status, stage.nextAction).tone}
+                  >
                     <div className="workflow-stage-heading">
                       <strong>{stage.kind.toUpperCase()}</strong>
                       <span className="workflow-stage-status">
