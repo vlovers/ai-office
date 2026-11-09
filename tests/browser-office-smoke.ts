@@ -580,7 +580,9 @@ try {
   await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();
   await capture('disconnected');
   await navigate('Settings');
-  await expect(page.getByText('Settings show the last received snapshot', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('Settings show the last received snapshot', { exact: false }),
+  ).toBeVisible();
   await expect(page.getByLabel('Authentication mode')).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Register/ })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Refresh connection' })).toBeEnabled();

@@ -17,6 +17,20 @@ export function SettingsPage({
   onRefreshConnection: () => void;
   onRegisterRepository: (path: string, form: HTMLFormElement) => void;
 }) {
+  const connectionStatus = !transportConnected
+    ? 'Server disconnected'
+    : !dashboard
+      ? 'Checking connection…'
+      : dashboard.connection.status === 'available'
+        ? 'Available'
+        : dashboard.connection.status === 'authentication-required'
+          ? 'Authentication required'
+          : 'Connection error';
+  const connectionMessage = !transportConnected
+    ? dashboard
+      ? `Last known provider state: ${dashboard.connection.message}`
+      : 'Provider status unavailable until the server reconnects.'
+    : dashboard?.connection.message ?? 'Checking the local backend connection…';
   return (
     <div className="settings-destination">
       <div className="destination-intro">
@@ -37,15 +51,7 @@ export function SettingsPage({
             role="status"
             data-testid="codex-connection-status"
           >
-            {!transportConnected
-              ? 'Server disconnected'
-              : !dashboard
-                ? 'Checking connection…'
-              : dashboard.connection.status === 'available'
-                ? 'Available'
-                : dashboard.connection.status === 'authentication-required'
-                  ? 'Authentication required'
-                  : 'Connection error'}
+            {connectionStatus}
           </span>
         </div>
         <div className="connection-controls">
@@ -71,11 +77,7 @@ export function SettingsPage({
           </button>
         </div>
         <p className="connection-message">
-          {!transportConnected
-            ? dashboard
-              ? `Last known provider state: ${dashboard.connection.message}`
-              : 'Provider status unavailable until the server reconnects.'
-            : (dashboard?.connection.message ?? 'Checking the local backend connection…')}
+          {connectionMessage}
         </p>
         <p className="field-hint">
           No credentials are entered in this dashboard. Local login never falls back to API billing.
