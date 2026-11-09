@@ -7,6 +7,7 @@ import { readWorkflowResponse } from './workflow-http.js';
 import { assertWorkflowReadShape } from './workflow-response-shapes.js';
 import { assertWorkflowSnapshotCoherent } from './workflow-snapshot-coherence.js';
 import { workflowsForTask } from './workflow-task-context.js';
+import { workflowStagePresentation } from './workflow-stage-presentation.js';
 import { createRequestDeadline, createSingleFlight } from './workflow-polling.js';
 import {
   selectWorkflowOperations,
@@ -635,10 +636,15 @@ export function WorkflowBoard({
                     <p role="note">{diagnostics.warning}</p>
                   </section>
                 )}
-              <ol>
+              <ol className="workflow-stage-list" aria-label="Workflow stage progress">
                 {timeline.stages.map((stage) => (
-                  <li key={stage.kind}>
-                    <strong>{stage.kind.toUpperCase()}</strong> — {stage.status}
+                  <li key={stage.kind} className="workflow-stage" data-stage-state={workflowStagePresentation(stage.status, stage.nextAction).tone}>
+                    <div className="workflow-stage-heading">
+                      <strong>{stage.kind.toUpperCase()}</strong>
+                      <span className="workflow-stage-status">
+                        {workflowStagePresentation(stage.status, stage.nextAction).label}
+                      </span>
+                    </div>
                     <p>
                       {stage.agentId} · profile v{stage.agentRevision} · {stage.mode}
                     </p>
@@ -665,6 +671,11 @@ export function WorkflowBoard({
                           {report.error && <p role="alert">{report.error}</p>}
                         </div>
                       ))}
+                    {stage.nextAction && !checkpointCurrent && (
+                      <p className="workflow-stage-hint" role="status">
+                        Approval and stage actions are locked until the current checkpoint is verified.
+                      </p>
+                    )}
                     {stage.nextAction && (
                       <button
                         disabled={loading || !checkpointCurrent}
