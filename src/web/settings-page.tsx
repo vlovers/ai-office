@@ -4,6 +4,7 @@ export function SettingsPage({
   dashboard,
   busy,
   agentBusy,
+  transportConnected,
   onChangeMode,
   onRefreshConnection,
   onRegisterRepository,
@@ -11,6 +12,7 @@ export function SettingsPage({
   dashboard?: Dashboard;
   busy: boolean;
   agentBusy: boolean;
+  transportConnected: boolean;
   onChangeMode: (mode: AuthMode) => void;
   onRefreshConnection: () => void;
   onRegisterRepository: (path: string, form: HTMLFormElement) => void;
@@ -21,6 +23,12 @@ export function SettingsPage({
         <h2>Workspace settings</h2>
         <p>Manage your local connection and trusted repository roots.</p>
       </div>
+      {!transportConnected && (
+        <p role="status" className="overview-transport-warning">
+          Server connection unavailable. Settings show the last received snapshot; reconnect before
+          changing authentication or registering repositories.
+        </p>
+      )}
       <section className="panel connection-panel" aria-label="Codex connection">
         <div className="panel-heading">
           <h2>Codex connection</h2>
@@ -44,7 +52,7 @@ export function SettingsPage({
             <select
               id="authentication-mode"
               value={dashboard?.connection.mode ?? 'local-cli-chatgpt'}
-              disabled={!dashboard || busy || agentBusy}
+              disabled={!transportConnected || !dashboard || busy || agentBusy}
               onChange={(event) => onChangeMode(event.target.value as AuthMode)}
             >
               <option value="local-cli-chatgpt">Local ChatGPT login (preferred)</option>
@@ -93,7 +101,7 @@ export function SettingsPage({
               placeholder="/Users/you/projects/example"
               autoComplete="off"
             />
-            <button className="secondary" disabled={busy}>
+            <button className="secondary" disabled={!transportConnected || busy}>
               Register <span>↗</span>
             </button>
           </div>

@@ -824,6 +824,7 @@ function App() {
                   {page === 'settings' && (
                     <SettingsPage
                       dashboard={dashboard}
+                      transportConnected={httpConnection === 'connected'}
                       busy={busy}
                       agentBusy={agentBusy}
                       onChangeMode={(mode) => {

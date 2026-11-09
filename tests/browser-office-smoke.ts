@@ -579,7 +579,15 @@ try {
   });
   await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();
   await capture('disconnected');
+  await navigate('Settings');
+  await expect(page.getByText('Settings show the last received snapshot', { exact: false })).toBeVisible();
+  await expect(page.getByLabel('Authentication mode')).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Register/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Refresh connection' })).toBeEnabled();
   await page.unroute('**/api/dashboard');
+  await expect(page.getByLabel('Authentication mode')).toBeEnabled({ timeout: 10000 });
+  await expect(page.getByRole('button', { name: /^Register/ })).toBeEnabled();
+  await navigate('Office');
   await expect(page.locator('.studio-notice')).toHaveCount(0, { timeout: 10000 });
   // Large persisted histories should not mount every task row on a phone.
   // The backend fixture stays unchanged: intercept only this read-only snapshot.
