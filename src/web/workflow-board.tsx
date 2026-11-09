@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dashboard } from '../shared/types.js';
 import { exportWorkflowOperationsCsv } from './workflow-operations-export.js';
+import { isCurrentWorkflowCheckpoint } from './workflow-checkpoint-status.js';
+import { createLatestResultGate } from './latest-result-gate.js';
+import { readWorkflowResponse } from './workflow-http.js';
+import { assertWorkflowReadShape } from './workflow-response-shapes.js';
+import { assertWorkflowSnapshotCoherent } from './workflow-snapshot-coherence.js';
+import { workflowsForTask } from './workflow-task-context.js';
+import { workflowStagePresentation } from './workflow-stage-presentation.js';
+import { createRequestDeadline, createSingleFlight } from './workflow-polling.js';
 import {
   selectWorkflowOperations,
   summarizeWorkflowOperations,
@@ -60,21 +68,23 @@ const labels: Record<string, string> = {
   'approve-qa-result': 'Approve QA result',
   cancel: 'Cancel workflow',
 };
-async function request<T>(path: string, body?: unknown): Promise<T> {
+async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(
     '/api' + path,
     body === undefined
-      ? undefined
+      ? { signal }
       : {
+          signal,
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
         },
   );
-  const value = await response.json();
-  if (!response.ok)
-    throw new Error(value.error ?? `Workflow request failed: HTTP ${response.status}`);
-  return value as T;
+  const value = await readWorkflowResponse<T>(response);
+  // TypeScript generics do not validate untrusted JSON at runtime. Keep
+  // malformed successful GETs from becoming an actionable checkpoint.
+  if (body === undefined) assertWorkflowReadShape(path, value);
+  return value;
 }
 
 export function WorkflowBoard({
@@ -92,8 +102,15 @@ export function WorkflowBoard({
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attention'>('attention');
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState('');
+  const [loadingCheckpoint, setLoadingCheckpoint] = useState(false);
+  // Mutations can select a new workflow before React renders again.
+  // Read this ref after async polling instead of a stale selected closure.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   useEffect(() => {
     if (inspection) {
+      if (inspection.id !== selectedRef.current) setLoadingCheckpoint(true);
+      selectedRef.current = inspection.id;
       setSelected(inspection.id);
       // Explicit inspection must load the requested checkpoint, including after a pause.
       setPaused(false);
@@ -109,6 +126,7 @@ export function WorkflowBoard({
   const [reviewer, setReviewer] = useState('');
   const [qa, setQA] = useState('');
   const [error, setError] = useState('');
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<{
     name: string;
@@ -118,54 +136,114 @@ export function WorkflowBoard({
   } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  // A slow poll must be allowed to settle while the next poll is pending.
+  // Only a newer *settled* snapshot may supersede an earlier response.
   const refreshEpoch = useRef(0);
+  const refreshResults = useRef(createLatestResultGate());
+  const automaticPolling = useRef(createSingleFlight());
+  const pendingReads = useRef(new Set<ReturnType<typeof createRequestDeadline>>());
+  const abortPendingReads = () => {
+    for (const deadline of pendingReads.current) deadline.cancel();
+    pendingReads.current.clear();
+  };
   const refresh = useCallback(async () => {
-    const epoch = ++refreshEpoch.current;
+    const epoch = refreshEpoch.current;
+    const ticket = refreshResults.current.begin();
+    const deadline = createRequestDeadline(15000);
+    pendingReads.current.add(deadline);
     try {
       const [all, current, choices] = await Promise.all([
-        request<Summary[]>('/workflows'),
-        request<Dashboard>('/dashboard'),
-        request<{ commands: { commandId: string; argv: string[] }[] }>('/workflows/qa-commands'),
+        request<Summary[]>('/workflows', undefined, deadline.signal),
+        request<Dashboard>('/dashboard', undefined, deadline.signal),
+        request<{ commands: { commandId: string; argv: string[] }[] }>(
+          '/workflows/qa-commands',
+          undefined,
+          deadline.signal,
+        ),
       ]);
       if (epoch !== refreshEpoch.current) return;
-      const workflows = taskId ? all.filter((item) => item.stages[0]?.taskId === taskId) : all;
+      const workflows = workflowsForTask(all, taskId);
+      const requested = selectedRef.current;
+      const next = workflows.some((item) => item.id === requested)
+        ? requested
+        : (workflows[0]?.id ?? '');
+      const [view, output, diagnosis] = next
+        ? await Promise.all([
+            request<Timeline>(`/workflows/${next}/timeline`, undefined, deadline.signal),
+            request<Report[]>(`/workflows/${next}/results`, undefined, deadline.signal),
+            request<Diagnostics>(`/workflows/${next}/diagnostics`, undefined, deadline.signal),
+          ])
+        : [null, [], null];
+      // Reject cross-request skew: a valid JSON timeline or diagnostics response
+      // from a different workflow/version is not a coherent checkpoint.
+      // A legitimate concurrent server update will be retried on the next poll.
+      if (epoch !== refreshEpoch.current || selectedRef.current !== requested) return;
+      if (next) {
+        assertWorkflowSnapshotCoherent(
+          next,
+          workflows.find((item) => item.id === next),
+          view,
+          diagnosis,
+        );
+      }
+      // Commit the list and its checkpoint atomically. A newer settled read
+      // or selection change must never restore an obsolete snapshot.
+      if (!refreshResults.current.accept(ticket)) return;
       setItems(workflows);
       setDashboard(current);
       setCommands(choices.commands);
-      const next = workflows.some((item) => item.id === selected)
-        ? selected
-        : (workflows[0]?.id ?? '');
+      selectedRef.current = next;
       setSelected(next);
-      const [view, output, diagnosis] = next
-        ? await Promise.all([
-            request<Timeline>(`/workflows/${next}/timeline`),
-            request<Report[]>(`/workflows/${next}/results`),
-            request<Diagnostics>(`/workflows/${next}/diagnostics`),
-          ])
-        : [null, [], null];
-      if (epoch !== refreshEpoch.current) return;
       setTimeline(view);
       setReports(output);
       setDiagnostics(diagnosis);
+      setLoadingCheckpoint(false);
+      setHasLoaded(true);
       setError('');
     } catch (cause) {
-      if (epoch === refreshEpoch.current)
-        setError(cause instanceof Error ? cause.message : String(cause));
+      // Abort sibling GETs after a failure; never abort POST mutations here.
+      deadline.cancel();
+      if (epoch === refreshEpoch.current && refreshResults.current.accept(ticket)) {
+        setLoadingCheckpoint(false);
+        setError(
+          deadline.timedOut
+            ? 'Workflow refresh timed out after 15 seconds'
+            : cause instanceof Error
+              ? cause.message
+              : String(cause),
+        );
+      }
+    } finally {
+      deadline.dispose();
+      pendingReads.current.delete(deadline);
     }
-  }, [selected, taskId]);
+  }, [taskId]);
+  const lastPolledSelection = useRef(selected);
   useEffect(() => {
-    if (!paused) void refresh();
-    const timer = paused ? undefined : setInterval(() => void refresh(), 3000);
+    const selectionChanged = lastPolledSelection.current !== selected;
+    lastPolledSelection.current = selected;
+    // Pause stops periodic polling, not a user's explicit workflow selection.
+    // Load the new checkpoint once without resuming the three-second timer.
+    // Pausing while that one-off read is pending cancels it in cleanup; restart
+    // the read once rather than leaving the selected checkpoint loading forever.
+    if (!paused || selectionChanged || loadingCheckpoint) {
+      void automaticPolling.current.run(refresh);
+    }
+    const timer = paused
+      ? undefined
+      : setInterval(() => void automaticPolling.current.run(refresh), 3000);
     return () => {
       if (timer) clearInterval(timer);
       refreshEpoch.current++;
+      automaticPolling.current.reset();
+      abortPendingReads();
     };
-  }, [refresh, paused]);
-  async function mutate(operation: () => Promise<unknown>) {
+  }, [refresh, paused, selected]);
+  async function mutate(operation?: () => Promise<unknown>) {
     setLoading(true);
     setError('');
     try {
-      await operation();
+      if (operation) await operation();
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -173,7 +251,27 @@ export function WorkflowBoard({
       setLoading(false);
     }
   }
+  // Invalidate in-flight snapshots synchronously with a user's choice. React
+  // state may render later, so async poll continuations must read this ref.
+  const chooseWorkflow = (id: string) => {
+    // Reselecting the same item must not blank its checkpoint while paused.
+    if (id === selectedRef.current) return;
+    refreshEpoch.current++;
+    automaticPolling.current.reset();
+    abortPendingReads();
+    selectedRef.current = id;
+    setError('');
+    setLoadingCheckpoint(true);
+    setTimeline(null);
+    setReports([]);
+    setDiagnostics(null);
+    setSelected(id);
+  };
   const chosen = items.find((item) => item.id === selected);
+  // The server enforces optimistic versions; the UI must also fail closed
+  // when polling fails, a different workflow is selected, or updates are paused.
+  const checkpointCurrent =
+    !paused && isCurrentWorkflowCheckpoint(selected, chosen, timeline, error);
   const counts = {
     active: items.filter((item) => item.state === 'active').length,
     blocked: items.filter((item) => item.state === 'blocked').length,
@@ -192,9 +290,9 @@ export function WorkflowBoard({
     ? filteredWorkflows.filter((item) => item.id === selected)
     : filteredWorkflows;
   const workflowChoices = filteredWorkflows;
-  const staleAction = Boolean(
-    action && (!timeline || action.id !== timeline.id || action.version !== timeline.version),
-  );
+  const staleAction =
+    action !== null &&
+    (!checkpointCurrent || action.id !== selected || action.version !== timeline?.version);
   const unsubmitted =
     dashboard?.tasks.filter(
       (task) =>
@@ -244,7 +342,7 @@ export function WorkflowBoard({
             {paused ? 'Resume live updates' : 'Pause live updates'}
           </button>
         )}
-        <button className="secondary" disabled={loading} onClick={() => void mutate(refresh)}>
+        <button className="secondary" disabled={loading} onClick={() => void mutate()}>
           Refresh workflow
         </button>
       </div>
@@ -299,6 +397,8 @@ export function WorkflowBoard({
                   reviewerAgentId: reviewer,
                   ...(qa ? { qaAgentId: qa } : {}),
                 });
+                selectedRef.current = created.id;
+                setLoadingCheckpoint(true);
                 setSelected(created.id);
               })
             }
@@ -408,20 +508,14 @@ export function WorkflowBoard({
             execution events before stopping or cancelling anything.
           </p>
           {visibleWorkflows.length > 0 && (
-            <ul aria-label="Workflow operations queue">
+            <ul className="workflow-operations-list" aria-label="Workflow operations queue">
               {visibleWorkflows.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     className="secondary"
                     aria-current={item.id === selected ? 'true' : undefined}
-                    onClick={() => {
-                      refreshEpoch.current++;
-                      setTimeline(null);
-                      setReports([]);
-                      setDiagnostics(null);
-                      setSelected(item.id);
-                    }}
+                    onClick={() => chooseWorkflow(item.id)}
                   >
                     {item.id.slice(0, 8)} · {item.state} · v{item.version}
                   </button>{' '}
@@ -452,11 +546,32 @@ export function WorkflowBoard({
             </ul>
           )}
           {visibleWorkflows.length === 0 && (
-            <p role="status">No workflows match the current filters.</p>
+            <div role="status">
+              <p>
+                {selectedOnly && !selected
+                  ? 'No workflow selected. Select a workflow or clear the focused view.'
+                  : 'No workflows match the current filters.'}
+              </p>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => {
+                  setWorkflowQuery('');
+                  setStateFilter('all');
+                  setTriageOnly(false);
+                  setSelectedOnly(false);
+                  setSortBy('attention');
+                }}
+              >
+                Clear workflow filters
+              </button>
+            </div>
           )}
         </div>
       )}
-      {!items.length && <p>No workflows created yet.</p>}
+      {!items.length && !error && (
+        <p>{hasLoaded ? 'No workflows created yet.' : 'Loading workflows…'}</p>
+      )}
       {items.length > 0 && (
         <>
           <label>
@@ -464,13 +579,7 @@ export function WorkflowBoard({
             <select
               aria-label="Workflow"
               value={selected}
-              onChange={(event) => {
-                refreshEpoch.current++;
-                setTimeline(null);
-                setReports([]);
-                setDiagnostics(null);
-                setSelected(event.target.value);
-              }}
+              onChange={(event) => chooseWorkflow(event.target.value)}
             >
               {selected && !workflowChoices.some((item) => item.id === selected) && (
                 <option value={selected} disabled>
@@ -484,11 +593,22 @@ export function WorkflowBoard({
               ))}
             </select>
           </label>
+          {selected && loadingCheckpoint && timeline?.id !== selected && (
+            <p role="status" aria-live="polite">
+              Loading selected workflow checkpoint…
+            </p>
+          )}
           {timeline && timeline.id === selected && (
             <>
               <p role="status">
                 State: {timeline.state} · version {timeline.version}
               </p>
+              {!checkpointCurrent && (
+                <p role="status">
+                  Checkpoint actions are unavailable until the current workflow version is verified.
+                  Resume live updates or refresh after the connection recovers.
+                </p>
+              )}
               {diagnostics &&
                 diagnostics.id === timeline.id &&
                 diagnostics.version === timeline.version && (
@@ -516,10 +636,21 @@ export function WorkflowBoard({
                     <p role="note">{diagnostics.warning}</p>
                   </section>
                 )}
-              <ol>
+              <ol className="workflow-stage-list" aria-label="Workflow stage progress">
                 {timeline.stages.map((stage) => (
-                  <li key={stage.kind}>
-                    <strong>{stage.kind.toUpperCase()}</strong> — {stage.status}
+                  <li
+                    key={stage.kind}
+                    className="workflow-stage"
+                    data-stage-state={
+                      workflowStagePresentation(stage.status, stage.nextAction).tone
+                    }
+                  >
+                    <div className="workflow-stage-heading">
+                      <strong>{stage.kind.toUpperCase()}</strong>
+                      <span className="workflow-stage-status">
+                        {workflowStagePresentation(stage.status, stage.nextAction).label}
+                      </span>
+                    </div>
                     <p>
                       {stage.agentId} · profile v{stage.agentRevision} · {stage.mode}
                     </p>
@@ -546,9 +677,14 @@ export function WorkflowBoard({
                           {report.error && <p role="alert">{report.error}</p>}
                         </div>
                       ))}
+                    {stage.nextAction && !checkpointCurrent && (
+                      <p className="workflow-stage-hint" role="status">
+                        Approval and stage actions are locked until the current checkpoint is verified.
+                      </p>
+                    )}
                     {stage.nextAction && (
                       <button
-                        disabled={loading}
+                        disabled={loading || !checkpointCurrent}
                         onClick={() => {
                           setAction({
                             name: stage.nextAction!,
@@ -583,7 +719,7 @@ export function WorkflowBoard({
                 !timeline.stages.some((stage) => stage.status === 'running') && (
                   <button
                     className="secondary"
-                    disabled={loading}
+                    disabled={loading || !checkpointCurrent}
                     onClick={() => {
                       setAction({
                         name: 'cancel',

@@ -39,6 +39,13 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
+  const navigate = async (destination: 'Office' | 'Tasks' | 'Agents' | 'Settings') => {
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: destination })
+      .click();
+  };
+  await navigate('Settings');
   // Complete repository registration after the task form was edited: its draft mode must survive.
   let releaseRegistration!: () => void;
   const registration = new Promise<void>((resolve) => {
@@ -51,11 +58,13 @@ try {
   });
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: /^Register/ }).click();
+  await navigate('Tasks');
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Execution mode').selectOption('write');
   releaseRegistration();
-  await expect(page.getByRole('button', { name: /^Register/ })).toBeEnabled();
   await expect(page.getByLabel('Execution mode')).toHaveValue('write');
   await page.getByLabel('Execution mode').selectOption('read-only');
+  await navigate('Agents');
   const studio = page.getByRole('region', { name: 'Agent Studio', exact: true });
   await expect(studio).toBeVisible();
   const create = studio.getByRole('button', { name: 'Create agent' });
@@ -102,13 +111,16 @@ try {
     '<script>window.agentStudioInjected = true</script>',
   );
   assert.equal(await page.evaluate(() => 'agentStudioInjected' in window), false);
+  await navigate('Agents');
   await card.getByRole('button', { name: 'Edit Review bot', exact: true }).click();
   const edit = page.getByRole('dialog', { name: 'Edit Review bot' });
   await edit.getByLabel('Instructions', { exact: true }).fill('Updated instructions');
   await edit.getByLabel('Model ID (optional)').fill('unavailable-model');
   await edit.getByRole('button', { name: 'Save agent' }).click();
   await expect(card).toContainText('v2');
+  await navigate('Tasks');
   await expect(page.locator('.configuration-record')).toContainText('Current profile v2');
+  await page.getByRole('button', { name: '+ New task' }).click();
   await page.getByLabel('Task title').fill('Studio resume');
   await page.getByLabel('What should the agent work on?').fill('Continue the review');
   await page.getByRole('button', { name: 'Create task' }).click();
@@ -117,22 +129,31 @@ try {
   await expect(page.locator('.task-toolbar .badge')).toHaveText('completed', { timeout: 15000 });
   assert.equal(store.tasks().find((task) => task.title === 'Studio resume')?.sessionId, sessionId);
   await expect(page.locator('.configuration-record')).toContainText('v1');
+  await navigate('Agents');
   await card.getByRole('button', { name: 'Duplicate Review bot', exact: true }).click();
   await expect(studio.locator('.profile-card')).toHaveCount(4);
   await card.getByRole('button', { name: 'Archive Review bot', exact: true }).click();
   await expect(card).toHaveCount(0);
   await studio.getByLabel('Show archived profiles').check();
   await expect(card).toContainText('archived');
+  await navigate('Tasks');
   await page.locator('.task-row').filter({ hasText: 'Studio review' }).click();
   await page.waitForResponse(
     (response) => response.url().endsWith('/api/dashboard') && response.ok(),
   );
   await expect(page.getByLabel('Assign to agent')).toHaveValue(profile.id);
+  await navigate('Office');
+  // The operational workspace is primary; legacy workstation inspector lives
+  // in the optional Office scene and must remain accessible on demand.
+  await page.locator('.office-visual > summary').click();
   await expect(page.getByRole('region', { name: 'Selected agent inspector' })).toContainText(
     'Review bot',
   );
   await expect(page.locator('.studio-agent[aria-pressed="true"]')).toContainText('archived');
   await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();
+  await navigate('Agents');
+  // The profile list remounts on destination changes; restore its archived filter.
+  await studio.getByLabel('Show archived profiles').check();
   await card.getByRole('button', { name: 'Restore Review bot', exact: true }).click();
   await expect(card).not.toContainText('archived');
   const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
@@ -151,10 +172,12 @@ try {
   app = await createApp(manager);
   const restarted = await app.listen({ host: '127.0.0.1', port: 0 });
   await page.goto(restarted);
+  await navigate('Agents');
   await expect(studio).toContainText('Review bot');
   assert.equal(store.requireAgent(profile.id).revision, 4);
   assert.equal(store.taskConfiguration(first.id)?.profileRevision, 1);
   assert.equal(store.sessions().length, 1);
+  await navigate('Tasks');
   await page.locator('.task-row').filter({ hasText: 'Studio review' }).click();
   await expect(page.locator('.configuration-record')).toContainText('v1');
   assert.deepEqual(errors, []);

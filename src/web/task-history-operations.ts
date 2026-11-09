@@ -11,6 +11,22 @@ export interface TaskHistoryOptions {
   repositoryId?: string;
 }
 
+/** Include historical IDs even after an agent profile or repository is removed.
+ * Keep known names, deduplicate IDs and make filter order deterministic.
+ */
+export function historyFilterOptions(
+  known: readonly { id: string; name: string }[],
+  referencedIds: readonly string[],
+): { id: string; name: string }[] {
+  const labels = new Map(known.map(({ id, name }) => [id, name]));
+  for (const id of referencedIds) {
+    if (!labels.has(id)) labels.set(id, id);
+  }
+  return [...labels]
+    .map(([id, name]) => ({ id, name }))
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+}
+
 export function taskNeedsAttention(task: Pick<Task, 'state'>): boolean {
   return task.state === 'failed' || task.state === 'interrupted';
 }

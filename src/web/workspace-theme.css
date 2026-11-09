@@ -1,0 +1,1869 @@
+/*
+ * Minimal Workspace UI — visual foundation, #190 / #191.
+ * Imported after the legacy stylesheet to preserve existing flows while
+ * migrating surfaces incrementally. No fake metrics or network assets.
+ */
+:root {
+  color-scheme: dark;
+  --bg: #0b0d13;
+  --surface: #141821;
+  --surface-raised: #1b2030;
+  --line: #2a3040;
+  --line-dim: #222735;
+  --text: #f2f3f8;
+  --muted: #9da7bb;
+  --phosphor: #a78bfa;
+  --amber: #f5b969;
+  --red: #f38e96;
+  --cyan: #76c9dd;
+  --border: var(--line);
+  --accent: #9b8cff;
+  --success: #57d8a3;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+.button-link {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+button:hover:not(:disabled),
+.button-link:hover {
+  border-color: #5a5679;
+  background: #292d40;
+  color: var(--text);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #b5a0ff;
+  outline-offset: 3px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+a {
+  color: #c1adff;
+}
+
+.shell {
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+.shell .sidebar {
+  width: 236px;
+  inset: 0 auto 0 0;
+  padding: 24px 14px 18px;
+  background: #10131b;
+  border: 0;
+  border-right: 1px solid var(--line-dim);
+  border-radius: 0;
+  scrollbar-color: #343b4a transparent;
+}
+
+.sidebar .brand {
+  margin: 0 4px 24px;
+  gap: 12px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.5px;
+}
+
+.sidebar .brand svg {
+  width: 38px;
+  height: 38px;
+  padding: 7px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #7656d9, #5137a1);
+  color: white;
+}
+
+.sidebar .brand small {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.sidebar .nav-label {
+  color: #9da5b5;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.9px;
+  margin: 16px 12px 8px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 4px;
+}
+
+.sidebar .nav-item {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #c1c8d7;
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.sidebar .nav-item > span:first-child {
+  color: inherit;
+  font-size: 17px;
+  width: 22px;
+}
+
+.sidebar .nav-item:hover {
+  background: #1f2533;
+  border-color: transparent;
+}
+
+.sidebar .nav-item.active {
+  background: #25243a;
+  color: #f5f1ff;
+  border-color: #393653;
+  border-left: 1px solid #6f64ba;
+  font-weight: 650;
+}
+
+.sidebar .nav-count {
+  background: #282c3b;
+  color: #c4b2ff;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 2px 7px;
+}
+
+.sidebar .repo-link {
+  border-radius: 8px;
+  font-size: 12px;
+  color: #b8c1d0;
+}
+
+.sidebar .repo-link.chosen,
+.sidebar .repo-link:hover {
+  background: #212738;
+  border-color: #3a4256;
+  color: var(--text);
+}
+
+.shell main {
+  margin-left: 236px;
+}
+
+.shell .topbar {
+  min-height: 64px;
+  padding: 12px 28px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-dim);
+  border-radius: 0;
+  background: #121721;
+  gap: 16px;
+}
+
+.topbar .workspace-chip strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.topbar .eyebrow,
+.page-heading .eyebrow {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+}
+
+.topbar .connection {
+  font-size: 12px;
+  color: #c2cad7;
+}
+
+.topbar .motion-toggle,
+.topbar .crt-toggle {
+  font-size: 11px;
+  min-height: 34px;
+  padding: 5px 9px;
+}
+
+.topbar .secondary,
+.secondary {
+  background: #222838;
+  border-color: #3a4355;
+  color: #d6dceb;
+}
+
+.shell .content {
+  max-width: 1680px;
+  padding: 28px clamp(16px, 3vw, 40px) 36px;
+  margin: 0 auto;
+}
+
+.page-heading {
+  margin-bottom: 20px;
+}
+
+.page-heading h1 {
+  font-size: clamp(23px, 2.1vw, 32px);
+  line-height: 1.2;
+  font-weight: 720;
+  color: var(--text);
+  letter-spacing: -0.7px;
+}
+
+.page-heading p {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.shell .panel,
+.shell .stats,
+.shell .onboarding,
+.shell .office-scene,
+.shell .task-panel-tabs,
+.shell .mission-board > section,
+.shell .inspector > section {
+  border-radius: 14px;
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.shell .panel {
+  padding: 20px;
+}
+
+.shell .panel-heading {
+  border-bottom-color: var(--line-dim);
+}
+
+.shell .panel-heading h2::before {
+  content: none;
+}
+
+.shell .panel h2,
+.shell .panel h3 {
+  color: var(--text);
+}
+
+.shell .subtle,
+.shell .step,
+.shell .task-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.shell .mission-grid {
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+}
+
+.shell .mission-board,
+.shell .inspector {
+  gap: 18px;
+}
+
+.shell .task-row {
+  min-height: 64px;
+  border-bottom-color: var(--line-dim);
+  border-radius: 0;
+  padding: 12px;
+}
+
+.shell .task-row strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shell .task-row.selected {
+  border-color: #67549f;
+  border-radius: 8px;
+  background: #29233e;
+}
+
+.shell .task-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.shell .task-indicator.completed {
+  background: var(--success);
+}
+
+.shell .task-indicator.running {
+  background: #ae90ff;
+}
+
+.shell .task-indicator.failed,
+.shell .task-indicator.interrupted {
+  background: var(--red);
+}
+
+.shell .status-dot {
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.shell .view-switch {
+  margin-bottom: 18px;
+}
+
+.shell .view-switch button[aria-pressed='true'],
+.shell .task-panel-tabs button.active {
+  background: #392960;
+  color: #f4efff;
+  border-color: #68509b;
+  box-shadow: none;
+}
+
+.shell .view-switch > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shell footer {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.shell .office-visual {
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.shell .office-visual-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 18px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.shell .office-visual-heading::-webkit-details-marker {
+  display: none;
+}
+
+.shell .office-visual-heading::before {
+  content: '▸';
+  color: #bcadf6;
+}
+
+.shell .office-visual[open] .office-visual-heading::before {
+  content: '▾';
+}
+
+.shell .office-visual-heading small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.shell .office-visual .office-scene {
+  margin-top: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.shell .scene-label,
+.shell .scene-caption {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.shell .scene-caption > span:first-child {
+  color: #c4b1ff;
+}
+
+/* The operational overview takes precedence over the decorative office. */
+.workspace-overview {
+  display: grid;
+  gap: 20px;
+}
+
+.overview-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.overview-intro h2 {
+  font-size: 22px;
+  line-height: 1.25;
+  margin: 4px 0 6px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.overview-intro p,
+.overview-card-heading p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.overview-kicker {
+  color: #a9a0cc;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.overview-new-task {
+  background: #7651d0;
+  border-color: #8e68ec;
+  color: white;
+  padding: 9px 18px;
+  white-space: nowrap;
+}
+
+.overview-new-task:hover:not(:disabled) {
+  background: #8660df;
+  color: white;
+}
+
+.overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.overview-metric,
+.overview-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.overview-metric {
+  min-height: 120px;
+  padding: 19px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.overview-metric > span {
+  font-size: 12px;
+  color: #c2cad8;
+}
+
+.overview-metric strong {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.overview-metric small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.overview-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+  align-items: start;
+  gap: 16px;
+}
+
+.overview-card {
+  min-width: 0;
+  padding: 17px;
+}
+
+.overview-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.overview-card-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.overview-card-heading > span {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.overview-tasks {
+  padding-bottom: 4px;
+}
+
+.overview-task-list {
+  display: grid;
+}
+
+.overview-task {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 10px;
+  min-height: 70px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line-dim);
+  border-radius: 0;
+}
+
+.overview-task:hover:not(:disabled) {
+  background: #1d2230;
+  border-color: var(--line-dim);
+}
+
+.overview-task-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.overview-task-title strong,
+.overview-agent-list strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.overview-task-title small,
+.overview-agent-list small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.overview-task-meta {
+  min-width: 108px;
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.overview-task-meta time {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.overview-state {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #303345;
+  color: #d4dcf0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.overview-state.state-running {
+  background: #34284f;
+  color: #d8c2ff;
+}
+
+.overview-state.state-completed {
+  background: #173f31;
+  color: #74e8b5;
+}
+
+.overview-state.state-failed,
+.overview-state.state-interrupted {
+  background: #4a2836;
+  color: #ffadb7;
+}
+
+.overview-side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.overview-agent-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.overview-agent-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line-dim);
+}
+
+.overview-agent-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 10px;
+  background: #35304c;
+  color: #d4c2ff;
+}
+
+.overview-agent-list li > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
+.overview-agent-state {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.overview-agent-state.busy {
+  color: #a78bfa;
+}
+
+.overview-connection {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.overview-connection-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.overview-connection-dot.ready {
+  background: var(--success);
+}
+
+.overview-connection-caption,
+.overview-empty {
+  margin: 12px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.overview-empty {
+  padding: 20px 10px;
+}
+
+/* Operational task surfaces: readable rows instead of a tiny terminal viewport. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.overview-task-search {
+  display: block;
+  margin: 0 0 12px;
+}
+
+.overview-task-search input {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #121824;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.overview-task-search input::placeholder {
+  color: var(--muted);
+}
+
+.overview-task-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.overview-task-filters select {
+  max-width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #121824;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.overview-show-more {
+  width: 100%;
+  margin: 10px 0 14px;
+  min-height: 44px;
+  background: transparent;
+  color: #cbb8ff;
+  border-color: var(--line);
+}
+
+.shell[data-page='office'] .page-heading h1 > span {
+  display: none;
+}
+
+.shell .task-list {
+  max-height: min(65vh, 700px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #4a4f66 transparent;
+}
+
+.shell .history .panel-heading,
+.shell .output .panel-heading {
+  padding-bottom: 12px;
+}
+
+.shell .history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  padding: 14px 0 18px;
+}
+
+.shell .history-controls label {
+  display: grid;
+  gap: 6px;
+  min-width: 136px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shell .history-controls input,
+.shell .history-controls select {
+  width: 100%;
+  min-height: 39px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #111723;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.shell .history-controls p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shell .badge {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #343448;
+  color: #d8deec;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.shell .badge::before {
+  content: none;
+}
+
+.shell .badge.running {
+  background: #382c56;
+  color: #d4baff;
+}
+
+.shell .badge.completed {
+  background: #193d31;
+  color: #72e5b2;
+}
+
+.shell .badge.failed,
+.shell .badge.interrupted {
+  background: #482833;
+  color: #ffb2bf;
+}
+
+.shell .badge.queued,
+.shell .badge.stopping,
+.shell .badge.stopped {
+  background: #473523;
+  color: #ffd59b;
+}
+
+.shell .task-panel-tabs {
+  background: #151b27;
+  border: 1px solid var(--line);
+}
+
+.shell .task-panel-tabs button {
+  color: #c4cbd8;
+  font-size: 13px;
+}
+
+.shell .event-console {
+  min-height: 180px;
+  max-height: 50vh;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0e141e;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+}
+
+.shell .event-line {
+  grid-template-columns: 72px 70px minmax(0, 1fr);
+  border-bottom-color: #252c3b;
+}
+
+.shell .event-line pre {
+  color: #d3d9e7;
+  line-height: 1.6;
+}
+
+.shell .event-kind {
+  color: #b3a0f3;
+}
+
+.shell .panel .task-prompt,
+.shell .panel .result {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .shell .history-controls[data-mobile-open='false'] {
+    display: none;
+  }
+
+  .shell .history-controls[data-mobile-open='true'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .shell .task-list {
+    max-height: 60vh;
+  }
+
+  .shell .event-line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .shell .sidebar {
+    width: 208px;
+  }
+
+  .shell main {
+    margin-left: 208px;
+  }
+
+  .shell .mission-grid,
+  .overview-columns {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+}
+
+@media (max-width: 960px) {
+  .overview-columns,
+  .shell .mission-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shell .inspector {
+    order: 0;
+  }
+
+  .overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .shell .sidebar {
+    position: static;
+    inset: auto;
+    width: auto;
+    margin: 0;
+    padding: 12px 14px 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sidebar .brand {
+    margin: 0 0 10px;
+    font-size: 18px;
+  }
+
+  .sidebar nav {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 4px 0;
+    overflow-x: auto;
+  }
+
+  .sidebar .nav-item {
+    min-height: 44px;
+    flex: 0 0 auto;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .shell main {
+    margin-left: 0;
+  }
+
+  .shell .topbar {
+    margin: 0;
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .shell .content {
+    padding: 20px 14px 28px;
+  }
+
+  .overview-intro {
+    align-items: flex-start;
+  }
+
+  .overview-intro h2 {
+    font-size: 20px;
+  }
+
+  .overview-new-task {
+    padding: 8px 12px;
+  }
+
+  .overview-side,
+  .overview-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview-metrics {
+    gap: 9px;
+  }
+
+  .overview-metric {
+    min-height: 102px;
+    padding: 13px;
+  }
+
+  .overview-metric strong {
+    font-size: 24px;
+  }
+
+  .overview-task {
+    padding-inline: 2px;
+  }
+
+  .overview-task-meta {
+    min-width: 90px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Phase 2: common information density and clear hierarchy across destinations. */
+.shell .destination-intro {
+  margin: 0 0 18px;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line-dim);
+  border-radius: 0;
+  background: transparent;
+}
+
+.shell .destination-intro h2 {
+  margin: 0 0 5px;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 690;
+  letter-spacing: -0.35px;
+}
+
+.shell .destination-intro p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.shell[data-page='workflows'] .workflows-destination,
+.shell[data-page='agents'] .agents-destination,
+.shell[data-page='settings'] .settings-destination {
+  max-width: 1280px;
+}
+
+.shell[data-page='workflows'] #workflows {
+  padding: 22px;
+}
+
+.shell #workflows .panel-heading {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.shell #workflows > details {
+  margin-bottom: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #161c28;
+}
+
+.shell #workflows > details > summary {
+  min-height: 46px;
+  padding: 13px 16px;
+  color: var(--text);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.shell #workflows > details[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.shell #workflows > details > :not(summary) {
+  margin-inline: 16px;
+}
+
+.shell #workflows label,
+.shell .settings-destination label,
+.shell .agent-studio label {
+  color: #c4ccda;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.shell #workflows input:not([type='checkbox']),
+.shell #workflows select,
+.shell .settings-destination input,
+.shell .settings-destination select,
+.shell .agent-studio input:not([type='checkbox']),
+.shell .agent-studio textarea,
+.shell .agent-studio select {
+  min-height: 42px;
+  max-width: 100%;
+  border: 1px solid #394355;
+  border-radius: 10px;
+  background: #111824;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.shell #workflows input[type='checkbox'],
+.shell .agent-studio input[type='checkbox'] {
+  accent-color: #9875e3;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #141b27;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] > label {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] > label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  max-width: 420px;
+}
+
+.shell #workflows [aria-label='Workflow operations overview'] > p {
+  width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.shell
+  #workflows
+  [aria-label='Workflow operations overview']
+  > p[aria-label='Workflow attention summary'] {
+  color: #d5cbf1;
+}
+
+.shell .workflow-operations-list {
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0;
+  gap: 8px;
+}
+
+.shell .workflow-operations-list > li {
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #1a2230;
+  color: var(--text);
+}
+
+.shell .workflow-operations-list button[aria-current='true'] {
+  background: #35294f;
+  border-color: #7961af;
+  color: #f1eaff;
+}
+
+.shell #workflows [role='note'] {
+  border-left: 3px solid #665388;
+  padding: 9px 12px;
+  background: #252236;
+  border-radius: 7px;
+  color: #c9c2df;
+}
+
+.shell .agent-studio {
+  padding: 20px;
+}
+
+.shell .agent-studio > p,
+.shell .agent-studio > .studio-tools,
+.shell .agent-studio > [role] {
+  margin-inline: 0;
+}
+
+.shell .studio-tools {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.shell .studio-tools > button:first-child {
+  background: #7350c4;
+  border-color: #8c6add;
+  color: white;
+}
+
+.shell .studio-tools > label {
+  display: grid;
+  gap: 6px;
+}
+
+.shell .studio-tools input[type='search'] {
+  width: min(310px, 100%);
+}
+
+.shell .profile-list {
+  padding: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 12px;
+}
+
+.shell .profile-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #1a2030;
+}
+
+.shell .profile-card h3 {
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.shell .profile-actions {
+  gap: 8px;
+}
+
+.shell .profile-actions button {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+.shell .agent-studio dialog {
+  background: #1a2030;
+  border: 1px solid #414a5e;
+  border-radius: 16px;
+  box-shadow: 0 24px 90px #0008;
+}
+
+.shell .agent-studio dialog::backdrop {
+  background: #060910bd;
+}
+
+.shell[data-page='settings'] .settings-destination {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.shell[data-page='settings'] .settings-destination > .panel {
+  padding: 24px;
+}
+
+.shell .connection-panel .connection-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.shell .connection-panel .connection-controls > div {
+  flex: 1 1 230px;
+  min-width: 0;
+}
+
+.shell .connection-panel .connection-controls label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.shell .connection-message,
+.shell .field-hint,
+.shell .panel-description {
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 12px;
+}
+
+.shell .repository-panel .input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.shell .repository-panel .input-row input {
+  flex: 1 1 250px;
+  min-width: 0;
+}
+
+.shell .repository-panel .input-row button {
+  white-space: nowrap;
+}
+
+.shell[data-page='settings'] .settings-destination > .destination-intro {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1200px) {
+  .shell[data-page='settings'] .settings-destination {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .shell #workflows {
+    padding: 16px;
+  }
+
+  .shell #workflows [aria-label='Workflow operations overview'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .shell #workflows [aria-label='Workflow operations overview'] > label {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .shell .studio-tools,
+  .shell .connection-panel .connection-controls,
+  .shell .repository-panel .input-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .shell .studio-tools > label,
+  .shell .studio-tools input[type='search'],
+  .shell .repository-panel .input-row button,
+  .shell .connection-panel .connection-controls > div {
+    width: 100%;
+  }
+
+  .shell .profile-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shell[data-page='settings'] .settings-destination > .panel {
+    padding: 18px;
+  }
+}
+
+/* Secondary settings are available on demand without cluttering the topbar. */
+.shell .display-preferences {
+  position: relative;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.shell .display-preferences > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.shell .display-preferences > summary::-webkit-details-marker {
+  display: none;
+}
+
+.shell .display-preferences > summary::after {
+  content: '⌄';
+  margin-left: 9px;
+  color: #c2aaff;
+}
+
+.shell .display-preferences[open] > summary {
+  color: var(--text);
+  border-color: #66548d;
+  background: #29223d;
+}
+
+.shell .display-preferences-controls {
+  display: grid;
+  gap: 8px;
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 215px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #1b2030;
+  box-shadow: 0 12px 35px #0006;
+}
+
+.shell .display-preferences-controls button {
+  white-space: nowrap;
+  text-align: left;
+}
+
+@media (max-width: 680px) {
+  .shell .display-preferences {
+    margin-left: 0;
+  }
+
+  .shell .display-preferences-controls {
+    left: 0;
+    right: auto;
+  }
+}
+
+/* Visually align the persistent navigation with the minimal product shell. */
+.sidebar .brand-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #7656d9, #5137a1);
+  color: #ffffff;
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.shell[data-page='office'] .workspace-overview {
+  gap: 16px;
+}
+
+.shell[data-page='office'] .overview-metrics {
+  margin-top: 0;
+}
+
+.shell .onboarding {
+  background: #171c27;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.shell .onboarding .setup-index {
+  color: #a88bf3;
+}
+
+@media (max-width: 680px) {
+  .shell[data-page='office'] .page-heading {
+    margin-bottom: 14px;
+  }
+
+  .shell .onboarding {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .shell .onboarding ol {
+    gap: 4px 14px;
+    margin-top: 8px;
+  }
+}
+
+/* Linear-inspired density: one quiet workspace rather than a card dashboard. */
+.shell[data-page='office'] .overview-metrics {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-dim);
+  border-radius: 10px;
+  background: #12151d;
+}
+
+.shell[data-page='office'] .overview-metric {
+  min-height: 88px;
+  padding: 14px 17px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.shell[data-page='office'] .overview-metric + .overview-metric {
+  border-left: 1px solid var(--line-dim);
+}
+
+.shell[data-page='office'] .overview-metric strong {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+}
+
+.shell[data-page='office'] .overview-metric > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shell[data-page='office'] .overview-card {
+  border-color: var(--line-dim);
+  border-radius: 10px;
+  background: #12151d;
+}
+
+.shell[data-page='office'] .overview-card-heading h3 {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.1px;
+}
+
+.shell[data-page='office'] .overview-task {
+  min-height: 54px;
+  padding: 9px 10px;
+}
+
+.shell[data-page='office'] .overview-task:hover:not(:disabled) {
+  background: #1b1e29;
+}
+
+.shell[data-page='office'] .overview-state {
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+.shell[data-page='office'] .overview-empty {
+  padding: 12px 10px;
+}
+
+.shell .sidebar .nav-item.active {
+  background: #20212d;
+  border-color: transparent;
+  border-left-color: #8178c9;
+  color: #f0f0f8;
+}
+
+@media (max-width: 680px) {
+  .shell[data-page='office'] .overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shell[data-page='office'] .overview-metric {
+    min-height: 78px;
+    padding: 12px;
+  }
+
+  .shell[data-page='office'] .overview-metric:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .shell[data-page='office'] .overview-metric:nth-child(n + 3) {
+    border-top: 1px solid var(--line-dim);
+  }
+}
+
+/* Quiet, dense application chrome and task inspection surfaces. */
+.shell .topbar {
+  min-height: 52px;
+  padding: 9px 22px;
+  background: #10131a;
+  border-bottom-color: var(--line-dim);
+  gap: 12px;
+}
+
+.shell .sidebar {
+  background: #0f1219;
+  padding-top: 20px;
+}
+
+.shell .sidebar .brand {
+  margin-bottom: 18px;
+  font-size: 17px;
+  font-weight: 680;
+}
+
+.shell .sidebar .nav-item {
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.shell .sidebar .nav-item > span:first-child {
+  font-size: 15px;
+}
+
+.shell .mission-board,
+.shell .inspector {
+  gap: 12px;
+}
+
+.shell .inspector > section,
+.shell .task-panel-tabs {
+  border-radius: 10px;
+  border-color: var(--line-dim);
+  background: #12151d;
+}
+
+.shell .inspector > section {
+  padding: 16px;
+}
+
+.shell .inspector .panel-heading {
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.shell .inspector .panel-heading h2,
+.shell .inspector .panel-heading h3 {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.shell .event-line {
+  border-bottom-color: var(--line-dim);
+}
+
+.shell .event-line pre {
+  color: #c9cfdd;
+  line-height: 1.5;
+}
+
+.shell .event-kind {
+  color: #a79ee5;
+}
+
+@media (max-width: 680px) {
+  .shell .topbar {
+    min-height: 48px;
+    padding: 9px 14px;
+  }
+
+  .shell .inspector > section {
+    padding: 14px;
+  }
+}
+
+/* Compact task discovery: keep controls readable and task rows in view. */
+.shell[data-page='office'] .overview-card-heading {
+  margin-bottom: 12px;
+}
+
+.shell[data-page='office'] .overview-task-search {
+  margin-bottom: 8px;
+}
+
+.shell[data-page='office'] .overview-task-search input,
+.shell[data-page='office'] .overview-task-filters select {
+  min-height: 36px;
+  border-radius: 7px;
+  background: #10141c;
+  border-color: var(--line-dim);
+}
+
+.shell[data-page='office'] .overview-task-filters {
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.shell[data-page='office'] .overview-task-filters > span[role='status'] {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell[data-page='office'] .overview-task-filters button {
+  min-height: 36px;
+}
+
+.shell[data-page='office'] .overview-task:focus-visible,
+.shell[data-page='office'] .overview-task-filters button:focus-visible,
+.shell[data-page='office'] .overview-task-filters select:focus-visible,
+.shell[data-page='office'] .overview-task-search input:focus-visible {
+  outline: 2px solid #ad9bff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 680px) {
+  .shell[data-page='office'] .workspace-overview {
+    gap: 10px;
+  }
+
+  .shell[data-page='office'] .overview-metric {
+    min-height: 60px;
+    padding: 9px 12px;
+    gap: 2px;
+  }
+
+  .shell[data-page='office'] .overview-metric strong {
+    font-size: 21px;
+  }
+
+  .shell[data-page='office'] .overview-metric small {
+    display: none;
+  }
+
+  .shell[data-page='office'] .overview-card {
+    padding: 12px;
+  }
+
+  .shell[data-page='office'] .overview-task-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .shell[data-page='office'] .overview-task-filters label,
+  .shell[data-page='office'] .overview-task-filters select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .shell[data-page='office'] .overview-task-filters > span[role='status'] {
+    margin-left: 0;
+    align-self: center;
+  }
+
+  /* Preserve comfortable touch targets and prevent iOS input zoom. */
+  .shell[data-page='office'] .overview-task-search input,
+  .shell[data-page='office'] .overview-task-filters select,
+  .shell[data-page='office'] .overview-task-filters button {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .shell[data-page='office'] .overview-task {
+    min-height: 48px;
+    gap: 8px;
+  }
+
+  .shell[data-page='office'] .overview-task-filters > button {
+    justify-self: start;
+  }
+}
+
+/* Narrow phones need the full native select label, not clipped sort text. */
+@media (max-width: 420px) {
+  .shell[data-page='office'] .overview-task-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shell[data-page='office'] .overview-task-filters label,
+  .shell[data-page='office'] .overview-task-filters select {
+    max-width: 100%;
+  }
+}
+
+/* Workflow stage progress: display only, never a source of authorization. */
+.shell .workflow-stage-list {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0;
+  display: grid;
+  gap: 12px;
+}
+
+.shell .workflow-stage {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #555d72;
+  border-radius: 10px;
+  background: #151b27;
+  overflow-wrap: anywhere;
+}
+
+.shell .workflow-stage[data-stage-state='active'] {
+  border-left-color: #a78bfa;
+}
+
+.shell .workflow-stage[data-stage-state='attention'] {
+  border-left-color: #f5b969;
+}
+
+.shell .workflow-stage[data-stage-state='success'] {
+  border-left-color: #57d8a3;
+}
+
+.shell .workflow-stage[data-stage-state='danger'] {
+  border-left-color: #f38e96;
+}
+
+.shell .workflow-stage-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.shell .workflow-stage-heading strong {
+  font-size: 13px;
+  letter-spacing: 0.4px;
+}
+
+.shell .workflow-stage-status {
+  font-size: 11px;
+  color: #ced4e2;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: #293243;
+}
+
+.shell .workflow-stage[data-stage-state='attention'] .workflow-stage-status {
+  color: #ffd59b;
+}
+
+.shell .workflow-stage[data-stage-state='danger'] .workflow-stage-status {
+  color: #ffb2bf;
+}
+
+.shell .workflow-stage[data-stage-state='success'] .workflow-stage-status {
+  color: #72e5b2;
+}
+
+.shell .workflow-stage-hint {
+  font-size: 12px;
+  color: var(--amber);
+}
+
+@media (max-width: 680px) {
+  .shell .workflow-stage {
+    padding: 14px;
+  }
+
+  .shell .workflow-stage button {
+    min-height: 44px;
+    max-width: 100%;
+  }
+}

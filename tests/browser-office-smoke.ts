@@ -66,6 +66,39 @@ try {
       });
     }
   };
+  // Real persisted fixture tasks below exercise the actual operational view.
+  // Keep the optional illustrated scene closed for the primary screenshots,
+  // then restore its previous disclosure state for the existing scene checks.
+  const captureOperational = async (name: string) => {
+    const previousViewport = page.viewportSize();
+    const wasOpen = await visualDisclosure.evaluate((node) => (node as HTMLDetailsElement).open);
+    if (wasOpen) await visualDisclosure.locator('summary').click();
+    await captureWorkspace(name);
+    if (wasOpen) await visualDisclosure.locator('summary').click();
+    if (previousViewport) await page.setViewportSize(previousViewport);
+  };
+  const captureTaskInspector = async (name: string, title: string) => {
+    const previousViewport = page.viewportSize();
+    for (const [width, height, size] of [
+      [1440, 900, 'desktop'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      const inspector = page.locator('#task-workspace');
+      await expect(inspector).toContainText(title);
+      await inspector.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: join(artifacts, `task-${name}-${size}-viewport.png`),
+      });
+      await inspector.screenshot({
+        path: join(artifacts, `task-${name}-${size}-inspector.png`),
+      });
+    }
+    if (previousViewport) await page.setViewportSize(previousViewport);
+  };
   let releaseLoading!: () => void;
   const held = new Promise<void>((resolve) => {
     releaseLoading = resolve;
@@ -76,13 +109,86 @@ try {
     await route.fulfill({ response });
   });
   await page.goto(address, { waitUntil: 'domcontentloaded' });
+  const visualDisclosure = page.locator('.office-visual');
+  await expect(visualDisclosure).not.toHaveAttribute('open', '');
+  const workspaceOverview = page.getByRole('region', { name: 'Workspace activity' });
+  await expect(workspaceOverview).toBeVisible();
+  // Capture the actual primary product screen, not only the opt-in pixel
+  // illustration. Compare the same app with no data and with real fixtures.
+  const captureWorkspace = async (name: string) => {
+    for (const [width, height, size] of [
+      [1440, 900, 'desktop'],
+      [900, 800, 'tablet'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect(visualDisclosure).not.toHaveAttribute('open', '');
+      await expect(workspaceOverview).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: join(artifacts, `workspace-${name}-${size}-viewport.png`),
+      });
+      await workspaceOverview.screenshot({
+        path: join(artifacts, `workspace-${name}-${size}-overview.png`),
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
+  };
+  await captureWorkspace('loading');
+  await visualDisclosure.locator('summary').click();
   await expect(page.getByText('Opening your office…')).toBeVisible();
   await capture('loading');
   releaseLoading();
   await page.unrouteAll({ behavior: 'wait' });
   await expect(page.locator('.office-workstation')).toHaveCount(2);
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
+  await visualDisclosure.locator('summary').click();
+  await captureWorkspace('ready');
+  await visualDisclosure.locator('summary').click();
   await capture('two-idle');
+  // The pixel scene is a secondary visual, not the only operational workspace.
+  await visualDisclosure.locator('summary').click();
+  await expect(scene).toBeHidden();
+  await expect(page.getByRole('region', { name: 'Workspace activity' })).toBeVisible();
+  await visualDisclosure.locator('summary').click();
+  await expect(scene).toBeVisible();
+  // A malformed HTTP 200 must not replace the last confirmed dashboard or
+  // workflow snapshot. The next successful poll must recover without a reload.
+  let invalidDashboardSeen = false;
+  let invalidWorkflowSeen = false;
+  await page.route('**/api/dashboard', async (route) => {
+    if (!invalidDashboardSeen) {
+      invalidDashboardSeen = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"tasks":"not-an-array"}',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.route('**/api/workflows', async (route) => {
+    if (!invalidWorkflowSeen) {
+      invalidWorkflowSeen = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"stages":"not-an-array"}',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await expect
+    .poll(() => invalidDashboardSeen && invalidWorkflowSeen, { timeout: 12000 })
+    .toBe(true);
+  await expect(page.locator('.office-workstation')).toHaveCount(2);
+  await page.unrouteAll({ behavior: 'wait' });
+  await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   // Actual archive operation yields the real zero-profile office, no fake runtime objects.
   for (const profile of env.store.agents())
     env.store.editAgent(profile.id, profile.revision, { archived: true });
@@ -103,60 +209,312 @@ try {
   );
   await expect(page.locator('.studio-agent')).toHaveCount(6, { timeout: 10000 });
   await expect(page.locator('.office-workstation')).toHaveCount(4);
+  await visualDisclosure.locator('summary').click();
+  await captureWorkspace('six-agents');
+  await visualDisclosure.locator('summary').click();
   await page.locator('.studio-agent').last().click();
+  await expect(page.locator('.studio-agent').last()).toHaveAttribute('aria-pressed', 'true');
+  // Workstation selection is local to Office, not an implicit route to Agents.
   await expect(
-    page.locator(`.office-workstation[data-agent-id="${extras[3]!.id}"]`),
-  ).toHaveAttribute('aria-pressed', 'true');
+    page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: 'Office' }),
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(scene).toBeVisible();
   await capture('multiple-agents');
   // Queue and execution use the manager/SDK fixture through the normal UI in browser-smoke.
   // These persisted records exercise the saved outcome view with explicit fixture names.
+  const navigate = async (destination: 'Office' | 'Tasks' | 'Settings') => {
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: destination })
+      .click();
+  };
+  // On a 320px screen the five destinations must remain keyboard-accessible
+  // even when the horizontal strip clips the first or last item.
+  await page.setViewportSize({ width: 320, height: 720 });
+  await navigate('Settings');
+  const mobileNav = page.getByRole('navigation', { name: 'Main navigation' });
+  const officeNavButton = mobileNav.getByRole('button', { name: 'Office' });
+  const settingsNavButton = mobileNav.getByRole('button', { name: 'Settings' });
+  await expect(settingsNavButton).toBeInViewport();
+  await settingsNavButton.focus();
+  const beforeKeyboardScroll = await page.evaluate(() => window.scrollY);
+  await page.keyboard.press('Home');
+  await expect(officeNavButton).toBeFocused();
+  await expect(officeNavButton).toBeInViewport();
+  await expect(page).toHaveURL(/#settings$/);
+  await page.keyboard.press('End');
+  await expect(settingsNavButton).toBeFocused();
+  await expect(settingsNavButton).toBeInViewport();
+  await expect(page.evaluate(() => window.scrollY)).resolves.toBe(beforeKeyboardScroll);
+  await page.keyboard.press('ArrowRight');
+  await expect(officeNavButton).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#office$/);
+  await page.keyboard.press('ArrowLeft');
+  await expect(settingsNavButton).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#settings$/);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await navigate('Office');
+  // A stale task URL must offer a usable exit instead of leaving the user in
+  // Focus Mode with an empty session and an unrelated history fragment.
+  await page.evaluate(() => {
+    window.location.hash = '#task/missing-fixture/session';
+  });
+  await expect(page.getByRole('alert')).toContainText('no longer available');
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.getByRole('button', { name: 'Back to task history' }).click();
+  await expect(page).toHaveURL(/#task-history$/);
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-history')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await navigate('Office');
+  const newTask = async (agentId: string, title: string, prompt: string) => {
+    await navigate('Tasks');
+    await page.getByRole('button', { name: '+ New task' }).click();
+    await page.getByLabel('Assign to agent').selectOption(agentId);
+    await page.getByLabel('Task title').fill(title);
+    await page.getByLabel('What should the agent work on?').fill(prompt);
+    await page.getByRole('button', { name: 'Create task' }).click();
+    await page.getByRole('button', { name: 'Start task' }).click();
+    await navigate('Office');
+  };
+  // Switching to the task composer must be a real history entry. Back and
+  // Forward restore both the destination and the active task panel.
+  await navigate('Tasks');
+  await page.getByRole('button', { name: '+ New task' }).click();
+  await expect(page).toHaveURL(/#compose$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/#tasks$/);
+  await expect(page.locator('.shell')).toHaveAttribute('data-task-panel', 'details');
+  await page.goForward();
+  await expect(page).toHaveURL(/#compose$/);
+  await expect(page.locator('.shell')).toHaveAttribute('data-task-panel', 'new');
+  await navigate('Settings');
   await page.getByLabel('Absolute repository path').fill(env.repository);
   await page.getByRole('button', { name: 'Register' }).click();
-  await page.getByLabel('Assign to agent').selectOption('codex-1');
-  await page.getByLabel('Task title').fill('FIXTURE · held SDK reasoning');
-  await page.getByLabel('What should the agent work on?').fill('WAIT_FIXTURE');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  // A terminal SSE HTTP failure must be explicit and recoverable by the user.
+  await page.route('**/api/tasks/*/stream*', async (route) => {
+    await route.fulfill({ status: 503, contentType: 'text/plain', body: 'fixture unavailable' });
+  });
+  await newTask('codex-1', 'FIXTURE · held SDK reasoning', 'WAIT_FIXTURE');
+  await expect(page.getByText('Live event stream disconnected', { exact: true })).toBeVisible({
+    timeout: 15000,
+  });
+  await expect(page.getByRole('button', { name: 'Retry live events' })).toBeVisible();
+  await page.unroute('**/api/tasks/*/stream*');
+  await page.getByRole('button', { name: 'Retry live events' }).click();
+  await expect(page.getByText('Live events connected', { exact: true })).toBeVisible({
+    timeout: 15000,
+  });
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'thinking',
     { timeout: 15000 },
   );
   await capture('active');
-  await page.getByLabel('Assign to agent').selectOption('codex-2');
-  await page.getByLabel('Task title').fill('FIXTURE · submitted queue');
-  await page.getByLabel('What should the agent work on?').fill('Review later');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' })
+      .locator('.overview-state'),
+  ).toHaveText('Running');
+  await captureOperational('running');
+  const overview = page.getByRole('region', { name: 'Workspace activity' });
+  const search = overview.getByRole('searchbox', { name: 'Search workspace tasks' });
+  await expect(
+    overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
+  ).toBeVisible();
+  await search.fill('NO_MATCH_FIXTURE');
+  await expect(overview.getByText('No tasks match your search or status filter.')).toBeVisible();
+  await search.fill('FIXTURE · held SDK reasoning');
+  await expect(
+    overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
+  ).toBeVisible();
+  await search.fill('');
+  const overviewStatus = overview.getByRole('combobox', { name: 'Filter tasks by status' });
+  await overviewStatus.selectOption('completed');
+  await expect(overview.getByText('No tasks match your search or status filter.')).toBeVisible();
+  await overviewStatus.selectOption('running');
+  await expect(
+    overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
+  ).toBeVisible();
+  await overviewStatus.selectOption('all');
+  await newTask('codex-2', 'FIXTURE · submitted queue', 'Review later');
   const queue = page.getByRole('region', { name: 'Live task queue' });
   await expect(queue).toContainText('FIXTURE · submitted queue');
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute('data-state', 'queued');
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · submitted queue' })
+      .locator('.overview-state'),
+  ).toHaveText('In queue');
+  await captureOperational('running-and-queued');
   await queue.getByRole('button', { name: /FIXTURE · submitted queue/ }).click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await captureTaskInspector('queued', 'FIXTURE · submitted queue');
+  // A deep link wins over a previously selected task, including after reload.
+  await page.evaluate(() => sessionStorage.setItem('ai-office-selected-task', 'deleted-task'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  // Restoring the task must also restore its agent, not the default workstation.
+  await expect(page.locator('.shell')).toHaveAttribute('data-selected-agent', 'codex-2');
+  await navigate('Tasks');
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // A normal Tasks route must restore the selection without a task deep link.
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')))
+    .not.toBe('deleted-task');
+  const savedTaskId = await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task'));
+  assert.ok(savedTaskId);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  assert.equal(
+    await page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')),
+    savedTaskId,
+  );
+  // A restored selection must not keep forcing its agent after a manual switch.
+  await navigate('Office');
+  const codexOneStation = page.locator('.office-workstation[data-agent-id="codex-1"]');
+  await codexOneStation.click();
+  await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
+  await navigate('Tasks');
+  await navigate('Office');
+  await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
+  await navigate('Tasks');
+  // A deleted task saved in sessionStorage must be discarded on ordinary routes.
+  await page.evaluate(() => sessionStorage.setItem('ai-office-selected-task', 'deleted-task'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('ai-office-selected-task')))
+    .toBeNull();
+  // Deep links, direct hash changes and browser history must restore the correct workspace mode.
+  const queuedTask = env.store.tasks().find((item) => item.state === 'queued');
+  assert.ok(queuedTask);
+  // Queue and history selections must open the exact task in a durable session
+  // route, not only mutate an ephemeral selection (especially on mobile).
+  await page
+    .getByRole('region', { name: 'Submitted queue' })
+    .getByRole('button', { name: /FIXTURE · submitted queue/ })
+    .click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await navigate('Tasks');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .locator('#task-history .task-row')
+    .filter({ hasText: 'FIXTURE · submitted queue' })
+    .click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('#task-workspace')).toBeFocused();
+  await expect(page.locator('#task-workspace')).toBeInViewport();
+  await page.reload();
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.goBack();
+  await expect(page).toHaveURL(/#tasks$/);
+  await expect(page.locator('#task-history')).toBeVisible();
+  await page.goForward();
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  // Even while the selected task stays visible, stale transport must not allow
+  // a queued task cancellation based solely on the last dashboard snapshot.
+  const cancelQueuedTask = page.getByRole('button', { name: 'Cancel queued task' });
+  await expect(cancelQueuedTask).toBeEnabled();
+  // A temporary dashboard outage must preserve the deep-linked task inspector.
+  // The next successful poll restores connectivity without a reload or lost selection.
+  let dashboardOffline = true;
+  await page.route('**/api/dashboard', async (route) => {
+    if (dashboardOffline) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    } else {
+      await route.continue();
+    }
+  });
+  await expect(page.getByText('Server disconnected', { exact: true })).toBeVisible({
+    timeout: 12000,
+  });
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(cancelQueuedTask).toBeDisabled();
+  dashboardOffline = false;
+  await expect(page.getByText('Server disconnected', { exact: true })).toBeHidden({
+    timeout: 12000,
+  });
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(cancelQueuedTask).toBeEnabled();
+  await page.unroute('**/api/dashboard');
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  // A valid task may have a stale review deep link before it has a workspace.
+  // Offer its session instead of sending the user to unrelated task history.
+  await page.evaluate((id) => {
+    window.location.hash = `#task/${encodeURIComponent(id)}/review`;
+  }, queuedTask.id);
+  await expect(page.getByRole('alert')).toContainText('Code review is not available');
+  await page.getByRole('button', { name: 'Open task session' }).click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · submitted queue');
+  await page.evaluate((id) => {
+    window.location.hash = `#task/${encodeURIComponent(id)}/session`;
+  }, queuedTask.id);
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.evaluate(() => {
+    window.location.hash = '#settings';
+  });
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  await page.goBack();
+  await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
+  await page.goForward();
+  await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
+  // Internal section navigation must create a browser history entry: the
+  // previous destination should be recoverable without reloading the app.
+  await navigate('Office');
   await capture('queued');
+  await navigate('Tasks');
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
   await manager.stop(env.store.tasks().find((task) => task.state === 'running')!.id);
-  await page.getByLabel('Assign to agent').selectOption('codex-1');
-  await page.getByLabel('Task title').fill('FIXTURE · saved completion');
-  await page.getByLabel('What should the agent work on?').fill('Review the README.');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  await newTask('codex-1', 'FIXTURE · saved completion', 'Review the README.');
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
     'completed',
     { timeout: 15000 },
   );
   await capture('completed');
-  await page.getByLabel('Task title').fill('FIXTURE · provider failure');
-  await page.getByLabel('What should the agent work on?').fill('FAIL_FIXTURE');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Start task' }).click();
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · saved completion' })
+      .locator('.overview-state'),
+  ).toHaveText('Completed');
+  await captureOperational('completed');
+  await newTask('codex-1', 'FIXTURE · provider failure', 'FAIL_FIXTURE');
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute('data-state', 'error', {
     timeout: 15000,
   });
   await capture('failure');
+  await expect(
+    workspaceOverview
+      .getByRole('button', { name: 'Open task: FIXTURE · provider failure' })
+      .locator('.overview-state'),
+  ).toHaveText('Failed');
+  await captureOperational('failed');
   // CSV export uses the current history filters and contains no prompt or transcript content.
+  await navigate('Tasks');
   const history = page.locator('#task-history');
+  // The Office fixture captures a 390px viewport before this export journey.
+  // Expand the accessible mobile disclosure before editing filtered history.
+  const historyFiltersToggle = history.getByRole('button', { name: /^Filters/ });
+  await expect(historyFiltersToggle).toBeVisible();
+  await historyFiltersToggle.click();
+  await expect(historyFiltersToggle).toHaveAttribute('aria-expanded', 'true');
   await history.getByLabel('Search tasks').fill('FIXTURE · provider failure');
   await expect(history.getByRole('button', { name: /Export filtered CSV/ })).toBeEnabled();
   const [download] = await Promise.all([
@@ -168,7 +526,51 @@ try {
   assert.match(csv, /FIXTURE · provider failure/);
   assert.doesNotMatch(csv, /FIXTURE · saved completion/);
   assert.doesNotMatch(csv, /FAIL_FIXTURE|WAIT_FIXTURE/);
-  await history.getByLabel('Search tasks').fill('');
+  // A zero-result search must offer a visible escape even when the filter
+  // disclosure is collapsed on a phone.
+  await history.getByLabel('Search tasks').fill('NO_MATCH_FIXTURE');
+  await expect(history.getByText('No tasks match these filters.')).toBeVisible();
+  await expect(history.locator('.mobile-history-results')).toContainText('0 of');
+  await expect(history.getByRole('button', { name: 'Clear task filters' })).toBeVisible();
+  await history.getByRole('button', { name: 'Clear task filters' }).click();
+  await expect(history.getByLabel('Search tasks')).toHaveValue('');
+  await expect(history.locator('.task-row').first()).toBeVisible();
+
+  // Escape closes mobile filters and restores keyboard focus to the disclosure.
+  await history.getByLabel('Search tasks').focus();
+  await page.keyboard.press('Escape');
+  await expect(historyFiltersToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(historyFiltersToggle).toBeFocused();
+  await expect(history.getByLabel('Search tasks')).toBeHidden();
+
+  // Selecting a task and then filtering it out must never strand the user:
+  // the selected-task recovery action remains visible outside the disclosure.
+  await history.locator('.task-row').filter({ hasText: 'FIXTURE · saved completion' }).click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await navigate('Tasks');
+  if ((await historyFiltersToggle.getAttribute('aria-expanded')) !== 'true') {
+    await historyFiltersToggle.click();
+  }
+  await history.getByLabel('Search tasks').fill('FIXTURE · provider failure');
+  await expect(history.getByText('Selected task is hidden by current filters.')).toBeVisible();
+  await history.getByRole('button', { name: 'Show selected task' }).click();
+  await expect(history.getByLabel('Search tasks')).toHaveValue('');
+  await expect(
+    history.locator('.task-row').filter({ hasText: 'FIXTURE · saved completion' }),
+  ).toBeVisible();
+  await navigate('Office');
+
+  // A temporary workflow API failure must not blank the Office or claim the
+  // last known workflow snapshot is live. Polling recovers without reloading.
+  await page.route('**/api/workflows', (route) => route.abort());
+  await expect(page.getByText('Workflow status unavailable.', { exact: false })).toBeVisible({
+    timeout: 10000,
+  });
+  await expect(page.locator('.studio-agent').first()).toBeVisible();
+  await page.unroute('**/api/workflows');
+  await expect(page.getByText('Workflow status unavailable.', { exact: false })).toHaveCount(0, {
+    timeout: 10000,
+  });
 
   // Simulate transport failure while retaining genuine persisted application snapshots.
   await page.route('**/api/dashboard', (route) => route.abort());
@@ -177,8 +579,69 @@ try {
   });
   await expect(page.getByRole('button', { name: 'Assign a task', exact: true })).toBeDisabled();
   await capture('disconnected');
+  await navigate('Settings');
+  await expect(
+    page.getByText('Settings show the last received snapshot', { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Authentication mode')).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Register/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Refresh connection' })).toBeEnabled();
   await page.unroute('**/api/dashboard');
+  await expect(page.getByLabel('Authentication mode')).toBeEnabled({ timeout: 10000 });
+  await expect(page.getByRole('button', { name: /^Register/ })).toBeEnabled();
+  await navigate('Office');
   await expect(page.locator('.studio-notice')).toHaveCount(0, { timeout: 10000 });
+  // Large persisted histories should not mount every task row on a phone.
+  // The backend fixture stays unchanged: intercept only this read-only snapshot.
+  await page.route('**/api/dashboard', async (route) => {
+    const response = await route.fetch();
+    const snapshot = (await response.json()) as { tasks: Array<Record<string, unknown>> };
+    const template = snapshot.tasks[0];
+    assert.ok(template);
+    const synthetic = Array.from({ length: 125 }, (_, index) => ({
+      ...template,
+      id: `history-batch-${index}`,
+      title: `HISTORY_BATCH_${index}`,
+      state: 'failed',
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    }));
+    await route.fulfill({
+      response,
+      json: { ...snapshot, tasks: [...snapshot.tasks, ...synthetic] },
+    });
+  });
+  await navigate('Tasks');
+  await expect(history.getByRole('button', { name: 'Show next 40 tasks' })).toBeVisible({
+    timeout: 10000,
+  });
+  const firstBatchCount = await history.locator('.task-row').count();
+  assert.ok(firstBatchCount >= 40 && firstBatchCount <= 41);
+  const totalMatching = Number(
+    (await history.locator('.history-load-more [role="status"]').innerText()).match(
+      /of (\d+) matching/,
+    )?.[1],
+  );
+  assert.ok(totalMatching >= 125);
+  // A pinned selection outside the page may add a row, but never advances pagination.
+  await expect(history.locator('.history-load-more [role="status"]')).toHaveText(
+    `40 of ${totalMatching} matching tasks loaded`,
+  );
+  await history.getByRole('button', { name: 'Show next 40 tasks' }).click();
+  await expect(history.locator('.task-row')).toHaveCount(firstBatchCount + 40);
+  await expect(history.locator('.history-load-more [role="status"]')).toHaveText(
+    `80 of ${totalMatching} matching tasks loaded`,
+  );
+  if ((await historyFiltersToggle.getAttribute('aria-expanded')) !== 'true') {
+    await historyFiltersToggle.click();
+  }
+  await history.getByLabel('Search tasks').fill('HISTORY_BATCH_124');
+  await expect(history.locator('.task-row')).toHaveCount(1);
+  await expect(history.getByRole('button', { name: /Show next/ })).toHaveCount(0);
+  await history.getByLabel('Search tasks').fill('');
+  await expect(history.locator('.task-row')).toHaveCount(firstBatchCount);
+  await page.unroute('**/api/dashboard');
+
   assert.deepEqual(errors, []);
   console.log(
     `Office V4 browser passed: zero/two/six profiles, overflow selection, real SDK fixture reasoning, submitted queue exact-task selection, failure, disconnected snapshot, reduced motion and desktop/mobile overflow. Screenshots: ${artifacts}`,
