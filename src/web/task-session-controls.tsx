@@ -119,7 +119,10 @@ export function TaskSessionControls({
                 Resumes the original pinned configuration; current profile edits do not apply.
               </small>
             )}
-            <button disabled={!transportConnected || busy || !dashboard?.ready} onClick={onStartTask}>
+            <button
+              disabled={!transportConnected || busy || !dashboard?.ready}
+              onClick={onStartTask}
+            >
               ▶ Start task
             </button>
           </div>

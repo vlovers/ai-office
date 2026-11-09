@@ -908,7 +908,7 @@ function App() {
                             resumeSessionId={resumeSessionId}
                             busy={busy}
                             stopPending={pendingStops.includes(task.id)}
-                             transportConnected={httpConnection === 'connected'}
+                            transportConnected={httpConnection === 'connected'}
                             showStopControl={view === 'focus' && task.id === agent?.taskId}
                             stopControl={stopControl}
                             onNavigate={navigateTask}
