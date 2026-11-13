@@ -10,17 +10,17 @@
   "devDependencies": {
     "@babel/eslint-parser": "^8.0.7",
     "@babel/plugin-syntax-typescript": "^8.0.3",
-    "@playwright/test": "^1.64.1",
-    "@types/node": "^26.6.5",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.2",
-    "eslint": "^10.13.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "eslint": "^10.14.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4",
-    "vitest": "^5.0.5"
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0"
   },
   "name": "ai-office",
   "version": "0.6.0",
