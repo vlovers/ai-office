@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Dashboard, Task } from '../shared/types.js';
 
 interface WorkspaceOverviewProps {
@@ -6,6 +6,9 @@ interface WorkspaceOverviewProps {
   transportStatus?: 'connecting' | 'connected' | 'disconnected';
   onOpenTask: (task: Task) => void;
   onNewTask: () => void;
+  onRetry?: () => void;
+  selectedTaskId?: string;
+  inspector?: ReactNode;
 }
 
 function taskStatus(state: Task['state']): string {
@@ -32,6 +35,9 @@ export function WorkspaceOverview({
   transportStatus = 'connecting',
   onOpenTask,
   onNewTask,
+  onRetry,
+  selectedTaskId,
+  inspector,
 }: WorkspaceOverviewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -117,9 +123,14 @@ export function WorkspaceOverview({
   return (
     <section className="workspace-overview" aria-label="Workspace activity">
       {!isLive && (
-        <p className="overview-transport-warning" role="status">
+        <div className="overview-transport-warning" role="status">
           {transportMessage}
-        </p>
+          {transportStatus === 'disconnected' && onRetry && (
+            <button type="button" onClick={onRetry}>
+              Retry connection
+            </button>
+          )}
+        </div>
       )}
       <div className="overview-metrics" aria-label="Task status summary">
         {metrics.map(({ label, value, hint }) => (
@@ -130,7 +141,7 @@ export function WorkspaceOverview({
           </div>
         ))}
       </div>
-      <div className="overview-columns">
+      <div className={`overview-columns ${inspector ? 'has-task-inspector' : ''}`}>
         <section className="overview-card overview-tasks" aria-label="Workspace tasks">
           <div className="overview-card-heading">
             <div>
@@ -246,6 +257,8 @@ export function WorkspaceOverview({
                   className="overview-task"
                   onClick={() => onOpenTask(task)}
                   aria-label={`Open task: ${task.title}`}
+                  aria-pressed={selectedTaskId === task.id}
+                  data-overview-task-id={task.id}
                 >
                   <span className="overview-task-title">
                     <strong>{task.title}</strong>
@@ -280,63 +293,75 @@ export function WorkspaceOverview({
             </div>
           )}
         </section>
-        <aside className="overview-side" aria-label="Agent and task overview">
-          <section className="overview-card">
-            <div className="overview-card-heading">
-              <h3>Agents</h3>
-              <span>{dashboard ? agents.length : '—'}</span>
-            </div>
-            {!dashboard ? (
-              <p className="overview-empty">Loading agents…</p>
-            ) : agents.length === 0 ? (
-              <p className="overview-empty">No agents configured.</p>
-            ) : (
-              <ul className="overview-agent-list">
-                {agents.map((agent) => (
-                  <li key={agent.id}>
-                    <span className="overview-agent-mark" aria-hidden="true">
-                      ◇
-                    </span>
-                    <span>
-                      <strong>{agent.name}</strong>
-                      <small>
-                        {agent.taskId
-                          ? 'Working on a task'
-                          : agent.state === 'waiting'
-                            ? 'Task waiting in queue'
-                            : 'No active task'}
-                      </small>
-                    </span>
-                    <span className={`overview-agent-state ${agent.taskId ? 'busy' : ''}`}>
-                      {agentLabel(agent.state, Boolean(agent.taskId))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          <section className="overview-card overview-health">
-            <div className="overview-card-heading">
-              <h3>Provider readiness</h3>
-            </div>
-            <p className="overview-connection">
-              <span
-                className={`overview-connection-dot ${
-                  isLive && dashboard?.connection.status === 'available' ? 'ready' : ''
-                }`}
-              />
-              {!dashboard
-                ? 'Checking connection…'
-                : isLive
-                  ? dashboard.connection.message
-                  : `Last known: ${dashboard.connection.message}`}
-            </p>
-            <p className="overview-connection-caption">
-              <span>Provider readiness is based on the last received snapshot;</span>{' '}
-              <span>server connectivity is tracked separately.</span>
-            </p>
-          </section>
-        </aside>
+        {inspector ? (
+          <aside className="overview-task-inspector" aria-label="Task inspector">
+            {inspector}
+          </aside>
+        ) : (
+          <aside className="overview-side" aria-label="Agent and task overview">
+            <section className="overview-card">
+              <div className="overview-card-heading">
+                <h3>Agents</h3>
+                <span>{dashboard ? agents.length : '—'}</span>
+              </div>
+              {!dashboard ? (
+                <p className="overview-empty">
+                  {transportStatus === 'disconnected'
+                    ? 'Agents unavailable while disconnected.'
+                    : 'Loading agents…'}
+                </p>
+              ) : agents.length === 0 ? (
+                <p className="overview-empty">No agents configured.</p>
+              ) : (
+                <ul className="overview-agent-list">
+                  {agents.map((agent) => (
+                    <li key={agent.id}>
+                      <span className="overview-agent-mark" aria-hidden="true">
+                        ◇
+                      </span>
+                      <span>
+                        <strong>{agent.name}</strong>
+                        <small>
+                          {agent.taskId
+                            ? 'Working on a task'
+                            : agent.state === 'waiting'
+                              ? 'Task waiting in queue'
+                              : 'No active task'}
+                        </small>
+                      </span>
+                      <span className={`overview-agent-state ${agent.taskId ? 'busy' : ''}`}>
+                        {agentLabel(agent.state, Boolean(agent.taskId))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section className="overview-card overview-health">
+              <div className="overview-card-heading">
+                <h3>Provider readiness</h3>
+              </div>
+              <p className="overview-connection">
+                <span
+                  className={`overview-connection-dot ${
+                    isLive && dashboard?.connection.status === 'available' ? 'ready' : ''
+                  }`}
+                />
+                {!dashboard
+                  ? transportStatus === 'disconnected'
+                    ? 'Provider readiness unavailable.'
+                    : 'Checking connection…'
+                  : isLive
+                    ? dashboard.connection.message
+                    : `Last known: ${dashboard.connection.message}`}
+              </p>
+              <p className="overview-connection-caption">
+                <span>Provider readiness is based on the last received snapshot;</span>{' '}
+                <span>server connectivity is tracked separately.</span>
+              </p>
+            </section>
+          </aside>
+        )}
       </div>
     </section>
   );

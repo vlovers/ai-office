@@ -62,6 +62,18 @@ describe('workspace navigation', () => {
     expect(taskNavigationTarget(undefined, 'session')).toBeNull();
   });
 
+  it('round-trips contextual inspectors without losing Overview', () => {
+    for (const destination of ['session', 'review', 'workflow'] as const) {
+      const target = { taskId: 'review / #42', destination, context: 'overview' as const };
+      const hash = encodeTaskNavigation(target);
+      expect(destinationFromHash(hash)).toBe('office');
+      expect(decodeTaskNavigation(hash)).toEqual(target);
+    }
+    expect(decodeTaskNavigation('#overview/task/%ZZ/session')).toBeNull();
+    expect(decodeTaskNavigation('#overview/task/%00/session')).toBeNull();
+    expect(decodeTaskNavigation('#overview/task/t1/execute')).toBeNull();
+  });
+
   it('falls back safely for unknown and empty fragments', () => {
     expect(destinationFromHash('')).toBe('office');
     expect(destinationFromHash('#not-a-page')).toBe('office');

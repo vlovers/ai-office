@@ -9,7 +9,7 @@ import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
 import { TaskSummary } from './task-summary.js';
 import { TaskHistory } from './task-history.js';
 import { TaskComposer } from './task-composer.js';
-import { TaskSessionOutput } from './task-session-output.js';
+import { TaskSessionOutput, type TaskLogView } from './task-session-output.js';
 import { TaskChangedFiles } from './task-changed-files.js';
 import { TaskSessionControls } from './task-session-controls.js';
 import { SubmittedQueue } from './submitted-queue.js';
@@ -156,6 +156,24 @@ function App() {
     }
   }, [dashboard, selected, navigation]);
   const lastNavigation = useRef('');
+  const inspectorOpener = useRef<HTMLElement | null>(null);
+  const taskLogView = useRef<TaskLogView | undefined>(undefined);
+  const inspectedTask = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const previous = inspectedTask.current;
+    inspectedTask.current = navigation?.context === 'overview' ? navigation.taskId : undefined;
+    if (!previous || inspectedTask.current || page !== 'office') return;
+    const row = document.querySelector<HTMLElement>(
+      `[data-overview-task-id="${CSS.escape(previous)}"]`,
+    );
+    // Closing or going Back restores the task row, or search if filtering hid it.
+    const focusTarget =
+      row ??
+      (inspectorOpener.current?.isConnected ? inspectorOpener.current : null) ??
+      document.querySelector<HTMLElement>('.overview-task-search input');
+    focusTarget?.focus({ preventScroll: true });
+    focusTarget?.scrollIntoView({ block: 'nearest' });
+  }, [navigation, page]);
   useEffect(() => {
     const onHashChange = () => {
       const route = routeFromHash(window.location.hash);
@@ -211,7 +229,8 @@ function App() {
     }
   };
   useEffect(() => {
-    void refresh().catch((e) => setError(String(e.message)));
+    // Connection state owns polling failures; operation errors remain separate.
+    void refresh().catch(() => {});
     const timer = setInterval(() => {
       void refresh().catch(() => {});
     }, 2000);
@@ -323,11 +342,15 @@ function App() {
     if (selected !== target.id) setSelected(target.id);
     if (taskPanel !== 'details') setTaskPanel('details');
     if (selectedAgent !== target.agentId) setSelectedAgent(target.agentId);
-    if (view !== 'focus') setView('focus');
-    if (page !== 'tasks') setPage('tasks');
+    const overview = navigation.context === 'overview';
+    const targetView = overview ? 'mission' : 'focus';
+    const targetPage = overview ? 'office' : 'tasks';
+    if (view !== targetView) setView(targetView);
+    if (page !== targetPage) setPage(targetPage);
   }, [navigation, dashboard, selected, selectedAgent, view, page, taskPanel]);
   useEffect(() => {
-    if (!navigation || !dashboard || view !== 'focus' || selected !== navigation.taskId) return;
+    if (!navigation || !dashboard || selected !== navigation.taskId) return;
+    if (page !== (navigation.context === 'overview' ? 'office' : 'tasks')) return;
     const target = dashboard.tasks.find((item) => item.id === navigation.taskId);
     if (!target || (navigation.destination === 'review' && !taskHasReview(target))) return;
     const key = encodeTaskNavigation(navigation);
@@ -343,23 +366,35 @@ function App() {
     lastNavigation.current = key;
     section.focus({ preventScroll: true });
     section.scrollIntoView({ block: 'start' });
-  }, [navigation, dashboard, selected, view]);
+  }, [navigation, dashboard, selected, view, page]);
   const clearTaskNavigation = () => {
     setNavigation(null);
     lastNavigation.current = '';
-    if (window.location.hash.startsWith('#task/')) {
+    if (window.location.hash.startsWith('#overview/task/')) {
+      window.history.replaceState(null, '', '#overview');
+    } else if (window.location.hash.startsWith('#task/')) {
       window.history.replaceState(null, '', '#task-history');
     }
   };
-  const navigateTask = (item: Task, destination: TaskDestination) => {
+  const navigateTask = (
+    item: Task,
+    destination: TaskDestination,
+    context: 'overview' | 'tasks' = navigation?.context ?? 'tasks',
+  ) => {
     const target = taskNavigationTarget(item, destination);
     if (!target) return;
+    if (context === 'overview') {
+      target.context = 'overview';
+      inspectorOpener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
     setSelected(item.id);
     setTaskPanel('details');
     setSelectedAgent(item.agentId);
     setResumeSessionId('');
-    setView('focus');
-    setPage('tasks');
+    setView(context === 'overview' ? 'mission' : 'focus');
+    setPage(context === 'overview' ? 'office' : 'tasks');
+    setNavigation(target);
     const hash = encodeTaskNavigation(target);
     if (window.location.hash === hash) {
       lastNavigation.current = '';
@@ -465,6 +500,125 @@ function App() {
     >
       ■ Stop agent
     </button>
+  );
+  const closeInspector = () => {
+    setNavigation(null);
+    lastNavigation.current = '';
+    window.location.hash = '#overview';
+  };
+  const taskWorkspace = (
+    <section
+      className="panel output"
+      aria-label="Selected task details"
+      onKeyDown={(event) => {
+        if (
+          event.key === 'Escape' &&
+          navigation?.context === 'overview' &&
+          !event.defaultPrevented
+        ) {
+          event.preventDefault();
+          closeInspector();
+        }
+      }}
+      id="task-workspace"
+      tabIndex={-1}
+      data-task-panel="details"
+    >
+      <div className="panel-heading">
+        <h2>Task workspace {task && <span className="output-title">/ {task.title}</span>}</h2>
+        <span className="subtle">
+          {httpConnection === 'disconnected'
+            ? 'LAST KNOWN OUTPUT · DISCONNECTED'
+            : !task
+              ? 'SELECT A TASK'
+              : task.state === 'completed' ||
+                  task.state === 'failed' ||
+                  task.state === 'interrupted' ||
+                  task.state === 'stopped'
+                ? 'SAVED OUTPUT'
+                : httpConnection === 'connecting'
+                  ? 'CONNECTING · OUTPUT MAY BE STALE'
+                  : 'LIVE OUTPUT'}
+        </span>
+      </div>
+      {navigation?.context === 'overview' && (
+        <div className="task-inspector-actions">
+          <button type="button" onClick={closeInspector}>
+            Close inspector
+          </button>
+          {task && (
+            <button type="button" onClick={() => navigateTask(task, 'session', 'tasks')}>
+              Open in Tasks
+            </button>
+          )}
+        </div>
+      )}
+      {!task ? (
+        <div className="output-empty">
+          {!dashboard
+            ? httpConnection === 'disconnected'
+              ? 'Task details unavailable. Retry the connection.'
+              : 'Loading task details…'
+            : 'Select a task to follow its progress and review the result.'}
+        </div>
+      ) : (
+        <>
+          <TaskSessionControls
+            task={task}
+            repositoryName={repository?.name}
+            dashboard={dashboard}
+            queued={queued}
+            taskConfiguration={taskConfiguration}
+            resumeSessionId={resumeSessionId}
+            busy={busy}
+            stopPending={pendingStops.includes(task.id)}
+            transportConnected={httpConnection === 'connected'}
+            showStopControl={
+              (view === 'focus' || navigation?.context === 'overview') && task.id === agent?.taskId
+            }
+            stopControl={stopControl}
+            onNavigate={navigateTask}
+            onResumeSessionChange={setResumeSessionId}
+            onStartTask={() => {
+              void act(async () => {
+                if (
+                  task.executionMode === 'write' &&
+                  !window.confirm(
+                    'Start a write-enabled Codex session in an isolated Git worktree? The agent can edit that worktree. Review and integration are manual.',
+                  )
+                )
+                  return;
+                await api(`/tasks/${task.id}/start`, {
+                  ...(resumeSessionId ? { resumeSessionId } : {}),
+                  confirmedWrite: task.executionMode === 'write',
+                });
+              });
+            }}
+            onStopTask={() => void stopTask(task.id)}
+          />
+          <TaskSessionOutput task={task} session={session} events={events} logView={taskLogView} />
+          {taskHasReview(task) && (
+            <ReviewCenter
+              key={task.id}
+              task={{ ...task, configuration: taskConfiguration }}
+              api={api}
+            />
+          )}
+          {(!taskHasReview(task) ||
+            (navigation?.taskId === task.id && navigation.destination === 'workflow')) && (
+            <div
+              className="task-workflow-anchor"
+              id={`task-workflow-${encodeURIComponent(task.id)}`}
+              data-task-id={task.id}
+              tabIndex={-1}
+            >
+              <WorkflowBoard taskId={task.id} />
+            </div>
+          )}
+          <TaskChangedFiles task={task} />
+        </>
+      )}
+    </section>
   );
   return (
     <div
@@ -576,6 +730,11 @@ function App() {
             />
             {connection}
           </span>
+          {httpConnection === 'disconnected' && page !== 'office' && (
+            <button type="button" onClick={() => void refresh().catch(() => {})}>
+              Retry connection
+            </button>
+          )}
           {canRetryStreams(httpConnection, streamConnections) && (
             <button
               type="button"
@@ -681,14 +840,19 @@ function App() {
               </button>
             </div>
           )}
-          {page === 'office' && (
-            <OfficePage>
-              <WorkspaceOverview
-                dashboard={dashboard}
-                transportStatus={httpConnection}
-                onOpenTask={(task) => navigateTask(task, 'session')}
-                onNewTask={() => showSection('compose')}
-              />
+          <OfficePage hidden={page !== 'office'}>
+            <WorkspaceOverview
+              dashboard={dashboard}
+              transportStatus={httpConnection}
+              onOpenTask={(task) => navigateTask(task, 'session', 'overview')}
+              onNewTask={() => showSection('compose')}
+              onRetry={() => void refresh().catch(() => {})}
+              selectedTaskId={navigation?.context === 'overview' ? selected : undefined}
+              inspector={
+                navigation?.context === 'overview' && !linkError ? taskWorkspace : undefined
+              }
+            />
+            {page === 'office' && (
               <details
                 className="office-visual"
                 open={officeSceneOpen}
@@ -781,8 +945,8 @@ function App() {
                   )}
                 </section>
               </details>
-            </OfficePage>
-          )}
+            )}
+          </OfficePage>
           {page === 'tasks' && (
             <TaskPanelTabs
               active={taskPanel}
@@ -867,95 +1031,7 @@ function App() {
                       onSelectTask={(item) => navigateTask(item, 'session')}
                     />
                   )}
-                  {page === 'tasks' && (
-                    <section
-                      className="panel output"
-                      id="task-workspace"
-                      tabIndex={-1}
-                      data-task-panel="details"
-                    >
-                      <div className="panel-heading">
-                        <h2>
-                          Task workspace{' '}
-                          {task && <span className="output-title">/ {task.title}</span>}
-                        </h2>
-                        <span className="subtle">
-                          {httpConnection === 'disconnected'
-                            ? 'LAST KNOWN OUTPUT · DISCONNECTED'
-                            : !task
-                              ? 'SELECT A TASK'
-                              : task.state === 'completed' ||
-                                  task.state === 'failed' ||
-                                  task.state === 'interrupted' ||
-                                  task.state === 'stopped'
-                                ? 'SAVED OUTPUT'
-                                : httpConnection === 'connecting'
-                                  ? 'CONNECTING · OUTPUT MAY BE STALE'
-                                  : 'LIVE OUTPUT'}
-                        </span>
-                      </div>
-                      {!task ? (
-                        <div className="output-empty">
-                          <span>↳</span> Select a task to follow its progress and review the result.
-                        </div>
-                      ) : (
-                        <>
-                          <TaskSessionControls
-                            task={task}
-                            repositoryName={repository?.name}
-                            dashboard={dashboard}
-                            queued={queued}
-                            taskConfiguration={taskConfiguration}
-                            resumeSessionId={resumeSessionId}
-                            busy={busy}
-                            stopPending={pendingStops.includes(task.id)}
-                            transportConnected={httpConnection === 'connected'}
-                            showStopControl={view === 'focus' && task.id === agent?.taskId}
-                            stopControl={stopControl}
-                            onNavigate={navigateTask}
-                            onResumeSessionChange={setResumeSessionId}
-                            onStartTask={() => {
-                              void act(async () => {
-                                if (
-                                  task.executionMode === 'write' &&
-                                  !window.confirm(
-                                    'Start a write-enabled Codex session in an isolated Git worktree? The agent can edit that worktree. Review and integration are manual.',
-                                  )
-                                )
-                                  return;
-                                await api(`/tasks/${task.id}/start`, {
-                                  ...(resumeSessionId ? { resumeSessionId } : {}),
-                                  confirmedWrite: task.executionMode === 'write',
-                                });
-                              });
-                            }}
-                            onStopTask={() => void stopTask(task.id)}
-                          />
-                          <TaskSessionOutput task={task} session={session} events={events} />
-                          {taskHasReview(task) && (
-                            <ReviewCenter
-                              key={task.id}
-                              task={{ ...task, configuration: taskConfiguration }}
-                              api={api}
-                            />
-                          )}
-                          {(!taskHasReview(task) ||
-                            (navigation?.taskId === task.id &&
-                              navigation.destination === 'workflow')) && (
-                            <div
-                              className="task-workflow-anchor"
-                              id={`task-workflow-${encodeURIComponent(task.id)}`}
-                              data-task-id={task.id}
-                              tabIndex={-1}
-                            >
-                              <WorkflowBoard taskId={task.id} />
-                            </div>
-                          )}
-                          <TaskChangedFiles task={task} />
-                        </>
-                      )}
-                    </section>
-                  )}
+                  {page === 'tasks' && taskWorkspace}
                   {page === 'tasks' && (
                     <TaskComposer
                       dashboard={dashboard}

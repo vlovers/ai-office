@@ -26,6 +26,11 @@ describe('workspace destinations', () => {
   });
 
   it('restores focus only for a valid task-scoped fragment', () => {
+    expect(routeFromHash('#overview/task/example/session')).toEqual({
+      page: 'office',
+      taskPanel: 'details',
+      view: 'mission',
+    });
     for (const section of ['session', 'review', 'workflow']) {
       expect(routeFromHash(`#task/example/${section}`)).toEqual({
         page: 'tasks',

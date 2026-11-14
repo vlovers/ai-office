@@ -679,7 +679,8 @@ export function WorkflowBoard({
                       ))}
                     {stage.nextAction && !checkpointCurrent && (
                       <p className="workflow-stage-hint" role="status">
-                        Approval and stage actions are locked until the current checkpoint is verified.
+                        Approval and stage actions are locked until the current checkpoint is
+                        verified.
                       </p>
                     )}
                     {stage.nextAction && (

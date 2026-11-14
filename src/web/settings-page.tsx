@@ -80,9 +80,7 @@ export function SettingsPage({
             Refresh connection
           </button>
         </div>
-        <p className="connection-message">
-          {connectionMessage}
-        </p>
+        <p className="connection-message">{connectionMessage}</p>
         <p className="field-hint">
           No credentials are entered in this dashboard. Local login never falls back to API billing.
         </p>

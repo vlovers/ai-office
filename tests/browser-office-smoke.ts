@@ -230,13 +230,15 @@ try {
       .getByRole('button', { name: destination })
       .click();
   };
-  // On a 320px screen the five destinations must remain keyboard-accessible
-  // even when the horizontal strip clips the first or last item.
+  // All five destinations remain visible and keyboard-accessible at 320px.
   await page.setViewportSize({ width: 320, height: 720 });
   await navigate('Settings');
   const mobileNav = page.getByRole('navigation', { name: 'Main navigation' });
   const officeNavButton = mobileNav.getByRole('button', { name: 'Office' });
   const settingsNavButton = mobileNav.getByRole('button', { name: 'Settings' });
+  for (const label of ['Office', 'Tasks', 'Workflows', 'Agents', 'Settings']) {
+    await expect(mobileNav.getByRole('button', { name: label })).toBeInViewport();
+  }
   await expect(settingsNavButton).toBeInViewport();
   await settingsNavButton.focus();
   const beforeKeyboardScroll = await page.evaluate(() => window.scrollY);
@@ -343,6 +345,113 @@ try {
   await expect(
     overview.getByRole('button', { name: 'Open task: FIXTURE · held SDK reasoning' }),
   ).toBeVisible();
+  // Inspect in context without discarding the Overview projection. The same
+  // task remains addressable in Tasks, reloads and browser Back/Forward.
+  await search.fill('FIXTURE · held SDK reasoning');
+  const overviewSort = overview.getByRole('combobox', { name: 'Sort workspace tasks' });
+  await overviewSort.selectOption('title');
+  const runningRow = overview.getByRole('button', {
+    name: 'Open task: FIXTURE · held SDK reasoning',
+  });
+  await runningRow.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#overview\/task\/[^/]+\/session$/);
+  const contextualInspector = page.getByRole('complementary', {
+    name: 'Task inspector',
+    exact: true,
+  });
+  await expect(contextualInspector).toBeVisible();
+  await expect(contextualInspector.getByRole('button', { name: 'Stop agent' })).toBeEnabled();
+  await expect(page.locator('#task-workspace')).toBeFocused();
+  await expect(runningRow).toHaveAttribute('aria-pressed', 'true');
+  await expect(search).toHaveValue('FIXTURE · held SDK reasoning');
+  await expect(overviewStatus).toHaveValue('running');
+  // Check the rendered theme, rather than assuming token colors are legible.
+  const colors = await page.evaluate(() =>
+    ['.overview-metric small', '.overview-task-title strong', '.overview-state.state-running'].map(
+      (selector) => {
+        const element = document.querySelector<HTMLElement>(selector)!;
+        let background: HTMLElement | null = element;
+        while (background && getComputedStyle(background).backgroundColor === 'rgba(0, 0, 0, 0)')
+          background = background.parentElement;
+        return [getComputedStyle(element).color, getComputedStyle(background!).backgroundColor];
+      },
+    ),
+  );
+  // Calculate outside the page so tsx's named-function helpers are not serialized.
+  const luminance = (color: string) =>
+    color
+      .match(/[\d.]+/g)!
+      .slice(0, 3)
+      .map(Number)
+      .map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      })
+      .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0);
+  const contrast = colors.map(([foreground, background]) => {
+    const front = luminance(foreground!);
+    const back = luminance(background!);
+    return (Math.max(front, back) + 0.05) / (Math.min(front, back) + 0.05);
+  });
+  assert.ok(
+    contrast.every((ratio) => ratio >= 4.5),
+    `Text contrast ratios: ${contrast.join(', ')}`,
+  );
+  assert.equal(
+    await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+    true,
+  );
+  await captureTaskInspector('contextual', 'FIXTURE · held SDK reasoning');
+  await contextualInspector.getByRole('button', { name: 'Pause auto-scroll' }).click();
+  const pausedScrollTop = await contextualInspector
+    .getByRole('log')
+    .evaluate((node) => node.scrollTop);
+  await contextualInspector.getByRole('button', { name: 'Open in Tasks' }).click();
+  await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
+  await expect(page.locator('#task-workspace')).toContainText('FIXTURE · held SDK reasoning');
+  await expect(page.getByRole('button', { name: 'Jump to latest event' })).toBeVisible();
+  await page.goBack();
+  await expect(contextualInspector).toBeVisible();
+  await expect(
+    contextualInspector.getByRole('button', { name: 'Jump to latest event' }),
+  ).toBeVisible();
+  assert.equal(
+    await contextualInspector.getByRole('log').evaluate((node) => node.scrollTop),
+    pausedScrollTop,
+  );
+  await expect(overviewSort).toHaveValue('title');
+  await page.reload();
+  await expect(contextualInspector).toContainText('FIXTURE · held SDK reasoning');
+  // Filters persist within the application session across destinations; a
+  // reload restores the task URL independently of optional browser storage.
+  await search.fill('FIXTURE · held SDK reasoning');
+  await overviewStatus.selectOption('running');
+  await overviewSort.selectOption('title');
+  await page.locator('#task-workspace').focus();
+  await page.keyboard.press('Escape');
+  await expect(contextualInspector).toBeHidden();
+  await expect(runningRow).toBeFocused();
+  assert.notEqual(await runningRow.evaluate((node) => getComputedStyle(node).outlineStyle), 'none');
+  await navigate('Tasks');
+  await navigate('Office');
+  await expect(search).toHaveValue('FIXTURE · held SDK reasoning');
+  await expect(overviewStatus).toHaveValue('running');
+  await expect(overviewSort).toHaveValue('title');
+  // The inspector and keyboard focus remain usable at the smallest viewport.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await runningRow.focus();
+  await page.keyboard.press('Enter');
+  await expect(contextualInspector).toBeInViewport();
+  await contextualInspector.getByRole('button', { name: 'Close inspector' }).click();
+  await expect(runningRow).toBeFocused();
+  await expect(runningRow).toBeInViewport();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await search.fill('');
+  await overviewSort.selectOption('recent');
   await overviewStatus.selectOption('all');
   await newTask('codex-2', 'FIXTURE · submitted queue', 'Review later');
   const queue = page.getByRole('region', { name: 'Live task queue' });

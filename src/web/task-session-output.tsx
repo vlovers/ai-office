@@ -1,27 +1,49 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { AgentEvent, Session, Task } from '../shared/types.js';
 import { countEventsAfter, isNearLogEnd, unreadBaseline } from './log-follow.js';
 
 type FollowMode = 'following' | 'reading' | 'paused';
 
+/** Retain only the selected task's reading position across workspace routes. */
+export interface TaskLogView {
+  taskId: string;
+  mode: FollowMode;
+  pausedAtId: number | null;
+  scrollTop: number;
+}
+
 /**
  * Key this component by task ID. A task switch must never inherit another
  * task's paused cursor or scroll position, even before effects have run.
  */
-function TaskEventLog({ events }: { events: AgentEvent[] }) {
+function TaskEventLog({
+  events,
+  taskId,
+  logView,
+}: {
+  events: AgentEvent[];
+  taskId: string;
+  logView?: RefObject<TaskLogView | undefined>;
+}) {
   const logRef = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState<FollowMode>('following');
-  const [pausedAtId, setPausedAtId] = useState<number | null>(null);
+  const saved = logView?.current?.taskId === taskId ? logView.current : undefined;
+  const [mode, setMode] = useState<FollowMode>(saved?.mode ?? 'following');
+  const [pausedAtId, setPausedAtId] = useState<number | null>(saved?.pausedAtId ?? null);
   const latestEventId = events.at(-1)?.id;
   const unread = countEventsAfter(events, pausedAtId);
   const following = mode === 'following';
+
+  useLayoutEffect(() => {
+    if (logRef.current && saved) logRef.current.scrollTop = saved.scrollTop;
+  }, []);
 
   // Scroll before paint so a new SSE event cannot briefly displace the reader
   // or produce an intermediate scroll event that disables follow mode.
   useLayoutEffect(() => {
     const log = logRef.current;
     if (log && following) log.scrollTop = log.scrollHeight;
-  }, [following, latestEventId]);
+    if (log && logView) logView.current = { taskId, mode, pausedAtId, scrollTop: log.scrollTop };
+  }, [following, latestEventId, mode, pausedAtId, logView, taskId]);
 
   return (
     <>
@@ -64,6 +86,8 @@ function TaskEventLog({ events }: { events: AgentEvent[] }) {
         aria-live={following ? 'polite' : 'off'}
         tabIndex={0}
         onScroll={(event) => {
+          if (logView?.current?.taskId === taskId)
+            logView.current.scrollTop = event.currentTarget.scrollTop;
           // An explicit pause stays paused until the reader resumes it.
           // Reading mode, by contrast, resumes when the reader scrolls down.
           if (mode === 'paused') return;
@@ -100,10 +124,12 @@ export function TaskSessionOutput({
   task,
   session,
   events,
+  logView,
 }: {
   task: Task;
   session?: Session;
   events: AgentEvent[];
+  logView?: RefObject<TaskLogView | undefined>;
 }) {
   return (
     <>
@@ -121,7 +147,7 @@ export function TaskSessionOutput({
           </span>
         </p>
       )}
-      <TaskEventLog key={task.id} events={events} />
+      <TaskEventLog key={task.id} events={events} taskId={task.id} logView={logView} />
       {task.error && (
         <p className="task-error" role="alert">
           {task.error}

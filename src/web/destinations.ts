@@ -23,10 +23,11 @@ export function routeFromHash(hash: string): {
   taskPanel: 'details' | 'new';
   view: 'mission' | 'focus';
 } {
+  const task = decodeTaskNavigation(hash);
   return {
     page: destinationFromHash(hash),
     taskPanel: hash === '#compose' ? 'new' : 'details',
-    view: decodeTaskNavigation(hash) ? 'focus' : 'mission',
+    view: task && task.context !== 'overview' ? 'focus' : 'mission',
   };
 }
 

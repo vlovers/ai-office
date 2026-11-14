@@ -226,7 +226,11 @@ export function TaskHistory({
           </button>
         </div>
       )}
-      {!dashboard?.tasks.length ? (
+      {!dashboard ? (
+        <p className="empty-state" role="status">
+          Waiting for a workspace snapshot. Task history appears when the server connects.
+        </p>
+      ) : !dashboard.tasks.length ? (
         <div className="empty-state">
           <div>☷</div>
           <h3>No reviews yet.</h3>
