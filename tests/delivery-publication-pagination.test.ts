@@ -17,11 +17,113 @@ describe('complete read-only GitHub PR pagination', () => {
     const fetchPage = vi.fn(async (page: number) =>
       page === 1
         ? { candidates: [candidate], nextPage: 2 }
-        : { candidates: [{ ...candidate, state: 'closed' }], nextPage: null },
+        : {
+            candidates: [
+              {
+                ...candidate,
+                html_url: 'https://github.com/vlovers/ai-office/pull/124',
+                state: 'closed',
+              },
+            ],
+            nextPage: null,
+          },
     );
     const result = await collectRemotePullRequests(fetchPage);
     expect(result.complete).toBe(true);
     expect(result.candidates).toHaveLength(2);
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('verifies stable multi-page PR identities in a second complete traversal', async () => {
+    const fetchPage = vi.fn(async (page: number) =>
+      page === 1
+        ? { candidates: [candidate], nextPage: 2 }
+        : {
+            candidates: [
+              { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+            ],
+            nextPage: null,
+          },
+    );
+    const result = await collectRemotePullRequests(fetchPage, 100, true);
+    expect(result.candidates).toHaveLength(2);
+    expect(fetchPage.mock.calls.map(([page]) => page)).toEqual([1, 2, 1, 2]);
+  });
+
+  it('refuses a page shift without any duplicate within either traversal', async () => {
+    let pass = 0;
+    const fetchPage = vi.fn(async (page: number) => {
+      if (page === 1) pass += 1;
+      return page === 1
+        ? {
+            candidates: [
+              {
+                ...candidate,
+                html_url: `https://github.com/vlovers/ai-office/pull/${pass === 1 ? 123 : 125}`,
+              },
+            ],
+            nextPage: 2,
+          }
+        : {
+            candidates: [
+              { ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' },
+            ],
+            nextPage: null,
+          };
+    });
+    await expect(collectRemotePullRequests(fetchPage, 100, true)).rejects.toThrow(
+      'pagination changed during inventory',
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(4);
+  });
+
+  it('detects an injected adapter mutating first-pass evidence during verification', async () => {
+    const mutable = { ...candidate };
+    let pass = 0;
+    const fetchPage = vi.fn(async (page: number) => {
+      if (page === 1) {
+        pass += 1;
+        if (pass === 2) {
+          mutable.html_url = 'https://github.com/vlovers/ai-office/pull/125';
+        }
+        return { candidates: [mutable], nextPage: 2 };
+      }
+      return {
+        candidates: [{ ...candidate, html_url: 'https://github.com/vlovers/ai-office/pull/124' }],
+        nextPage: null,
+      };
+    });
+    await expect(collectRemotePullRequests(fetchPage, 100, true)).rejects.toThrow(
+      'pagination changed during inventory',
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not return a first-pass inventory when the verification traversal fails', async () => {
+    let firstPageReads = 0;
+    const fetchPage = vi.fn(async (page: number) => {
+      if (page === 1) {
+        firstPageReads += 1;
+        if (firstPageReads === 2) throw new Error('GitHub HTTP 429');
+        return { candidates: [candidate], nextPage: 2 };
+      }
+      return { candidates: [], nextPage: null };
+    });
+    await expect(collectRemotePullRequests(fetchPage, 100, true)).rejects.toThrow(
+      'GitHub HTTP 429',
+    );
+    expect(fetchPage.mock.calls.map(([page]) => page)).toEqual([1, 2, 1]);
+  });
+
+  it('rejects repeated PR URLs even if their state changes between pages', async () => {
+    const fetchPage = vi.fn(async (page: number) =>
+      page === 1
+        ? { candidates: [candidate], nextPage: 2 }
+        : { candidates: [{ ...candidate, state: 'closed' }], nextPage: null },
+    );
+    await expect(collectRemotePullRequests(fetchPage)).rejects.toThrow(
+      'duplicate or invalid PR identity',
+    );
     expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 
@@ -51,7 +153,15 @@ describe('complete read-only GitHub PR pagination', () => {
   it('refuses a listing that exceeds the configured safe page limit', async () => {
     await expect(
       collectRemotePullRequests(
-        async (page) => ({ candidates: [candidate], nextPage: page + 1 }),
+        async (page) => ({
+          candidates: [
+            {
+              ...candidate,
+              html_url: `https://github.com/vlovers/ai-office/pull/${page + 122}`,
+            },
+          ],
+          nextPage: page + 1,
+        }),
         2,
       ),
     ).rejects.toThrow('safe pagination limit');

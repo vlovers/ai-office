@@ -96,7 +96,7 @@ describe('read-only commit and push receipt verification', () => {
         fetcher: t.fetcher,
       });
       expect(push.state).toBe('confirmed');
-      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET']);
+      expect(t.fetcher.mock.calls.map((call) => call[1].method)).toEqual(['GET', 'GET', 'GET']);
       expect(t.journal.assertReadyForDraft(identity)).toBeUndefined();
     } finally {
       t.db.close();

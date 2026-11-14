@@ -220,3 +220,19 @@ production startup and does not authorize GitHub writes. Independent-process
 tests, stable persisted registration discovery, authenticated commit/push
 approvals and HTTP/session/CSRF gates remain outstanding. See
 [trusted startup coordinator](docs/DELIVERY_STARTUP_COORDINATOR.md).
+
+### v0.8 publication journal integrity (unreleased, integration PR #79)
+
+The existing Draft PR publication journal now adds SQL-level receipt-free intent
+insertion, immutable operation ownership, monotonic receipt transitions,
+non-deletable evidence and read-time detection of legacy duplicate owners.
+Integration coverage includes separate SQLite connections, child-process
+restart and preservation of pre-upgrade conflicts. This complements, but does
+not replace, the commit/push journal, shared Git lease, verified remote PR
+receipt and authenticated operator authorization.
+
+**Still blocked:** independent security review of the combined executor,
+real target-host failure injection, private SQLite backup/restore and migration
+verification, least-privilege credential audit, and any production write route.
+Do not merge or activate the integration solely on green CI. See
+[production checklist](docs/DELIVERY_PRODUCTION_CHECKLIST.md).

@@ -1,7 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeliveryJournal } from '../src/server/delivery-journal.js';
 import { publicationKey } from '../src/server/delivery-publication-idempotency.js';
+import { publishApprovedDraft } from '../src/server/delivery-publication-service.js';
 import { reconcileUncertainDraftViaGitHub } from '../src/server/delivery-publication-github-recovery.js';
 
 const { acquireLocks, repositoryLeaseDirectories } = vi.hoisted(() => ({
@@ -76,13 +80,96 @@ describe('lease-protected GitHub GET reconciliation', () => {
     }
   });
 
+  it('reconciles a crashed reservation through GET and blocks a second publication', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const journal = new DeliveryJournal(db);
+      journal.reserve('workspace-1', publicationKey(plan));
+      expect(journal.get('workspace-1')?.state).toBe('reserved');
+      journal.recoverWorkspace('workspace-1', publicationKey(plan));
+      expect(journal.get('workspace-1')?.state).toBe('uncertain');
+
+      const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+        expect(init.method).toBe('GET');
+        return json([candidate]);
+      });
+      const result = await reconcileUncertainDraftViaGitHub(context(journal), { fetcher });
+      expect(result.state).toBe('published');
+      expect(result.pullRequestUrl).toBe(candidate.html_url);
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(() => journal.reserve('workspace-1', publicationKey(plan))).toThrow('already exists');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('recovers an ambiguous remote CREATE across a SQLite restart without a second POST', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-office-publication-restart-'));
+    const file = join(directory, 'publication.sqlite');
+    const createDraft = vi.fn(async () => {
+      // Model a remote PR created successfully but its HTTP response lost.
+      throw new Error('connection dropped after remote CREATE');
+    });
+    try {
+      const first = new DatabaseSync(file);
+      try {
+        const journal = new DeliveryJournal(first);
+        await expect(publishApprovedDraft({ ...context(journal), createDraft })).rejects.toThrow(
+          'connection dropped after remote CREATE',
+        );
+        expect(journal.get('workspace-1')?.state).toBe('uncertain');
+        expect(createDraft).toHaveBeenCalledOnce();
+      } finally {
+        first.close();
+      }
+
+      const reopened = new DatabaseSync(file);
+      try {
+        const journal = new DeliveryJournal(reopened);
+        expect(journal.get('workspace-1')?.state).toBe('uncertain');
+        await expect(publishApprovedDraft({ ...context(journal), createDraft })).rejects.toThrow(
+          'Publication outcome is uncertain',
+        );
+        expect(createDraft).toHaveBeenCalledOnce();
+
+        const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+          expect(init.method).toBe('GET');
+          return json([candidate]);
+        });
+        const receipt = await reconcileUncertainDraftViaGitHub(context(journal), { fetcher });
+        expect(receipt).toMatchObject({
+          state: 'published',
+          pullRequestUrl: candidate.html_url,
+        });
+        expect(fetcher).toHaveBeenCalledOnce();
+
+        const reused = await publishApprovedDraft({ ...context(journal), createDraft });
+        expect(reused).toEqual(receipt);
+        expect(createDraft).toHaveBeenCalledOnce();
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('keeps uncertain state after a failed later page', async () => {
     const db = new DatabaseSync(':memory:');
     try {
       const journal = uncertainJournal(db);
       const fetcher = vi.fn(async (url: string) => {
         const page = new URL(url).searchParams.get('page');
-        return page === '1' ? json([candidate, candidate]) : json({ message: 'rate limit' }, 429);
+        return page === '1'
+          ? json([
+              candidate,
+              {
+                ...candidate,
+                html_url: 'https://github.com/vlovers/ai-office/pull/124',
+                head: { ...candidate.head, ref: 'unrelated-branch' },
+              },
+            ])
+          : json({ message: 'rate limit' }, 429);
       });
       await expect(
         reconcileUncertainDraftViaGitHub(context(journal), { fetcher, perPage: 2 }),

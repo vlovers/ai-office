@@ -92,7 +92,7 @@ describe('server-only least-privilege GitHub credential boundary', () => {
     const result = await t.request('/workspaces/workspace-a/remote-status', { body: {} });
     expect(result.response.status).toBe(200);
     expect(result.body).toEqual({ headSha, baseSha, remoteWritesEnabled: false });
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     for (const request of requests) {
       expect(request.url).toMatch(
         /^https:\/\/api.github.com\/repos\/vlovers\/ai-office\/git\/ref\/heads\//,
@@ -214,11 +214,42 @@ describe('server-only least-privilege GitHub credential boundary', () => {
         endpoint.replace('https://', `https://${token}@`),
         `https://api.github.com/repos/${repository}/pulls?state=all&page=1&per_page=100&page=2`,
         `https://api.github.com/repos/${repository}/pulls/1/merge`,
+        `https://api.github.com/repos/${repository}/pulls/1?unexpected=1`,
+        `https://api.github.com/repos/${repository}/pulls/1#fragment`,
+        `https://api.github.com/repos/${repository}/pulls/1/`,
+        `https://api.github.com/repos/${repository}/pulls/1%2Fmerge`,
+        `https://api.github.com/repos/${repository}/pulls/01`,
+        `https://api.github.com/repos/${repository}/pulls/1?state=all`,
       ])
         await expect(fetcher(url, { method: 'GET' })).rejects.toThrow('unavailable');
       for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'])
         await expect(fetcher(endpoint, { method })).rejects.toThrow();
       expect(calls).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('permits canonical pull detail and bounded inventory reads with read-only credentials', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const calls: string[] = [];
+      const manager = new DeliveryGitHubCredentials(
+        db,
+        async () => credential(),
+        async (url, init) => {
+          calls.push(url);
+          expect(init.method).toBe('GET');
+          expect(init.redirect).toBe('error');
+          return Response.json({ number: 1 });
+        },
+      );
+      const fetcher = manager.readOnlyFetcher(repository, ['main']);
+      const detail = `https://api.github.com/repos/${repository}/pulls/1`;
+      const listing = `https://api.github.com/repos/${repository}/pulls?state=all&page=1&per_page=100`;
+      expect((await fetcher(detail, { method: 'GET' })).status).toBe(200);
+      expect((await fetcher(listing, { method: 'GET' })).status).toBe(200);
+      expect(calls).toEqual([detail, listing]);
     } finally {
       db.close();
     }

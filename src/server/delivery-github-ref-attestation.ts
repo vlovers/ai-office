@@ -1,4 +1,6 @@
 import { parseGitHubPullRequest } from './delivery-github-readonly.js';
+import { withGitHubRequestDeadline } from './delivery-github-request-deadline.js';
+import { GITHUB_JSON_LIMITS, readBoundedGitHubJson } from './delivery-github-json-boundary.js';
 import { publicationKey } from './delivery-publication-idempotency.js';
 import type { DeliveryPublicationPlan } from './delivery-publication-policy.js';
 import {
@@ -34,6 +36,7 @@ export type GitHubRefOptions = {
   token?: string;
   fetcher?: Fetcher;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 function validCommitSha(value: string): boolean {
@@ -87,19 +90,24 @@ async function fetchExactCommitRef(
     'X-GitHub-Api-Version': '2022-11-28',
   };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
-  const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
-    method: 'GET',
-    redirect: 'error',
-    headers,
-    signal: options.signal,
-  });
-  if (response.redirected || (response.url && response.url !== url.toString())) {
-    throw new Error('GitHub commit ref request was redirected.');
-  }
-  if (response.status !== 200) {
-    throw new Error(`GitHub commit ref request failed with HTTP ${response.status}.`);
-  }
-  const body: unknown = await response.json();
+  const body: unknown = await withGitHubRequestDeadline(
+    async (signal) => {
+      const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
+        method: 'GET',
+        redirect: 'error',
+        headers,
+        signal,
+      });
+      if (response.redirected || (response.url && response.url !== url.toString())) {
+        throw new Error('GitHub commit ref request was redirected.');
+      }
+      if (response.status !== 200) {
+        throw new Error(`GitHub commit ref request failed with HTTP ${response.status}.`);
+      }
+      return readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.refs);
+    },
+    { signal: options.signal, timeoutMs: options.timeoutMs },
+  );
   if (
     !isRecord(body) ||
     body.ref !== `refs/heads/${branch}` ||
@@ -130,22 +138,41 @@ export async function attestGitHubCommitRefs(
   if (options.token !== undefined && (!options.token || /\s/.test(options.token))) {
     throw new Error('Invalid server-side GitHub credential.');
   }
-  // Sequential reads avoid exposing an apparently complete attestation if
-  // the first ref is already missing or stale.
-  const headCommitSha = await fetchExactCommitRef(repository, plan.branch, options);
-  if (headCommitSha !== approval.headCommitSha) {
-    throw new Error('GitHub head branch moved since operator review.');
+  // One outer deadline bounds the head/base/head sequence, including body
+  // parsing. A concurrent writer may move the managed head while the base
+  // request is pending. Re-read it after the base rather than authorizing a
+  // POST from a head snapshot that was already stale during attestation.
+  // This is a fail-closed TOCTOU reduction, not an atomic GitHub snapshot.
+  // The outer AbortSignal also prevents late responses from starting a
+  // subsequent GET after the attestation has timed out.
+  const timeoutMs = options.timeoutMs ?? 15_000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 60_000) {
+    throw new Error('Invalid GitHub commit ref attestation deadline.');
   }
-  const baseCommitSha = await fetchExactCommitRef(repository, plan.baseBranch, options);
-  if (baseCommitSha !== approval.baseCommitSha) {
-    throw new Error('GitHub base branch moved since operator review.');
-  }
-  return {
-    ...approval,
-    repository,
-    branch: plan.branch,
-    baseBranch: plan.baseBranch,
-  };
+  return withGitHubRequestDeadline(
+    async (signal) => {
+      const boundedOptions = { ...options, signal, timeoutMs };
+      const headCommitSha = await fetchExactCommitRef(repository, plan.branch, boundedOptions);
+      if (headCommitSha !== approval.headCommitSha) {
+        throw new Error('GitHub head branch moved since operator review.');
+      }
+      const baseCommitSha = await fetchExactCommitRef(repository, plan.baseBranch, boundedOptions);
+      if (baseCommitSha !== approval.baseCommitSha) {
+        throw new Error('GitHub base branch moved since operator review.');
+      }
+      const confirmedHeadSha = await fetchExactCommitRef(repository, plan.branch, boundedOptions);
+      if (confirmedHeadSha !== approval.headCommitSha) {
+        throw new Error('GitHub head branch moved during remote attestation.');
+      }
+      return {
+        ...approval,
+        repository,
+        branch: plan.branch,
+        baseBranch: plan.baseBranch,
+      };
+    },
+    { signal: options.signal, timeoutMs },
+  );
 }
 
 /**
@@ -176,19 +203,24 @@ export async function readGitHubDraftCommitReceipt(
     'X-GitHub-Api-Version': '2022-11-28',
   };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
-  const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
-    method: 'GET',
-    redirect: 'error',
-    headers,
-    signal: options.signal,
-  });
-  if (response.redirected || (response.url && response.url !== url.toString())) {
-    throw new Error('GitHub draft PR detail request was redirected.');
-  }
-  if (response.status !== 200) {
-    throw new Error(`GitHub draft PR detail request failed with HTTP ${response.status}.`);
-  }
-  const body: unknown = await response.json();
+  const body: unknown = await withGitHubRequestDeadline(
+    async (signal) => {
+      const response = await (options.fetcher ?? globalThis.fetch)(url.toString(), {
+        method: 'GET',
+        redirect: 'error',
+        headers,
+        signal,
+      });
+      if (response.redirected || (response.url && response.url !== url.toString())) {
+        throw new Error('GitHub draft PR detail request was redirected.');
+      }
+      if (response.status !== 200) {
+        throw new Error(`GitHub draft PR detail request failed with HTTP ${response.status}.`);
+      }
+      return readBoundedGitHubJson(response, GITHUB_JSON_LIMITS.detail);
+    },
+    { signal: options.signal, timeoutMs: options.timeoutMs },
+  );
   if (
     !isRecord(body) ||
     body.number !== Number(match[3]) ||
@@ -202,6 +234,11 @@ export async function readGitHubDraftCommitReceipt(
     throw new Error('Invalid GitHub draft PR commit details.');
   }
   const parsed = parseGitHubPullRequest(body);
+  // The API route's numeric identity and the returned HTML identity must
+  // agree. Otherwise a successful GET could confirm an unrelated PR.
+  if (parsed.html_url !== pullRequestUrl) {
+    throw new Error('GitHub draft PR detail URL differs from the requested receipt.');
+  }
   const receipt: GitHubCommitReceipt = {
     ...parsed,
     head: { ...parsed.head, sha: body.head.sha },
