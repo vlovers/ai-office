@@ -1,0 +1,178 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+import type { AgentView, Dashboard, Task } from '../src/shared/types.js';
+import { WorkspaceOverview } from '../src/web/workspace-overview.js';
+
+const agent: AgentView = {
+  id: 'codex-1',
+  name: 'Coder',
+  provider: 'codex',
+  state: 'idle',
+  taskId: null,
+  canStop: true,
+  mode: 'Repository review · read only',
+};
+
+const task = (id: string, state: Task['state']): Task => ({
+  id,
+  repositoryId: 'repo-1',
+  agentId: 'codex-1',
+  sessionId: null,
+  title: `Task ${id}`,
+  prompt: 'Read-only fixture',
+  state,
+  result: '',
+  error: null,
+  changedFiles: [],
+  baselineFiles: [],
+  summaryError: null,
+  createdAt: '2026-11-07T12:00:00.000Z',
+  updatedAt: '2026-11-07T12:00:00.000Z',
+});
+
+const dashboard = (tasks: Task[]): Dashboard => ({
+  agents: [agent],
+  agent,
+  profiles: [],
+  repositories: [
+    {
+      id: 'repo-1',
+      name: 'Demo repository',
+      path: '/tmp/demo',
+      gitDir: '/tmp/demo/.git',
+      createdAt: '2026-11-07T12:00:00.000Z',
+    },
+  ],
+  tasks,
+  sessions: [],
+  queue: [],
+  concurrency: 2,
+  ready: true,
+  readinessMessage: 'Ready',
+  connection: {
+    mode: 'local-cli-chatgpt',
+    status: 'available',
+    message: 'Local provider available',
+    checkedAt: null,
+    modes: [],
+  },
+});
+
+const render = (
+  data?: Dashboard,
+  transportStatus: 'connecting' | 'connected' | 'disconnected' = 'connected',
+) =>
+  renderToStaticMarkup(
+    <WorkspaceOverview
+      dashboard={data}
+      transportStatus={transportStatus}
+      onOpenTask={() => {}}
+      onNewTask={() => {}}
+    />,
+  );
+
+describe('minimal workspace overview', () => {
+  it('does not present a stale provider snapshot as live after disconnect', () => {
+    const html = render(dashboard([]), 'disconnected');
+    expect(html).toContain('Server disconnected');
+    expect(html).toContain('Last known: Local provider available');
+    expect(html).not.toContain('overview-connection-dot ready');
+  });
+
+  it('distinguishes reconnecting from live provider readiness', () => {
+    const reconnecting = render(dashboard([]), 'connecting');
+    expect(reconnecting).toContain('Reconnecting to server');
+    expect(reconnecting).not.toContain('overview-connection-dot ready');
+    const connected = render(dashboard([]), 'connected');
+    expect(connected).toContain('overview-connection-dot ready');
+    expect(connected).not.toContain('overview-transport-warning');
+  });
+  it('explains offline and connecting states before the first snapshot', () => {
+    const offline = render(undefined, 'disconnected');
+    expect(offline).toContain('Server disconnected. No workspace snapshot is available');
+    expect(offline).toContain('Workspace tasks are unavailable while the server is disconnected.');
+    expect(offline).not.toContain('Loading workspace tasks');
+    expect(offline).not.toContain('overview-connection-dot ready');
+
+    const connecting = render(undefined, 'connecting');
+    expect(connecting).toContain('Connecting to server. Waiting for the first workspace snapshot.');
+    expect(connecting).toContain('Connecting to server…');
+    expect(connecting).not.toContain('Last known:');
+  });
+
+  it('does not fabricate metrics or agents before a snapshot arrives', () => {
+    const html = render();
+    expect(html).toContain('Loading workspace tasks');
+    expect(html).toContain('Loading agents');
+    expect(html).toContain('Checking connection');
+    expect(html).toContain('<strong>—</strong>');
+    expect(html).not.toContain('99.98%');
+  });
+
+  it('shows an actionable empty state without fake recent activity', () => {
+    const html = render(dashboard([]));
+    expect(html).toContain('No tasks yet');
+    expect(html).toContain('Create a task');
+    expect(html).toContain('Local provider available');
+    expect(html).not.toContain('Run completed');
+  });
+
+  it('distinguishes submitted queue entries from unsubmitted task drafts', () => {
+    const draft = task('draft', 'queued');
+    const submitted = task('submitted', 'queued');
+    const data = dashboard([
+      draft,
+      submitted,
+      task('running', 'running'),
+      task('failed', 'failed'),
+      task('completed', 'completed'),
+    ]);
+    data.queue.push({
+      taskId: submitted.id,
+      agentId: 'codex-1',
+      order: 1,
+      enqueuedAt: '2026-11-07T12:00:00.000Z',
+      mode: 'local-cli-chatgpt',
+      resumeSessionId: null,
+    });
+    const html = render(data);
+    expect(html).toContain('Task draft');
+    expect(html).toContain('Task submitted');
+    expect(html).toContain('In queue');
+    expect(html).toContain('Not started');
+    expect(html).toContain('Needs attention');
+    expect(html).toContain('Failed');
+    expect(html).toContain('Demo repository');
+    expect(html).toContain('Open task: Task submitted');
+    expect(html).not.toContain('72%');
+  });
+
+  it('exposes status filters and searches across task, repository and agent fields', () => {
+    const html = render(dashboard([task('review', 'failed')]));
+    expect(html).toContain('aria-label="Filter tasks by status"');
+    expect(html).toContain('<option value="queued">In queue</option>');
+    expect(html).toContain('<option value="attention">Needs attention</option>');
+    expect(html).toContain('Search tasks, repositories or agents');
+    expect(html).toContain('1 matching');
+  });
+
+  it('limits initial rows to twelve with an accessible path to older tasks', () => {
+    const data = dashboard(
+      Array.from({ length: 15 }, (_, index) => task(String(index).padStart(2, '0'), 'completed')),
+    );
+    const html = render(data);
+    expect(html.match(/aria-label="Open task:/g)).toHaveLength(12);
+    expect(html).toContain('Show more tasks (3 remaining)');
+    expect(html).toContain('15 matching');
+    expect(html).toContain('15 total');
+  });
+
+  it('does not confuse unsubmitted drafts with the submitted queue metric', () => {
+    const data = dashboard([task('draft', 'queued')]);
+    const html = render(data);
+    expect(html).toContain('Not started');
+    expect(html).toContain('Submitted and waiting');
+    expect(html).toContain('<strong>0</strong>');
+    expect(html).not.toContain('state-queued">In queue');
+  });
+});

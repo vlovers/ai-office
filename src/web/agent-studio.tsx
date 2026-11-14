@@ -86,6 +86,11 @@ export function AgentStudio({
           />
           Show archived profiles
         </label>
+        {filter && (
+          <button className="secondary" type="button" onClick={() => setFilter('')}>
+            Clear profile search
+          </button>
+        )}
         <button className="secondary" disabled={busy} onClick={() => void act(refresh)}>
           Reload profiles
         </button>
@@ -96,9 +101,16 @@ export function AgentStudio({
           {error}
         </p>
       )}
+      <p role="status" className="subtle" aria-live="polite">
+        {shown.length} of {profiles.length} profiles shown
+      </p>
       {!shown.length && (
         <p className="empty-state">
-          No matching profiles. Create an agent or show archived profiles.
+          {profiles.length === 0
+            ? 'No profiles yet. Create an agent to get started.'
+            : filter
+              ? 'No profiles match your search. Clear the search to see other profiles.'
+              : 'No active profiles to show. Enable archived profiles or create an agent.'}
         </p>
       )}
       <ul className="profile-list">

@@ -519,7 +519,12 @@ export class WorkflowStore {
             }
             this.db.prepare('DELETE FROM task_queue WHERE task_id=?').run(stage.taskId);
           }
-          stage.state = row?.state === 'completed' ? 'blocked' : 'interrupted';
+          // Preserve terminal failures across restart. A blocked workflow is
+          // skipped by reconcileTerminals(), so this is the final opportunity
+          // to distinguish failed QA from an interrupted execution.
+          if (row?.state === 'completed') stage.state = 'blocked';
+          else if (row?.state === 'failed' || row?.state === 'stopped') stage.state = 'failed';
+          else stage.state = 'interrupted';
           next.state = 'blocked';
         }
         if (next.state !== 'blocked') continue;
