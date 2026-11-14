@@ -36,7 +36,10 @@ function registration(
       workspaceId,
       operationKey: `operation-${workspaceId}`,
       destination: 'https://github.com/vlovers/ai-office',
-      branch: 'ai-office/12345678-1234-1234-1234-123456789abc',
+      branch:
+        workspaceId === 'workspace-1'
+          ? 'ai-office/12345678-1234-1234-1234-123456789abc'
+          : 'ai-office/22345678-1234-1234-1234-123456789abc',
       headSha: 'a'.repeat(40),
       baseSha: 'b'.repeat(40),
     },
