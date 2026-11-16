@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import { readFile, rm } from 'node:fs/promises';
-import { sandbox, until } from './helpers.js';
+import { sandbox, until, testIsolation } from './helpers.js';
 import { validateRepository } from '../src/server/repositories.js';
 import type { AgentId } from '../src/shared/types.js';
 import { Store } from '../src/server/store.js';
@@ -119,7 +119,8 @@ it('recovers submitted FIFO work and resumes the same agent-owned thread after a
   const auth = new CodexAuth({ dataDir: a.root, inspectLocal: async () => a.inspection });
   await auth.refresh();
   const providers = ['1', '2'].map(
-    (id) => new CodexProvider({ home: join(a.root, 'reopened', id), auth }),
+    (id) =>
+      new CodexProvider({ home: join(a.root, 'reopened', id), auth, isolation: testIsolation }),
   );
   const manager = new TaskManager(store, providers, auth);
   manager.startQueue();

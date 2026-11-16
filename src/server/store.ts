@@ -169,6 +169,38 @@ export class Store {
     this.deliveryJournal = new DeliveryJournal(this.db);
     this.deliveryJournal.recoverInterrupted();
   }
+  private eventWrites = 0;
+  /**
+   * Monotonic version of everything except the append-only event log, for this
+   * connection (all AI Office writes share it). Any non-event write increments it;
+   * spurious increments only cause a rebuild, never a stale read.
+   */
+  version(): number {
+    const row = this.db.prepare('SELECT total_changes() AS changes').get();
+    return Number(row?.changes ?? 0) - this.eventWrites;
+  }
+  taskConfigurations(): Map<string, ExecutionConfiguration> {
+    return new Map(
+      this.db
+        .prepare('SELECT task_id, coalesce(execution,submission) AS json FROM task_configurations')
+        .all()
+        .map((row) => [
+          String(row.task_id),
+          JSON.parse(String(row.json)) as ExecutionConfiguration,
+        ]),
+    );
+  }
+  sessionConfigurations(): Map<string, ExecutionConfiguration> {
+    return new Map(
+      this.db
+        .prepare('SELECT session_id, json FROM session_configurations')
+        .all()
+        .map((row) => [
+          String(row.session_id),
+          JSON.parse(String(row.json)) as ExecutionConfiguration,
+        ]),
+    );
+  }
   taskConfiguration(id: string): ExecutionConfiguration | undefined {
     const row = this.db
       .prepare(
@@ -458,6 +490,7 @@ export class Store {
     const result = this.db
       .prepare('INSERT INTO events(task_id,at,kind,message,data) VALUES (?,?,?,?,?)')
       .run(taskId, at, kind, message, data === undefined ? null : JSON.stringify(data));
+    this.eventWrites += Number(result.changes);
     return { id: Number(result.lastInsertRowid), taskId, at, kind, message, data };
   }
   events(taskId: string, after = 0): AgentEvent[] {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AgentEvent, Dashboard, Task, AuthMode, AgentId } from '../shared/types.js';
+import type { AgentEvent, Dashboard, Task, AgentId } from '../shared/types.js';
 import { AgentsPage } from './agents-page.js';
 import { MainNavigation } from './main-navigation.js';
 import { PageHeading } from './page-heading.js';
@@ -53,7 +53,6 @@ import {
   type TaskHistoryOrder,
   type TaskHistoryStatus,
 } from './task-history-operations.js';
-import { exportTaskHistoryCsv } from './task-history-export.js';
 import {
   isDashboardSnapshot,
   isOfficeWorkflowList,
@@ -76,7 +75,24 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   );
   return parseOfficeApiResponse<T>(response);
 }
-const activeStates = ['running', 'stopping'];
+/**
+ * Conditional poll. Sends the last accepted ETag and reports `unchanged` on 304 so
+ * the caller keeps its current state without re-parsing or re-rendering. The caller
+ * commits `etag` only after validating and accepting the response.
+ */
+async function poll<T>(
+  path: string,
+  etag: string | undefined,
+): Promise<{ unchanged: true } | { unchanged: false; data: T; etag: string | undefined }> {
+  const response = await fetch(`/api${path}`, {
+    cache: 'no-store',
+    headers: etag ? { 'If-None-Match': etag } : {},
+  });
+  if (response.status === 304) return { unchanged: true };
+  const data = await parseOfficeApiResponse<T>(response);
+  return { unchanged: false, data, etag: response.headers.get('ETag') ?? undefined };
+}
+const pageHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 function App() {
   const [crt, setCrt] = useState(() => {
     try {
@@ -209,13 +225,18 @@ function App() {
   const [resumeSessionId, setResumeSessionId] = useState('');
   const [executionMode, setExecutionMode] = useState('read-only');
   const dashboardResults = useRef(createLatestResultGate());
+  const dashboardTag = useRef<string | undefined>(undefined);
   const refresh = async () => {
     const ticket = dashboardResults.current.begin();
     try {
-      const data = await api<unknown>('/dashboard');
-      if (!isDashboardSnapshot(data)) throw new Error('Invalid dashboard snapshot.');
+      const response = await poll<unknown>('/dashboard', dashboardTag.current);
+      if (!response.unchanged && !isDashboardSnapshot(response.data))
+        throw new Error('Invalid dashboard snapshot.');
       if (dashboardResults.current.accept(ticket)) {
-        setDashboard(data);
+        if (!response.unchanged) {
+          dashboardTag.current = response.etag;
+          setDashboard(response.data as Dashboard);
+        }
         setHttpConnection('connected');
       }
     } catch (e) {
@@ -231,21 +252,34 @@ function App() {
   useEffect(() => {
     // Connection state owns polling failures; operation errors remain separate.
     void refresh().catch(() => {});
+    // Hidden tabs skip polls and refresh immediately when shown again.
     const timer = setInterval(() => {
-      void refresh().catch(() => {});
+      if (!pageHidden()) void refresh().catch(() => {});
     }, 2000);
-    return () => clearInterval(timer);
+    const visible = () => {
+      if (!pageHidden()) void refresh().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', visible);
+    };
   }, []);
   useEffect(() => {
     let live = true;
     const workflowResults = createLatestResultGate();
+    let workflowTag: string | undefined;
     const load = async () => {
       const ticket = workflowResults.begin();
       try {
-        const items = await api<unknown>('/workflows');
-        if (!isOfficeWorkflowList(items)) throw new Error('Invalid workflow list.');
+        const response = await poll<unknown>('/workflows', workflowTag);
+        if (!response.unchanged && !isOfficeWorkflowList(response.data))
+          throw new Error('Invalid workflow list.');
         if (live && workflowResults.accept(ticket)) {
-          setWorkflows(items);
+          if (!response.unchanged) {
+            workflowTag = response.etag;
+            setWorkflows(response.data as OfficeWorkflow[]);
+          }
           setWorkflowAvailable(true);
         }
       } catch {
@@ -258,10 +292,17 @@ function App() {
       }
     };
     void load();
-    const timer = setInterval(() => void load(), 3000);
+    const timer = setInterval(() => {
+      if (!pageHidden()) void load();
+    }, 3000);
+    const visible = () => {
+      if (!pageHidden()) void load();
+    };
+    document.addEventListener('visibilitychange', visible);
     return () => {
       live = false;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', visible);
     };
   }, []);
   useEffect(() => {
