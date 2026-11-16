@@ -47,6 +47,16 @@ A separate process-group worker owns the command's timeout, output bound and bac
 
 Cleanup accepts only a delivered SIGKILL or confirmed group absence. Transient EPERM is retried conservatively; persistent uncertainty preserves leases and reports interruption rather than claiming a stop. Cancellation cannot undo completed writes or provider charges. Unknown resources and uncertain cleanup require manual inspection.
 
+## Execution safety (unreleased)
+
+**Read-only isolation gate.** Every Codex execution that is not an explicitly confirmed isolated write — including a task with no recorded mode — runs the native sandbox probe before the provider process starts. The probe uses the installed binary and the exact read-only policy, and must show: an allowed read succeeds; reads outside the repository, through a symlink out of it, and of `.env` are denied; writes inside it, via `..` traversal, and to a new directory are denied; and loopback network is denied. Exit codes and filesystem effects are both checked. Any failure fails the task closed with a fixed message and never starts the provider; there is no downgrade path.
+
+Successful ordinary probes are cached in memory for 10 minutes, keyed by the executable's canonical path and device/inode/size/mtime/mode, the reported runtime version, the exact sandbox arguments, OS release/architecture and Node version. Failures are never cached, the key is recomputed on every execution, and a restart starts with an empty cache. Reviewer/QA snapshot stages always run a fresh probe. Cancelling a task aborts its wait for the probe. Limitation: the fingerprint covers the CLI entry point and its reported version, not a hash of every native binary it loads.
+
+**Deadline.** One runtime limit (default 15 minutes) starts when the scheduler dispatches the task and covers repository validation, leases, workspace preparation, isolation verification, provider startup and execution. Expiry requests Stop and records the task as `failed` with the limit in its error. Cleanup is outside the budget: the process group is still reaped, and if cleanup is uncertain the task becomes `interrupted`, leases stay held and the agent stays quarantined. A timed-out or restart-interrupted task is never re-queued.
+
+**Lease directory.** Leases live under `/tmp/ai-office-worktrees-<uid>`. Before any lease is created, its parent must be a real directory (not a symlink), owned by the current user, with no group/other permission bits; the check compares an `O_NOFOLLOW` descriptor with `lstat` to reject swaps. AI Office creates the root as `0700` if absent and never repairs, deletes or chmods an existing path. If the check fails, inspect the path and fix it manually (for example, remove a stray directory created by another user).
+
 ## Storage and retained limitations
 
 Metadata/runtime directories are private and excluded from Git. SQLite uses WAL/foreign keys/transactions; schema v8 refuses older application readers and retains unfinished operation diagnostics. There are no quotas, general backup/retention/encryption facilities or account-wide spend limits. Host crashes cannot emit final events. Never clear a lock by deleting the database. No recovery path automatically deletes unknown/user-modified resources.

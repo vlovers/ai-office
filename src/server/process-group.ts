@@ -33,7 +33,9 @@ export async function reapProcessGroup(pid: number, timeoutMs = 1000) {
         Date.now() >= deadline
       )
         throw error;
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 25);
+      });
     }
   }
 }

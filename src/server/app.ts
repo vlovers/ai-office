@@ -66,7 +66,13 @@ export async function createApp(manager: TaskManager) {
     manager.startQueue();
   });
   app.get('/api/health', async () => ({ ok: true }));
-  app.get('/api/dashboard', async () => manager.dashboard());
+  // Conditional GETs: pollers send If-None-Match and receive 304 while nothing changed.
+  app.get('/api/dashboard', async (request, reply) => {
+    const view = manager.dashboardView(request.headers['if-none-match']);
+    reply.header('ETag', view.etag);
+    if (!view.dashboard) return reply.code(304).send();
+    return view.dashboard;
+  });
   app.get('/api/workflows/qa-commands', async () => ({
     commands: Object.entries(manager.workspaces?.options.commands ?? {}).map(
       ([commandId, argv]) => ({ commandId, argv }),
@@ -521,7 +527,12 @@ export async function createApp(manager: TaskManager) {
       result: assessment.eligible ? 'snapshot-runner-required' : 'manual-inspection-required',
     };
   });
-  app.get('/api/workflows', async () => new WorkflowStore(manager.store.db).list());
+  app.get('/api/workflows', async (request, reply) => {
+    const etag = manager.dataTag();
+    reply.header('ETag', etag);
+    if (request.headers['if-none-match'] === etag) return reply.code(304).send();
+    return new WorkflowStore(manager.store.db).list();
+  });
   app.get('/api/workflows/diagnostics', async () =>
     new WorkflowStore(manager.store.db).list().map(diagnoseWorkflow),
   );
@@ -782,7 +793,7 @@ export async function createApp(manager: TaskManager) {
     await manager.stop(taskId);
     return reply.send(manager.store.task(taskId));
   });
-  app.get('/api/tasks/:id/events', async (request, reply) => {
+  app.get('/api/tasks/:id/events', async (request) => {
     const taskId = id.parse((request.params as { id: string }).id);
     if (!manager.store.task(taskId)) throw new AppError(404, 'Task not found.');
     const query = z

@@ -4,7 +4,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
-import { sandbox } from './helpers.js';
+import { sandbox, testIsolation } from './helpers.js';
 import { TaskManager } from '../src/server/manager.js';
 import { CodexProvider } from '../src/server/providers/codex.js';
 const { createApp } = await import(pathToFileURL(resolve('dist/server/app.js')).href);
@@ -18,7 +18,11 @@ const manager = new TaskManager(
   undefined,
   {
     createProvider: (id) =>
-      new CodexProvider({ home: join(env.root, 'workers', id), auth: env.auth }),
+      new CodexProvider({
+        home: join(env.root, 'workers', id),
+        auth: env.auth,
+        isolation: testIsolation,
+      }),
     concurrency: 2,
   },
 );
@@ -197,7 +201,7 @@ try {
   await capture('no-agents');
   for (const profile of env.store.agents())
     env.store.editAgent(profile.id, profile.revision, { archived: false });
-  const extras = Array.from({ length: 4 }, (_, i) =>
+  Array.from({ length: 4 }, (_, i) =>
     env.store.createAgent({
       name: ['Fern', 'Sage', 'Iris', 'Moss'][i]!,
       role: i === 0 ? 'Reviewer' : 'Coding assistant',
@@ -703,7 +707,11 @@ try {
   // Large persisted histories should not mount every task row on a phone.
   // The backend fixture stays unchanged: intercept only this read-only snapshot.
   await page.route('**/api/dashboard', async (route) => {
-    const response = await route.fetch();
+    // Rewritten content is not the server's representation: always fetch a full body
+    // and never pass the server ETag through, so the client cannot 304 onto synthetic data.
+    const headers = { ...route.request().headers() };
+    delete headers['if-none-match'];
+    const response = await route.fetch({ headers });
     const snapshot = (await response.json()) as { tasks: Array<Record<string, unknown>> };
     const template = snapshot.tasks[0];
     assert.ok(template);
@@ -715,8 +723,11 @@ try {
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-01T00:00:00Z',
     }));
+    const responseHeaders = { ...response.headers() };
+    delete responseHeaders.etag;
     await route.fulfill({
       response,
+      headers: responseHeaders,
       json: { ...snapshot, tasks: [...snapshot.tasks, ...synthetic] },
     });
   });

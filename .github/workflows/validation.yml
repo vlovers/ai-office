@@ -37,7 +37,7 @@ jobs:
         run: npm ci
       - name: TypeScript
         run: npm run typecheck
-      - name: Delivery security lint
+      - name: Lint (security, async safety, React hooks)
         run: npm run lint
       - name: Unit and integration tests
         run: npm test

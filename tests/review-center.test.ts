@@ -101,7 +101,9 @@ it('waits briefly for a concurrent read-only Git review without bypassing write 
     // A write/feedback operation must not wait or bypass a competing lease.
     await expect(env.save()).rejects.toThrow('Repository is busy or has an unresolved lease.');
     const read = env.manager.reviewOperation(env.task.id, 'review');
-    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 120);
+    });
     await release();
     held = false;
     await expect(read).resolves.toMatchObject({ workspace: { id: env.workspace.id } });

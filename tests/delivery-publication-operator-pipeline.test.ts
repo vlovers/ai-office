@@ -81,7 +81,7 @@ describe('durable operator approval in the GitHub draft pipeline', () => {
   it('attests remote commits, consumes approval, reserves and sends exactly one POST', async () => {
     const t = setup();
     try {
-      t.fetcher.mockImplementationOnce(async (url, init) => {
+      t.fetcher.mockImplementationOnce(async (_url, init) => {
         expect(init.method).toBe('GET');
         t.ledger.assertPending(t.authorization.approvalId, {
           workspaceId: 'workspace-1',

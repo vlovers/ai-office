@@ -3,7 +3,7 @@ import { Store } from '../src/server/store.js';
 import { CodexProvider } from '../src/server/providers/codex.js';
 import { expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { sandbox, until } from './helpers.js';
+import { sandbox, until, testIsolation } from './helpers.js';
 import { TaskManager } from '../src/server/manager.js';
 import { validateRepository } from '../src/server/repositories.js';
 import type {
@@ -43,7 +43,12 @@ it('runs more than two profiles with bounded capacity, fair FIFO heads, cancella
       },
       async executeTask(session, prompt) {
         calls.push({ profile, prompt: prompt.split('\n').at(-1)!, session });
-        waits.set(session.id, new Promise((resolve) => releases.set(session.id, resolve)));
+        waits.set(
+          session.id,
+          new Promise((resolve) => {
+            releases.set(session.id, resolve);
+          }),
+        );
       },
       async *streamEvents(session): AsyncIterable<ProviderEvent> {
         yield { kind: 'thread', threadId: session.threadId ?? randomUUID() };
@@ -196,7 +201,11 @@ it('recovers confirmed dynamic-profile queues with original settings after archi
     reopened = new Store(join(env.root, 'metadata.sqlite'));
     manager = new TaskManager(reopened, env.providers, env.auth, undefined, undefined, undefined, {
       createProvider: (id) =>
-        new CodexProvider({ home: join(env.root, 'workers', id), auth: env.auth }),
+        new CodexProvider({
+          home: join(env.root, 'workers', id),
+          auth: env.auth,
+          isolation: testIsolation,
+        }),
       concurrency: 2,
     });
     manager.startQueue();

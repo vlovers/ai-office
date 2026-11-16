@@ -37,7 +37,7 @@ import {
 import { qaPlan, runSandboxedQA } from './qa-runner.js';
 import { verifyNativeIsolation } from './providers/native-isolation.js';
 import { AppError } from './errors.js';
-import { acquireLocks, acquireLock, ResourceLockedError } from './lock.js';
+import { acquireLocks, acquireLock, ResourceLockedError, ensureLeaseRoot } from './lock.js';
 import { changedFiles, revalidateRepository, repositoryLeaseDirectories } from './repositories.js';
 import type { AgentProvider, ProviderSession } from './providers/types.js';
 import {
@@ -57,7 +57,10 @@ import type { CodexAuth } from './providers/codex-auth.js';
 async function acquireReadOnlyReviewLease(paths: string[], detail: string) {
   const delays = [0, 50, 100, 200, 400];
   for (const [attempt, delay] of delays.entries()) {
-    if (delay) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    if (delay)
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delay);
+      });
     try {
       return await acquireLocks(paths, detail);
     } catch (error) {
@@ -131,8 +134,45 @@ export class TaskManager {
   startQueue() {
     this.wake(0);
   } // recover submitted work only after a successful listen
-  dashboard(): Dashboard {
+  private readonly instance = randomUUID();
+  private stored?: {
+    version: number;
+    data: Pick<Dashboard, 'profiles' | 'repositories' | 'tasks' | 'sessions'>;
+  };
+  isReady() {
+    return !this.connectionBusy && this.auth.view().status === 'available';
+  }
+  /** Opaque tag for persisted data; changes on every non-event write or restart. */
+  dataTag() {
+    return `"${this.instance}-${this.store.version()}"`;
+  }
+  // Persisted history is rebuilt only when stored rows change (bulk queries, no N+1).
+  private storedDashboard() {
+    const version = this.store.version();
+    if (this.stored?.version !== version) {
+      const taskConfigurations = this.store.taskConfigurations();
+      const sessionConfigurations = this.store.sessionConfigurations();
+      this.stored = {
+        version,
+        data: {
+          profiles: this.store.agents(),
+          repositories: this.store.repositories(),
+          tasks: this.store
+            .tasks()
+            .map((task) => ({ ...task, configuration: taskConfigurations.get(task.id) })),
+          sessions: this.store.sessions().map((session) => ({
+            ...session,
+            configuration: sessionConfigurations.get(session.id),
+          })),
+        },
+      };
+    }
+    return this.stored;
+  }
+  // In-memory scheduler state is always recomputed; it is small.
+  private liveDashboard() {
     const queue = this.store.queue();
+    const connection = this.auth.view();
     const agents = this.store
       .agents()
       .filter((profile) => this.runtime || this.providers.has(profile.id))
@@ -162,16 +202,7 @@ export class TaskManager {
         };
       });
     return {
-      profiles: this.store.agents(),
-      connection: this.auth.view(),
-      repositories: this.store.repositories(),
-      tasks: this.store
-        .tasks()
-        .map((task) => ({ ...task, configuration: this.store.taskConfiguration(task.id) })),
-      sessions: this.store.sessions().map((session) => ({
-        ...session,
-        configuration: this.store.sessionConfiguration(session.id),
-      })),
+      connection,
       agents,
       agent: agents[0]!,
       concurrency: this.capacity(),
@@ -179,13 +210,25 @@ export class TaskManager {
         ...entry,
         waitingReason:
           this.waiting.get(entry.taskId) ??
-          (entry.mode !== this.auth.view().mode
+          (entry.mode !== connection.mode
             ? 'Choose the submitted connection mode.'
             : 'Waiting for assigned agent.'),
       })),
-      ready: !this.connectionBusy && this.auth.view().status === 'available',
-      readinessMessage: this.auth.view().message,
+      ready: this.isReady(),
+      readinessMessage: connection.message,
     };
+  }
+  /** Conditional dashboard: omits the body when the caller's tag is current. */
+  dashboardView(ifNoneMatch?: string): { etag: string; dashboard?: Dashboard } {
+    const stored = this.storedDashboard();
+    const live = this.liveDashboard();
+    const digest = createHash('sha256').update(JSON.stringify(live)).digest('hex').slice(0, 16);
+    const etag = `"${this.instance}-${stored.version}-${digest}"`;
+    if (ifNoneMatch === etag) return { etag };
+    return { etag, dashboard: { ...stored.data, ...live } };
+  }
+  dashboard(): Dashboard {
+    return this.dashboardView().dashboard!;
   }
   private wake(delay = 200) {
     if (this.closing || this.timer) return;
@@ -258,7 +301,7 @@ export class TaskManager {
   ) {
     if (this.closing) throw new AppError(503, 'Server is shutting down.');
     if (this.connectionBusy) throw new AppError(409, 'Wait for the connection check to finish.');
-    if (!this.dashboard().ready) throw new AppError(503, this.dashboard().readinessMessage);
+    if (!this.isReady()) throw new AppError(503, this.auth.view().message);
     const task = this.store.task(taskId);
     if (!task) throw new AppError(404, 'Task not found.');
     if (task.state !== 'queued')
@@ -393,8 +436,7 @@ export class TaskManager {
           if (!info.isDirectory() || info.isSymbolicLink())
             throw new AppError(409, 'Artifact identity changed.');
         }
-        const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-        await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+        const lockRoot = await ensureLeaseRoot();
         const sourceTask = workflow.stages[0]?.taskId
           ? this.store.task(workflow.stages[0].taskId)
           : undefined;
@@ -430,7 +472,7 @@ export class TaskManager {
     );
   }
   private async submitSnapshotStage(id: string, version: number, kind: 'reviewer' | 'qa') {
-    if (this.closing || !this.workspaces || !this.dashboard().ready)
+    if (this.closing || !this.workspaces || !this.isReady())
       throw new AppError(503, 'Workflow runner is unavailable.');
     const workflows = new WorkflowStore(this.store.db);
     const workflow = workflows.get(id);
@@ -630,6 +672,25 @@ export class TaskManager {
       .find((item) => item.stages.some((stage) => stage.taskId === active.taskId));
     const workflowStage = workflow?.stages.find((stage) => stage.taskId === active.taskId);
     const downstream = workflowStage && workflowStage.kind !== 'coder';
+    // One execution budget from dispatch: repository validation, leases, workspace
+    // preparation, isolation verification, provider startup and execution. Cleanup is
+    // outside the budget: a timeout only requests Stop, which still reaps the process
+    // group and keeps leases when cleanup is uncertain.
+    let timedOut = false;
+    const limit =
+      this.timeoutMs % 60_000 === 0
+        ? `${this.timeoutMs / 60_000} minute`
+        : `${Math.ceil(this.timeoutMs / 1000)} second`;
+    const timeoutMessage = `Task exceeded the ${limit} runtime limit.`;
+    timer = setTimeout(() => {
+      timedOut = true;
+      failure = timeoutMessage;
+      this.emit(active.taskId, 'state', 'Runtime limit reached; stopping the task.');
+      void this.stop(active.taskId).catch(() => {
+        /* run() records uncertain cleanup and quarantines the agent */
+      });
+    }, this.timeoutMs);
+    timer.unref();
     try {
       await revalidateRepository(repository);
       if (active.stopRequested || this.closing) {
@@ -637,8 +698,7 @@ export class TaskManager {
         return;
       }
       // A fixed OS-local root ensures TMPDIR differences cannot bypass another process's lease.
-      const locks = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-      await mkdir(locks, { recursive: true, mode: 0o700 });
+      const locks = await ensureLeaseRoot();
       const directories = await repositoryLeaseDirectories(
         repository,
         downstream ? workflowSource(this.store, workflow!).workspace.gitDir : undefined,
@@ -832,16 +892,12 @@ export class TaskManager {
         active.session,
         configuredPrompt(effective, this.store.task(active.taskId)!.prompt),
       );
-      if (active.stopRequested) void provider.stopSession(active.session);
-      timer = setTimeout(() => {
-        failure = 'Task exceeded the 15 minute runtime limit.';
-        void this.stop(active.taskId);
-      }, this.timeoutMs);
+      if (active.stopRequested) void provider.stopSession(active.session).catch(() => {});
       for await (const event of provider.streamEvents(active.session)) {
         active.preparing = false;
         if (++eventCount > 5000) {
           failure = 'Task exceeded the 5000 event limit.';
-          void this.stop(active.taskId);
+          void this.stop(active.taskId).catch(() => {});
           continue;
         }
         if (event.kind === 'thread') {
@@ -924,14 +980,28 @@ export class TaskManager {
         if (workspace) this.store.saveWorkspace({ ...workspace, reviewEpoch: active.taskId });
       }
       if (downstream && !requeue && cleanupConfirmed && state === 'completed') {
-        try {
-          if (!this.workspaces || !result.trim())
-            throw new AppError(409, 'Downstream returned no authenticated result.');
-          await validateWorkflowSnapshot(this.store, this.workspaces, workflows.get(workflow!.id)!);
-        } catch {
+        // A missing result or a changed snapshot both reject the downstream result.
+        const workspaces = this.workspaces;
+        const intact =
+          workspaces && result.trim()
+            ? await validateWorkflowSnapshot(
+                this.store,
+                workspaces,
+                workflows.get(workflow!.id)!,
+              ).then(
+                () => true,
+                () => false,
+              )
+            : false;
+        if (!intact) {
           state = 'failed';
           failure = 'Snapshot integrity changed during execution. Result was not approved.';
         }
+      }
+      // A timeout is a failure, not a user Stop, unless cleanup itself became uncertain.
+      if (timedOut && !requeue && state !== 'interrupted') {
+        state = 'failed';
+        failure = timeoutMessage;
       }
       const persistTerminal = () => {
         try {
@@ -1081,8 +1151,7 @@ export class TaskManager {
       task.repositoryId !== repository.id
     )
       throw new AppError(409, 'Coder task and workspace binding changed.');
-    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockRoot = await ensureLeaseRoot();
     const lockPaths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
       (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
     );
@@ -1169,8 +1238,7 @@ export class TaskManager {
       task.repositoryId !== repository.id
     )
       throw new AppError(409, 'Coder workspace no longer matches the approved evidence.');
-    const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-    await mkdir(root, { recursive: true, mode: 0o700 });
+    const root = await ensureLeaseRoot();
     const paths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
       (directory) => join(root, createHash('sha256').update(directory).digest('hex')),
     );
@@ -1278,8 +1346,7 @@ export class TaskManager {
       task.repositoryId !== repository.id
     )
       throw new AppError(409, 'Coder workspace binding changed.');
-    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockRoot = await ensureLeaseRoot();
     const paths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
       (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
     );
@@ -1371,8 +1438,7 @@ export class TaskManager {
       task.repositoryId !== repo.id
     )
       throw new AppError(409, 'Coder source workspace changed.');
-    const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-    await mkdir(root, { recursive: true, mode: 0o700 });
+    const root = await ensureLeaseRoot();
     const paths = (await repositoryLeaseDirectories(repo, workspace.gitDir)).map((directory) =>
       join(root, createHash('sha256').update(directory).digest('hex')),
     );
@@ -1483,8 +1549,7 @@ export class TaskManager {
       task.repositoryId !== repository.id
     )
       throw new AppError(409, 'Source worktree binding is invalid.');
-    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockRoot = await ensureLeaseRoot();
     const lockPaths = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
       (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
     );
@@ -1571,8 +1636,7 @@ export class TaskManager {
     const workspace = task?.workspaceId ? this.store.workspace(task.workspaceId) : undefined;
     if (!workspace || workspace.id !== coder.evidence?.workspaceId)
       throw new AppError(409, 'Coder worktree identity changed.');
-    const lockRoot = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-    await mkdir(lockRoot, { recursive: true, mode: 0o700 });
+    const lockRoot = await ensureLeaseRoot();
     const locks = (await repositoryLeaseDirectories(repository, workspace.gitDir)).map(
       (directory) => join(lockRoot, createHash('sha256').update(directory).digest('hex')),
     );
@@ -1727,8 +1791,7 @@ export class TaskManager {
       if (action === 'review') return { workspace, files: [], diff: '', commands: [] };
       throw new AppError(409, 'Workspace already rejected.');
     }
-    const locks = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-    await mkdir(locks, { recursive: true, mode: 0o700 });
+    const locks = await ensureLeaseRoot();
     if (workspace.operation || workspace.recoveryError) {
       if (action === 'review')
         return this.clean({
@@ -1800,7 +1863,7 @@ export class TaskManager {
         if (session?.threadId !== record.threadId || session.workspaceId !== workspace.id)
           throw new AppError(409, 'Saved session identity changed. Manual recovery is required.');
         this.validateResume(task, session.id);
-        if (!this.dashboard().ready || this.connectionBusy || this.store.queue().length >= 100)
+        if (!this.isReady() || this.store.queue().length >= 100)
           throw new AppError(409, 'Connection or queue unavailable. Refresh connection and retry.');
         await this.workspaces.validateExecution(repository, workspace);
         const prompt =

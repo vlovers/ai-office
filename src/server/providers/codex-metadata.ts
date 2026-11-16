@@ -64,7 +64,7 @@ export class MetadataClient {
         );
       else pending.resolve(message.result);
     });
-    this.closed = new Promise((resolve) =>
+    this.closed = new Promise((resolve) => {
       this.child.once('close', () => {
         lines.close();
         for (const pending of this.pending.values()) {
@@ -73,8 +73,8 @@ export class MetadataClient {
         }
         this.pending.clear();
         resolve();
-      }),
-    );
+      });
+    });
     this.child.on('error', () => {});
     this.child.stdin.on('error', () => {});
   }

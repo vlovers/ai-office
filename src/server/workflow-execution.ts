@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, realpath } from 'node:fs/promises';
+import { lstat, readFile, realpath } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { Store } from './store.js';
 import type { Workspaces } from './workspaces.js';
 import type { Workflow, WorkflowStage } from './workflows.js';
 import { AppError } from './errors.js';
 import { git, repositoryLeaseDirectories } from './repositories.js';
-import { acquireLocks } from './lock.js';
+import { acquireLocks, ensureLeaseRoot } from './lock.js';
 import { verifyEvidenceBundle, type SnapshotManifest } from './evidence-bundle.js';
 import { verifyReviewerSourceCandidate, type ReviewerSourceManifest } from './reviewer-source.js';
 import { verifyReviewerGitContext } from './reviewer-runtime.js';
@@ -33,8 +33,7 @@ export function workflowSource(store: Store, workflow: Workflow) {
 
 export async function acquireWorkflowLease(store: Store, workflow: Workflow) {
   const { repository, workspace } = workflowSource(store, workflow);
-  const root = join('/tmp', `ai-office-worktrees-${process.getuid?.() ?? 'local'}`);
-  await mkdir(root, { recursive: true, mode: 0o700 });
+  const root = await ensureLeaseRoot();
   const directories = await repositoryLeaseDirectories(repository, workspace.gitDir);
   if (workflow.stages[1]?.runtimeCandidate)
     directories.push(join(workflow.stages[1].runtimeCandidate.directory, '.git'));

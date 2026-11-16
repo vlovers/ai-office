@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { createApp } from '../src/server/app.js';
-import { sandbox, until } from './helpers.js';
+import { sandbox, until, testIsolation } from './helpers.js';
 import type { Repository, Task, AgentEvent } from '../src/shared/types.js';
 import { Store } from '../src/server/store.js';
 import { TaskManager } from '../src/server/manager.js';
@@ -74,7 +74,11 @@ it('smoke: HTTP → SQLite → official SDK/CLI fixture → SSE → result → p
     currentStore = new Store(join(env.root, 'metadata.sqlite'));
     const auth = new CodexAuth({ dataDir: env.root, inspectLocal: async () => env.inspection });
     await auth.refresh();
-    const provider = new CodexProvider({ home: join(env.root, 'worker-home'), auth });
+    const provider = new CodexProvider({
+      home: join(env.root, 'worker-home'),
+      auth,
+      isolation: testIsolation,
+    });
     const manager = new TaskManager(currentStore, provider, auth);
     app = await createApp(manager);
     base = (await app.listen({ host: '127.0.0.1', port: 0 })) + '/api';

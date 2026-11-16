@@ -2,6 +2,7 @@ import { mkdtemp, writeFile, rm, chmod, realpath, lstat, readdir } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { CodexProvider } from '../src/server/providers/codex.js';
 import { Store } from '../src/server/store.js';
@@ -9,8 +10,48 @@ import { TaskManager } from '../src/server/manager.js';
 import { CodexAuth, type LocalInspection } from '../src/server/providers/codex-auth.js';
 import { AGENT_IDS } from '../src/shared/types.js';
 import { dirname } from 'node:path';
-import { nativeCodex } from '../src/server/providers/native-isolation.js';
+import {
+  nativeCodex,
+  nativeIsolationVerifier,
+  type IsolationVerifier,
+} from '../src/server/providers/native-isolation.js';
 
+/** True where Codex's native sandbox can be probed (macOS, or Linux CI opting in). */
+export const nativeIsolationAvailable =
+  process.platform === 'darwin' || process.env.AI_OFFICE_NATIVE_TESTS === '1';
+export const simulatedIsolationCalls: string[] = [];
+/**
+ * Read-only gate for fixture providers. macOS uses the REAL native probe through the
+ * installed Codex binary. Elsewhere it is SIMULATED: it only records that the gate was
+ * consulted. Simulated runs prove the gate is mandatory, not that the OS sandbox works.
+ */
+export const testIsolation: IsolationVerifier = nativeIsolationAvailable
+  ? nativeIsolationVerifier
+  : async (executable, _version, signal) => {
+      signal.throwIfAborted();
+      simulatedIsolationCalls.push(executable);
+    };
+
+let sharedFixture: Promise<string> | undefined;
+/**
+ * One immutable fixture CLI per test worker. Its identity is stable, so the REAL native
+ * isolation probe runs once per worker and later read-only tasks exercise the production
+ * cache path, instead of re-probing (9 sandboxed processes) in every test.
+ */
+function fixtureExecutable() {
+  sharedFixture ??= (async () => {
+    const directory = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-fixture-')));
+    const executable = join(directory, 'fixture.mjs');
+    await writeFile(
+      executable,
+      `#!${process.execPath}\n${(await readFile(new URL('./fixtures/codex-fixture.mjs', import.meta.url), 'utf8')).replace('__NATIVE_CODEX_PATH__', JSON.stringify(nativeCodex))}`,
+    );
+    await chmod(executable, 0o500);
+    process.once('exit', () => rmSync(directory, { recursive: true, force: true }));
+    return executable;
+  })();
+  return sharedFixture;
+}
 export async function sandbox(existingRepository?: string) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ai-office-test-')));
   const repository = existingRepository ?? join(root, 'example');
@@ -26,12 +67,7 @@ export async function sandbox(existingRepository?: string) {
     });
     await writeFile(join(repository, 'README.md'), '# Disposable example\n');
   }
-  const executable = join(root, 'fixture.mjs');
-  await writeFile(
-    executable,
-    `#!${process.execPath}\n${(await readFile(new URL('./fixtures/codex-fixture.mjs', import.meta.url), 'utf8')).replace('__NATIVE_CODEX_PATH__', JSON.stringify(nativeCodex))}`,
-  );
-  await chmod(executable, 0o700);
+  const executable = await fixtureExecutable();
   const store = new Store(join(root, 'metadata.sqlite'));
   // Write scenarios explicitly opt fixture profiles into write preference; production defaults stay read-only.
   for (const profile of store.agents())
@@ -54,7 +90,7 @@ export async function sandbox(existingRepository?: string) {
   const auth = new CodexAuth({ dataDir: root, inspectLocal: async () => inspection });
   await auth.refresh();
   const providers = AGENT_IDS.map(
-    (id) => new CodexProvider({ home: join(root, 'workers', id), auth }),
+    (id) => new CodexProvider({ home: join(root, 'workers', id), auth, isolation: testIsolation }),
   );
   const provider = providers[0]!;
   const manager = new TaskManager(store, providers, auth);
@@ -96,7 +132,9 @@ export async function until<T>(
   do {
     value = read();
     if (predicate(value)) return value;
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
   } while (Date.now() < deadline);
   throw new Error(`Timed out: ${JSON.stringify(value!)}`);
 }

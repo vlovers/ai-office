@@ -195,7 +195,9 @@ try {
     second.focus();
     second.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     first.focus();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
   });
   await page
     .getByRole('navigation', { name: 'Main navigation' })

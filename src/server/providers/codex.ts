@@ -2,12 +2,17 @@ import { reapProcessGroup, UncertainCleanupError } from '../process-group.js';
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
+import { AppError } from '../errors.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import type { AgentProvider, ProviderEvent, ProviderSession } from './types.js';
 import type { SessionBinding } from './types.js';
 import type { CodexAuth, CodexExecution } from './codex-auth.js';
 import { codexDiagnostic } from './codex-diagnostics.js';
-import { verifyNativeIsolation } from './native-isolation.js';
+import {
+  nativeIsolationVerifier,
+  verifyNativeIsolation,
+  type IsolationVerifier,
+} from './native-isolation.js';
 
 class EventQueue implements AsyncIterable<ProviderEvent> {
   private values: ProviderEvent[] = [];
@@ -41,6 +46,8 @@ interface Run {
 export interface CodexProviderOptions {
   home: string;
   auth: CodexAuth;
+  /** Read-only execution gate. Defaults to the cached native sandbox probe. */
+  isolation?: IsolationVerifier;
 }
 
 export class CodexProvider implements AgentProvider {
@@ -50,6 +57,7 @@ export class CodexProvider implements AgentProvider {
   private cleanupFailures = new Map<string, Error>();
   private prepared = new Map<string, CodexExecution>();
   private cancelled = new WeakSet<ProviderSession>();
+  private verifying = new Map<string, AbortController>();
   constructor(private options: CodexProviderOptions) {}
   async verifyIsolation() {
     const execution = await this.options.auth.prepare();
@@ -86,9 +94,33 @@ export class CodexProvider implements AgentProvider {
     const execution = this.prepared.get(session.id);
     if (!execution) throw new Error('Session has no prepared connection.');
     this.prepared.delete(session.id);
-    if (session.verifiedReadOnly) {
-      if (session.executionMode !== 'read-only') throw new Error('Read-only execution required.');
-      await verifyNativeIsolation(execution.sandboxExecutable);
+    // Every execution that is not an explicitly isolated write is read-only and must
+    // pass the native sandbox probe first. Missing mode fails closed as read-only.
+    if (session.verifiedReadOnly && session.executionMode !== 'read-only')
+      throw new Error('Read-only execution required.');
+    if (session.executionMode !== 'write') {
+      if (this.cancelled.has(session)) throw new Error('Session stopped before execution.');
+      const controller = new AbortController();
+      this.verifying.set(session.id, controller);
+      try {
+        await (this.options.isolation ?? nativeIsolationVerifier)(
+          execution.sandboxExecutable,
+          execution.binding.runtimeVersion,
+          controller.signal,
+          // Workflow snapshot stages keep their original per-dispatch proof.
+          { fresh: Boolean(session.verifiedReadOnly) },
+        );
+      } catch (error) {
+        if (this.cancelled.has(session)) throw new Error('Session stopped before execution.');
+        throw error instanceof AppError
+          ? error
+          : new AppError(
+              409,
+              'Native sandbox capability verification failed. No downstream execution is allowed.',
+            );
+      } finally {
+        this.verifying.delete(session.id);
+      }
     }
     if (this.cancelled.has(session)) throw new Error('Session stopped before execution.');
     const worker = new URL(
@@ -217,6 +249,7 @@ export class CodexProvider implements AgentProvider {
   async stopSession(session: ProviderSession) {
     this.cancelled.add(session);
     this.prepared.delete(session.id);
+    this.verifying.get(session.id)?.abort();
     const run = this.runs.get(session.id);
     if (!run) {
       if (this.cleanupFailures.has(session.id)) throw this.cleanupFailures.get(session.id)!;

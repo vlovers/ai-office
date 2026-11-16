@@ -26,6 +26,8 @@ Read-only is the legacy/default mode. Write tasks require explicit confirmation 
 
 Authentication preparation can take time, so ownership is checked again immediately before execution. Write resume requires the original execution/authentication modes, repository, agent/provider, native transcript, pending workspace and unchanged HEAD. No reset or implicit privilege upgrade occurs.
 
+Dashboard loading: `/api/dashboard` and `/api/workflows` return an `ETag` and answer `304` to a matching `If-None-Match`. The tag combines a per-process ID, a version of all non-event SQLite rows (`total_changes()` minus event inserts on the shared connection) and a digest of in-memory scheduler state, so event appends never invalidate it and a restart always does. Stored history is rebuilt only when that version changes, using bulk configuration queries. The browser sends the tag itself (`cache: 'no-store'`), keeps its state on `304`, and skips polls while the tab is hidden. A changed dashboard still returns the full task/session history; pagination is not implemented yet.
+
 ## Codex transport and sandbox
 
 The installed/pinned SDK remains `@openai/codex-sdk` 0.162.1. Verified APIs are `startThread`, `resumeThread`, `runStreamed` and AbortSignal. The SDK starts threads lazily and emits `thread.started`; the ID is persisted immediately. Completed agent messages can be interim commentary: only the latest response after `turn.completed` is a final result.

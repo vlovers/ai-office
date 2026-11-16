@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { sandbox } from './helpers.js';
+import { sandbox, testIsolation } from './helpers.js';
 import { TaskManager } from '../src/server/manager.js';
 import { Store } from '../src/server/store.js';
 import { Workspaces } from '../src/server/workspaces.js';
@@ -231,7 +231,12 @@ try {
   });
   await restartedAuth.refresh();
   const restartedProviders = AGENT_IDS.map(
-    (id) => new CodexProvider({ home: join(env.root, 'workers', id), auth: restartedAuth }),
+    (id) =>
+      new CodexProvider({
+        home: join(env.root, 'workers', id),
+        auth: restartedAuth,
+        isolation: testIsolation,
+      }),
   );
   manager = new TaskManager(
     store,

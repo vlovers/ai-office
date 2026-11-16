@@ -3,7 +3,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
-import { sandbox } from './helpers.js';
+import { sandbox, testIsolation } from './helpers.js';
 import { validateRepository } from '../src/server/repositories.js';
 const { createApp } = await import(pathToFileURL(resolve('dist/server/app.js')).href);
 const { TaskManager } = await import(pathToFileURL(resolve('dist/server/manager.js')).href);
@@ -22,7 +22,7 @@ let store: import('../src/server/store.js').Store = new Store(join(env.root, 'me
 const makeManager = () =>
   new TaskManager(store, env.providers, auth, undefined, undefined, undefined, {
     createProvider: (id: string) =>
-      new CodexProvider({ home: join(env.root, 'workers', id), auth }),
+      new CodexProvider({ home: join(env.root, 'workers', id), auth, isolation: testIsolation }),
     concurrency: 2,
   });
 let manager = makeManager();

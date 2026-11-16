@@ -147,7 +147,9 @@ if (args.length === 1 && args[0] === '--prepare') {
           assert.throws(() => manager.start(task.id), /Confirm isolated writes/);
           manager.start(task.id, undefined, true);
           while (['queued', 'running', 'stopping'].includes(store.task(task.id)!.state))
-            await new Promise((r) => setTimeout(r, 200));
+            await new Promise((r) => {
+              setTimeout(r, 200);
+            });
           assert.equal(
             store.task(task.id)!.state,
             'completed',
