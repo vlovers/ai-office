@@ -180,7 +180,9 @@ await new Promise<void>((accept, reject) => {
 const endpoint = temp.address();
 assert.ok(endpoint && typeof endpoint !== 'string');
 const port = endpoint.port;
-await new Promise<void>((accept) => temp.close(() => accept()));
+await new Promise<void>((accept) => {
+  temp.close(() => accept());
+});
 
 const fixtureScript = resolve('tests/fixtures/restart-browser-server.mjs');
 let child: ChildProcess | undefined;

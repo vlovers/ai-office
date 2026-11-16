@@ -50,7 +50,10 @@ it('supervises host verification after abrupt backend death without passing host
       (text) => JSON.parse(text),
       () => undefined,
     );
-    if (!marker) await new Promise((resolve) => setTimeout(resolve, 20));
+    if (!marker)
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
   }
   expect(marker).toBeDefined();
   const group = marker!.group;

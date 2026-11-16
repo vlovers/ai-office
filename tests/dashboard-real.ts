@@ -58,9 +58,9 @@ async function startBackend(): Promise<string> {
     stdio: ['ignore', 'pipe', 'ignore'],
   });
   const child = backend;
-  closed = new Promise((resolve) =>
-    child.once('close', (code, signal) => resolve({ code, signal })),
-  );
+  closed = new Promise((resolve) => {
+    child.once('close', (code, signal) => resolve({ code, signal }));
+  });
   return new Promise((resolve, reject) => {
     let output = '';
     const timer = setTimeout(

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AgentProfile } from '../shared/types.js';
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
 export function AgentStudio({

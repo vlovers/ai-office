@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { constants } from 'node:fs';
-import { chmod, lstat, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { AppError } from './errors.js';
 import { verifyReviewerSourceCandidate, type ReviewerSourceManifest } from './reviewer-source.js';

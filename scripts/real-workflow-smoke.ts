@@ -122,7 +122,9 @@ try {
         );
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100);
+      });
     }
     throw new Error('Live workflow task did not finish within its bound.');
   };
