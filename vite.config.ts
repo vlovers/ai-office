@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   root: 'src/web',
-  build: { outDir: '../../dist/web', emptyOutDir: true },
+  build: {
+    outDir: '../../dist/web',
+    emptyOutDir: true,
+    rolldownOptions: { input: ['src/web/index.html', 'src/web/orchestration.html'] },
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,

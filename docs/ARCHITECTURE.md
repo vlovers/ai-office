@@ -107,6 +107,12 @@ The workflow layer persists a revision-bound sequence of Coder, Reviewer and opt
 
 This is a local single-user architecture, not a general multi-tenant scheduler. There is no automatic merge, push or deployment, and Linux native success-path compatibility remains unverified.
 
+Schema 10 adds repository-scoped operator proposals/conversation, workflow templates
+and append-only project context. Confirmed proposal materialization atomically creates
+an inert existing workflow and task; all execution stays behind the v0.7 checkpoints
+and TaskManager capacity. Model planning and release automation are unavailable.
+See [v0.9 contracts, migration and limitations](V0_9_ORCHESTRATION.md).
+
 ## Office V4 presentation
 
 The office scene projects existing dashboard/task/SSE and workflow list state.
