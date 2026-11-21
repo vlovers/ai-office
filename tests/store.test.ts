@@ -56,7 +56,7 @@ it('upgrades version-1 metadata without guessing authentication for legacy sessi
     expect(store.session(session.id)?.threadId).toBe('legacy-thread');
     expect(store.session(session.id)?.authMode).toBeUndefined();
     expect(store.sessionBinding(session.id)).toBeUndefined();
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(10);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
@@ -100,7 +100,7 @@ it('transactionally migrates v2 tasks and sessions without auto-submitting legac
     store.db.exec('DROP TABLE task_queue; PRAGMA user_version=2;');
     store.close();
     store = new Store(path);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(10);
     expect(store.session(session.id)?.agentId).toBe('codex-1');
     expect(store.session(session.id)?.threadId).toBe('synthetic-v2-thread');
     expect(store.sessionBinding(session.id)).toEqual(binding);
@@ -206,7 +206,7 @@ it('migrates an actual schema-5 database without changing tasks and preserves sc
     store.close();
     store = new Store(path);
     expect(store.task(task.id)).toEqual(original);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(10);
     expect(store.queue()).toEqual([]);
     const record = store.captureReview(store.task(task.id)!, {
       workspace,
@@ -230,7 +230,7 @@ it('migrates an actual schema-5 database without changing tasks and preserves sc
   }
 });
 
-it('upgrades v8 metadata to v9 without losing existing work', async () => {
+it('upgrades v8 metadata to v10 without losing existing work', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'ai-office-v8-v9-'));
   const path = join(directory, 'office.sqlite');
   let store = new Store(path);
@@ -249,7 +249,7 @@ it('upgrades v8 metadata to v9 without losing existing work', async () => {
     store.db.exec('DROP TABLE workflows; PRAGMA user_version=8;');
     store.close();
     store = new Store(path);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(10);
     expect(store.task(task.id)?.title).toBe('Preserve v8 task');
     expect(store.session(session.id)).toBeDefined();
     expect(
@@ -260,7 +260,7 @@ it('upgrades v8 metadata to v9 without losing existing work', async () => {
     expect(store.queue()).toEqual([]);
     store.close();
     store = new Store(path);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(10);
     expect(store.task(task.id)).toBeDefined();
   } finally {
     store.close();

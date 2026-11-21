@@ -15,6 +15,7 @@ import { planDeliveryPublication } from './delivery-publication-policy.js';
 import { assessHandoff } from './handoff-assessment.js';
 import { git, revalidateRepository, validateRepository } from './repositories.js';
 import type { AgentEvent, WorkspaceReview } from '../shared/types.js';
+import { registerOrchestrationRoutes } from './orchestration-routes.js';
 
 const id = z.string().uuid();
 export async function createApp(manager: TaskManager) {
@@ -66,6 +67,7 @@ export async function createApp(manager: TaskManager) {
     manager.startQueue();
   });
   app.get('/api/health', async () => ({ ok: true }));
+  registerOrchestrationRoutes(app, manager);
   app.get('/api/dashboard', async () => manager.dashboard());
   app.get('/api/workflows/qa-commands', async () => ({
     commands: Object.entries(manager.workspaces?.options.commands ?? {}).map(

@@ -31,7 +31,7 @@ it('migrates v0.6 schema 8 without changing tasks, pinned profiles, queue intent
     await copyFile(file, backup);
     const bytes = await readFile(backup);
     store = new Store(file);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(10);
     expect(store.task(task.id)).toEqual(task);
     expect(store.taskConfiguration(task.id)).toEqual(pinned);
     expect(store.agents()).toEqual(profiles);
