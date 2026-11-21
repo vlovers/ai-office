@@ -2,7 +2,7 @@ import type { Destination } from './destinations.js';
 
 const copy: Record<Destination, { title: string; description: string }> = {
   office: {
-    title: 'Your AI workspace',
+    title: 'Overview',
     description: 'Manage tasks, agents and workflows in one place.',
   },
   tasks: {

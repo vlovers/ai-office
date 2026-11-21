@@ -120,6 +120,7 @@ try {
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
     .click();
+  await page.getByRole('tab', { name: 'Review', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh Git review' }).click();
   await expect(review).toContainText('verification passed');
   // Real production UI over HTTP and SDK transport; no model calls.
@@ -184,6 +185,7 @@ try {
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
     .click();
+  await page.getByRole('tab', { name: 'Review', exact: true }).click();
   await expect(review).toContainText('CORRECT_FIXTURE: clarify README and retain context');
   await review.screenshot({
     path: join(process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir(), 'ai-office-v05-feedback.png'),
@@ -252,6 +254,7 @@ try {
     .locator('.task-row')
     .filter({ hasText: /^Implement isolated change/ })
     .click();
+  await page.getByRole('tab', { name: 'Review', exact: true }).click();
   await expect(review).toContainText('Review revision 3');
   await page.getByLabel('Review history').selectOption(oldRevision);
   await expect(review).toContainText('CORRECT_FIXTURE: clarify README and retain context');

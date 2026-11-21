@@ -19,7 +19,7 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
   const screenshotDir = process.env.AI_OFFICE_SCREENSHOT_DIR ?? tmpdir();
-  await page.getByRole('heading', { name: 'Your AI workspace' }).waitFor();
+  await page.getByRole('heading', { name: 'Overview' }).waitFor();
   await expect(page.getByRole('region', { name: 'Get started' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Focus Mode', exact: true })).toHaveCount(0);
   await page.screenshot({
@@ -71,7 +71,7 @@ try {
   ).toHaveAttribute('aria-current', 'page');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   // The legacy pixel scene is opt-in; expand it to retain the existing
   // motion, workstation and accessibility regression coverage.
@@ -158,7 +158,7 @@ try {
   await page.keyboard.press(' ');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await page
@@ -168,20 +168,20 @@ try {
   await expect(page.locator('#agent')).toContainText('Codex 02');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('.studio-agent').nth(1)).toHaveAttribute('aria-pressed', 'true');
   await page.locator('.studio-agent').first().click();
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(firstDesk).toHaveAttribute('aria-pressed', 'true');
   await secondDesk.focus();
   await page.keyboard.press('Enter');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(secondDesk).toHaveAttribute('aria-pressed', 'true');
   await firstDesk.focus();
@@ -199,7 +199,7 @@ try {
   });
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await firstDesk.focus();
   await expect(firstDesk).toBeFocused();
@@ -241,7 +241,9 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
-  await expect(page.getByRole('heading', { name: 'Task session' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Review the example project', exact: true }),
+  ).toBeVisible();
   await expect(page.locator('#task-workspace')).toContainText('Review the example project');
   await expect(page.locator('#task-workspace .panel-heading .subtle')).toHaveText('LIVE OUTPUT');
   // Focus mode intentionally hides task history. Return to the Tasks list
@@ -373,7 +375,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',
@@ -437,7 +439,7 @@ try {
   await expect(page.getByRole('log')).toContainText('Waiting for Stop');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute(
     'data-state',
@@ -456,16 +458,19 @@ try {
   await expect(page.locator('#task-workspace')).toContainText('Stop review');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
   await expect(page).toHaveURL(/#task\/[^/]+\/session$/);
   await expect(page.locator('.shell')).toHaveClass(/focus-mode/);
   await expect(page.locator('#task-workspace')).toBeFocused();
-  // Leaving Focus Mode through the overview control must update the URL.
+  // Leaving Focus Mode through the Overview navigation must update the URL.
   // Back restores the same task-scoped session instead of a stale mission view.
-  await page.getByRole('button', { name: 'Office overview', exact: true }).click();
-  await expect(page).toHaveURL(/#overview$/);
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Overview', exact: true })
+    .click();
+  await expect(page).toHaveURL(/#office$/);
   await expect(page.locator('.shell')).toHaveAttribute('data-page', 'office');
   await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
   await page.goBack();
@@ -505,7 +510,7 @@ try {
   await expect(page.locator('#agent')).toBeVisible();
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'idle');
   await createTask('Failed review', 'FAIL_FIXTURE');
@@ -515,7 +520,7 @@ try {
   await expect(page.locator('.task-error')).not.toContainText('Simulated provider failure');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('.office-workstation').first()).toHaveAttribute('data-state', 'error');
   // Launch both real agent slots against two disposable worktrees through the UI.
@@ -541,7 +546,7 @@ try {
   const taskB = env.store.tasks().find((task) => task.title === 'Agent B concurrent')!;
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   // Recent agent activity and the selected-agent inspector belong to the Office page.
   const history = page.getByRole('button', { name: /Recent task activity/ });
@@ -557,7 +562,7 @@ try {
   );
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('.office-workstation').nth(0)).toHaveAttribute(
     'data-state',
@@ -603,7 +608,7 @@ try {
   await expect(page.locator('.task-toolbar .badge')).toHaveText('stopped');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await page.getByRole('button', { name: 'Select Codex 01 workstation' }).click();
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
@@ -612,7 +617,7 @@ try {
   // B's Stop remains usable while A waits for its own process-group cleanup.
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await page.getByRole('button', { name: 'Select Codex 02 workstation' }).click();
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();
@@ -624,7 +629,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await page.screenshot({ path: join(screenshotDir, 'ai-office-v03-desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Focus Mode', exact: true }).click();

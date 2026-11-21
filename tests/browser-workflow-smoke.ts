@@ -311,7 +311,7 @@ try {
   await expect(board.getByRole('button', { name: 'Start QA', exact: true })).toHaveCount(0);
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('[data-agent-id="codex-2"]')).toHaveAttribute(
     'data-state',
@@ -488,7 +488,7 @@ try {
   }
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Office' })
+    .getByRole('button', { name: 'Overview' })
     .click();
   await expect(page.locator('[data-agent-id="codex-1"]')).toHaveAttribute(
     'data-state',

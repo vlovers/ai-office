@@ -6,6 +6,8 @@ import { MainNavigation } from './main-navigation.js';
 import { PageHeading } from './page-heading.js';
 import { OfficePage, WorkspacePage } from './workspace-pages.js';
 import { TaskPanelTabs, type TaskPanel } from './task-panel-tabs.js';
+import { TaskDetails } from './task-details.js';
+import { WorkspaceIcon } from './workspace-icon.js';
 import { TaskSummary } from './task-summary.js';
 import { TaskHistory } from './task-history.js';
 import { TaskComposer } from './task-composer.js';
@@ -62,6 +64,7 @@ import {
 import { WorkspaceOverview } from './workspace-overview.js';
 import './styles.css';
 import './workspace-theme.css';
+import './workspace-v09.css';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(
@@ -364,7 +367,12 @@ function App() {
     const section = document.getElementById(id);
     if (!section) return;
     lastNavigation.current = key;
-    section.focus({ preventScroll: true });
+    // Keep keyboard focus on the selected tab when switching detail sections.
+    if (!(
+      document.activeElement?.getAttribute('role') === 'tab' &&
+      document.getElementById('task-workspace')?.contains(document.activeElement)
+    ))
+      section.focus({ preventScroll: true });
     section.scrollIntoView({ block: 'start' });
   }, [navigation, dashboard, selected, view, page]);
   const clearTaskNavigation = () => {
@@ -446,7 +454,6 @@ function App() {
   const agentBusy = !dashboard || dashboard.agents.some((item) => item.taskId !== null);
   const selectedBusy = Boolean(agent?.taskId);
   const queued = dashboard?.queue.find((entry) => entry.taskId === selected);
-  const selectedRepository = dashboard?.repositories.find((item) => item.id === repositoryId);
   const scene = sceneStatus(
     dashboard,
     task,
@@ -562,50 +569,74 @@ function App() {
             : 'Select a task to follow its progress and review the result.'}
         </div>
       ) : (
-        <>
-          <TaskSessionControls
-            task={task}
-            repositoryName={repository?.name}
-            dashboard={dashboard}
-            queued={queued}
-            taskConfiguration={taskConfiguration}
-            resumeSessionId={resumeSessionId}
-            busy={busy}
-            stopPending={pendingStops.includes(task.id)}
-            transportConnected={httpConnection === 'connected'}
-            showStopControl={
-              (view === 'focus' || navigation?.context === 'overview') && task.id === agent?.taskId
-            }
-            stopControl={stopControl}
-            onNavigate={navigateTask}
-            onResumeSessionChange={setResumeSessionId}
-            onStartTask={() => {
-              void act(async () => {
-                if (
-                  task.executionMode === 'write' &&
-                  !window.confirm(
-                    'Start a write-enabled Codex session in an isolated Git worktree? The agent can edit that worktree. Review and integration are manual.',
+        <TaskDetails
+          key={task.id}
+          task={task}
+          dashboard={dashboard}
+          events={events}
+          destination={navigation?.taskId === task.id ? navigation.destination : 'execution'}
+          connected={httpConnection === 'connected'}
+          embedded={view !== 'focus'}
+          api={api}
+          onNavigate={(item, destination) => navigateTask(item, destination)}
+          controls={
+            <TaskSessionControls
+              task={task}
+              repositoryName={repository?.name}
+              dashboard={dashboard}
+              queued={queued}
+              taskConfiguration={taskConfiguration}
+              resumeSessionId={resumeSessionId}
+              busy={busy}
+              stopPending={pendingStops.includes(task.id)}
+              transportConnected={httpConnection === 'connected'}
+              showStopControl={
+                (view === 'focus' || navigation?.context === 'overview') &&
+                task.id === agent?.taskId
+              }
+              stopControl={stopControl}
+              onNavigate={navigateTask}
+              onResumeSessionChange={setResumeSessionId}
+              onStartTask={() => {
+                void act(async () => {
+                  if (
+                    task.executionMode === 'write' &&
+                    !window.confirm(
+                      'Start a write-enabled Codex session in an isolated Git worktree? The agent can edit that worktree. Review and integration are manual.',
+                    )
                   )
-                )
-                  return;
-                await api(`/tasks/${task.id}/start`, {
-                  ...(resumeSessionId ? { resumeSessionId } : {}),
-                  confirmedWrite: task.executionMode === 'write',
+                    return;
+                  await api(`/tasks/${task.id}/start`, {
+                    ...(resumeSessionId ? { resumeSessionId } : {}),
+                    confirmedWrite: task.executionMode === 'write',
+                  });
                 });
-              });
-            }}
-            onStopTask={() => void stopTask(task.id)}
-          />
-          <TaskSessionOutput task={task} session={session} events={events} logView={taskLogView} />
-          {taskHasReview(task) && (
-            <ReviewCenter
-              key={task.id}
-              task={{ ...task, configuration: taskConfiguration }}
-              api={api}
+              }}
+              onStopTask={() => void stopTask(task.id)}
             />
-          )}
-          {(!taskHasReview(task) ||
-            (navigation?.taskId === task.id && navigation.destination === 'workflow')) && (
+          }
+          execution={
+            <TaskSessionOutput
+              task={task}
+              session={session}
+              events={events}
+              logView={taskLogView}
+            />
+          }
+          review={
+            taskHasReview(task) ? (
+              <ReviewCenter
+                key={task.id}
+                task={{ ...task, configuration: taskConfiguration }}
+                api={api}
+              />
+            ) : (
+              <p className="empty-state">
+                Code review becomes available after an isolated write task finishes.
+              </p>
+            )
+          }
+          workflow={
             <div
               className="task-workflow-anchor"
               id={`task-workflow-${encodeURIComponent(task.id)}`}
@@ -614,9 +645,32 @@ function App() {
             >
               <WorkflowBoard taskId={task.id} />
             </div>
-          )}
-          <TaskChangedFiles task={task} />
-        </>
+          }
+          changes={
+            <>
+              <TaskChangedFiles task={task} />
+              {task.executionMode === 'write' ? (
+                <p>
+                  Isolated worktree changes and patches are available in{' '}
+                  <a
+                    href={encodeTaskNavigation({
+                      taskId: task.id,
+                      destination: 'review',
+                      ...(navigation?.context === 'overview'
+                        ? { context: 'overview' as const }
+                        : {}),
+                    })}
+                  >
+                    Review
+                  </a>{' '}
+                  after execution finishes.
+                </p>
+              ) : ['queued', 'running', 'stopping'].includes(task.state) ? (
+                <p>Changed files are captured when execution finishes.</p>
+              ) : null}
+            </>
+          }
+        />
       )}
     </section>
   );
@@ -652,7 +706,7 @@ function App() {
             ✦
           </span>
           <span>
-            AI OFFICE<small>Local agent workspace</small>
+            AI Office<small>Local agent workspace</small>
           </span>
         </a>
         <div className="nav-label">WORKSPACE</div>
@@ -683,7 +737,7 @@ function App() {
               }}
               title={repo.path}
             >
-              <span aria-hidden="true">⌑</span>
+              <WorkspaceIcon name="repository" />
               <span>
                 {repo.name}
                 <small>{repo.path}</small>
@@ -698,6 +752,13 @@ function App() {
             </p>
           )}
         </div>
+        <button
+          className="sidebar-add secondary"
+          type="button"
+          onClick={() => showSection('repositories')}
+        >
+          ＋ Add repository
+        </button>
       </aside>
       <main id="overview" tabIndex={-1}>
         {linkError && (
@@ -716,9 +777,34 @@ function App() {
           </div>
         )}
         <header className="topbar">
-          <div className="workspace-chip">
-            <span className="eyebrow">CURRENT REPOSITORY</span>
-            <strong>{selectedRepository?.name ?? 'No repository selected'}</strong>
+          <label className="workspace-selector">
+            <WorkspaceIcon name="repository" />
+            <span className="sr-only">Current repository</span>
+            <select
+              aria-label="Current repository"
+              value={repositoryId}
+              onChange={(event) => {
+                setRepositoryId(event.target.value);
+                setResumeSessionId('');
+              }}
+              disabled={!dashboard?.repositories.length}
+            >
+              <option value="" disabled>
+                Select repository
+              </option>
+              {dashboard?.repositories.map((repo) => (
+                <option key={repo.id} value={repo.id}>
+                  {repo.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div
+            className="branch-context"
+            title="Repository branch is not supplied by the current runtime"
+          >
+            <WorkspaceIcon name="branch" />
+            <span>Branch unavailable</span>
           </div>
           <span className="connection" role="status">
             <span
@@ -775,7 +861,7 @@ function App() {
               showSection('compose');
             }}
           />
-          {stationTask && (
+          {stationTask && page === 'office' && (
             <div className="view-switch" role="group" aria-label="Workspace view">
               <button
                 className="secondary"
