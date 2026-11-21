@@ -1,13 +1,14 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import type { Destination } from './destinations.js';
+import { WorkspaceIcon, type WorkspaceIconName } from './workspace-icon.js';
 import { nextNavigationIndex } from './navigation-keys.js';
 
-const items: ReadonlyArray<{ id: Destination; icon: string; label: string }> = [
-  { id: 'office', icon: '⌂', label: 'Office' },
-  { id: 'tasks', icon: '▤', label: 'Tasks' },
-  { id: 'workflows', icon: '◇', label: 'Workflows' },
-  { id: 'agents', icon: '♙', label: 'Agents' },
-  { id: 'settings', icon: '⚙', label: 'Settings' },
+const items: ReadonlyArray<{ id: Destination; icon: WorkspaceIconName; label: string }> = [
+  { id: 'office', icon: 'overview', label: 'Overview' },
+  { id: 'tasks', icon: 'tasks', label: 'Tasks' },
+  { id: 'workflows', icon: 'workflows', label: 'Workflows' },
+  { id: 'agents', icon: 'agents', label: 'Agents' },
+  { id: 'settings', icon: 'settings', label: 'Settings' },
 ];
 
 /** Reveal a focused destination without scrolling the entire document. */
@@ -64,7 +65,7 @@ export function MainNavigation({
           aria-current={page === id ? 'page' : undefined}
           onClick={() => onNavigate(id)}
         >
-          <span aria-hidden="true">{icon}</span>
+          <WorkspaceIcon name={icon} />
           {label}
           {id === 'tasks' && <span className="nav-count">{taskCount}</span>}
         </button>

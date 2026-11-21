@@ -39,7 +39,7 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address);
-  const navigate = async (destination: 'Office' | 'Tasks' | 'Agents' | 'Settings') => {
+  const navigate = async (destination: 'Overview' | 'Tasks' | 'Agents' | 'Settings') => {
     await page
       .getByRole('navigation', { name: 'Main navigation' })
       .getByRole('button', { name: destination })
@@ -142,7 +142,7 @@ try {
     (response) => response.url().endsWith('/api/dashboard') && response.ok(),
   );
   await expect(page.getByLabel('Assign to agent')).toHaveValue(profile.id);
-  await navigate('Office');
+  await navigate('Overview');
   // The operational workspace is primary; legacy workstation inspector lives
   // in the optional Office scene and must remain accessible on demand.
   await page.locator('.office-visual > summary').click();

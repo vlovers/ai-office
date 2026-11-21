@@ -1,6 +1,7 @@
 import type { Task } from '../shared/types.js';
 
-export type TaskDestination = 'session' | 'review' | 'workflow';
+export type TaskDestination =
+  'overview' | 'execution' | 'changes' | 'history' | 'session' | 'review' | 'workflow';
 
 export interface TaskNavigation {
   taskId: string;
@@ -27,7 +28,10 @@ export function encodeTaskNavigation(value: TaskNavigation): string {
 }
 
 export function decodeTaskNavigation(hash: string): TaskNavigation | null {
-  const match = /^#(overview\/)?task\/([^/]+)\/(session|review|workflow)$/.exec(hash);
+  const match =
+    /^#(overview\/)?task\/([^/]+)\/(overview|execution|changes|history|session|review|workflow)$/.exec(
+      hash,
+    );
   if (!match) return null;
   try {
     const taskId = decodeURIComponent(match[2]!);

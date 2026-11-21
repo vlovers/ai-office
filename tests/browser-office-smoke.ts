@@ -218,13 +218,13 @@ try {
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation' })
-      .getByRole('button', { name: 'Office' }),
+      .getByRole('button', { name: 'Overview' }),
   ).toHaveAttribute('aria-current', 'page');
   await expect(scene).toBeVisible();
   await capture('multiple-agents');
   // Queue and execution use the manager/SDK fixture through the normal UI in browser-smoke.
   // These persisted records exercise the saved outcome view with explicit fixture names.
-  const navigate = async (destination: 'Office' | 'Tasks' | 'Settings') => {
+  const navigate = async (destination: 'Overview' | 'Tasks' | 'Settings') => {
     await page
       .getByRole('navigation', { name: 'Main navigation' })
       .getByRole('button', { name: destination })
@@ -234,9 +234,9 @@ try {
   await page.setViewportSize({ width: 320, height: 720 });
   await navigate('Settings');
   const mobileNav = page.getByRole('navigation', { name: 'Main navigation' });
-  const officeNavButton = mobileNav.getByRole('button', { name: 'Office' });
+  const officeNavButton = mobileNav.getByRole('button', { name: 'Overview' });
   const settingsNavButton = mobileNav.getByRole('button', { name: 'Settings' });
-  for (const label of ['Office', 'Tasks', 'Workflows', 'Agents', 'Settings']) {
+  for (const label of ['Overview', 'Tasks', 'Workflows', 'Agents', 'Settings']) {
     await expect(mobileNav.getByRole('button', { name: label })).toBeInViewport();
   }
   await expect(settingsNavButton).toBeInViewport();
@@ -262,7 +262,7 @@ try {
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await navigate('Office');
+  await navigate('Overview');
   // A stale task URL must offer a usable exit instead of leaving the user in
   // Focus Mode with an empty session and an unrelated history fragment.
   await page.evaluate(() => {
@@ -275,7 +275,7 @@ try {
   await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
   await expect(page.locator('#task-history')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await navigate('Office');
+  await navigate('Overview');
   const newTask = async (agentId: string, title: string, prompt: string) => {
     await navigate('Tasks');
     await page.getByRole('button', { name: '+ New task' }).click();
@@ -284,7 +284,7 @@ try {
     await page.getByLabel('What should the agent work on?').fill(prompt);
     await page.getByRole('button', { name: 'Create task' }).click();
     await page.getByRole('button', { name: 'Start task' }).click();
-    await navigate('Office');
+    await navigate('Overview');
   };
   // Switching to the task composer must be a real history entry. Back and
   // Forward restore both the destination and the active task panel.
@@ -434,7 +434,7 @@ try {
   await expect(runningRow).toBeFocused();
   assert.notEqual(await runningRow.evaluate((node) => getComputedStyle(node).outlineStyle), 'none');
   await navigate('Tasks');
-  await navigate('Office');
+  await navigate('Overview');
   await expect(search).toHaveValue('FIXTURE · held SDK reasoning');
   await expect(overviewStatus).toHaveValue('running');
   await expect(overviewSort).toHaveValue('title');
@@ -490,12 +490,12 @@ try {
     savedTaskId,
   );
   // A restored selection must not keep forcing its agent after a manual switch.
-  await navigate('Office');
+  await navigate('Overview');
   const codexOneStation = page.locator('.office-workstation[data-agent-id="codex-1"]');
   await codexOneStation.click();
   await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
   await navigate('Tasks');
-  await navigate('Office');
+  await navigate('Overview');
   await expect(codexOneStation).toHaveAttribute('aria-pressed', 'true');
   await navigate('Tasks');
   // A deleted task saved in sessionStorage must be discarded on ordinary routes.
@@ -586,7 +586,7 @@ try {
   await expect(page.locator('.shell')).not.toHaveClass(/focus-mode/);
   // Internal section navigation must create a browser history entry: the
   // previous destination should be recoverable without reloading the app.
-  await navigate('Office');
+  await navigate('Overview');
   await capture('queued');
   await navigate('Tasks');
   await page.getByRole('button', { name: 'Cancel queued task' }).click();
@@ -667,7 +667,7 @@ try {
   await expect(
     history.locator('.task-row').filter({ hasText: 'FIXTURE · saved completion' }),
   ).toBeVisible();
-  await navigate('Office');
+  await navigate('Overview');
 
   // A temporary workflow API failure must not blank the Office or claim the
   // last known workflow snapshot is live. Polling recovers without reloading.
@@ -698,7 +698,7 @@ try {
   await page.unroute('**/api/dashboard');
   await expect(page.getByLabel('Authentication mode')).toBeEnabled({ timeout: 10000 });
   await expect(page.getByRole('button', { name: /^Register/ })).toBeEnabled();
-  await navigate('Office');
+  await navigate('Overview');
   await expect(page.locator('.studio-notice')).toHaveCount(0, { timeout: 10000 });
   // Large persisted histories should not mount every task row on a phone.
   // The backend fixture stays unchanged: intercept only this read-only snapshot.
